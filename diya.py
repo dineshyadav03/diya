@@ -1,12 +1,14 @@
 import json
 import os
 import sys
+import threading
+import uuid
 
-import chromadb
 import httpx
 from ddgs import DDGS
 from openai import OpenAI
 
+import diya_config
 import diya_db
 
 WEATHER_CODES = {
@@ -19,40 +21,21 @@ WEATHER_CODES = {
     95: "thunderstorm",
 }
 
-sys.stdout.reconfigure(encoding="utf-8")
 
-MODEL = "qwen2.5:3b"
-NOTES_DIR = "sample_notes"
+class OllamaUnavailable(RuntimeError):
+    """Raised by Agent.warm_up() when the model server or the notes index can't be reached/built."""
 
-client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
-
-
-def embed(text):
-    return client.embeddings.create(model="nomic-embed-text", input=text).data[0].embedding
-
-
-# ---- memory, built at startup (Milestone 3) ----
-try:
-    chroma = chromadb.Client()
-    notes = chroma.create_collection("notes")
-    for filename in os.listdir(NOTES_DIR):
-        with open(os.path.join(NOTES_DIR, filename)) as f:
-            text = f.read()
-        notes.add(ids=[filename], embeddings=[embed(text)], documents=[text])
-except Exception as exc:
-    print(f"Couldn't start Diya: can't reach Ollama at {client.base_url} ({exc}).")
-    print("Is Ollama running? Start it, then try again.")
-    sys.exit(1)
+    def __init__(self, base_url, cause):
+        super().__init__(f"can't reach Ollama at {base_url} ({cause})")
+        self.base_url = base_url
+        self.cause = cause
 
 
 # ---- Diya's default toolkit ----
+# Tools that need no state live here as plain functions; the ones that need the
+# model server (search_notes) or the database (reminders) are Agent methods.
 def list_files(directory="."):
     return "\n".join(os.listdir(directory))
-
-
-def search_notes(query):
-    result = notes.query(query_embeddings=[embed(query)], n_results=1)
-    return result["documents"][0][0]
 
 
 NETWORK_TIMEOUT = 5.0  # seconds -- fail fast instead of hanging when there's no connection
@@ -115,21 +98,6 @@ def web_search(query):
     if not results:
         return "No results found."
     return "\n".join(f"{r['title']}: {r['body']} ({r['href']})" for r in results)
-
-
-def add_reminder(content, due_at=None):
-    diya_db.add_reminder(content, due_at)
-    return f"Reminder saved: {content}" + (f" (due {due_at})" if due_at else "")
-
-
-def list_reminders():
-    rows = diya_db.list_reminders()
-    if not rows:
-        return "No pending reminders."
-    return "\n".join(
-        f"#{rid}: {content}" + (f" (due {due_at})" if due_at else "")
-        for rid, content, due_at, done in rows
-    )
 
 
 TOOLS = [
@@ -233,73 +201,164 @@ TOOLS = [
     },
 ]
 
-AVAILABLE_FUNCTIONS = {
-    "list_files": list_files,
-    "search_notes": search_notes,
-    "get_weather": get_weather,
-    "web_search": web_search,
-    "add_reminder": add_reminder,
-    "list_reminders": list_reminders,
-}
-
 
 MAX_TOOL_ROUNDS = 8  # matches Truffle's own documented default -- a safety cap, never expected in normal use
 
 
-def with_profile(history):
-    """Prepend Dreaming's output as a system message, if any exists -- shared by every
-    entry point (terminal, web, evals) so this can't silently be missing from one of them
-    again. Injected fresh each call, never saved into a thread's own persisted history --
-    it should always reflect the latest profile, not a frozen snapshot."""
-    if os.path.exists("user_profile.txt"):
-        with open("user_profile.txt") as f:
-            profile = f.read().strip()
-        if profile:
-            return [
-                {"role": "system", "content": f"What you know about the user so far:\n{profile}"}
-            ] + history
-    return history
+class Agent:
+    """Diya's brain: the model client, the notes index, the toolkit and the tool-calling loop.
 
+    Everything expensive is lazy -- constructing an Agent connects to nothing. The model
+    client is created on first use and the notes index is built on the first search (or by
+    warm_up(), which the entry points call at startup so a missing Ollama is caught
+    immediately rather than on the first question).
+    """
 
-def ask(messages):
-    """Returns (answer_text, tools_called) -- the tool list exists so evals can check routing."""
-    tools_called = []
-    for _ in range(MAX_TOOL_ROUNDS):
-        response = client.chat.completions.create(model=MODEL, messages=messages, tools=TOOLS)
-        message = response.choices[0].message
+    def __init__(self, config=None, client=None, store=None):
+        self.config = config or diya_config.load_config()
+        self.store = store or diya_db.Store(self.config.db_path)
+        self._client = client
+        self._notes = None
+        self._notes_lock = threading.Lock()
+        self._functions = {
+            "list_files": list_files,
+            "search_notes": self.search_notes,
+            "get_weather": get_weather,
+            "web_search": web_search,
+            "add_reminder": self.add_reminder,
+            "list_reminders": self.list_reminders,
+        }
 
-        if not message.tool_calls:
-            if message.content:
-                return message.content, tools_called
-            # The model sometimes returns nothing at all when no tool applies -- a known small-
-            # model quirk, not a real answer. One bounded retry, on a throwaway copy of the
-            # messages so the real conversation history doesn't get polluted with a nudge.
-            retry = messages + [
-                {"role": "user", "content": "Please answer directly, in one short sentence."}
-            ]
-            retry_response = client.chat.completions.create(
-                model=MODEL, messages=retry, tools=TOOLS
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = OpenAI(base_url=self.config.ollama_url, api_key="ollama")
+        return self._client
+
+    def embed(self, text):
+        return self.client.embeddings.create(model=self.config.embed_model, input=text).data[0].embedding
+
+    # ---- memory (Milestone 3): an in-memory index of the notes folder ----
+    @property
+    def notes(self):
+        with self._notes_lock:
+            if self._notes is None:
+                self._notes = self._build_notes()
+            return self._notes
+
+    def _build_notes(self):
+        import chromadb  # heavy; only needed once notes are actually searched
+
+        # A unique name per Agent: Chroma's in-memory client is shared across a process, so a
+        # fixed name would collide as soon as a second Agent (tests, evals) builds its own.
+        notes = chromadb.Client().create_collection(f"notes-{uuid.uuid4().hex[:12]}")
+        for filename in os.listdir(self.config.notes_dir):
+            with open(os.path.join(self.config.notes_dir, filename)) as f:
+                text = f.read()
+            notes.add(ids=[filename], embeddings=[self.embed(text)], documents=[text])
+        return notes
+
+    def warm_up(self):
+        """Build the notes index now. This is what used to happen at import time; it needs
+        Ollama for the embeddings, so it doubles as the "is Ollama reachable?" check."""
+        try:
+            self.notes
+        except Exception as exc:
+            base_url = getattr(self.client, "base_url", self.config.ollama_url)
+            raise OllamaUnavailable(base_url, exc) from exc
+
+    # ---- the tools that need state ----
+    def search_notes(self, query):
+        result = self.notes.query(query_embeddings=[self.embed(query)], n_results=1)
+        return result["documents"][0][0]
+
+    def add_reminder(self, content, due_at=None):
+        self.store.add_reminder(content, due_at)
+        return f"Reminder saved: {content}" + (f" (due {due_at})" if due_at else "")
+
+    def list_reminders(self):
+        rows = self.store.list_reminders()
+        if not rows:
+            return "No pending reminders."
+        return "\n".join(
+            f"#{rid}: {content}" + (f" (due {due_at})" if due_at else "")
+            for rid, content, due_at, done in rows
+        )
+
+    def with_profile(self, history):
+        """Prepend Dreaming's output as a system message, if any exists -- shared by every
+        entry point (terminal, web, evals) so this can't silently be missing from one of them
+        again. Injected fresh each call, never saved into a thread's own persisted history --
+        it should always reflect the latest profile, not a frozen snapshot."""
+        path = self.config.profile_path
+        if os.path.exists(path):
+            with open(path) as f:
+                profile = f.read().strip()
+            if profile:
+                return [
+                    {"role": "system", "content": f"What you know about the user so far:\n{profile}"}
+                ] + history
+        return history
+
+    def ask(self, messages):
+        """Returns (answer_text, tools_called) -- the tool list exists so evals can check routing."""
+        tools_called = []
+        for _ in range(MAX_TOOL_ROUNDS):
+            response = self.client.chat.completions.create(
+                model=self.config.model, messages=messages, tools=TOOLS
             )
-            retry_content = retry_response.choices[0].message.content
-            return retry_content or "I didn't get a clear answer -- try rephrasing.", tools_called
+            message = response.choices[0].message
 
-        messages.append(message)
-        for call in message.tool_calls:
-            tools_called.append(call.function.name)
-            func = AVAILABLE_FUNCTIONS[call.function.name]
-            args = json.loads(call.function.arguments)
-            print(f"  [tool call] {call.function.name}({args})")
-            try:
-                result = func(**args)
-            except Exception as exc:
-                result = f"Error: {exc}"
-                print(f"  [tool error] {result}")
-            messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
+            if not message.tool_calls:
+                if message.content:
+                    return message.content, tools_called
+                # The model sometimes returns nothing at all when no tool applies -- a known small-
+                # model quirk, not a real answer. One bounded retry, on a throwaway copy of the
+                # messages so the real conversation history doesn't get polluted with a nudge.
+                retry = messages + [
+                    {"role": "user", "content": "Please answer directly, in one short sentence."}
+                ]
+                retry_response = self.client.chat.completions.create(
+                    model=self.config.model, messages=retry, tools=TOOLS
+                )
+                retry_content = retry_response.choices[0].message.content
+                return retry_content or "I didn't get a clear answer -- try rephrasing.", tools_called
 
-    return "I couldn't finish that after several tool calls -- something's likely stuck. Try rephrasing.", tools_called
+            messages.append(message)
+            for call in message.tool_calls:
+                tools_called.append(call.function.name)
+                func = self._functions[call.function.name]
+                args = json.loads(call.function.arguments)
+                print(f"  [tool call] {call.function.name}({args})")
+                try:
+                    result = func(**args)
+                except Exception as exc:
+                    result = f"Error: {exc}"
+                    print(f"  [tool error] {result}")
+                messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
+
+        return "I couldn't finish that after several tool calls -- something's likely stuck. Try rephrasing.", tools_called
 
 
-def chat_loop(thread_id, history):
+# ---- entry-point helpers (the programs that own the console call these, not import) ----
+def configure_console():
+    """Let print() emit non-ASCII on a Windows console. This used to run as a side effect of
+    importing this module; it is now an explicit step for the CLI, web server and evals."""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
+
+def warm_up_or_exit(agent):
+    """Fail fast with a clear message if Ollama isn't reachable, exactly as importing used to."""
+    try:
+        agent.warm_up()
+    except OllamaUnavailable as exc:
+        print(f"Couldn't start Diya: {exc}.")
+        print("Is Ollama running? Start it, then try again.")
+        sys.exit(1)
+
+
+def chat_loop(agent, thread_id, history):
     print(f"[Diya -- thread {thread_id}. Type 'exit' (or Ctrl+C) to stop.]")
     for m in history:
         print(f"{m['role']}> {m['content']}")
@@ -314,49 +373,73 @@ def chat_loop(thread_id, history):
         if user_input.lower() in ("exit", "quit"):
             break
 
-        diya_db.add_message(thread_id, "user", user_input)
+        agent.store.add_message(thread_id, "user", user_input)
         history.append({"role": "user", "content": user_input})
 
         try:
-            answer, _ = ask(history)
+            answer, _ = agent.ask(history)
         except Exception as exc:
             # Your message is already saved -- Ollama just isn't reachable right now.
             print(f"assistant> Couldn't reach the model ({exc}). Try again in a moment.")
             continue
 
-        diya_db.add_message(thread_id, "assistant", answer)
+        agent.store.add_message(thread_id, "assistant", answer)
         history.append({"role": "assistant", "content": answer})
         print(f"assistant> {answer}")
 
 
 def main():
+    configure_console()
     if len(sys.argv) < 2:
         print("Usage:")
         print('  python diya.py <thread_id|new>              -- start a live chat (default)')
         print('  python diya.py <thread_id|new> "message"     -- send one message and exit (for scripts)')
         return
 
+    agent = Agent()
+    warm_up_or_exit(agent)
+
     thread_arg = sys.argv[1]
     message = sys.argv[2] if len(sys.argv) > 2 else None
 
     if thread_arg == "new":
-        thread_id = diya_db.create_thread()
+        thread_id = agent.store.create_thread()
         print(f"[created thread {thread_id}]")
     else:
         thread_id = int(thread_arg)
 
-    history = with_profile(diya_db.get_history(thread_id))
+    history = agent.with_profile(agent.store.get_history(thread_id))
 
     if message is not None:
         # one-off mode: useful for scripts/scheduled tasks, not for talking to it yourself
-        diya_db.add_message(thread_id, "user", message)
+        agent.store.add_message(thread_id, "user", message)
         history.append({"role": "user", "content": message})
-        answer, _ = ask(history)
-        diya_db.add_message(thread_id, "assistant", answer)
+        answer, _ = agent.ask(history)
+        agent.store.add_message(thread_id, "assistant", answer)
         print(f"assistant> {answer}")
         return
 
-    chat_loop(thread_id, history)
+    chat_loop(agent, thread_id, history)
+
+
+# ---- Temporary: the old module-level API, for callers not yet moved to their own Agent
+# (diya_web.py, diya_evals.py). Removed once they are. ----
+_default_agent = None
+
+
+def _agent():
+    global _default_agent
+    if _default_agent is None:
+        _default_agent = Agent()
+    return _default_agent
+
+
+def ask(messages):
+    return _agent().ask(messages)
+
+
+def with_profile(history):
+    return _agent().with_profile(history)
 
 
 if __name__ == "__main__":
