@@ -23,15 +23,18 @@ def keyword_embedding(text):
 class FakeClient:
     """Replays `replies` in order for chat completions and records every call made."""
 
-    def __init__(self, replies=(), embed_error=None):
+    def __init__(self, replies=(), embed_error=None, chat_error=None):
         self.replies = list(replies)
         self.chat_calls = []
         self.embed_calls = []
         self._embed_error = embed_error
+        self._chat_error = chat_error
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
         self.embeddings = SimpleNamespace(create=self._embed)
 
-    def _create(self, model, messages, tools):
+    def _create(self, model, messages, tools=None):
+        if self._chat_error:
+            raise self._chat_error
         self.chat_calls.append({"model": model, "messages": list(messages), "tools": tools})
         return self.replies.pop(0)
 

@@ -27,6 +27,8 @@ class Config:
     ollama_url: str = "http://localhost:11434/v1"
     notes_dir: str = "sample_notes"
     profile_path: str = "user_profile.txt"
+    dream_log_path: str = "dream_log.txt"
+    dream_state_path: str = "dream_state.json"
     whisper_model: str = "base"
     host: str = "0.0.0.0"
     port: int = 8080
@@ -41,6 +43,8 @@ _STRING_SETTINGS = {
     "ollama_url": "DIYA_OLLAMA_URL",
     "notes_dir": "DIYA_NOTES_DIR",
     "profile_path": "DIYA_PROFILE_PATH",
+    "dream_log_path": "DIYA_DREAM_LOG_PATH",
+    "dream_state_path": "DIYA_DREAM_STATE_PATH",
     "whisper_model": "DIYA_WHISPER_MODEL",
     "host": "DIYA_HOST",
 }
