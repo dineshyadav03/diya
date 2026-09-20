@@ -1,0 +1,1061 @@
+<title>Truffle Research Dossier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f4f2ec;
+    --surface:#ffffff;
+    --surface-2:#eae6db;
+    --border:#ddd7c8;
+    --text:#211d16;
+    --text-dim:#6c6353;
+    --text-faint:#9a927e;
+    --accent:#8a541f;
+    --accent-strong:#6e4318;
+    --accent-soft:#f1e3cd;
+    --led:#127a68;
+    --led-soft:#dcf0ec;
+    --code-bg:#1c1810;
+    --code-text:#ecdfc6;
+    --code-dim:#8f8060;
+    --shadow: 0 1px 2px rgba(33,29,22,0.06), 0 8px 24px rgba(33,29,22,0.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#141310;
+      --surface:#1b1914;
+      --surface-2:#242019;
+      --border:#373124;
+      --text:#ece6d8;
+      --text-dim:#a89e8a;
+      --text-faint:#746b58;
+      --accent:#dfa257;
+      --accent-strong:#f0bd7c;
+      --accent-soft:#2c2314;
+      --led:#5fd6bd;
+      --led-soft:#152621;
+      --code-bg:#0e0c08;
+      --code-text:#eadfc4;
+      --code-dim:#7a7057;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#141310;
+    --surface:#1b1914;
+    --surface-2:#242019;
+    --border:#373124;
+    --text:#ece6d8;
+    --text-dim:#a89e8a;
+    --text-faint:#746b58;
+    --accent:#dfa257;
+    --accent-strong:#f0bd7c;
+    --accent-soft:#2c2314;
+    --led:#5fd6bd;
+    --led-soft:#152621;
+    --code-bg:#0e0c08;
+    --code-text:#eadfc4;
+    --code-dim:#7a7057;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans', system-ui, sans-serif;
+    font-size:16px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4{
+    font-family:'JetBrains Mono', ui-monospace, monospace;
+    font-weight:700;
+    letter-spacing:-0.01em;
+    text-wrap:balance;
+    color:var(--text);
+  }
+  a{ color:var(--accent-strong); }
+  code, .mono{ font-family:'JetBrains Mono', ui-monospace, monospace; }
+  ::selection{ background:var(--accent-soft); }
+
+  .layout{
+    display:grid;
+    grid-template-columns:240px minmax(0,1fr);
+    max-width:1180px;
+    margin:0 auto;
+    gap:0;
+  }
+  @media (max-width:900px){
+    .layout{ grid-template-columns:1fr; }
+    nav.toc{ display:none; }
+  }
+
+  /* ---- Sidebar nav ---- */
+  nav.toc{
+    position:sticky;
+    top:0;
+    align-self:start;
+    height:100vh;
+    overflow-y:auto;
+    padding:28px 18px 28px 24px;
+    border-right:1px solid var(--border);
+  }
+  .toc-brand{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    font-size:13px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--text);
+    margin-bottom:22px;
+  }
+  .toc-brand .dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--led);
+    box-shadow:0 0 0 3px var(--led-soft);
+    flex:none;
+  }
+  nav.toc ul{ list-style:none; margin:0; padding:0; }
+  nav.toc li{ margin:0; }
+  nav.toc a{
+    display:block;
+    padding:6px 8px;
+    margin:1px 0;
+    border-radius:6px;
+    font-size:13px;
+    color:var(--text-dim);
+    text-decoration:none;
+    border-left:2px solid transparent;
+  }
+  nav.toc a:hover{ color:var(--text); background:var(--surface-2); }
+  nav.toc .grp{
+    margin-top:16px;
+    font-size:10.5px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--text-faint);
+    padding:0 8px;
+  }
+  nav.toc .sub a{ padding-left:20px; font-size:12.5px; }
+
+  /* ---- Main content ---- */
+  main{ padding:0; min-width:0; }
+  .hero{
+    padding:52px 44px 34px;
+    border-bottom:1px solid var(--border);
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--led);
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:14px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:7px;height:7px;border-radius:50%;
+    background:var(--led);
+  }
+  .hero h1{
+    font-size:clamp(28px,4vw,42px);
+    margin:0 0 12px;
+    line-height:1.08;
+  }
+  .hero .lede{
+    max-width:62ch;
+    font-size:17px;
+    color:var(--text-dim);
+    margin:0 0 22px;
+  }
+  .meta-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .pill{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11.5px;
+    padding:5px 10px;
+    border-radius:999px;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text-dim);
+  }
+
+  section{
+    padding:40px 44px;
+    border-bottom:1px solid var(--border);
+    max-width:860px;
+  }
+  section.wide{ max-width:none; }
+  section h2{
+    font-size:22px;
+    margin:0 0 6px;
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+  }
+  section h2 .num{ color:var(--text-faint); font-size:15px; font-weight:500; }
+  section > .section-intro{
+    color:var(--text-dim);
+    font-size:14.5px;
+    margin:0 0 26px;
+    max-width:64ch;
+  }
+  h3{ font-size:17px; margin:28px 0 10px; }
+  h3:first-child{ margin-top:0; }
+  h4{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--accent-strong);
+    margin:20px 0 8px;
+  }
+  p{ margin:0 0 14px; max-width:70ch; }
+  ul,ol{ margin:0 0 14px; padding-left:22px; }
+  li{ margin-bottom:6px; max-width:66ch; }
+  strong{ color:var(--text); }
+
+  .callout{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-left:3px solid var(--led);
+    border-radius:8px;
+    padding:16px 18px;
+    margin:0 0 20px;
+    box-shadow:var(--shadow);
+  }
+  .callout h4{ color:var(--led); margin-top:0; }
+  .callout p:last-child{ margin-bottom:0; }
+  .callout.warn{ border-left-color:var(--accent); }
+  .callout.warn h4{ color:var(--accent-strong); }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13.5px;
+    margin:8px 0 22px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:8px;
+    overflow:hidden;
+  }
+  .table-wrap{ overflow-x:auto; margin:0 0 22px; }
+  .table-wrap table{ margin:0; }
+  th,td{
+    text-align:left;
+    padding:9px 12px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+  }
+  th{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--text-faint);
+    background:var(--surface-2);
+  }
+  tr:last-child td{ border-bottom:none; }
+  td.mono, th.mono{ font-family:'JetBrains Mono',monospace; }
+  td .small{ color:var(--text-dim); font-size:12px; }
+
+  pre{
+    background:var(--code-bg);
+    color:var(--code-text);
+    border-radius:8px;
+    padding:16px 18px;
+    overflow-x:auto;
+    font-size:12.6px;
+    line-height:1.6;
+    margin:0 0 20px;
+    border:1px solid var(--border);
+  }
+  pre code{ font-family:'JetBrains Mono',monospace; }
+  .code-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--code-dim);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    margin:-6px 0 -12px;
+    padding:4px 2px;
+  }
+  code:not(pre code){
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:1px 5px;
+    font-size:0.88em;
+  }
+
+  .fact-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+    gap:1px;
+    background:var(--border);
+    border:1px solid var(--border);
+    border-radius:10px;
+    overflow:hidden;
+    margin:0 0 8px;
+  }
+  .fact{
+    background:var(--surface);
+    padding:16px 18px;
+  }
+  .fact .k{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:0.07em;
+    color:var(--text-faint);
+    margin-bottom:6px;
+  }
+  .fact .v{ font-size:15px; font-weight:600; }
+  .fact .v.mono{ font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:500; }
+
+  .stack-cards{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+    gap:14px;
+    margin:8px 0 22px;
+  }
+  .stack-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px 18px;
+    box-shadow:var(--shadow);
+  }
+  .stack-card .name{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    font-size:13.5px;
+    color:var(--accent-strong);
+    margin-bottom:6px;
+  }
+  .stack-card p{ font-size:13.5px; margin:0; color:var(--text-dim); }
+
+  .timeline{ position:relative; margin:0 0 10px; padding-left:0; list-style:none; }
+  .timeline li{
+    position:relative;
+    padding:0 0 22px 26px;
+    border-left:2px solid var(--border);
+    margin:0;
+    max-width:none;
+  }
+  .timeline li:last-child{ border-color:transparent; }
+  .timeline li::before{
+    content:"";
+    position:absolute;
+    left:-6px; top:2px;
+    width:10px;height:10px;
+    border-radius:50%;
+    background:var(--bg);
+    border:2px solid var(--led);
+  }
+  .timeline .date{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11.5px;
+    color:var(--led);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin-bottom:3px;
+  }
+  .timeline .title{ font-weight:600; margin-bottom:3px; }
+  .timeline .desc{ font-size:13.5px; color:var(--text-dim); max-width:66ch; }
+
+  .name-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:10px;
+    margin:8px 0 4px;
+  }
+  .name-row{
+    display:grid;
+    grid-template-columns:28px 1fr;
+    gap:12px;
+    padding:12px 14px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--surface);
+  }
+  .name-row.this{ border-color:var(--led); background:var(--led-soft); }
+  .name-row .badge{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    font-size:13px;
+    color:var(--text-faint);
+  }
+  .name-row.this .badge{ color:var(--led); }
+  .name-row .t{ font-weight:600; font-size:14px; margin-bottom:2px; }
+  .name-row .d{ font-size:13px; color:var(--text-dim); }
+
+  footer{
+    padding:34px 44px 60px;
+    max-width:860px;
+  }
+  footer h2{ font-size:18px; }
+  .src-list{ columns:1; font-size:12.5px; color:var(--text-dim); }
+  .src-list li{ margin-bottom:5px; max-width:none; word-break:break-word; }
+  .src-list a{ color:var(--text-dim); text-decoration:underline; text-decoration-color:var(--border); }
+  .src-list a:hover{ color:var(--accent-strong); }
+
+  .backrow{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+</style>
+
+<div class="layout">
+  <nav class="toc" aria-label="Table of contents">
+    <div class="toc-brand"><span class="dot"></span> TRUFFLE DOSSIER</div>
+    <ul>
+      <li><a href="#vision">1. What Truffle Is</a></li>
+      <li><a href="#naming">2. Naming Collisions</a></li>
+      <li><a href="#company">3. Company &amp; History</a></li>
+      <li><a href="#hardware">4. Hardware — Truffle¹</a></li>
+      <li><a href="#software">5. Software Stack</a></li>
+      <li><a href="#ai">6. AI Engineering</a></li>
+      <li class="sub"><a href="#ai-models">— Model lineage</a></li>
+      <li class="sub"><a href="#ai-inference">— Inference API</a></li>
+      <li class="sub"><a href="#ai-agent">— Agent &amp; memory</a></li>
+      <li class="sub"><a href="#ai-mcp">— Tool-use / MCP apps</a></li>
+      <li class="sub"><a href="#ai-sdk">— SDK evolution</a></li>
+      <li class="sub"><a href="#ai-code">— Code walkthrough</a></li>
+      <li class="sub"><a href="#ai-registry">— Agent Registry (Web3)</a></li>
+      <li><a href="#timeline">7. Release Timeline</a></li>
+      <li><a href="#reception">8. Reception &amp; Criticism</a></li>
+      <li><a href="#landscape">9. Competitive Landscape</a></li>
+      <li><a href="#buildbuy">10. Build vs. Buy</a></li>
+      <li><a href="#macmini">11. The Mac Mini Path</a></li>
+      <li><a href="#sources">12. Sources</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <div class="hero" id="top">
+      <div class="eyebrow">Research dossier · compiled September 2026</div>
+      <h1>Truffle — the private exo-cortex</h1>
+      <p class="lede">A full walkthrough of truffle.net: the company behind it, the Jetson-based hardware it sells, the app/agent SDK built on top, and — in depth — how its on-device AI stack is actually engineered.</p>
+      <div class="meta-row">
+        <span class="pill">truffle.net</span>
+        <span class="pill">Deepshard, Inc. · Los Angeles</span>
+        <span class="pill">Personal AI hardware</span>
+        <span class="pill">Local-first LLM inference</span>
+        <span class="pill">MCP-based agent SDK</span>
+      </div>
+    </div>
+
+    <section id="vision">
+      <h2><span class="num">1</span> What Truffle Is</h2>
+      <p class="section-intro">The one-paragraph version, before the detail.</p>
+
+      <p><strong>Truffle</strong> is a consumer hardware device — called <strong>Truffle¹</strong> — plus a companion software ecosystem, built by a small Los Angeles company operating as <strong>Deepshard, Inc.</strong> The pitch is a personal computer whose entire job is to run a large language model and a growing set of "apps" (tools) for you, physically in your home, so that your prompts, files, and behavioural data never have to leave the device to reach a cloud model.</p>
+
+      <p>The marketing language for this is an <strong>"exo-cortex"</strong>: an external, always-on extension of your own mind that runs locally, gets to know your habits over time, and — critically to how the company frames it — belongs to you rather than to a hyperscaler's data centre. The homepage copy is unusually blunt about the political framing: <em>"Beyond the confines of corporate controlled Intelligence, Truffle1 emerges as the antithesis, the anti-hero, and a private, local exo-cortex, conceived as a remedy to cloud dependency, recurring costs, and centralized control."</em></p>
+
+      <p>In practice this cashes out as three things bundled together:</p>
+      <ul>
+        <li><strong>A box</strong> — a small, low-power inference computer built around an NVIDIA Jetson module, with visible status LEDs, that sits on a shelf like a router.</li>
+        <li><strong>A client</strong> — desktop app ("Symphony") and iOS app ("Radiance") that let you talk to the device, install "apps," schedule automations, and manage memory/permissions.</li>
+        <li><strong>An SDK</strong> — a Python framework (now called <strong>Truffile</strong>) that lets developers write new tools/integrations the on-device agent can call, and deploy them straight to the hardware.</li>
+      </ul>
+
+      <p>This report treats all three layers, but leans hardest on the third, since that's where the actual AI-engineering decisions — model choice, tool-calling protocol, sandboxing, proactive-agent design — are visible and documented.</p>
+    </section>
+
+    <section id="naming">
+      <h2><span class="num">2</span> Naming Collisions — Read This First</h2>
+      <p class="section-intro">"Truffle" is an unusually overloaded name in the AI/dev-tools space right now. Four unrelated companies use it. This report is about exactly one of them.</p>
+
+      <div class="name-grid">
+        <div class="name-row this">
+          <div class="badge">✓</div>
+          <div>
+            <div class="t">Truffle (truffle.net / itsalltruffles.com) — this report</div>
+            <div class="d">Deepshard, Inc., Los Angeles. Makes the Truffle¹ hardware "exo-cortex" and the Truffile SDK. GitHub org: <code>deepshard</code>. X: <code>@itsalltruffles</code>.</div>
+          </div>
+        </div>
+        <div class="name-row">
+          <div class="badge">✕</div>
+          <div>
+            <div class="t">Truffle Security (trufflesecurity.com)</div>
+            <div class="d">Unrelated cybersecurity company, maker of the open-source secret-scanner <strong>TruffleHog</strong>. Raised a $25M Series B in November 2025 led by Intel Capital and a16z.</div>
+          </div>
+        </div>
+        <div class="name-row">
+          <div class="badge">✕</div>
+          <div>
+            <div class="t">Truffle AI (YC Winter 2025, Bengaluru)</div>
+            <div class="d">Unrelated agent-infrastructure startup founded by Shaunak Srivastava and Rahul Karajgikar. Sells APIs for deploying AI agents (e.g. WhatsApp/Slack support bots) without managing infra. Raised $500K seed in March 2025.</div>
+          </div>
+        </div>
+        <div class="name-row">
+          <div class="badge">✕</div>
+          <div>
+            <div class="t">Truffle (hiretruffle.com)</div>
+            <div class="d">Unrelated recruiting/HR content company; CEO Sean Griffith.</div>
+          </div>
+        </div>
+      </div>
+      <p style="font-size:13.5px;color:var(--text-dim)">Search results for "Truffle" + "AI" mix all four freely — most funding and team searches surface the wrong company. Everything below is cross-checked against <code>truffle.net</code>, <code>docs.truffle.net</code>, and the <code>github.com/deepshard</code> organisation specifically.</p>
+    </section>
+
+    <section id="company">
+      <h2><span class="num">3</span> Company &amp; History</h2>
+
+      <div class="fact-grid">
+        <div class="fact"><div class="k">Legal entity</div><div class="v">Deepshard, Inc.</div></div>
+        <div class="fact"><div class="k">Trades as</div><div class="v">Truffle</div></div>
+        <div class="fact"><div class="k">HQ</div><div class="v">Los Angeles, CA</div></div>
+        <div class="fact"><div class="k">GitHub org</div><div class="v mono">github.com/deepshard</div></div>
+        <div class="fact"><div class="k">Seed funding</div><div class="v">$1.78M (Jul 2022)</div></div>
+        <div class="fact"><div class="k">Investors</div><div class="v">Accelerate Fund, Sprout Fund</div></div>
+        <div class="fact"><div class="k">Public launch</div><div class="v">March 2024</div></div>
+        <div class="fact"><div class="k">Community</div><div class="v mono">discord.gg/itsalltruffles</div></div>
+      </div>
+
+      <p>Deepshard raised a modest $1.78M seed round in July 2022, well before the current wave of AI-hardware attention, then spent roughly 18 months building before a March 2024 public preorder launch as "Truffle-1." The GitHub organisation's stated mission is a single line: <em>"We're building a personal AI computer."</em></p>
+
+      <div class="callout warn">
+        <h4>Unusually anonymous team</h4>
+        <p>Deepshard has been consistently opaque about who runs it. At the 2024 launch, no founder names appeared anywhere on the marketing site, which Hacker News commenters flagged directly as a credibility problem for a company asking for $500 deposits. The clearest public thread back to a real name is a LinkedIn profile for an <strong>Aidan Guarniere</strong>, listed as affiliated with "Deepshard, Inc." in Los Angeles — not confirmed as a founder or as CEO. Support contacts that do appear in the docs and GitHub issues (e.g. <code>muhammad@deepshard.org</code>, <code>hello@deepshard.org</code>) are first-name-only. The company's root domain, <code>itsalltruffles.com</code>, redirects to a page that is literally just ASCII art and the tagline "Stream of consciousness" — the anonymity looks deliberate, part of the brand's off-grid/anti-corporate posture, rather than accidental.</p>
+      </div>
+
+      <p>Whatever the reason, the low profile hasn't stopped the product from shipping and iterating: the public docs changelog runs in weekly-ish increments from April through at least <strong>August 29, 2026</strong> at the time of writing, which is a materially different picture from the render-heavy preorder page HN was skeptical of in 2024 (see <a href="#reception">§8</a>).</p>
+    </section>
+
+    <section id="hardware">
+      <h2><span class="num">4</span> Hardware — Truffle¹</h2>
+      <p class="section-intro">The physical device is not custom silicon — it's a productized NVIDIA Jetson developer module with Truffle's own enclosure, firmware, and always-on software stack on top.</p>
+
+      <div class="table-wrap">
+        <table>
+          <tr><th>Spec</th><th>Value</th></tr>
+          <tr><td>Compute module</td><td class="mono">NVIDIA Jetson AGX Orin, 64GB unified memory</td></tr>
+          <tr><td>Claimed AI performance</td><td class="mono">~275 TOPS (INT8)</td></tr>
+          <tr><td>Memory bandwidth</td><td class="mono">~200 GB/s</td></tr>
+          <tr><td>Power draw</td><td class="mono">~60 W</td></tr>
+          <tr><td>Max model size (on-device)</td><td class="mono">up to ~100B parameters (quantized)</td></tr>
+          <tr><td>Launch benchmark: Mixtral 8x7B</td><td class="mono">~22 tok/s</td></tr>
+          <tr><td>Launch benchmark: Mistral 7B</td><td class="mono">~50 tok/s</td></tr>
+          <tr><td>Connectivity</td><td class="mono">Wi-Fi, Bluetooth LE, USB-C</td></tr>
+          <tr><td>Deployment model</td><td>Home server appliance — always on, discovered on the LAN by the <code>truffile scan</code> CLI / Symphony onboarding</td></tr>
+          <tr><td>Launch price</td><td class="mono">$1,299 (with a $500 refundable preorder deposit in 2024)</td></tr>
+        </table>
+      </div>
+
+      <p>A dedicated <code>docs.truffle.net/hardware/overview</code> page exists but was marked "coming soon" as of this research pass — notable, since every software surface (SDK, client, release notes) has thorough docs. That gap, plus the release notes' silence on any hardware revision, suggests the currently-shipping unit is still the original Orin-based board rather than a refresh onto NVIDIA's newer Jetson Thor (Blackwell) line, which only reached general availability in mid/late 2026.</p>
+
+      <p>The enclosure carries programmable status LEDs that the on-device agent can control directly — the August 2026 release notes describe prompting the agent in natural language to build a scheduled "dim the LEDs 8pm–6am" routine, and to re-theme the LED behaviour "Tron-like" by having it read and rewrite its own LED-control skill file. That's a small but telling detail: even a physical, ambient feature of the hardware is exposed as something the agent can reprogram, not just a fixed firmware setting.</p>
+    </section>
+
+    <section id="software">
+      <h2><span class="num">5</span> Software Stack</h2>
+      <p class="section-intro">Four named surfaces, each with a distinct job.</p>
+
+      <div class="stack-cards">
+        <div class="stack-card">
+          <div class="name">Symphony</div>
+          <p>Desktop client (Windows, macOS Intel + Apple Silicon, Linux). Handles device onboarding/pairing, memory &amp; custom-instruction settings, app installs and OAuth flows, and — as of Aug 2026 — a system-tray quick-actions menu for schedules, LEDs, and remote access.</p>
+        </div>
+        <div class="stack-card">
+          <div class="name">Radiance</div>
+          <p>iOS companion app. Received a full visual redesign across mid-2026 releases: Home/Lock-screen widgets, voice input, redesigned search/schedules/settings, and direct in-app app-store installs.</p>
+        </div>
+        <div class="stack-card">
+          <div class="name">Conductor</div>
+          <p>A lighter-weight control surface reachable from Symphony's tray menu alongside Convo and the full app — functions as a quick dashboard rather than a separate product.</p>
+        </div>
+        <div class="stack-card">
+          <div class="name">Convo</div>
+          <p>The actual agent conversation backend. Stateful, thread-based (a fixed "Main" thread plus arbitrary side threads), and — critically for developers — fully scriptable from the CLI with JSON output and exit codes. Replaced an older Chat/Task-ID system in a one-way, non-migrated cutover on August 10, 2026.</p>
+        </div>
+      </div>
+
+      <h3>The App Store</h3>
+      <p>Around Convo sits an app store of first- and third-party integrations the agent can call or be extended with. Examples that shipped through 2026 release notes include Slack, Gmail (multi-account), Notion, Obsidian, WHOOP (wearable health data), Home Assistant, Exa search, Alpha Vantage (market data), Internet Archive / Wayback Machine / Project Gutenberg, X, Firecrawl, Higgsfield (image/video generation), Pinterest, Viator (travel), and a "Daily News" digest app. As of August 29, 2026, apps also support <strong>multiple accounts per app</strong> (e.g. two Slack workspaces, a personal and work Gmail) and a <strong>per-connection permission model</strong> — Read only, Read and write, or Auto review — that governs how much autonomy the agent gets with that specific account.</p>
+    </section>
+
+    <section id="ai" class="wide" style="max-width:none;">
+      <div style="max-width:860px">
+      <h2><span class="num">6</span> AI Engineering — How It's Actually Built</h2>
+      <p class="section-intro">This is the part worth reading closely. Truffle's AI-engineering story is really the story of three successive SDKs converging on a standard protocol (MCP), wrapped around a small, swappable local model and a genuinely proactive agent loop.</p>
+      </div>
+
+      <div style="max-width:860px" id="ai-models">
+      <h3>6.1 · Model lineage — what's actually running</h3>
+      <p>Truffle doesn't train its own foundation model. Its engineering work is in <em>serving, routing to, and building tools around</em> open-weight models on constrained edge hardware, and in swapping the underlying model as better small models ship.</p>
+      </div>
+      <div class="table-wrap" style="max-width:860px">
+        <table>
+          <tr><th>Period</th><th>On-device model(s)</th><th>Cloud-assist path</th></tr>
+          <tr><td class="mono">Mar 2024 launch</td><td>Mixtral 8×7B (~22 tok/s), Mistral 7B (~50 tok/s)</td><td>—</td></tr>
+          <tr><td class="mono">~2025 (SDK docs)</td><td>Gemma3-27B / Qwen-32B / Qwen-14B, selectable by task weight</td><td>DeepSeek R1 for heavier reasoning</td></tr>
+          <tr><td class="mono">Apr 19, 2026</td><td>Upgraded to <strong>Qwen 3.6</strong> — shipped specifically for better agentic tool-use</td><td>—</td></tr>
+          <tr><td class="mono">May 11, 2026</td><td>Added a dedicated local <strong>embeddings model</strong> for long-term memory; context window enlarged</td><td>—</td></tr>
+        </table>
+      </div>
+      <div style="max-width:860px">
+      <p>Two things stand out. First, the model is explicitly a replaceable component — the release notes treat a model swap ("Qwen 3.6 now runs on your Truffle!") the same way a SaaS product would announce a backend upgrade, with the device even printing a screenshot of itself identifying as Qwen 3.6 when asked. Second, the earlier SDK generation described an optional cloud fallback (DeepSeek R1) for tasks the local model couldn't handle well — a pragmatic hybrid stance that sits in some tension with the "fully local, no cloud" marketing, though the newer 2026 docs no longer mention a cloud model explicitly, which may indicate the local model has since gotten good enough to drop it, or simply that it's undocumented.</p>
+
+      <h4>Routing: a mixture-of-models classifier</h4>
+      <p>The original 2024 SDK documentation describes the core dispatch mechanism plainly: every app declares a <code>Goal</code> string in its metadata, and this goal is <em>"presented to the core mixture-of-models almost as a system prompt."</em> In other words, app selection isn't a hand-written intent classifier — it's another LLM call (or set of calls) that reads the user's prompt against every installed app's declared purpose and description, then routes to the best match. The docs note that each app's <code>description</code> field also seeds <em>"synthetic data for live classification,"</em> implying the routing layer is calibrated/fine-tuned using generated examples per app rather than pure zero-shot matching.</p>
+      </div>
+
+      <div style="max-width:860px" id="ai-inference">
+      <h3>6.2 · Inference API — OpenAI-compatible, on your LAN</h3>
+      <p>Every Truffle exposes a local, OpenAI-Chat-Completions-compatible REST surface at <code>/if2/v1/*</code> ("IF2" = inference-facing v2, presumably). This is the same shape as calling <code>api.openai.com</code>, just pointed at a device on your home network instead of a cloud endpoint — a deliberate compatibility choice that lets any existing OpenAI-SDK client, LangChain integration, or curl script work against the device with only a base-URL change.</p>
+      </div>
+
+      <div class="code-label">List available models</div>
+      <pre><code>curl -sS http://&lt;device-host&gt;/if2/v1/models | python -m json.tool</code></pre>
+
+      <div class="code-label">Chat completion (non-streaming)</div>
+      <pre><code>curl -sS http://&lt;device-host&gt;/if2/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "&lt;model-id-or-uuid&gt;",
+    "messages": [
+      {"role": "user", "content": "Give me one sentence about Truffle."}
+    ]
+  }'</code></pre>
+
+      <div style="max-width:860px">
+      <p>The request schema supports the features you'd expect from a modern serving stack, not a toy demo: <code>stream</code> (SSE, terminated by <code>data: [DONE]</code>, with an <code>include_usage</code> option for token accounting), <code>temperature</code> / <code>top_p</code>, <code>max_tokens</code>, a <code>reasoning: {"enabled": true}</code> flag that surfaces the model's chain-of-thought as a separate field, and full <code>tools</code> / <code>tool_choice</code> support in OpenAI's function-calling format. Vision input is handled the same way OpenAI's own API does it — an <code>image_url</code> content block with a base64 data URI — and natively supports JPEG/PNG/BMP, with other formats transcoded through Pillow if it's installed.</p>
+
+      <p>Streaming events carry incremental <code>content</code>, <code>reasoning</code>, and <code>tool_calls</code> deltas independently, which is what lets the CLI's <code>truffile infer</code> REPL render a live "thinking" trace, a token-per-second readout (<code>tokens [142/580/722] | decode 48.2 t/s | ttft 312ms</code>), and streamed tool-call indicators all at once — genuinely useful ergonomics for anyone debugging prompts or tool schemas against the on-device model before shipping an app.</p>
+      </div>
+
+      <div style="max-width:860px" id="ai-agent">
+      <h3>6.3 · Agent architecture — Convo, memory, and proactivity</h3>
+      <p><strong>Convo</strong> is the layer above raw inference: a stateful, multi-threaded agent session per user, with a fixed <code>Main</code> thread (id <code>0</code>) and any number of ad-hoc side threads. It is deliberately built to be scriptable, not just chatted with through a UI — the CLI accepts one-shot prompts with explicit thread targeting and returns machine-readable JSON with a defined contract:</p>
+      </div>
+
+      <div class="code-label">truffile convo — one-shot automation contract</div>
+      <pre><code>{
+  "task_id": "123",
+  "thread_id": "123",
+  "backend": "convo",
+  "title": "QA debug",
+  "device": "truffle-6272",
+  "content": "...",
+  "thinking": null,
+  "tool_calls": null,
+  "pending_user_response": false,
+  "status": "ok",
+  "error": null,
+  "interrupted": false,
+  "timed_out": false
+}</code></pre>
+
+      <div style="max-width:860px">
+      <p>Exit codes are equally deliberate: <code>0</code> success, <code>1</code> runtime/auth error, <code>2</code> bad input, <code>3</code> "needs a human in a supported client" (e.g. an OAuth or setup step Convo can't complete headlessly), <code>75</code> "the completion fence was lost — do not blindly retry," <code>124</code> timeout, <code>130</code> interrupted. Designing explicit, distinguishable exit codes for an agent CLI — especially the <code>75</code>/"don't auto-retry" case — is a small but real sign of engineering maturity: it's the kind of thing you only add after being burned by naive automation double-sending requests.</p>
+
+      <h4>Memory and personalization ("Dreaming")</h4>
+      <p>The marketing site describes a nightly "dreaming" cycle — <em>"moving beyond interactions to consolidation and reflection, constructing a 'you world.'"</em> The engineering reality behind that framing, per the 2026 release notes, is more concrete: a locally-run embeddings model (added May 2026) backs a searchable, taggable memory store, with a distinguished "User profile" memory category the model is told to weight heavily, plus user-editable "Custom instructions" — essentially a local vector-memory system plus a system-prompt layer, both exposed and editable through Symphony rather than hidden.</p>
+
+      <h4>Proactivity — the agent acts without being asked</h4>
+      <p>The most distinctive architectural piece is how <em>background</em> apps feed a separate proactive-agent loop. A background app doesn't return a chat response — it periodically calls <code>submit_text(content=..., uris=..., priority=...)</code> with a natural-language description of something that changed (a price move, a new PR, a WHOOP recovery score). The proactive agent ingests these submissions across <em>every installed app at once</em> and decides whether to act, notify, or stay quiet.</p>
+
+      <div class="callout warn">
+        <h4>Documented cross-app side effect</h4>
+        <p>Truffle's own SDK docs flag a real behavioural hazard here: <em>"Background context can trigger action in any app, not just yours. If an Instagram message about an Amazon order lands in the proactive agent's context, Truffle might use your Amazon app to add the item to cart."</em> That's a direct, disclosed consequence of pooling all background context into one proactive decision-maker — app developers are explicitly told to write their context submissions with that cross-triggering in mind, and the August 2026 release's per-app <strong>read-only / read-write / auto-review</strong> permission tiers read as the product-level mitigation for exactly this risk.</p>
+      </div>
+      </div>
+
+      <div style="max-width:860px" id="ai-mcp">
+      <h3>6.4 · Tool-use — from custom protobufs to native MCP</h3>
+      <p>This is where the SDK's history is most visible, because Truffle rebuilt its own tool-calling protocol twice, converging on the industry-standard one.</p>
+
+      <h4>Generation 1 (2024) — the original <code>truffle</code> SDK</h4>
+      <p>The first public SDK described apps as <em>"a toolbox in a sandbox"</em>: a Python class, decorated per-method with <code>@truffle.tool(...)</code> and <code>@truffle.args(...)</code>, running inside an <strong>ephemeral Ubuntu ARM container</strong> with dependencies auto-installed. Under the hood, the SDK parsed each tool's type-annotated signature and <strong>auto-generated a gRPC server plus Protobuf request/response messages</strong> for it at runtime — a deliberately language-agnostic design (Python first, but the protobuf layer was explicitly meant to make binding other languages easy later). State lived in ordinary instance attributes and was transparently serialized/restored between sessions.</p>
+
+      <h4>Generation 2 (2025) — <code>hyphae</code></h4>
+      <p>An intermediate SDK, <code>hyphae</code>, kept the decorator model (<code>@hyphae.tool</code>, <code>@hyphae.args</code>) but added <strong>predicate-gated tools</strong> — a tool can declare <code>predicate=lambda self: self.has_paper_selected()</code> so it's only offered to the model once relevant state exists, which is a clean way to keep a large tool surface from confusing the router. It also introduced a Docker-style <code>Truffile</code> container manifest (<code>FROM hyphaehyphae/alpine-python:arm64</code>) and a <code>hyphae build / connect / upload</code> CLI workflow, plus a documented pattern for one app delegating work to another model entirely (a "Researcher" tool that calls out to Perplexity for expert analysis).</p>
+
+      <h4>Generation 3 (2026, current) — <code>truffile</code> and native MCP</h4>
+      <p>The current SDK, confusingly also spelled <strong>Truffile</strong> (a rename/merge of the CLI and SDK), drops the custom gRPC-per-tool machinery for foreground tools in favour of the <strong>Model Context Protocol (MCP)</strong> — the open standard for exposing tools to LLM agents. A foreground app now subclasses <code>ForegroundApp</code>, serves MCP over <strong>streamable HTTP</strong> (not <code>stdio</code>), and registers tools with a <code>ToolSpec</code> object whose fields map directly onto MCP tool metadata (name, description, icon, <code>annotations</code> like <code>readOnlyHint</code> / <code>destructiveHint</code>). Background apps keep a lighter-weight, Truffle-specific runtime (<code>BackgroundWorkerApp</code>) for scheduling and context submission, but can reach into their own foreground's MCP tools via <code>ctx.connect_foreground()</code> — reusing one app's auth/parsing logic from its own background cycle instead of duplicating it.</p>
+
+      <p>Adopting MCP is a meaningful engineering decision, not just a rename: it means any Truffle foreground app is, structurally, a standard MCP server — and the reverse also works, since <code>truffile infer --mcp &lt;url&gt;</code> lets a developer point the on-device model at <em>any</em> external MCP server (not just Truffle-native ones) for local testing. Truffle apps and, say, an Anthropic-ecosystem MCP server are now interchangeable at the protocol level.</p>
+      </div>
+
+      <div style="max-width:860px" id="ai-runtime">
+      <h4>Runtime discipline</h4>
+      <p>The docs are unusually candid about a specific operational failure mode: apps that don't close their own HTTP/DB/subprocess handles on exit. Both the foreground and background app guides independently call this out as <strong>"the #1 cause of flaky redeploys and container runtime crashes,"</strong> and every bundled example app wires an <code>atexit</code> cleanup handler. It's the kind of guidance that only makes it into docs after the team has been paged for it — a small tell about how the ephemeral-container model actually behaves in production.</p>
+      </div>
+
+      <div style="max-width:860px" id="ai-sdk">
+      <h3>6.5 · Developer workflow</h3>
+      <p>The CLI-first loop is consistent across all three SDK generations, and in the current one looks like this:</p>
+      </div>
+      <pre><code>pip install truffile
+
+truffile scan                          # discover Truffle devices on the LAN
+truffile connect truffle-6272 --user-id "$TRUFFLE_USER_ID"
+
+truffile create my-app --path ./apps   # scaffold truffile.yaml + fg/bg stubs
+truffile validate ./apps/my-app        # lint config + parse Python for syntax errors
+truffile deploy --dry-run ./apps/my-app
+truffile deploy ./apps/my-app          # upload, run install steps, register
+
+truffile infer --mcp http://127.0.0.1:8000/mcp   # test the app's MCP server locally, pre-deploy
+truffile convo --new --json --quiet --timeout 60 "Summarize my installed apps"</code></pre>
+
+      <div style="max-width:860px" id="ai-code">
+      <h4>Minimal working app (current SDK)</h4>
+      <p>A complete foreground app — one callable tool, wired for MCP, with proper cleanup — from Truffle's own docs:</p>
+      </div>
+      <pre><code>from truffile.app_runtime import ForegroundApp, ToolSpec, err
+from mcp.types import CallToolResult, TextContent
+import atexit, httpx
+
+class MyApp(ForegroundApp):
+    def __init__(self) -&gt; None:
+        super().__init__("myapp", logger_name="myapp.foreground")
+        self._http = httpx.AsyncClient(timeout=30.0)
+        self._register_tools()
+
+    def _register_tools(self) -&gt; None:
+        @self.tool(ToolSpec(
+            name="search_web",
+            description="Search the web and return the top results. "
+                         "Use this when the user asks about current events.",
+            icon="magnifying-glass",
+            annotations={"readOnlyHint": True, "destructiveHint": False},
+        ))
+        async def search_web(query: str, limit: int = 5):
+            if not query.strip():
+                return err("query is required")
+            response = await self._http.get(
+                "https://api.example.com/search", params={"q": query, "n": limit}
+            )
+            results = response.json().get("results", [])[:limit]
+            text = "\n".join(f"- {r['title']} — {r['url']}" for r in results)
+            return CallToolResult(content=[TextContent(type="text", text=text)])
+
+    async def aclose(self) -&gt; None:
+        await self._http.aclose()
+
+app = MyApp()
+atexit.register(lambda: __import__("asyncio").run(app.aclose()))
+
+if __name__ == "__main__":
+    app.run()</code></pre>
+
+      <div style="max-width:860px">
+      <p>Note what's absent: no gRPC stub generation, no protobuf schema file, no separate manifest describing the tool's arguments — the function's own Python type hints <em>are</em> the MCP input schema, and the docstring/description is what the router uses to decide when to call it. That's a direct simplification versus Generation 1's explicit protobuf-generation step.</p>
+
+      <h4>An AI-native piece of documentation</h4>
+      <p>Worth flagging on its own: the SDK's install page ships a ready-to-paste prompt block explicitly designed to be fed to <strong>Claude Code, Codex, or another coding agent</strong>, instructing that agent to set up the whole Python environment, install Truffile, run <code>truffile load all</code> to pull down bundled <code>SKILL.md</code> files (one each for the CLI, Convo, raw inference, and app-creation), and then read those skills before writing any code. In effect, Truffle ships onboarding material written <em>for an AI agent to execute</em>, not just for a human to read — a small but concrete example of "AI engineering" bleeding into how the product documents itself.</p>
+      </div>
+
+      <div style="max-width:860px" id="ai-selfauthor">
+      <h4>Emergent capability: agents that write their own tools</h4>
+      <p>The June 26, 2026 release introduced <strong>RunToolScript</strong>: the on-device agent can write a new tool from a natural-language request and save it for reuse, rather than the developer pre-registering every possible action. The shipped examples are genuinely agentic — "make a tool where every time there's a GitHub PR assigned to me, message me in my personal DM on Slack" produces a persistent, schedulable automation, generated and installed by the model itself rather than hand-coded by a developer. Combined with the App Store's "install/delete apps directly from Convo" capability (Aug 1, 2026), the direction of travel is toward the agent managing its own toolset, not just using a fixed one.</p>
+      </div>
+
+      <div style="max-width:860px" id="ai-registry">
+      <h3>6.6 · Agent Registry Protocol — a Web3 side-quest</h3>
+      <p>One repository in the <code>deepshard</code> GitHub org, <strong>AgentRegistry</strong>, describes something the shipped consumer product doesn't currently expose: a decentralized, EVM/Solidity-based <em>"AppStore for agents,"</em> where Truffle devices themselves are the trust anchor.</p>
+      <p>The mechanism is specific enough to be worth understanding even as speculative R&amp;D:</p>
+      <ul>
+        <li><strong>Hardware attestation</strong> — a <code>HardwareAttestation.sol</code> contract verifies a device's serial number against a Merkle root signed by the hardware manufacturer's root key, so only genuine Truffle units can register as agents on-chain.</li>
+        <li><strong>Sybil resistance via TEE</strong> — this attestation is tied to the Jetson Orin's <strong>OP-TEE</strong> (a Trusted Execution Environment), meaning one physical device can't cheaply masquerade as many agents.</li>
+        <li><strong>Staking &amp; a native token</strong> — an <code>AgentRegistry.sol</code> contract handles discovery and requires economic stake from registered agents; a <code>SomeNativeToken.sol</code> contract (literally named that, in the source) provides the staking/payment asset.</li>
+        <li><strong>Off-chain execution</strong> — only discovery, identity, and rules live on-chain; actual agent-to-agent interaction and payment settlement are designed to happen off-chain for scalability.</li>
+      </ul>
+      <p>Read alongside the AI-engineering material above, this is best understood as Truffle's answer to "how do autonomous agents pay and verify each other" — using owned, attested hardware as a substitute for the identity/reputation systems that centralized agent marketplaces (an app store, an API gateway) would normally provide. It has not shipped in Symphony, Radiance, or the Truffile SDK as of this research pass, and should be read as exploratory rather than product.</p>
+      </div>
+    </section>
+
+    <section id="timeline">
+      <h2><span class="num">7</span> Release Timeline</h2>
+      <p class="section-intro">Selected highlights from launch to the most recent public changelog (docs.truffle.net/release-notes), skewed toward AI/agent-relevant changes.</p>
+
+      <ul class="timeline">
+        <li>
+          <div class="date">March 2024</div>
+          <div class="title">Public launch as "Truffle-1"</div>
+          <div class="desc">$1,299 preorder ($500 deposit), Jetson AGX Orin 64GB, Mixtral 8×7B at ~22 tok/s. Decorator-based Python SDK ("toolbox in a sandbox") with gRPC/Protobuf auto-generated per tool.</div>
+        </li>
+        <li>
+          <div class="date">2025</div>
+          <div class="title"><code>hyphae</code> SDK generation</div>
+          <div class="desc">Predicate-gated tools, Docker-style app containers, on-device models shift to Gemma3-27B / Qwen-32B / Qwen-14B, with an optional DeepSeek R1 cloud-assist path for heavier reasoning.</div>
+        </li>
+        <li>
+          <div class="date">Apr 19, 2026</div>
+          <div class="title">Qwen 3.6 becomes the on-device model</div>
+          <div class="desc">Pitched specifically as an agentic-tool-use upgrade. Same release adds Obsidian, vision/image upload in Convo, and previews Radiance for iOS.</div>
+        </li>
+        <li>
+          <div class="date">May 11, 2026</div>
+          <div class="title">Local embeddings model, larger context, mid-turn steering</div>
+          <div class="desc">Long-term memory gets a real local embeddings backbone; users can queue messages and steer the model mid-response; password + recovery-code login added.</div>
+        </li>
+        <li>
+          <div class="date">Jun 26, 2026</div>
+          <div class="title">RunToolScript — self-authored tools</div>
+          <div class="desc">The agent can write and persist its own tools from natural-language requests. LED control exposed to the agent. Convo gets soft/hard reset commands.</div>
+        </li>
+        <li>
+          <div class="date">Jul 4 – Aug 1, 2026</div>
+          <div class="title">App Store expansion, proactivity push, Radiance on iOS ships</div>
+          <div class="desc">Alpha Vantage, Internet Archive, Daily News, X, Firecrawl apps added. "Truffle takes more initiative" release; iOS widgets; install apps directly through conversation.</div>
+        </li>
+        <li>
+          <div class="date">Aug 10, 2026</div>
+          <div class="title">Convo replaces the legacy Chat/Task backend</div>
+          <div class="desc">One-way, non-migrated cutover to the current thread-based agent model; scriptable one-shot mode with JSON contracts and defined exit codes ships alongside it.</div>
+        </li>
+        <li>
+          <div class="date">Aug 29, 2026 (latest at research time)</div>
+          <div class="title">Multi-account apps + granular tool permissions</div>
+          <div class="desc">Multiple accounts per app (e.g. two Slack workspaces); per-connection Read-only / Read-write / Auto-review permission tiers — the direct product-level response to cross-app proactive-agent risk.</div>
+        </li>
+      </ul>
+    </section>
+
+    <section id="reception">
+      <h2><span class="num">8</span> Reception &amp; Criticism</h2>
+      <p class="section-intro">The 2024 launch drew real skepticism on Hacker News and X. Much of it reads differently with two-plus years of shipped changelog behind it — but it's useful context for anyone evaluating the product today.</p>
+
+      <h3>What critics said at launch (HN thread on Truffle-1, March 2024)</h3>
+      <ul>
+        <li><strong>"It's just a Jetson with a markup."</strong> Commenters pointed out the core hardware is a stock NVIDIA Jetson AGX Orin dev module, and that buying the board directly plus writing your own inference stack would cost $300–400 less than the $1,299 asking price.</li>
+        <li><strong>Closed compiler on an "open" pitch.</strong> Truffle stated its compiler/middleware was proprietary and "wouldn't be valuable to open source anyway" — a claim critics found unconvincing given the product otherwise leans on the open-source-model narrative (Mixtral, Mistral).</li>
+        <li><strong>Naming collision on install.</strong> The original install command, <code>brew install truffle</code>, collided with an unrelated, already-established Ethereum development tool of the same name on Homebrew — read as a sign of insufficient diligence.</li>
+        <li><strong>No named leadership, mostly renders.</strong> At launch, the marketing site had no founder names and the product existed "almost exclusively" as renders rather than demoed hardware — for a company asking for money up front, this read as a real red flag to several commenters (see <a href="#company">§3</a> for where that anonymity stands today).</li>
+      </ul>
+
+      <h3>A counter-voice</h3>
+      <p>Not everyone was skeptical. Indie-hacker/tech commentator <strong>Pieter Levels (@levelsio)</strong> publicly praised the launch specifically for its lack of hype, contrasting it with the Humane AI Pin's polished-but-empty marketing: paraphrased, his take was that Truffle openly described itself as "a wrapper for an Nvidia chip" whose software made it meaningfully better — not claiming to be the best value, but at least being honest about what it was.</p>
+
+      <h3>Where things stand now</h3>
+      <p>The most concrete answer to the 2024 skepticism is simply that the product kept shipping: a weekly-cadence public changelog through August 2026, a real (if still small-team) app ecosystem, a native iOS app, and a tool-calling layer that converged on an actual industry standard (MCP) rather than staying a proprietary dead end. That doesn't resolve the anonymity question, and no major outlet appears to have published an independent hands-on review of a shipped unit — but "vaporware" is a harder label to apply to something with two and a half years of dated, specific release notes than it was to a preorder page of renders.</p>
+    </section>
+
+    <section id="landscape">
+      <h2><span class="num">9</span> Competitive Landscape</h2>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Product</th><th>Model location</th><th>Business model</th><th>How Truffle differs</th></tr>
+          <tr>
+            <td><strong>Rabbit R1 / Humane AI Pin</strong></td>
+            <td>Cloud</td>
+            <td>Hardware + often a subscription</td>
+            <td>Truffle inverts both axes: inference is local by design, and there's no subscription implied by the public materials — the pitch is explicitly anti-recurring-cost.</td>
+          </tr>
+          <tr>
+            <td><strong>ChatGPT / Claude / Gemini apps</strong></td>
+            <td>Cloud</td>
+            <td>Subscription</td>
+            <td>No dedicated hardware, no on-device data residency, no home-automation-style "app" ecosystem tied to physical device presence.</td>
+          </tr>
+          <tr>
+            <td><strong>DIY local LLM box</strong> (llama.cpp / Ollama on a home server)</td>
+            <td>Local</td>
+            <td>One-time hardware cost</td>
+            <td>Truffle adds the parts a DIY box doesn't have out of the box: a polished client (Symphony/Radiance), a maintained app store, a proactive agent loop, MCP-native tool SDK, and OTA model/software updates.</td>
+          </tr>
+          <tr>
+            <td><strong>Home automation hubs</strong> (Home Assistant, etc.)</td>
+            <td>Local/hybrid</td>
+            <td>One-time or open-source</td>
+            <td>Truffle treats these as one integration among many (there's literally a Home Assistant Truffle app) rather than being a home-automation product itself — its centre of gravity is general personal-agent behaviour, not device control specifically.</td>
+          </tr>
+        </table>
+      </div>
+      <p>The most defensible positioning is for a specific audience: privacy-conscious power users and developers who want a real device to build personal agent tooling against — one with actual file-system/API access to their own accounts (Gmail, Notion, Obsidian, a wearable) — rather than a sandboxed cloud assistant. The MCP-native SDK in particular means skills built for Truffle and skills built for other MCP-compatible agent runtimes are largely portable, which lowers the cost of betting on the platform as a developer.</p>
+    </section>
+
+    <section id="buildbuy">
+      <h2><span class="num">10</span> Build vs. Buy</h2>
+      <p class="section-intro">"Just buy the Jetson yourself" is the obvious objection to a $1,299 appliance built on off-the-shelf NVIDIA hardware. As of September 2026 that objection is weaker than it sounds — and in one specific case it has actually inverted. Figures below are current-as-of-research prices, independently re-checked against live listings and vendor pages, not the stale 2024 numbers that still circulate.</p>
+
+      <div class="callout warn">
+        <h4>The one everyone assumes, and gets wrong</h4>
+        <p>NVIDIA raised Jetson-line prices by up to 101% on July 21–22, 2026, citing industry-wide memory costs. The bare <strong>Jetson AGX Orin 64GB Developer Kit</strong> — the exact module inside a Truffle — moved from a $1,999 launch price to <strong>$3,499 on NVIDIA's own marketplace</strong> (live-confirmed; a third-party reseller SKU shows $2,999, Amazon $3,299). Add a required NVMe SSD (the onboard 64GB fills up almost immediately, and 2026 NAND-shortage pricing puts a 1TB drive at $130–200) and a from-scratch DIY build on the <em>identical silicon</em> now runs <strong>~$3,300–3,700</strong> — roughly 2.5–3x a complete Truffle, before writing a single line of the agent/memory/tool-ecosystem software Truffle ships with.</p>
+      </div>
+
+      <h3>10.1 · Building it yourself</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Path</th><th>Upfront cost (Sep 2026)</th><th>Setup effort</th><th>The catch</th></tr>
+          <tr>
+            <td><strong>Bare Jetson AGX Orin 64GB</strong> + llama.cpp/Ollama</td>
+            <td class="mono">~$3,300–3,700</td>
+            <td>Medium–high — flash JetPack from a separate host, add storage, fight ARM/CUDA build errors</td>
+            <td>Same chip as Truffle, but now <em>costs more</em> than Truffle post price-hike, and ships with none of the app ecosystem, mobile client, or proactive agent</td>
+          </tr>
+          <tr>
+            <td><strong>Mac mini / Mac Studio</strong> (Apple Silicon, Ollama/LM Studio/MLX)</td>
+            <td class="mono">$2,899–$5,399+</td>
+            <td>Low for basic chat, high to replicate proactivity/remote access</td>
+            <td>2–4x the price for a much faster general-purpose machine; hyped 2026 benchmarks for the new M5 Max are pre-launch marketing — bandwidth math points to real 70B throughput closer to 8–15 tok/s, not the 25–32 tok/s circulating on SEO sites</td>
+          </tr>
+          <tr>
+            <td><strong>Budget/used PC + consumer GPU</strong> (RTX 3090 used, or RTX 4060 Ti/5070 new)</td>
+            <td class="mono">~$1,000–1,700</td>
+            <td>High — drivers, systemd services, your own remote-access tunnel</td>
+            <td>The one DIY path that can still undercut Truffle, but 2026 VRAM-shortage pricing has eaten most of the margin, and Ollama still has no native MCP support — every tool integration needs a bridge you build yourself</td>
+          </tr>
+          <tr>
+            <td><strong>Open-source kit</strong> (Home Assistant + Ollama/Open WebUI, on a NAS or Ryzen AI Max mini-PC)</td>
+            <td class="mono">$260–330 (weak) to $1,700–2,400 (capable)</td>
+            <td>High — no single installer; every layer is a separate project</td>
+            <td>Cheapest entry point of any option, but the cheap tier is CPU-bound and slow, and Home Assistant's own docs describe its AI layer as <em>reactive, not autonomous</em> — nothing in this category replicates Truffle's proactive agent</td>
+          </tr>
+        </table>
+      </div>
+      <p>The pattern across all four DIY paths is the same: raw model-serving capability is achievable, often at competitive or better tokens/sec once you're not bandwidth-bound by the Jetson's ~200GB/s memory. What none of them replicate without real engineering effort is the packaged part of the product — a mobile app, a stateful multi-thread agent, an OAuth-managed app store, and above all a <em>proactive</em> background agent, which every option above either lacks entirely or explicitly disclaims (Home Assistant's own architecture docs call their assistant reactive by design).</p>
+
+      <h3>10.2 · Buying a different device instead</h3>
+      <p>Three other "personal AI hardware" gadgets get compared to Truffle by default, and none of them compete on the same axis — all three are fully cloud-dependent, the opposite of Truffle's core pitch.</p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Device</th><th>Price</th><th>2026 status</th></tr>
+          <tr><td><strong>Rabbit R1</strong></td><td class="mono">$199, no subscription</td><td>Still sold and updated, but reputation never recovered from a 2024 investigation alleging its "Large Action Model" was largely GPT-3.5 plus browser scripting</td></tr>
+          <tr><td><strong>Humane AI Pin</strong></td><td class="mono">was $699 + $24/mo</td><td><strong>Dead.</strong> HP acquired Humane's software/patents/team for ~$116M in Feb 2025 and shut the cloud backend off Feb 28, 2025 — every sold unit stopped working as an AI device, permanently, that day</td></tr>
+          <tr><td><strong>Friend necklace</strong></td><td class="mono">$249 (v2, Jul 2026)</td><td>Pivoted to companionship/emotional-support framing rather than a tool-calling assistant — a different product category, not really a Truffle substitute</td></tr>
+        </table>
+      </div>
+      <div class="callout">
+        <h4>The Humane Pin is the cautionary tale Truffle's marketing is built around</h4>
+        <p>Every Humane Pin buyer paid for hardware whose intelligence lived entirely on a vendor's servers; when that vendor's business ended, the hardware became e-waste overnight, with zero local fallback. That's the exact failure mode Truffle's "exo-cortex, no cloud dependency" pitch is positioned against — whatever else is uncertain about a small, low-profile company, an on-device model can't be switched off remotely by an acquirer the way Humane's could.</p>
+      </div>
+
+      <h3>10.3 · Skipping hardware entirely</h3>
+      <p>The lowest-effort alternative is simply not buying a device: use existing phones/laptops with ChatGPT, Claude, or Gemini. In 2026 all three ship real scheduled/background-agent features — OpenAI's Scheduled Tasks, Anthropic's Claude Cowork, and Google's Gemini Spark — that partially answer Truffle's "proactivity" pitch, though each depends on a companion app staying reachable rather than running on owned hardware.</p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Tier</th><th>Monthly cost</th><th>Break-even vs. Truffle's $1,299</th></tr>
+          <tr><td>Entry subscription (ChatGPT Plus / Claude Pro / Gemini Pro)</td><td class="mono">$20/mo</td><td>~65 months (5.4 years)</td></tr>
+          <tr><td>Power tier (ChatGPT Pro / Claude Max / Gemini Ultra)</td><td class="mono">$100–$200/mo</td><td>6.5–13 months</td></tr>
+          <tr><td>Heavy agentic API usage (tool-calling, background polling)</td><td class="mono">$100–$500+/mo, uncapped</td><td>as little as 1–4 months, then compounds forever</td></tr>
+        </table>
+      </div>
+      <p>The privacy trade is the mirror image of the cost trade: cloud assistants generally out-reason a mid-size on-device open model, but prompts and connected-app data are processed on vendor servers, and consumer tiers default to training on conversations unless a user actively opts out. Worth noting in fairness to the comparison: Truffle's own MCP "apps" (Slack, Gmail, Notion) still send data to those same third-party clouds whenever actually invoked — full local sovereignty applies to the model inference step, not to every connected service.</p>
+
+      <h3>10.4 · The verdict</h3>
+      <p>For someone who already owns capable Linux/Docker skills and is building a hobby project, a used-GPU PC (~$1,000–1,700) is the one path that can genuinely undercut Truffle on price while matching or beating it on raw tokens/sec — at the cost of weeks of integration work and zero vendor support if it breaks. For someone who wants the newest, fastest hardware and doesn't mind paying for it, a Mac Studio or a Ryzen AI Max mini-PC gets more headroom for 2–4x the money. For someone who wants to skip hardware and infrastructure decisions altogether, a cloud subscription is cheaper for the first year and smarter per query, then gets more expensive than Truffle for as long as it keeps being used. Truffle's actual pitch isn't "the cheapest way to run an LLM at home" — on 2026 pricing, several DIY paths no longer are — it's the only option in this list that bundles owned, offline inference with a maintained app ecosystem, a mobile client, and a standing proactive agent as one product, with one vendor accountable for all of it staying in sync.</p>
+    </section>
+
+    <section id="macmini">
+      <h2><span class="num">11</span> The Mac Mini Path — Building It as an Aspiring AI Engineer</h2>
+      <p class="section-intro">§10.1 asked "is a Mac cheaper than a Truffle?" This asks a different question: if the actual goal is <em>learning to build systems like Truffle</em> rather than owning one, is a Mac mini a good training platform? The honest answer is yes — better, in some ways, than either buying a Truffle or buying the priciest Mac configuration available.</p>
+
+      <h3>11.1 · Two budgets, two ambitions</h3>
+      <p>The mistake most beginners make is buying the $2,899 64GB configuration on day one because that's the number that showed up in the cost comparison above. It's the wrong first purchase for someone learning, not because it's a bad machine, but because the skills below are learned identically at 8B-model scale as they are at 70B-model scale — and 8B fits comfortably on far cheaper hardware.</p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Tier</th><th>Hardware</th><th>Cost</th><th>What it unlocks</th></tr>
+          <tr>
+            <td><strong>Entry / learning</strong></td>
+            <td>Any Mac with 16–24GB unified memory (base M-series mini, or a Mac you already own)</td>
+            <td class="mono">$0 (if owned) – ~$799</td>
+            <td>7–8B quantized models, comfortably fast — everything in §11.3's milestones 1–4 runs fine here</td>
+          </tr>
+          <tr>
+            <td><strong>Serious / production-scale</strong></td>
+            <td>Mac mini M5 Pro, 64GB/512GB (same config priced in §10.1)</td>
+            <td class="mono">$2,899</td>
+            <td>30–70B-class models, the scale where Truffle's own on-device model (Qwen 3.6) actually competes</td>
+          </tr>
+        </table>
+      </div>
+      <p>Buy the entry tier first. Upgrade only once you've hit a concrete wall the small model can't clear — that wall, and understanding exactly why it appeared, is itself the lesson.</p>
+
+      <h3>11.2 · The toolchain, in the order to install it</h3>
+      <ol>
+        <li><strong>Homebrew + Python via <code>uv</code></strong> — the same environment pattern Truffle's own SDK docs recommend (<code>docs.truffle.net/sdk/installation</code> walks through the identical <code>uv</code>/<code>venv</code> setup).</li>
+        <li><strong><code>brew install ollama</code></strong> — running <code>ollama serve</code> instantly exposes an OpenAI-compatible endpoint at <code>localhost:11434/v1</code>, the same request/response shape as Truffle's own <code>/if2/v1/chat/completions</code> covered in §6.2. This is the fastest way to see that "an inference API" is a learnable, ordinary thing, not something only a hardware company can build.</li>
+        <li><strong>LM Studio</strong> — a GUI alternative with a browsable model/quantization catalog and (since v0.3.17) a <strong>native MCP client</strong>, so it can call the exact class of tool servers described in §6.4.</li>
+        <li><strong><code>mlx-lm</code></strong> (Apple's own array framework) — once the black-box tools feel familiar, drop down a level and load a model directly in Python via MLX. This is where "quantization," "KV cache," and "unified memory" stop being words from §6.1's model-lineage table and become numbers you can watch move on your own machine.</li>
+      </ol>
+
+      <h3>11.3 · A milestone roadmap that mirrors §6</h3>
+      <p>Every capability §6 documented Truffle shipping has a small, buildable equivalent. Working through them in order is a genuine AI-engineering curriculum, not a toy exercise:</p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Milestone</th><th>Build this</th><th>Mirrors</th></tr>
+          <tr>
+            <td><strong>1. Inference API</strong></td>
+            <td>Call <code>ollama serve</code> with curl and the OpenAI Python SDK pointed at the local base URL. Practice streaming, temperature/top_p, and structured JSON output.</td>
+            <td>§6.2 — Truffle's <code>/if2/v1/*</code> endpoints</td>
+          </tr>
+          <tr>
+            <td><strong>2. Tool calling via MCP</strong></td>
+            <td>Write a ~30-line MCP server exposing one or two real tools (a file search, a weather lookup). Connect it to LM Studio or Claude Desktop and watch the model decide when to call it.</td>
+            <td>§6.4 — <code>ForegroundApp</code> / <code>ToolSpec</code></td>
+          </tr>
+          <tr>
+            <td><strong>3. Memory / RAG</strong></td>
+            <td>Add a local embeddings model (<code>nomic-embed-text</code> via Ollama, or an MLX embedding model) plus a pure-Python vector store (Chroma or LanceDB, no server to run). Point it at a folder of your own notes.</td>
+            <td>§6.3 — Convo's local-embeddings memory layer</td>
+          </tr>
+          <tr>
+            <td><strong>4. Proactivity</strong></td>
+            <td>Write a <code>launchd</code> or cron job that polls something on a schedule (new GitHub PRs, new email) and appends a note to a context file the model reads at chat time.</td>
+            <td>§6.3 — <code>BackgroundWorkerApp.submit_text()</code></td>
+          </tr>
+          <tr>
+            <td><strong>5. Capstone</strong></td>
+            <td>Wire milestones 1–4 into one small loop that routes between 2–3 tools using the model's own judgment — a crude, honest rebuild of the "mixture-of-models" classifier §6.1 described.</td>
+            <td>§6.1 — app-routing / classification</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="callout">
+        <h4>What this teaches that buying the appliance doesn't</h4>
+        <p>Debugging a model that calls the wrong tool, or invents an argument that doesn't exist, is the single most common real day-to-day task in AI engineering — and it's invisible if the only agent you've ever used is a polished consumer product that hides its own failures. The Mac mini's own unified-memory ceiling is a hands-on lesson in exactly the bandwidth-vs-model-size tradeoff Truffle's Jetson hardware faces (§4, §6.1). And MCP, the protocol you'd be hand-building a server for in Milestone 2, is the same standard Truffle's current SDK generation converged on (§6.4) — a transferable, increasingly industry-wide skill, not a Truffle-specific party trick.</p>
+      </div>
+
+      <h3>11.4 · Realistic cost and time</h3>
+      <p>Hardware: $0 if a capable Mac is already owned, or roughly $600–800 for a new base-tier Mac mini — a small fraction of either a Truffle ($1,299) or the 64GB configuration priced in §10.1 ($2,899). Time: Milestones 1–2 are a comfortable weekend; 3–4 are one to two weeks of evenings; 5 is ongoing iteration, the same way any real project keeps evolving. None of it requires buying a Truffle, a Jetson, or a cloud subscription — the entire skillset §6 spent this dossier describing is learnable on hardware most people can already reach for.</p>
+    </section>
+
+    <footer id="sources">
+      <h2>12 · Sources</h2>
+      <ul class="src-list">
+        <li><a href="https://truffle.net" target="_blank" rel="noopener">truffle.net</a> — marketing site, positioning/vision copy</li>
+        <li><a href="https://marketplace.nvidia.com/en-us/enterprise/robotics-edge/jetson-agx-orin-developer-kit/" target="_blank" rel="noopener">NVIDIA Jetson AGX Orin Developer Kit marketplace listing</a> — live-verified $3,499 price (Sept 2026)</li>
+        <li><a href="https://www.cnx-software.com/2026/07/22/nvidia-increases-the-price-of-jetson-modules-and-devkits-by-up-to-101/" target="_blank" rel="noopener">CNX Software — NVIDIA Jetson price increase (Jul 2026)</a></li>
+        <li><a href="https://www.apple.com/newsroom/2026/08/apple-introduces-new-mac-studio-with-m5-max-and-m5-ultra/" target="_blank" rel="noopener">Apple Newsroom — Mac Studio M5 Max/Ultra (Aug 2026)</a></li>
+        <li><a href="https://techcrunch.com/2025/02/18/humanes-ai-pin-is-dead-as-hp-buys-startups-assets-for-116m" target="_blank" rel="noopener">TechCrunch — Humane AI Pin shutdown, HP acquisition (Feb 2025)</a></li>
+        <li><a href="https://en.wikipedia.org/wiki/Rabbit_r1" target="_blank" rel="noopener">Rabbit R1 — status and reception</a></li>
+        <li><a href="https://claude.com/pricing" target="_blank" rel="noopener">Claude pricing</a>, <a href="https://blog.google/products-and-platforms/products/google-one/google-ai-subscriptions/" target="_blank" rel="noopener">Google AI subscriptions</a> — 2026 power-tier subscription pricing used in the build-vs-buy cost comparison</li>
+        <li><a href="https://www.home-assistant.io/blog/2025/09/11/ai-in-home-assistant/" target="_blank" rel="noopener">Home Assistant — AI architecture (reactive, not autonomous)</a></li>
+        <li><a href="https://www.techradar.com/pro/a-mac-studio-windows-workstation-clone-just-went-on-preorder-with-amds-ai-395-beelink-gtr9-pro-costs-usd1985-has-two-10-gbe-ports-and-128gb-ram" target="_blank" rel="noopener">TechRadar — Beelink GTR9 Pro (Ryzen AI Max+ 395) pricing</a></li>
+        <li><a href="https://lmstudio.ai/docs/app/mcp" target="_blank" rel="noopener">LM Studio — native MCP client docs</a>, <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>, <a href="https://github.com/ml-explore/mlx" target="_blank" rel="noopener">Apple MLX</a> — the Mac-mini toolchain referenced in §11</li>
+        <li><a href="https://docs.truffle.net" target="_blank" rel="noopener">docs.truffle.net</a> — SDK installation, CLI, Convo, Convo automation, Inference API, Building Apps, Foreground/Background app guides, Install Steps, Release Notes, Client Overview</li>
+        <li><a href="https://docs.truffle.net/llms.txt" target="_blank" rel="noopener">docs.truffle.net/llms.txt</a> — documentation index</li>
+        <li><a href="https://github.com/deepshard" target="_blank" rel="noopener">github.com/deepshard</a> — organisation overview and repository list</li>
+        <li><a href="https://github.com/deepshard/trufflesdk" target="_blank" rel="noopener">github.com/deepshard/trufflesdk</a> — original 2024 SDK README ("toolbox in a sandbox," gRPC/Protobuf design)</li>
+        <li><a href="https://github.com/deepshard/truffle-app-template" target="_blank" rel="noopener">github.com/deepshard/truffle-app-template</a> — worked SDK example, publishing flow</li>
+        <li><a href="https://github.com/deepshard/get-started-with-hyphae" target="_blank" rel="noopener">github.com/deepshard/get-started-with-hyphae</a> — Hyphae SDK generation, predicate-gated tools, ArXiv example app</li>
+        <li><a href="https://github.com/deepshard/AgentRegistry" target="_blank" rel="noopener">github.com/deepshard/AgentRegistry</a> — decentralized agent-registry protocol (Solidity, OP-TEE hardware attestation)</li>
+        <li><a href="https://docs.itsalltruffles.com/installation/intro/" target="_blank" rel="noopener">docs.itsalltruffles.com</a> — earlier-generation docs snapshot ("What is a Truffle App?", model list incl. DeepSeek R1 / Gemma3-27B / Qwen)</li>
+        <li><a href="https://itsalltruffles.com" target="_blank" rel="noopener">itsalltruffles.com</a> — Deepshard corporate landing page</li>
+        <li><a href="https://news.ycombinator.com/item?id=39682422" target="_blank" rel="noopener">Hacker News thread on Truffle-1 (Mar 2024)</a> — launch reception and criticism</li>
+        <li><a href="https://x.com/rohanpaul_ai/status/1767639847961829383" target="_blank" rel="noopener">@rohanpaul_ai on X</a> — launch benchmark summary</li>
+        <li><a href="https://x.com/levelsio/status/1767741344997400688" target="_blank" rel="noopener">@levelsio on X</a> — positive take on launch honesty</li>
+        <li><a href="https://fundersclub.com/companies/deepshard/" target="_blank" rel="noopener">FundersClub — Deepshard (dba Truffle)</a> — company/funding profile</li>
+        <li><a href="https://ycombinator.com/companies/truffle-ai" target="_blank" rel="noopener">YC — Truffle AI</a> — unrelated company, see naming disambiguation (§2)</li>
+        <li><a href="https://www.securityweek.com/truffle-security-raises-25-million-for-secret-scanning-engine/" target="_blank" rel="noopener">SecurityWeek — Truffle Security funding</a> — unrelated company, see naming disambiguation (§2)</li>
+      </ul>
+      <p style="margin-top:22px;font-size:12.5px;color:var(--text-faint)">Compiled from public web sources in September 2026. Truffle is a fast-moving, weekly-shipping product — treat specifics (pricing, exact model versions, feature availability) as a snapshot, and re-check <code>docs.truffle.net/release-notes</code> for anything decision-critical.</p>
+    </footer>
+  </main>
+</div>

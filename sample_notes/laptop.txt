@@ -1,0 +1,1 @@
+Laptop battery has been draining really fast lately, need to check which app is using the most power.

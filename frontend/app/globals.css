@@ -1,0 +1,271 @@
+:root {
+  --bg: #faf8f4;
+  --surface: #ffffff;
+  --surface-2: #f2ede3;
+  --border: #e4dcca;
+  --text: #2b2417;
+  --text-dim: #8c8270;
+  --accent: #c9812f;
+  --accent-text: #ffffff;
+  --danger: #d9634a;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 8px;
+  padding: env(safe-area-inset-top, 14px) 16px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+header .title { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; flex-shrink: 0; }
+header .title svg { flex-shrink: 0; }
+.brand-mark { width: 27px; height: 27px; border-radius: 6px; flex-shrink: 0; }
+header .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+header .icon-btn {
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 10px; padding: 6px 10px; font-size: 13px;
+}
+header label.icon-btn { display: flex; align-items: center; gap: 5px; }
+header input[type="checkbox"] { accent-color: var(--accent); }
+
+#log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.msg {
+  padding: 11px 15px;
+  border-radius: 18px;
+  max-width: 82%;
+  white-space: pre-wrap;
+  line-height: 1.4;
+  font-size: 15.5px;
+}
+.user { background: var(--accent); color: var(--accent-text); align-self: flex-end; border-bottom-right-radius: 4px; }
+.assistant { background: var(--surface-2); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; }
+.system {
+  align-self: center;
+  max-width: 95%;
+  background: none;
+  color: var(--text-dim);
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 12px;
+  padding: 2px 8px;
+  text-align: center;
+}
+.thinking-row { display: flex; align-items: center; padding: 9px 15px; }
+.tool-recap { display: flex; flex-direction: column; gap: 4px; font-family: ui-monospace, "SF Mono", monospace; }
+.tool-recap-item { display: flex; align-items: center; gap: 6px; }
+
+/* ── Composer bar: the exact chat-input mock from Jakubantalik/Libraries.dev
+   (sites/home/public/assets/examples.css, .mock-vchat and friends, dark
+   theme values) -- the same markup/CSS libraries.dev/voice wraps in
+   VoiceBeam for its own reference demo, made real (typable input, a
+   working mic button and send) instead of decorative. */
+.bar-dock {
+  padding: 16px 12px calc(env(safe-area-inset-bottom, 10px) + 16px);
+  display: flex;
+  justify-content: center;
+  /* .mock-vchat's own fill is translucent (rgba(48,48,48,0.4)) -- it's
+     authored to sit on the demo site's dark stage (#171717), not read
+     directly against a light page, so this dock provides that same
+     opaque dark backdrop. */
+  background: #171717;
+}
+.voice-fit { width: 100%; max-width: 480px; }
+
+.mock-vchat {
+  position: relative;
+  width: 371px;
+  max-width: 100%;
+  height: 104px;
+  border-radius: 20px;
+  overflow: hidden;
+  /* `hidden` still makes this a scroll container: metal-fx's halo (armed Send)
+     overflows it by ~30px each way, so any scroll-into-view -- an automation
+     click, a phone revealing a focused control -- permanently shifted the
+     whole composer up/left inside its own card. `clip` clips identically but
+     can't be scrolled at all. */
+  overflow: clip;
+  background: rgba(48, 48, 48, 0.4);
+  box-shadow:
+    inset 0 0 0 1px rgba(44, 47, 54, 0.52),
+    inset 0 0 50px 0 rgba(255, 255, 255, 0.02);
+  font-family: Inter, -apple-system, sans-serif;
+}
+.mock-vchat-input {
+  position: absolute;
+  left: 14px;
+  top: 20px;
+  right: 14px;
+  height: 16px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  color: #eaeaea;
+  caret-color: #eaeaea;
+  z-index: 5;
+}
+.mock-vchat-input::placeholder { color: #4e4e4e; opacity: 1; }
+/* metal-fx fades its root in (opacity 0 -> 1) once its WebGL ring has
+   initialized, and sets its child to visibility:hidden until that reveal.
+   In testing the WebGL init itself got stuck (opacity pinned at 0
+   indefinitely, no console error -- likely this sandbox's WebGL2 support),
+   so both the root and the button underneath stayed invisible, and the
+   button's visibility:hidden also blocked clicks (unlike opacity:0, which
+   wouldn't have). Neither the ring rendering nor the button being usable
+   should depend on that; this forces both. It does not touch the child's
+   background (data-normalize's rule) -- if the ring does render, this
+   won't paint over it. The ring is only mounted while there's text to
+   send (VoiceBar's hasText), so the metal-fx rule only ever applies then. */
+.mock-vchat-btn[aria-label="Send"] { visibility: visible !important; }
+.mock-vchat-actions .metal-fx-root { opacity: 1 !important; }
+.mic-status {
+  position: absolute;
+  left: 14px;
+  top: 19px;
+  right: 14px;
+  height: 18px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #b2b2b2;
+  background: rgba(48, 48, 48, 0.4);
+  pointer-events: none;
+}
+.mock-vchat-row {
+  position: absolute;
+  left: 11px;
+  right: 13px;
+  bottom: 13px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  z-index: 5;
+}
+.mock-vchat-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.mock-vchat-btn {
+  height: 36px;
+  min-width: 36px;
+  padding: 0 10px;
+  border-radius: 36px;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #eaeaea;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
+  transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.mock-vchat-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0);
+  transition: background 0.15s ease;
+  pointer-events: none;
+}
+.mock-vchat-btn:hover::after { background: rgba(255, 255, 255, 0.02); }
+.mock-vchat-btn:active { transform: scale(0.96); }
+.mock-vchat-btn:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.35); outline-offset: 2px; }
+.mock-vchat-btn:disabled { opacity: 0.5; cursor: default; }
+.mock-vchat-btn.recording { background: var(--danger); }
+/* The mock's text chip ("Agent" in the original), used here for "New chat". */
+.mock-vchat-agent {
+  padding: 0 10px 0 14px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  color: #caccd2;
+  white-space: nowrap;
+}
+
+/* Buttons inside <Liquid> (the "+" -> "New chat" menu): the library's blobs
+   are their surface, so the buttons themselves are transparent. The goo
+   filter turns alpha into a hard edge (alpha*18-7), which erases any
+   translucent fill -- so the fill stays opaque and the whole liquid layer is
+   dimmed to 10% instead, matching the 10% white of the mic and send buttons.
+   The pill has a fixed width so the menu's geometry (see VoiceBar.jsx)
+   doesn't depend on font metrics. */
+.liquid-menu [data-gooey-svg] { opacity: 0.1; }
+.mock-vchat-btn--liquid { background: transparent; }
+.mock-vchat-btn--liquid.mock-vchat-agent { width: 84px; padding: 0; }
+
+.mk-ico { position: relative; display: block; flex: none; width: 16px; height: 16px; }
+.mk-ico-mic {
+  background: #b2b2b2;
+  -webkit-mask: url("/icons/mic-16.svg") center / 16px 16px no-repeat;
+  mask: url("/icons/mic-16.svg") center / 16px 16px no-repeat;
+}
+.mk-ico-chevron {
+  transform: rotate(90deg);
+  background: rgba(255, 255, 255, 0.4);
+  -webkit-mask: url("/icons/chevron-15.svg") center / 16px 16px no-repeat;
+  mask: url("/icons/chevron-15.svg") center / 16px 16px no-repeat;
+}
+.mk-ico-arrow {
+  background: #eaeaea;
+  -webkit-mask: url("/icons/arrow-up-16.svg") center / 16px 16px no-repeat;
+  mask: url("/icons/arrow-up-16.svg") center / 16px 16px no-repeat;
+}
+.mk-ico-plus::before,
+.mk-ico-plus::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 1.5px;
+  margin: -0.75px 0 0 -5px;
+  border-radius: 1px;
+  background: currentColor;
+}
+.mk-ico-plus::after { transform: rotate(90deg); }
+
+/* History page */
+.history-page { font-family: -apple-system, sans-serif; padding: 16px; max-width: 640px; margin: 0 auto; }
+.history-page h2 { display: flex; align-items: center; gap: 10px; }
+.history-page a.back { color: var(--accent); text-decoration: none; font-size: 15px; }
+.thread {
+  display: block; padding: 12px 14px; margin-bottom: 8px; border: 1px solid var(--border);
+  border-radius: 12px; text-decoration: none; color: inherit; background: var(--surface);
+}
+.thread .preview { font-size: 15px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thread .date { font-size: 12px; color: var(--text-dim); }

@@ -1,0 +1,26 @@
+# --- Secrets / local TLS ---
+# diya_web.py and frontend/package.json expect an mkcert cert + key for your own
+# LAN IP (192.168.0.174+2.pem / 192.168.0.174+2-key.pem). Regenerate them locally.
+*.pem
+*.key
+.env
+.env.*
+
+# --- Personal data and runtime state (Diya creates these as it runs) ---
+diya.db
+user_profile.txt
+dream_state.json
+dream_log.txt
+watcher_state.json
+watcher_log.txt
+proactive_context.txt
+
+# --- Dependencies and build output ---
+node_modules/
+.next/
+__pycache__/
+*.pyc
+
+# --- Editor / OS / tooling ---
+.DS_Store
+.claude/settings.local.json
