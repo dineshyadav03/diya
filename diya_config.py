@@ -15,6 +15,12 @@ import os
 from dataclasses import dataclass
 
 
+# "staged": Dreaming writes candidate facts to a review queue and never touches the trusted
+# profile. "direct": the original behaviour (append straight to the profile), kept only as an
+# explicit compatibility option.
+DREAM_PROFILE_MODES = ("staged", "direct")
+
+
 class ConfigError(ValueError):
     """A DIYA_* environment variable holds a value that can't be used."""
 
@@ -29,6 +35,8 @@ class Config:
     profile_path: str = "user_profile.txt"
     dream_log_path: str = "dream_log.txt"
     dream_state_path: str = "dream_state.json"
+    dream_pending_path: str = "dream_pending.jsonl"
+    dream_profile_mode: str = "staged"
     whisper_model: str = "base"
     host: str = "0.0.0.0"
     port: int = 8080
@@ -45,6 +53,7 @@ _STRING_SETTINGS = {
     "profile_path": "DIYA_PROFILE_PATH",
     "dream_log_path": "DIYA_DREAM_LOG_PATH",
     "dream_state_path": "DIYA_DREAM_STATE_PATH",
+    "dream_pending_path": "DIYA_DREAM_PENDING_PATH",
     "whisper_model": "DIYA_WHISPER_MODEL",
     "host": "DIYA_HOST",
 }
@@ -72,6 +81,14 @@ def load_config(env=None) -> Config:
             raise ConfigError(f"DIYA_PORT must be an integer, got {port!r}") from None
         if not 1 <= values["port"] <= 65535:
             raise ConfigError(f"DIYA_PORT must be between 1 and 65535, got {values['port']}")
+
+    mode = read("DIYA_DREAM_PROFILE_MODE")
+    if mode is not None:
+        if mode.lower() not in DREAM_PROFILE_MODES:
+            raise ConfigError(
+                f"DIYA_DREAM_PROFILE_MODE must be one of {', '.join(DREAM_PROFILE_MODES)}, got {mode!r}"
+            )
+        values["dream_profile_mode"] = mode.lower()
 
     cert, key = read("DIYA_SSL_CERT"), read("DIYA_SSL_KEY")
     if (cert is None) != (key is None):

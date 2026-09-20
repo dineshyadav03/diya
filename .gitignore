@@ -12,6 +12,7 @@ backups/
 user_profile.txt
 dream_state.json
 dream_log.txt
+dream_pending.jsonl
 watcher_state.json
 watcher_log.txt
 proactive_context.txt

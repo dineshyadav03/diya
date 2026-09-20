@@ -22,6 +22,8 @@ def test_defaults_are_the_previously_hardcoded_values():
         profile_path="user_profile.txt",
         dream_log_path="dream_log.txt",
         dream_state_path="dream_state.json",
+        dream_pending_path="dream_pending.jsonl",
+        dream_profile_mode="staged",
         whisper_model="base",
         host="0.0.0.0",
         port=8080,
@@ -35,6 +37,7 @@ def test_every_setting_can_be_overridden():
         "DIYA_DB_PATH": "x.db", "DIYA_MODEL": "m", "DIYA_EMBED_MODEL": "e",
         "DIYA_OLLAMA_URL": "http://o:1/v1", "DIYA_NOTES_DIR": "n", "DIYA_PROFILE_PATH": "p.txt",
         "DIYA_DREAM_LOG_PATH": "d.log", "DIYA_DREAM_STATE_PATH": "d.json",
+        "DIYA_DREAM_PENDING_PATH": "q.jsonl", "DIYA_DREAM_PROFILE_MODE": "direct",
         "DIYA_WHISPER_MODEL": "small", "DIYA_HOST": "127.0.0.1", "DIYA_PORT": "9000",
         "DIYA_SSL_CERT": "c.pem", "DIYA_SSL_KEY": "k.pem",
     }
@@ -43,6 +46,7 @@ def test_every_setting_can_be_overridden():
     assert (cfg.notes_dir, cfg.profile_path, cfg.whisper_model) == ("n", "p.txt", "small")
     assert (cfg.host, cfg.port, cfg.ssl_certfile, cfg.ssl_keyfile) == ("127.0.0.1", 9000, "c.pem", "k.pem")
     assert (cfg.dream_log_path, cfg.dream_state_path) == ("d.log", "d.json")
+    assert (cfg.dream_pending_path, cfg.dream_profile_mode) == ("q.jsonl", "direct")
 
 
 def test_blank_values_count_as_unset():
@@ -65,6 +69,21 @@ def test_is_evaluated_per_call_not_cached(monkeypatch):
 def test_bad_port_is_rejected_with_a_clear_message(bad):
     with pytest.raises(ConfigError, match="DIYA_PORT"):
         load_config({"DIYA_PORT": bad})
+
+
+def test_dreaming_is_staged_by_default():
+    assert load_config({}).dream_profile_mode == "staged"
+
+
+@pytest.mark.parametrize("value, expected", [("staged", "staged"), ("direct", "direct"), (" Direct ", "direct"), ("STAGED", "staged")])
+def test_dream_profile_mode_accepts_the_two_known_modes(value, expected):
+    assert load_config({"DIYA_DREAM_PROFILE_MODE": value}).dream_profile_mode == expected
+
+
+@pytest.mark.parametrize("bad", ["auto", "append", "off", "true"])
+def test_an_unknown_dream_profile_mode_is_rejected_not_guessed(bad):
+    with pytest.raises(ConfigError, match="DIYA_DREAM_PROFILE_MODE"):
+        load_config({"DIYA_DREAM_PROFILE_MODE": bad})
 
 
 def test_ssl_cert_and_key_must_come_as_a_pair():
