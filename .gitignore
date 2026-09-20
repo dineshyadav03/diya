@@ -24,3 +24,7 @@ __pycache__/
 # --- Editor / OS / tooling ---
 .DS_Store
 .claude/settings.local.json
+
+# --- Test / tool caches ---
+.pytest_cache/
+.ruff_cache/
