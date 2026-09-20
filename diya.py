@@ -422,25 +422,5 @@ def main():
     chat_loop(agent, thread_id, history)
 
 
-# ---- Temporary: the old module-level API, for callers not yet moved to their own Agent
-# (diya_web.py, diya_evals.py). Removed once they are. ----
-_default_agent = None
-
-
-def _agent():
-    global _default_agent
-    if _default_agent is None:
-        _default_agent = Agent()
-    return _default_agent
-
-
-def ask(messages):
-    return _agent().ask(messages)
-
-
-def with_profile(history):
-    return _agent().with_profile(history)
-
-
 if __name__ == "__main__":
     main()

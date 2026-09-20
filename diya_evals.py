@@ -1,4 +1,14 @@
+import dataclasses
+import os
+import sys
+import tempfile
+
 import diya
+import diya_config
+
+# The cases below were written against these fixture notes (a dentist note saying "Thursday
+# at 3pm"), so they are pinned here rather than following DIYA_NOTES_DIR to real notes.
+FIXTURE_NOTES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample_notes")
 
 TEST_CASES = [
     {
@@ -41,16 +51,49 @@ TEST_CASES = [
 ]
 
 
-def run_evals():
+class EvalIsolationError(RuntimeError):
+    """The eval run was about to use Diya's live database."""
+
+
+def _same_file(a, b):
+    return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
+
+
+def assert_isolated(agent):
+    """Refuse to run against the database Diya actually uses. Evals write real reminders and
+    (before this guard existed) left junk threads in the live diya.db."""
+    live_paths = {diya_config.load_config().db_path, "diya.db"}
+    for live in live_paths:
+        if _same_file(agent.store.path, live):
+            raise EvalIsolationError(
+                f"refusing to run evals against the live database ({agent.store.path}); "
+                "evals must use their own temporary storage"
+            )
+
+
+def make_eval_agent(workdir, client=None):
+    """An Agent whose database lives in `workdir`. Model, embedding model and Ollama URL still
+    follow DIYA_* settings (that's what is being evaluated); notes are the fixture set."""
+    config = dataclasses.replace(
+        diya_config.load_config(),
+        db_path=os.path.join(workdir, "evals.db"),
+        notes_dir=FIXTURE_NOTES,
+    )
+    agent = diya.Agent(config, client=client)
+    assert_isolated(agent)
+    return agent
+
+
+def run_evals(agent, cases=TEST_CASES):
+    assert_isolated(agent)
     passed = 0
     failed = 0
 
-    for case in TEST_CASES:
-        thread_id = diya.diya_db.create_thread(title=f"eval: {case['name']}")
+    for case in cases:
         history = [{"role": "user", "content": case["prompt"]}]
 
         try:
-            answer, tools_called = diya.ask(history)
+            answer, tools_called = agent.ask(history)
         except Exception as exc:
             print(f"[FAIL] {case['name']}: crashed with {exc}")
             failed += 1
@@ -87,6 +130,13 @@ def run_evals():
     return failed == 0
 
 
+def main(client=None):
+    diya.configure_console()
+    with tempfile.TemporaryDirectory(prefix="diya-evals-", ignore_cleanup_errors=True) as workdir:
+        agent = make_eval_agent(workdir, client)
+        diya.warm_up_or_exit(agent)
+        return 0 if run_evals(agent) else 1
+
+
 if __name__ == "__main__":
-    import sys
-    sys.exit(0 if run_evals() else 1)
+    sys.exit(main())
