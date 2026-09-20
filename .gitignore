@@ -8,6 +8,7 @@
 
 # --- Personal data and runtime state (Diya creates these as it runs) ---
 diya.db
+backups/
 user_profile.txt
 dream_state.json
 dream_log.txt
