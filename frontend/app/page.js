@@ -179,7 +179,7 @@ export default function ChatPage() {
               preset="pixels-organic"
               images={['/diya-flame.svg']}
               autoReveal
-              theme="light"
+              theme="dark"
               paused={logoPaused}
               onCycle={(phase) => {
                 if (phase === 'visible') setLogoPaused(true)
@@ -195,7 +195,7 @@ export default function ChatPage() {
               orb state with no specific task behind it, on purpose. */}
           {!thinking && !speaking && (
             <span className="ambient-orb">
-              <ThinkingOrb state="breathing" size={20} theme="light" />
+              <ThinkingOrb state="breathing" size={20} theme="dark" />
             </span>
           )}
         </div>
@@ -239,7 +239,7 @@ export default function ChatPage() {
               <div key={i} className="msg system tool-recap">
                 {m.tools.map((name) => (
                   <span key={name} className="tool-recap-item">
-                    <ThinkingOrb state={TOOL_ORB[name].state} size={20} theme="light" />
+                    <ThinkingOrb state={TOOL_ORB[name].state} size={20} theme="dark" />
                     {TOOL_ORB[name].label}
                   </span>
                 ))}
@@ -254,7 +254,7 @@ export default function ChatPage() {
         })}
         {thinking && (
           <div className="msg assistant thinking-row">
-            <ThinkingOrb state="working" size={20} theme="light" />
+            <ThinkingOrb state="working" size={20} theme="dark" />
           </div>
         )}
       </div>

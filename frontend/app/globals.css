@@ -1,22 +1,29 @@
-/* Palette. The brand assets are the source of truth: public/diya-flame.svg is
-   cream #faf8f4 (its own background), amber #c9812f (the flame) and bronze
-   #8a5a1f (the lamp's base). Every colour below is one of those or a
-   text/surface tone derived from them, chosen to clear WCAG AA (4.5:1) on the
-   surfaces it actually sits on. */
+/* Palette. One continuous surface: the app's background IS the composer's surface
+   (#25221d -- its 40% grey fill composited over its dock), so the header, the chat,
+   the history and the composer read as a single piece, not separate zones.
+
+   The brand assets are still the source of truth for colour (public/diya-flame.svg:
+   cream #faf8f4, amber #c9812f, bronze #8a5a1f). On this dark surface cream is the
+   text and amber the accent (bronze is only 2.7:1 here). The assets themselves are
+   untouched, so the flame keeps its own cream tile.
+
+   Hierarchy comes from ELEVATION, never from a second background colour: translucent
+   cream lifts (--elev-*) and hairlines (--border) over the same surface. Every text
+   pairing below clears WCAG AA (4.5:1) on each surface it actually sits on. */
 :root {
-  --bg: #faf8f4;              /* asset background */
-  --surface: #ffffff;         /* raised: cards */
-  --surface-2: #f2ede3;       /* controls, assistant bubbles */
-  --surface-2-hover: #ebe4d4;
-  --border: #e4dcca;
-  --text: #2b2417;            /* 14.5:1 on --bg */
-  --text-dim: #6f6555;        /* 5.4:1 on --bg, 4.9:1 on --surface-2 (was #8c8270, 3.3:1) */
-  --accent: #c9812f;          /* asset flame: fills and marks, never small text on cream */
-  --accent-strong: #8a5a1f;   /* asset base: links, focus rings, accents in text (5.6:1) */
-  --accent-text: #2b2417;     /* text on --accent: 4.9:1 (white was 3.1:1) */
-  --danger: #d9634a;
-  --dock: #1d1810;            /* the composer's dark stage, warmed from --text (was cold #171717) */
-  --focus: 2px solid var(--accent-strong);
+  color-scheme: dark;
+  --bg: #25221d;
+  --elev-1: rgba(250, 248, 244, 0.06);  /* bubbles, cards, controls */
+  --elev-2: rgba(250, 248, 244, 0.10);  /* hover / pressed */
+  --border: rgba(250, 248, 244, 0.14);  /* hairlines: header edge, bubble and card outlines */
+  --ring: rgba(250, 248, 244, 0.14);    /* the composer's outline */
+  --text: #faf8f4;            /* asset cream: 14.9:1 on --bg */
+  --text-dim: #b3aa99;        /* 6.9:1 on --bg, 5.2:1 on the hover elevation */
+  --accent: #c9812f;          /* asset flame: 5.0:1 on --bg, so it works as link/focus colour here */
+  --accent-text: #2b2417;     /* text on --accent: 4.9:1 */
+  --danger: #d9634a;          /* fills and outlines */
+  --danger-text: #ee8b72;     /* the same red as text: 6.5:1 (--danger itself is 4.4:1) */
+  --focus: 2px solid var(--accent);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; margin: 0; }
@@ -30,9 +37,9 @@ body {
   display: flex;
   flex-direction: column;
 }
-/* The header sits on the asset's own cream, so the logo's cream tile blends into it
-   instead of showing as a faint square on white. max() because env() is 0px (not
-   unset) on desktop -- the old fallback never applied and the header hugged the top edge. */
+/* The header is the same surface as everything else; a hairline is what sets it apart.
+   max() because env() is 0px (not unset) on desktop -- a plain fallback never applied and
+   the header hugged the top edge. */
 header {
   display: flex;
   align-items: center;
@@ -55,22 +62,27 @@ header .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px
 header .icon-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   min-height: 34px; padding: 0 12px;
-  background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim);
+  background: var(--elev-1); border: 1px solid var(--border); color: var(--text-dim);
   border-radius: 10px; font: inherit; font-size: 13px; line-height: 1; text-decoration: none;
   cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
 }
-header .icon-btn:hover { background: var(--surface-2-hover); color: var(--text); }
+header .icon-btn:hover { background: var(--elev-2); color: var(--text); }
 header .icon-btn:focus-visible, header label.icon-btn:focus-within { outline: var(--focus); outline-offset: 2px; }
-header input[type="checkbox"] { accent-color: var(--accent-strong); width: 15px; height: 15px; margin: 0; cursor: pointer; }
+header input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; cursor: pointer; }
 @media (pointer: coarse) { header .icon-btn { min-height: 40px; } }
 
 #log {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 16px 16px 36px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* The chat and the composer are one surface, so there is no edge for scrolling messages
+     to run into: they fade out just above the composer instead of being cut off. The extra
+     bottom padding keeps the newest message clear of the fade. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
 .msg {
   padding: 11px 15px;
@@ -82,8 +94,8 @@ header input[type="checkbox"] { accent-color: var(--accent-strong); width: 15px;
 }
 .user { background: var(--accent); color: var(--accent-text); align-self: flex-end; border-bottom-right-radius: 4px; }
 .assistant {
-  background: var(--surface-2); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px;
-  border: 1px solid var(--border); /* the cream-on-cream bubble needs an edge to read as a surface */
+  background: var(--elev-1); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px;
+  border: 1px solid var(--border); /* lift + hairline: it reads as raised without being another background colour */
 }
 .system {
   align-self: center;
@@ -108,12 +120,8 @@ header input[type="checkbox"] { accent-color: var(--accent-strong); width: 15px;
   padding: 16px 12px calc(env(safe-area-inset-bottom, 10px) + 16px);
   display: flex;
   justify-content: center;
-  /* .mock-vchat's own fill is translucent (rgba(48,48,48,0.4)) -- it's
-     authored to sit on the demo site's dark stage, not read directly against
-     a light page, so this dock provides an opaque dark backdrop. Warmed from
-     the palette's own dark brown (--dock) rather than the demo's neutral
-     #171717, so the dock belongs to the cream page above it. */
-  background: var(--dock);
+  /* Not a separate zone any more: the dock is the page's own surface. */
+  background: var(--bg);
 }
 /* Exactly the width the mock (and voice-glow's / border-beam's px-authored
    geometry) was drawn for. It was 480px, wider than the 371px form, so on
@@ -134,9 +142,13 @@ header input[type="checkbox"] { accent-color: var(--accent-strong); width: 15px;
      whole composer up/left inside its own card. `clip` clips identically but
      can't be scrolled at all. */
   overflow: clip;
-  background: rgba(48, 48, 48, 0.4);
+  /* The composer's surface IS the app's surface (--bg is what its old 40% grey fill
+     composited to), so it is left transparent and outlined -- the voice glow still
+     shows through it exactly as before. The mock's near-invisible outline
+     (rgba(44,47,54,.52)) is now a real hairline. */
+  background: transparent;
   box-shadow:
-    inset 0 0 0 1px rgba(44, 47, 54, 0.52),
+    inset 0 0 0 1px var(--ring),
     inset 0 0 50px 0 rgba(255, 255, 255, 0.02);
   font-family: Inter, -apple-system, sans-serif;
 }
@@ -300,7 +312,10 @@ header input[type="checkbox"] { accent-color: var(--accent-strong); width: 15px;
   margin: auto; max-width: 320px; padding: 24px 16px;
   display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
 }
-.empty-mark { width: 72px; height: 72px; border-radius: 16px; margin-bottom: 10px; }
+/* The asset is untouched and keeps its own cream tile; on the dark surface it is the
+   brightest thing on screen, so it is kept modest and given an outline and a soft shadow
+   (elevation) so it reads as an app-icon chip resting on the surface. */
+.empty-mark { width: 60px; height: 60px; border-radius: 14px; margin-bottom: 12px; box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgba(0, 0, 0, 0.35); }
 .empty-state h1, .empty-state h2 { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.25; }
 .empty-state p { margin: 0; color: var(--text-dim); font-size: 14.5px; line-height: 1.45; }
 .cta {
@@ -319,17 +334,17 @@ header input[type="checkbox"] { accent-color: var(--accent-strong); width: 15px;
 .history-inner > h1 { margin: 4px 0 16px; font-size: 22px; font-weight: 600; line-height: 1.2; }
 .thread {
   display: block; padding: 12px 14px; margin-bottom: 8px; border: 1px solid var(--border);
-  border-radius: 12px; text-decoration: none; color: var(--text); background: var(--surface);
+  border-radius: 12px; text-decoration: none; color: var(--text); background: var(--elev-1);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-.thread:hover { border-color: var(--accent); background: var(--bg); }
+.thread:hover { border-color: var(--accent); background: var(--elev-2); }
 .thread:focus-visible { outline: var(--focus); outline-offset: 2px; }
-.thread:active { background: var(--surface-2); }
+.thread:active { background: var(--elev-2); }
 .thread .preview { font-size: 15px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .thread .date { font-size: 12.5px; color: var(--text-dim); }
 .thread-skeleton {
   height: 62px; margin-bottom: 8px; border-radius: 12px; border: 1px solid var(--border);
-  background: linear-gradient(90deg, var(--surface) 0%, var(--surface-2) 50%, var(--surface) 100%);
+  background: linear-gradient(90deg, var(--elev-1) 0%, var(--elev-2) 50%, var(--elev-1) 100%);
   background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite;
 }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }

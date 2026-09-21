@@ -8,8 +8,9 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  // The asset's cream: what the phone's status bar takes on above the header.
-  themeColor: '#faf8f4',
+  // The app's one surface (--bg in globals.css): what the phone's status bar takes on.
+  themeColor: '#25221d',
+  colorScheme: 'dark',
 }
 
 export default function RootLayout({ children }) {
