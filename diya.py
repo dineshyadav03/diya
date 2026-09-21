@@ -253,7 +253,9 @@ class Agent:
         # fixed name would collide as soon as a second Agent (tests, evals) builds its own.
         notes = chromadb.Client().create_collection(f"notes-{uuid.uuid4().hex[:12]}")
         for filename in os.listdir(self.config.notes_dir):
-            with open(os.path.join(self.config.notes_dir, filename)) as f:
+            # UTF-8 explicitly, not the platform default (cp1252 on Windows), which turned any
+            # non-ASCII note into mojibake; 'replace' so one stray byte can't stop startup.
+            with open(os.path.join(self.config.notes_dir, filename), encoding="utf-8", errors="replace") as f:
                 text = f.read()
             notes.add(ids=[filename], embeddings=[self.embed(text)], documents=[text])
         return notes
@@ -292,7 +294,11 @@ class Agent:
         it should always reflect the latest profile, not a frozen snapshot."""
         path = self.config.profile_path
         if os.path.exists(path):
-            with open(path) as f:
+            # The profile is UTF-8 with LF line endings (Dreaming and the promotion step write it
+            # that way). It used to be read with the platform default codec (cp1252 on Windows),
+            # so any non-ASCII fact came back as mojibake. A universal-newline read also copes
+            # with a legacy CRLF profile; 'replace' so a stray byte can't take chat down.
+            with open(path, encoding="utf-8", errors="replace") as f:
                 profile = f.read().strip()
             if profile:
                 return [

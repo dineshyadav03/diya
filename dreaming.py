@@ -39,24 +39,28 @@ class Dreamer:
             self._client = OpenAI(base_url=self.config.ollama_url, api_key="ollama")
         return self._client
 
+    # Every file Dreaming touches is UTF-8, and the profile is LF-only: text-mode writes on
+    # Windows translate "\n" to CRLF, which is how the profile ended up with mixed endings
+    # (lines Dreaming appended were CRLF, the rest LF) and, read back with the platform codec,
+    # garbled non-ASCII. Diya reads it with the same encoding (see Agent.with_profile).
     def load_profile(self):
         if os.path.exists(self.config.profile_path):
-            with open(self.config.profile_path) as f:
+            with open(self.config.profile_path, encoding="utf-8", errors="replace") as f:
                 return f.read().strip()
         return "(no profile yet -- this is the first dream cycle)"
 
     def save_profile(self, text):
-        with open(self.config.profile_path, "w") as f:
+        with open(self.config.profile_path, "w", encoding="utf-8", newline="\n") as f:
             f.write(text.strip() + "\n")
 
     def load_last_dreamed_id(self):
         if os.path.exists(self.config.dream_state_path):
-            with open(self.config.dream_state_path) as f:
+            with open(self.config.dream_state_path, encoding="utf-8") as f:
                 return json.load(f)["last_message_id"]
         return 0
 
     def save_last_dreamed_id(self, message_id):
-        with open(self.config.dream_state_path, "w") as f:
+        with open(self.config.dream_state_path, "w", encoding="utf-8", newline="\n") as f:
             json.dump({"last_message_id": message_id}, f)
 
     # ---- the review queue (staged mode) ----
@@ -212,7 +216,7 @@ class Dreamer:
             print("No genuine new facts found.")
             return
 
-        with open(self.config.profile_path, "a", encoding="utf-8") as f:
+        with open(self.config.profile_path, "a", encoding="utf-8", newline="\n") as f:
             f.write(new_facts + "\n")
 
         print("New facts appended:")

@@ -1,0 +1,22 @@
+# Line endings are LF in the repository AND in the working tree, on every machine.
+# Without this, Windows' core.autocrlf=true checks files out as CRLF and each tool then
+# adds or keeps its own, so the same repo ended up with a mix of both.
+* text=auto eol=lf
+
+# The only files that genuinely need CRLF: Windows batch scripts. (None today; explicit so
+# nobody "fixes" them to LF later.)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files: never converted, never diffed as text.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+
+# Text encoding: every text file in this repo is UTF-8 without a BOM (verified byte-for-byte
+# when this file was added). tests/test_repo_hygiene.py fails if that stops being true.
