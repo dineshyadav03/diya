@@ -27,7 +27,7 @@ Works today:
 - **A closed API boundary.** The API listens on 127.0.0.1 unless LAN mode is on. Every route refuses
   a `Host` that is not on the allowlist (400) and a browser `Origin` that is not the UI's (403).
   CORS names the UI origin; it is not `*`.
-- **363 tests**, none of which need Ollama, the network or the live database.
+- **380 tests passing** as of 2026-09-21 (update on change); none need Ollama, the network or the live DB.
 
 Not built yet:
 
@@ -37,7 +37,7 @@ Not built yet:
 - API authentication: any local process can call the API, and in LAN mode so can any device that
   reaches the port with an allowed `Host`.
 - Limits on `list_files` (it lists any folder) and on request body size.
-- Pinned dependencies and models, database migrations, CI, a license.
+- Pinned dependencies and models, database migrations, CI.
 - A fix for the 3B model calling `add_reminder` on arithmetic questions (roughly 40-50% of past runs).
 
 ## Architecture
@@ -112,7 +112,7 @@ non-loopback `DIYA_HOST` and no `DIYA_LAN=1`, or with `DIYA_LAN=1` and no allowe
 ## Tests and evals
 
 ```bash
-python -m pytest        # 363 tests, about 2 minutes, from the repo root
+python -m pytest        # about 2 minutes, from the repo root
 python diya_evals.py    # needs Ollama and both models; exits 1 if any case fails
 ```
 
@@ -131,8 +131,7 @@ Stage 0, safety and reproducibility:
 - [x] Line endings and text encoding pinned (`.gitattributes`, UTF-8; a test enforces it)
 - [x] Network boundary: loopback by default, Host and Origin allowlists, no wildcard CORS
 - [ ] Per-install auth token (stored hashed) behind a Next.js proxy, so the browser holds no secret
-- [ ] Request body-size limits
-- [ ] Restrict `list_files` to allowed folders
+- [ ] Request body-size limits, and `list_files` restricted to allowed folders
 - [ ] `pyproject.toml`, locked dependencies, and models pinned by digest (tags only today)
 - [ ] Database migrations (the schema is `CREATE TABLE IF NOT EXISTS`)
 - [ ] CI (no `.github/` yet)
@@ -142,8 +141,9 @@ Later stages: (1) hardware and model benchmark; (2) trustworthy memory, includin
 review-and-promote step for staged facts; (3) connectors and permissions; (4) durable workflows;
 (5) "Jev" decision benchmark; (6) daily-driver experience.
 
-## Credits
+## License and credits
 
-The composer is ported from the MIT-licensed [Libraries.dev](https://github.com/Jakubantalik/Libraries.dev)
-by Jakub Antalik ([notices](THIRD_PARTY_NOTICES.md)). The project is modeled on
-`Truffle_Research_Dossier.pdf`. There is no license of its own yet.
+All rights reserved: the code is published to read, and no license to use, copy, modify or distribute
+it is granted. Third-party parts keep their own licenses (the composer is ported from the MIT-licensed
+[Libraries.dev](https://github.com/Jakubantalik/Libraries.dev); see [notices](THIRD_PARTY_NOTICES.md)).
+The project is modeled on `Truffle_Research_Dossier.pdf`.
