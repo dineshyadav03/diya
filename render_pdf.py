@@ -1,3 +1,10 @@
+"""Source of the Truffle research dossier's content, and the script that builds the PDF.
+
+    python render_pdf.py     ->  Truffle_Research_Dossier.pdf   (GENERATED: edit this file, never the PDF)
+
+The rendering helpers and styles are in build_pdf.py. truffle-research.html is an older, hand-written
+web version of the same text; it is not generated from here and can lag behind this file.
+"""
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
@@ -93,7 +100,7 @@ s['blocks'] += [
      'credibility problem for a company asking for $500 deposits. The clearest public thread back to a '
      'real name is a LinkedIn profile for an **Aidan Guarniere**, listed as affiliated with "Deepshard, '
      'Inc." in Los Angeles -- not confirmed as a founder or CEO. Support contacts that do appear in the '
-     'docs and GitHub issues (`muhammad@deepshard.org`, `hello@deepshard.org`) are first-name-only. The '
+     'docs and GitHub issues (a first-name address and a generic contact address at the company domain) are first-name-only. The '
      'company\'s root domain, `itsalltruffles.com`, redirects to a page that is literally just ASCII art '
      'and the tagline "Stream of consciousness" -- the anonymity looks deliberate, part of the brand\'s '
      'off-grid/anti-corporate posture, rather than accidental.'),

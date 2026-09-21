@@ -146,4 +146,4 @@ review-and-promote step for staged facts; (3) connectors and permissions; (4) du
 All rights reserved: the code is published to read, and no license to use, copy, modify or distribute
 it is granted. Third-party parts keep their own licenses (the composer is ported from the MIT-licensed
 [Libraries.dev](https://github.com/Jakubantalik/Libraries.dev); see [notices](THIRD_PARTY_NOTICES.md)).
-The project is modeled on `Truffle_Research_Dossier.pdf`.
+The project is modeled on a research dossier: `render_pdf.py` is its source; the PDF is generated from it.
