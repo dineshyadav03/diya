@@ -53,6 +53,9 @@ export default function ChatPage() {
   const [speakOn, setSpeakOn] = useState(false)
   const [thinking, setThinking] = useState(false)
   const [speaking, setSpeaking] = useState(false)
+  // True once we know whether there is a past thread to load, so the empty state
+  // doesn't flash up for a moment before an existing conversation arrives.
+  const [ready, setReady] = useState(false)
   // Once revealed, freeze the shader/scheduler rather than let it render
   // forever -- see IMG_FX_ENABLED above for why this alone isn't enough
   // to make it safe by default.
@@ -78,6 +81,10 @@ export default function ChatPage() {
             .map((m) => ({ role: m.role, text: m.content }))
           setMessages(loaded)
         })
+        .catch(() => {})
+        .finally(() => setReady(true))
+    } else {
+      setReady(true)
     }
   }, [])
 
@@ -186,7 +193,11 @@ export default function ChatPage() {
           Diya
           {/* Ambient presence when nothing else is happening -- the one
               orb state with no specific task behind it, on purpose. */}
-          {!thinking && !speaking && <ThinkingOrb state="breathing" size={20} theme="light" />}
+          {!thinking && !speaking && (
+            <span className="ambient-orb">
+              <ThinkingOrb state="breathing" size={20} theme="light" />
+            </span>
+          )}
         </div>
         <div className="controls">
           <Link className="icon-btn" href="/history" style={{ textDecoration: 'none' }}>
@@ -215,6 +226,13 @@ export default function ChatPage() {
         </div>
       </header>
       <div id="log" ref={logRef}>
+        {ready && messages.length === 0 && !thinking && (
+          <div className="empty-state">
+            <img src="/diya-flame.svg" alt="" className="empty-mark" />
+            <h1>Ask Diya anything</h1>
+            <p>Type below, or hold the mic to talk.</p>
+          </div>
+        )}
         {messages.map((m, i) => {
           if (m.role === 'tools') {
             return (

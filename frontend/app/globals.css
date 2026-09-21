@@ -1,18 +1,27 @@
+/* Palette. The brand assets are the source of truth: public/diya-flame.svg is
+   cream #faf8f4 (its own background), amber #c9812f (the flame) and bronze
+   #8a5a1f (the lamp's base). Every colour below is one of those or a
+   text/surface tone derived from them, chosen to clear WCAG AA (4.5:1) on the
+   surfaces it actually sits on. */
 :root {
-  --bg: #faf8f4;
-  --surface: #ffffff;
-  --surface-2: #f2ede3;
+  --bg: #faf8f4;              /* asset background */
+  --surface: #ffffff;         /* raised: cards */
+  --surface-2: #f2ede3;       /* controls, assistant bubbles */
+  --surface-2-hover: #ebe4d4;
   --border: #e4dcca;
-  --text: #2b2417;
-  --text-dim: #8c8270;
-  --accent: #c9812f;
-  --accent-text: #ffffff;
+  --text: #2b2417;            /* 14.5:1 on --bg */
+  --text-dim: #6f6555;        /* 5.4:1 on --bg, 4.9:1 on --surface-2 (was #8c8270, 3.3:1) */
+  --accent: #c9812f;          /* asset flame: fills and marks, never small text on cream */
+  --accent-strong: #8a5a1f;   /* asset base: links, focus rings, accents in text (5.6:1) */
+  --accent-text: #2b2417;     /* text on --accent: 4.9:1 (white was 3.1:1) */
   --danger: #d9634a;
+  --dock: #1d1810;            /* the composer's dark stage, warmed from --text (was cold #171717) */
+  --focus: 2px solid var(--accent-strong);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; margin: 0; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Text", sans-serif;
   background: var(--bg);
   color: var(--text);
 }
@@ -21,26 +30,39 @@ body {
   display: flex;
   flex-direction: column;
 }
+/* The header sits on the asset's own cream, so the logo's cream tile blends into it
+   instead of showing as a faint square on white. max() because env() is 0px (not
+   unset) on desktop -- the old fallback never applied and the header hugged the top edge. */
 header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   row-gap: 8px;
-  padding: env(safe-area-inset-top, 14px) 16px 12px;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--bg);
 }
 header .title { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; flex-shrink: 0; }
 header .title svg { flex-shrink: 0; }
+.ambient-orb { display: inline-flex; }
+/* Purely decorative: on a phone the header has no slack (title + three controls fill 375px),
+   so the orb goes rather than crowd the buttons or force them onto a second row. */
+@media (max-width: 420px) { .ambient-orb { display: none; } }
 .brand-mark { width: 27px; height: 27px; border-radius: 6px; flex-shrink: 0; }
 header .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+/* One control style for link, button and label alike, so they share a height. */
 header .icon-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 34px; padding: 0 12px;
   background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim);
-  border-radius: 10px; padding: 6px 10px; font-size: 13px;
+  border-radius: 10px; font: inherit; font-size: 13px; line-height: 1; text-decoration: none;
+  cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
 }
-header label.icon-btn { display: flex; align-items: center; gap: 5px; }
-header input[type="checkbox"] { accent-color: var(--accent); }
+header .icon-btn:hover { background: var(--surface-2-hover); color: var(--text); }
+header .icon-btn:focus-visible, header label.icon-btn:focus-within { outline: var(--focus); outline-offset: 2px; }
+header input[type="checkbox"] { accent-color: var(--accent-strong); width: 15px; height: 15px; margin: 0; cursor: pointer; }
+@media (pointer: coarse) { header .icon-btn { min-height: 40px; } }
 
 #log {
   flex: 1;
@@ -59,7 +81,10 @@ header input[type="checkbox"] { accent-color: var(--accent); }
   font-size: 15.5px;
 }
 .user { background: var(--accent); color: var(--accent-text); align-self: flex-end; border-bottom-right-radius: 4px; }
-.assistant { background: var(--surface-2); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; }
+.assistant {
+  background: var(--surface-2); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px;
+  border: 1px solid var(--border); /* the cream-on-cream bubble needs an edge to read as a surface */
+}
 .system {
   align-self: center;
   max-width: 95%;
@@ -84,12 +109,17 @@ header input[type="checkbox"] { accent-color: var(--accent); }
   display: flex;
   justify-content: center;
   /* .mock-vchat's own fill is translucent (rgba(48,48,48,0.4)) -- it's
-     authored to sit on the demo site's dark stage (#171717), not read
-     directly against a light page, so this dock provides that same
-     opaque dark backdrop. */
-  background: #171717;
+     authored to sit on the demo site's dark stage, not read directly against
+     a light page, so this dock provides an opaque dark backdrop. Warmed from
+     the palette's own dark brown (--dock) rather than the demo's neutral
+     #171717, so the dock belongs to the cream page above it. */
+  background: var(--dock);
 }
-.voice-fit { width: 100%; max-width: 480px; }
+/* Exactly the width the mock (and voice-glow's / border-beam's px-authored
+   geometry) was drawn for. It was 480px, wider than the 371px form, so on
+   desktop the composer sat left of centre inside a wrapper the glow was
+   measured against. On narrow screens it still shrinks (VoiceBar's fit scale). */
+.voice-fit { width: 100%; max-width: 371px; }
 
 .mock-vchat {
   position: relative;
@@ -129,7 +159,12 @@ header input[type="checkbox"] { accent-color: var(--accent); }
   caret-color: #eaeaea;
   z-index: 5;
 }
-.mock-vchat-input::placeholder { color: #4e4e4e; opacity: 1; }
+/* was #4e4e4e: 1.9:1 on the composer, unreadable. 5.2:1 now. */
+.mock-vchat-input::placeholder { color: #9b9382; opacity: 1; }
+/* While the "Listening..." / "Transcribing..." chip covers the input, hide what is
+   underneath it -- the placeholder (and any typed text) used to ghost through. */
+.mock-vchat:has(.mic-status) .mock-vchat-input { color: transparent; caret-color: transparent; }
+.mock-vchat:has(.mic-status) .mock-vchat-input::placeholder { color: transparent; }
 /* metal-fx fades its root in (opacity 0 -> 1) once its WebGL ring has
    initialized, and sets its child to visibility:hidden until that reveal.
    In testing the WebGL init itself got stuck (opacity pinned at 0
@@ -155,7 +190,6 @@ header input[type="checkbox"] { accent-color: var(--accent); }
   gap: 6px;
   font-size: 13px;
   color: #b2b2b2;
-  background: rgba(48, 48, 48, 0.4);
   pointer-events: none;
 }
 .mock-vchat-row {
@@ -259,13 +293,44 @@ header input[type="checkbox"] { accent-color: var(--accent); }
 }
 .mk-ico-plus::after { transform: rotate(90deg); }
 
-/* History page */
-.history-page { font-family: -apple-system, sans-serif; padding: 16px; max-width: 640px; margin: 0 auto; }
-.history-page h2 { display: flex; align-items: center; gap: 10px; }
-.history-page a.back { color: var(--accent); text-decoration: none; font-size: 15px; }
+/* ── Empty, loading and error states (chat and history share these) ─────────
+   The mark is public/diya-flame.svg, referenced as-is: its cream tile is the page
+   background, so it sits on the page without a visible box. */
+.empty-state {
+  margin: auto; max-width: 320px; padding: 24px 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+}
+.empty-mark { width: 72px; height: 72px; border-radius: 16px; margin-bottom: 10px; }
+.empty-state h1, .empty-state h2 { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.25; }
+.empty-state p { margin: 0; color: var(--text-dim); font-size: 14.5px; line-height: 1.45; }
+.cta {
+  display: inline-flex; align-items: center; justify-content: center; margin-top: 16px;
+  min-height: 40px; padding: 0 20px; border-radius: 12px; border: 0;
+  background: var(--accent); color: var(--accent-text);
+  font: inherit; font-size: 14.5px; font-weight: 600; text-decoration: none; cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.cta:hover { filter: brightness(0.95); }
+.cta:focus-visible { outline: var(--focus); outline-offset: 2px; }
+
+/* ── History: the same header, page colour and surfaces as the chat ───────── */
+.history-page { flex: 1; overflow-y: auto; padding: 20px 16px 32px; }
+.history-inner { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; min-height: 100%; }
+.history-inner > h1 { margin: 4px 0 16px; font-size: 22px; font-weight: 600; line-height: 1.2; }
 .thread {
   display: block; padding: 12px 14px; margin-bottom: 8px; border: 1px solid var(--border);
-  border-radius: 12px; text-decoration: none; color: inherit; background: var(--surface);
+  border-radius: 12px; text-decoration: none; color: var(--text); background: var(--surface);
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
+.thread:hover { border-color: var(--accent); background: var(--bg); }
+.thread:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.thread:active { background: var(--surface-2); }
 .thread .preview { font-size: 15px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.thread .date { font-size: 12px; color: var(--text-dim); }
+.thread .date { font-size: 12.5px; color: var(--text-dim); }
+.thread-skeleton {
+  height: 62px; margin-bottom: 8px; border-radius: 12px; border: 1px solid var(--border);
+  background: linear-gradient(90deg, var(--surface) 0%, var(--surface-2) 50%, var(--surface) 100%);
+  background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .thread-skeleton { animation: none; } }
