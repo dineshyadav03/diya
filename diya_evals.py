@@ -48,6 +48,31 @@ TEST_CASES = [
         "expected_tool": "list_reminders",
         "expected_in_answer": [],
     },
+    # Sharing a fact is not asking for anything: expect a one-sentence acknowledgement and no
+    # tool at all (unprompted, the model saved a reminder or ran a web search and wrote
+    # paragraphs). The prompts are fictional; they have the shape of a real exam-and-travel share.
+    {
+        "name": "fact-share -- exam and travel detail: short acknowledgement, no tool",
+        "prompt": "My driving test is on October 12 from 9 to 10am and I take the train from Leeds to York for it.",
+        "expected_tool": None,
+        "expected_in_answer": ["october"],
+        "max_words": 30,
+    },
+    {
+        "name": "fact-share -- personal detail: short acknowledgement, no research",
+        "prompt": "My sister Anna lives in Lisbon and her birthday is on March 3rd.",
+        "expected_tool": None,
+        "expected_in_answer": ["anna"],
+        "max_words": 30,
+    },
+    # ...but a real question still gets a real answer, not a clipped one.
+    {
+        "name": "question -- still explained in full",
+        "prompt": "Explain what a mortgage is.",
+        "expected_tool": None,
+        "expected_in_answer": ["mortgage"],
+        "min_words": 30,
+    },
 ]
 
 
@@ -112,6 +137,13 @@ def run_evals(agent, cases=TEST_CASES):
         expected_terms = case.get("expected_in_answer", [])
         if expected_terms and not any(t.lower() in answer_lower for t in expected_terms):
             issues.append(f"expected one of {expected_terms} in the answer -- got: {answer!r}")
+
+        words = len(answer.split())
+        max_words, min_words = case.get("max_words"), case.get("min_words")
+        if max_words is not None and words > max_words:
+            issues.append(f"expected at most {max_words} words, got {words}: {answer!r}")
+        if min_words is not None and words < min_words:
+            issues.append(f"expected at least {min_words} words, got {words}: {answer!r}")
 
         for term in case.get("forbidden_in_answer", []):
             if term.lower() in answer_lower:

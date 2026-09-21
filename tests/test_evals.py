@@ -188,7 +188,7 @@ def test_main_fails_fast_when_ollama_is_down(run_python):
 
 
 def test_the_original_cases_are_unchanged():
-    assert [c["name"] for c in diya_evals.TEST_CASES] == [
+    assert [c["name"] for c in diya_evals.TEST_CASES][:6] == [
         "arithmetic -- should need no tool at all",
         "notes retrieval -- dentist appointment",
         "weather -- geocoding disambiguation regression check",
@@ -196,3 +196,27 @@ def test_the_original_cases_are_unchanged():
         "add a reminder",
         "list reminders",
     ]
+
+
+def test_the_fact_share_and_question_cases_are_present_and_use_only_fictional_data():
+    names = [c["name"] for c in diya_evals.TEST_CASES][6:]
+    assert names == [
+        "fact-share -- exam and travel detail: short acknowledgement, no tool",
+        "fact-share -- personal detail: short acknowledgement, no research",
+        "question -- still explained in full",
+    ]
+    for case in diya_evals.TEST_CASES[6:]:
+        assert case["expected_tool"] is None
+        assert ("max_words" in case) != ("min_words" in case)
+
+
+def test_the_word_limits_are_enforced(tmp_path, capsys):
+    short_only = {"name": "short", "prompt": "hi", "expected_tool": None, "expected_in_answer": [], "max_words": 3}
+    long_only = {"name": "long", "prompt": "hi", "expected_tool": None, "expected_in_answer": [], "min_words": 5}
+    agent, _ = eval_agent(tmp_path, text_reply("one two three four"), text_reply("one two three four"),
+                          text_reply("one two"))
+    assert diya_evals.run_evals(agent, [short_only]) is False
+    assert diya_evals.run_evals(agent, [long_only]) is False
+    out = capsys.readouterr().out
+    assert "expected at most 3 words, got 4" in out and "expected at least 5 words, got 4" in out
+    assert diya_evals.run_evals(agent, [short_only]) is True  # 2 words is within the limit

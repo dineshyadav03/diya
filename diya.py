@@ -10,6 +10,7 @@ from openai import OpenAI
 
 import diya_config
 import diya_db
+import diya_intent
 
 WEATHER_CODES = {
     0: "clear sky", 1: "mainly clear", 2: "partly cloudy", 3: "overcast",
@@ -204,6 +205,41 @@ TOOLS = [
 
 MAX_TOOL_ROUNDS = 8  # matches Truffle's own documented default -- a safety cap, never expected in normal use
 
+# What the model is told when the user is just sharing a fact (see diya_intent.is_fact_share).
+# Left to itself, a small model turns "my flight is on Friday at 6" into paragraphs of advice and
+# reaches for tools nobody asked for: it saved a reminder or ran a web search in 27 of 30
+# measured runs, and claimed "I've set a reminder for your flight". The user's message is already
+# stored in the thread and Dreaming stages facts for review, so there is nothing to store or look up.
+#
+# These instructions are sent ONLY on those turns. Sent on every turn they measurably halved the
+# length of ordinary answers (median ~100 -> ~50 words), and ordinary answers must stay exactly
+# as they were: on every other turn the request to the model is unchanged.
+FACT_SHARE_PROMPT = (
+    "The user is telling you something -- an appointment, a plan, a detail about their life -- and "
+    "is asking for nothing. Reply with ONE short sentence: start with a brief acknowledgement (such "
+    "as Got it, Noted, or Thanks) and then repeat the key detail, speaking to the user as \"you\" "
+    "and \"your\" (never \"my\"). Do not add advice, tips, plans or extra information, do not ask "
+    "follow-up questions, and do not use any tool. Their message is saved automatically; you never "
+    "need to store it yourself."
+)
+
+# Added to the last user message (for the model only, never saved) on a clear fact-share: the
+# instruction closest to the reply is the one a small model follows most reliably.
+FACT_SHARE_HINT = (
+    "(The user is telling you something, not asking. Reply with one short sentence: a brief "
+    "acknowledgement such as Got it or Noted, then the key detail, addressed to the user as "
+    "\"you\" or \"your\". No advice, no extra "
+    "information, no questions.)"
+)
+
+
+def _last_user_text(messages):
+    """The text of the newest user message in a conversation (tool messages can follow it)."""
+    for m in reversed(messages):
+        if isinstance(m, dict) and m.get("role") == "user":
+            return m.get("content")
+    return None
+
 
 class Agent:
     """Diya's brain: the model client, the notes index, the toolkit and the tool-calling loop.
@@ -306,29 +342,66 @@ class Agent:
                 ] + history
         return history
 
+    def _model_messages(self, messages, fact_share):
+        """The conversation as the model sees it (the caller's list is left alone).
+
+        Ordinary turns are passed through untouched. On a fact-share the fact-share instructions
+        go first -- merged with the profile system message when there is one, so the model still
+        gets a single system message -- and a reminder is added to the last user message to keep
+        the reply to one sentence."""
+        out = list(messages)
+        if not fact_share:
+            return out
+        first = out[0] if out else None
+        if isinstance(first, dict) and first.get("role") == "system":
+            out[0] = {"role": "system", "content": FACT_SHARE_PROMPT + "\n\n" + first["content"]}
+        else:
+            out.insert(0, {"role": "system", "content": FACT_SHARE_PROMPT})
+        for i in range(len(out) - 1, -1, -1):
+            m = out[i]
+            if isinstance(m, dict) and m.get("role") == "user":
+                out[i] = {**m, "content": f"{m['content']}\n\n{FACT_SHARE_HINT}"}
+                break
+        return out
+
+    def _complete(self, messages, fact_share, tools):
+        kwargs = {"model": self.config.model, "messages": self._model_messages(messages, fact_share)}
+        if tools:
+            kwargs["tools"] = tools
+        return self.client.chat.completions.create(**kwargs)
+
+    @staticmethod
+    def _final(content, fact_share):
+        """On a fact-share the prompt and the missing tools should already have produced one short
+        sentence; this is the backstop if the model elaborates anyway."""
+        return diya_intent.shorten_ack(content) if fact_share else content
+
     def ask(self, messages):
-        """Returns (answer_text, tools_called) -- the tool list exists so evals can check routing."""
+        """Returns (answer_text, tools_called) -- the tool list exists so evals can check routing.
+
+        A clear fact-share ("my flight is on Friday at 6") is not a request: the model is called
+        without tools (so it cannot save a reminder or search the web on its own initiative) and
+        its reply is kept to one sentence. Everything else -- questions, requests, chat -- gets
+        the full toolkit and a normal answer."""
         tools_called = []
+        fact_share = diya_intent.is_fact_share(_last_user_text(messages))
+        tools = None if fact_share else TOOLS
         for _ in range(MAX_TOOL_ROUNDS):
-            response = self.client.chat.completions.create(
-                model=self.config.model, messages=messages, tools=TOOLS
-            )
+            response = self._complete(messages, fact_share, tools)
             message = response.choices[0].message
 
             if not message.tool_calls:
                 if message.content:
-                    return message.content, tools_called
+                    return self._final(message.content, fact_share), tools_called
                 # The model sometimes returns nothing at all when no tool applies -- a known small-
                 # model quirk, not a real answer. One bounded retry, on a throwaway copy of the
                 # messages so the real conversation history doesn't get polluted with a nudge.
                 retry = messages + [
                     {"role": "user", "content": "Please answer directly, in one short sentence."}
                 ]
-                retry_response = self.client.chat.completions.create(
-                    model=self.config.model, messages=retry, tools=TOOLS
-                )
+                retry_response = self._complete(retry, fact_share, tools)
                 retry_content = retry_response.choices[0].message.content
-                return retry_content or "I didn't get a clear answer -- try rephrasing.", tools_called
+                return self._final(retry_content or "I didn't get a clear answer -- try rephrasing.", fact_share), tools_called
 
             messages.append(message)
             for call in message.tool_calls:
