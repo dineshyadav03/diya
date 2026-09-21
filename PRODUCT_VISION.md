@@ -124,4 +124,4 @@ to `dream_log.txt` and `watcher_log.txt`.
 
 Stage 0 (`ROADMAP.md`): `list_files` restricted to a configured root, the per-install token behind a
 Next.js proxy, body limits, packaging with a lock file, pinned models, migrations, CI. Then the review
-and promotion step for staged facts. The stage list is in the README.
+and promotion step for staged facts. The stage list is in the roadmap.

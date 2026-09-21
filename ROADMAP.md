@@ -1,8 +1,7 @@
 # Roadmap
 
-Current work is Stage 0 (safety and reproducibility). Later stages are listed in the
-[README](README.md#roadmap). The Phase 1 learning roadmap is archived in
-[`archive/phase1-learning-roadmap.md`](archive/phase1-learning-roadmap.md).
+Current work is Stage 0 (safety and reproducibility); the later stages are at the end. The Phase 1
+learning roadmap is archived in [`archive/phase1-learning-roadmap.md`](archive/phase1-learning-roadmap.md).
 
 ## Stage 0 checklist
 
@@ -26,4 +25,16 @@ Remaining:
 - [ ] Models pinned by digest (only tags today)
 - [ ] Database migrations (the schema is `CREATE TABLE IF NOT EXISTS`)
 - [ ] CI
+- [ ] Add a screenshot or demo GIF to the README (a placeholder comment marks the spot, e.g. `docs/demo.gif`)
 - [ ] Generate `truffle-research.html` from `render_pdf.py` (until then it is a marked hand copy)
+
+## Later stages
+
+1. Hardware and model benchmark. Includes the 3B model calling `add_reminder` on plain arithmetic
+   questions (roughly 40-50% of past runs), which prompt and temperature changes did not fix.
+2. Trustworthy memory. Includes the review-and-promote step for staged facts: nothing reads
+   `dream_pending.jsonl` yet, so staged facts never reach the model.
+3. Connectors and permissions.
+4. Durable workflows.
+5. "Jev" decision benchmark.
+6. Daily-driver experience.
