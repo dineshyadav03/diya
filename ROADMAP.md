@@ -20,8 +20,10 @@ Remaining:
   - [ ] Per-install token, stored hashed
   - [ ] Next.js proxy, so the browser holds no secret
   - [ ] Request body-size limits
-  - [ ] Restrict `list_files` to allowed folders
+  - [ ] Restrict `list_files` to a configured root: the next auth increment. The default root is a
+        dedicated `Documents\Diya` folder, not the repo root
 - [ ] `pyproject.toml` and locked dependencies
 - [ ] Models pinned by digest (only tags today)
 - [ ] Database migrations (the schema is `CREATE TABLE IF NOT EXISTS`)
 - [ ] CI
+- [ ] Generate `truffle-research.html` from `render_pdf.py` (until then it is a marked hand copy)
