@@ -1,4 +1,5 @@
 import dataclasses
+import types
 
 import pytest
 
@@ -296,3 +297,44 @@ def test_the_chat_loop_saves_messages_and_survives_a_model_error(config, monkeyp
         {"role": "assistant", "content": "Hi there."},
         {"role": "user", "content": "again"},
     ]
+
+
+# --- get_weather: old city names and picking the right match (no network: httpx.get is faked) -------
+
+def fake_open_meteo(monkeypatch, places):
+    """Answer the geocoding call with `places` and the forecast call with fixed weather."""
+    queries = []
+
+    def fake_get(url, params=None, timeout=None):
+        if "geocoding" in url:
+            queries.append(params["name"])
+            return types.SimpleNamespace(json=lambda: {"results": places} if places else {})
+        return types.SimpleNamespace(
+            json=lambda: {"current": {"temperature_2m": 30.0, "weather_code": 1, "wind_speed_10m": 5.0}}
+        )
+
+    monkeypatch.setattr(diya.httpx, "get", fake_get)
+    return queries
+
+
+CHENNAI = {"name": "Chennai", "admin1": "Tamil Nadu", "country": "India", "latitude": 13.1, "longitude": 80.3, "population": 7000000}
+
+
+@pytest.mark.parametrize("old, current", [("Madras", "Chennai"), (" bombay ", "Mumbai"), ("CALCUTTA", "Kolkata")])
+def test_get_weather_looks_up_the_current_name_of_a_renamed_city(monkeypatch, old, current):
+    queries = fake_open_meteo(monkeypatch, [CHENNAI])
+    diya.get_weather(old)
+    assert queries == [current]  # the geocoder may only know the current name, or the wrong place
+
+
+def test_get_weather_leaves_other_names_alone(monkeypatch):
+    queries = fake_open_meteo(monkeypatch, [CHENNAI])
+    diya.get_weather("Paris")
+    assert queries == ["Paris"]
+
+
+def test_get_weather_prefers_the_most_populous_match(monkeypatch):
+    small = {"name": "Chennai", "admin1": "Oregon", "country": "United States", "latitude": 44.0, "longitude": -123.0, "population": 5000}
+    fake_open_meteo(monkeypatch, [small, CHENNAI])
+    out = diya.get_weather("Chennai")
+    assert out.startswith("Chennai, Tamil Nadu, India: 30.0") and "Oregon" not in out

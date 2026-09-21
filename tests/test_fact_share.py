@@ -21,7 +21,7 @@ FACTS = [
     "My flight to Berlin leaves on Friday at 6am.",
     "I have a dentist appointment next Tuesday at 3pm.",
     "I just moved to a new apartment on Baker Street.",
-    "my final exam is on November 14 from 2 to 4pm and I travel to another city for my exams",
+    "my pottery class is on June 5 from 3 to 5pm and I take the bus to Exampleville for it",
     "I’m allergic to penicillin.",  # phone keyboards send a typographic apostrophe
     "Remember that my locker code is 4821.",
     "We're moving to Paris in June.",

@@ -25,10 +25,10 @@ TEST_CASES = [
     },
     {
         "name": "weather -- geocoding disambiguation regression check",
-        "prompt": "What's the weather in Bangalore?",
+        "prompt": "What's the weather in Madras?",
         "expected_tool": "get_weather",
-        "expected_in_answer": ["india", "karnataka", "bengaluru", "bangalore"],
-        "forbidden_in_answer": ["pakistan", "sindh"],
+        "expected_in_answer": ["india", "tamil nadu", "chennai", "madras"],
+        "forbidden_in_answer": ["oregon", "united states"],
     },
     {
         "name": "file listing",

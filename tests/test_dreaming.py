@@ -205,27 +205,27 @@ def test_no_facts_still_advances_the_checkpoint_but_writes_nothing(any_mode, dat
 
 
 def test_an_unreachable_model_loses_no_progress(any_mode, data, capsys):
-    seed(any_mode, ("user", "I adopted a dog named Rocky"))
+    seed(any_mode, ("user", "I adopted a cat named Pixel"))
     down, _ = dreamer(any_mode, chat_error=ConnectionError("down"))
     down.dream_cycle()
     assert capsys.readouterr().out == "[error] Could not reach the model (down). Will retry next cycle.\n"
     assert not os.path.exists(any_mode.dream_state_path)
     assert not (data / "profile.txt").exists() and not (data / "pending.jsonl").exists()
 
-    recovered, client = dreamer(any_mode, text_reply("- dog: Rocky"))
+    recovered, client = dreamer(any_mode, text_reply("- cat: Pixel"))
     recovered.dream_cycle()  # the same message is picked up on the next cycle
-    assert "Rocky" in client.chat_calls[0]["messages"][0]["content"]
+    assert "Pixel" in client.chat_calls[0]["messages"][0]["content"]
     assert state(any_mode) == {"last_message_id": 1}
 
 
 def test_the_prompt_uses_user_messages_only_and_the_configured_model(any_mode):
-    seed(any_mode, ("user", "I adopted a dog named Rocky"), ("assistant", "Congrats on the puppy!"))
-    d, client = dreamer(any_mode, text_reply("- dog: Rocky"))
+    seed(any_mode, ("user", "I adopted a cat named Pixel"), ("assistant", "Congrats on the kitten!"))
+    d, client = dreamer(any_mode, text_reply("- cat: Pixel"))
     d.dream_cycle()
     call = client.chat_calls[0]
     assert call["model"] == "qwen2.5:3b" and call["tools"] is None
     prompt = call["messages"][0]["content"]
-    assert "- I adopted a dog named Rocky" in prompt and "Congrats" not in prompt
+    assert "- I adopted a cat named Pixel" in prompt and "Congrats" not in prompt
 
 
 def test_profile_helpers(config, data):
@@ -240,8 +240,8 @@ def test_profile_helpers(config, data):
 
 
 def test_configured_paths_are_used_and_the_defaults_are_left_alone(any_mode, tmp_path):
-    seed(any_mode, ("user", "I adopted a dog named Rocky"))
-    d, _ = dreamer(any_mode, text_reply("- dog: Rocky"))
+    seed(any_mode, ("user", "I adopted a cat named Pixel"))
+    d, _ = dreamer(any_mode, text_reply("- cat: Pixel"))
     d.dream_cycle()
     assert os.path.exists(any_mode.dream_state_path)
     for default in ("user_profile.txt", "dream_state.json", "dream_log.txt", "dream_pending.jsonl"):
@@ -251,47 +251,47 @@ def test_configured_paths_are_used_and_the_defaults_are_left_alone(any_mode, tmp
 # --- staged mode (the default) ----------------------------------------------------------------
 
 def test_staged_extraction_is_one_record_and_the_trusted_profile_is_never_touched(config, data, capsys):
-    seed(config, ("user", "I adopted a dog named Rocky"), ("assistant", "Congrats on the puppy!"))
+    seed(config, ("user", "I adopted a cat named Pixel"), ("assistant", "Congrats on the kitten!"))
     (data / "profile.txt").write_bytes(b"- likes tea\r\n")
-    d, _ = dreamer(config, text_reply("  - has a dog named Rocky\n"))
+    d, _ = dreamer(config, text_reply("  - has a cat named Pixel\n"))
     d.dream_cycle()
 
     (record,) = pending(config)
     assert set(record) == {"timestamp", "first_message_id", "last_message_id", "model", "facts"}
     assert (record["first_message_id"], record["last_message_id"]) == (1, 2)
     assert record["model"] == "qwen2.5:3b"
-    assert record["facts"] == ["- has a dog named Rocky"]
+    assert record["facts"] == ["- has a cat named Pixel"]
     stamp = datetime.fromisoformat(record["timestamp"])
     assert stamp.utcoffset() == timedelta(0)  # UTC
 
     assert (data / "profile.txt").read_bytes() == b"- likes tea\r\n"  # byte-identical
     assert state(config) == {"last_message_id": 2}
-    assert capsys.readouterr().out == STAGED_HEADER + "- has a dog named Rocky\n"
+    assert capsys.readouterr().out == STAGED_HEADER + "- has a cat named Pixel\n"
 
 
 def test_staged_mode_never_creates_the_profile(config, data):
-    seed(config, ("user", "I adopted a dog named Rocky"))
-    d, _ = dreamer(config, text_reply("- dog: Rocky"))
+    seed(config, ("user", "I adopted a cat named Pixel"))
+    d, _ = dreamer(config, text_reply("- cat: Pixel"))
     d.dream_cycle()
     assert not (data / "profile.txt").exists()
-    assert pending(config)[0]["facts"] == ["- dog: Rocky"]
+    assert pending(config)[0]["facts"] == ["- cat: Pixel"]
 
 
 def test_the_agent_never_sees_staged_facts(config, data):
-    seed(config, ("user", "I adopted a dog named Rocky"))
-    d, _ = dreamer(config, text_reply("- dog: Rocky"))
+    seed(config, ("user", "I adopted a cat named Pixel"))
+    d, _ = dreamer(config, text_reply("- cat: Pixel"))
     d.dream_cycle()
     agent = diya.Agent(config, client=FakeClient())
     history = [{"role": "user", "content": "hi"}]
     assert agent.with_profile(history) == history  # nothing promoted, nothing injected
     (data / "profile.txt").write_text("- trusted fact\n")
     assert "trusted fact" in agent.with_profile(history)[0]["content"]
-    assert "Rocky" not in agent.with_profile(history)[0]["content"]
+    assert "Pixel" not in agent.with_profile(history)[0]["content"]
 
 
 def test_each_staged_extraction_is_its_own_record_with_a_disjoint_range(config):
-    store = seed(config, ("user", "I adopted a dog named Rocky"))
-    dreamer(config, text_reply("- dog: Rocky"))[0].dream_cycle()
+    store = seed(config, ("user", "I adopted a cat named Pixel"))
+    dreamer(config, text_reply("- cat: Pixel"))[0].dream_cycle()
     store.add_message(store.list_threads()[0][0], "user", "My favourite colour is teal")
     dreamer(config, text_reply("- likes teal"))[0].dream_cycle()
     first, second = pending(config)
@@ -312,7 +312,7 @@ def test_a_multi_line_reply_becomes_a_fact_list_and_the_file_stays_one_line_per_
 
 
 def test_the_record_is_flushed_to_disk_before_the_checkpoint_moves(config, monkeypatch):
-    seed(config, ("user", "I adopted a dog named Rocky"))
+    seed(config, ("user", "I adopted a cat named Pixel"))
     events = []
     real_fsync, real_save = os.fsync, Dreamer.save_last_dreamed_id
 
@@ -326,15 +326,15 @@ def test_the_record_is_flushed_to_disk_before_the_checkpoint_moves(config, monke
 
     monkeypatch.setattr(os, "fsync", spy_fsync)
     monkeypatch.setattr(Dreamer, "save_last_dreamed_id", spy_save)
-    dreamer(config, text_reply("- dog: Rocky"))[0].dream_cycle()
+    dreamer(config, text_reply("- cat: Pixel"))[0].dream_cycle()
     assert events == [("fsync", True), ("checkpoint", 1)]
 
 
 def test_an_unreadable_queue_fails_closed_before_the_model_is_even_asked(config, data, capsys):
-    seed(config, ("user", "I adopted a dog named Rocky"))
+    seed(config, ("user", "I adopted a cat named Pixel"))
     (data / "queue_dir").mkdir()  # a directory where the queue file should be
     broken = dataclasses.replace(config, dream_pending_path=str(data / "queue_dir"))
-    d, client = dreamer(broken, text_reply("- dog: Rocky"))
+    d, client = dreamer(broken, text_reply("- cat: Pixel"))
     d.dream_cycle()
     out = capsys.readouterr().out
     assert out.startswith("[error] Could not read the review queue (")
@@ -344,7 +344,7 @@ def test_an_unreadable_queue_fails_closed_before_the_model_is_even_asked(config,
 
 
 def test_a_staging_failure_leaves_the_checkpoint_alone_and_the_batch_is_retried(config, data, capsys, monkeypatch):
-    seed(config, ("user", "I adopted a dog named Rocky"))
+    seed(config, ("user", "I adopted a cat named Pixel"))
     real_append, fail = Dreamer._append_pending, [True]
 
     def flaky_append(self, record):
@@ -353,21 +353,21 @@ def test_a_staging_failure_leaves_the_checkpoint_alone_and_the_batch_is_retried(
         return real_append(self, record)
 
     monkeypatch.setattr(Dreamer, "_append_pending", flaky_append)
-    dreamer(config, text_reply("- dog: Rocky"))[0].dream_cycle()
+    dreamer(config, text_reply("- cat: Pixel"))[0].dream_cycle()
     out = capsys.readouterr().out
     assert out == "[error] Could not stage the new facts (disk full). Checkpoint left unchanged; will retry next cycle.\n"
     assert not os.path.exists(config.dream_state_path) and not (data / "profile.txt").exists()
     assert not os.path.exists(config.dream_pending_path)
 
-    retry, client = dreamer(config, text_reply("- dog: Rocky"))
+    retry, client = dreamer(config, text_reply("- cat: Pixel"))
     retry.dream_cycle()  # the very same batch, staged now
-    assert "Rocky" in client.chat_calls[0]["messages"][0]["content"]
+    assert "Pixel" in client.chat_calls[0]["messages"][0]["content"]
     assert [(r["first_message_id"], r["last_message_id"]) for r in pending(config)] == [(1, 1)]
     assert state(config) == {"last_message_id": 1}
 
 
 def test_a_crash_between_staging_and_the_checkpoint_cannot_duplicate_the_batch(config, monkeypatch, capsys):
-    seed(config, ("user", "I adopted a dog named Rocky"))
+    seed(config, ("user", "I adopted a cat named Pixel"))
     real_save, fail = Dreamer.save_last_dreamed_id, [True]
 
     def flaky_save(self, message_id):
@@ -377,7 +377,7 @@ def test_a_crash_between_staging_and_the_checkpoint_cannot_duplicate_the_batch(c
 
     monkeypatch.setattr(Dreamer, "save_last_dreamed_id", flaky_save)
     with pytest.raises(RuntimeError, match="disk full"):
-        dreamer(config, text_reply("- dog: Rocky"))[0].dream_cycle()
+        dreamer(config, text_reply("- cat: Pixel"))[0].dream_cycle()
     assert len(pending(config)) == 1 and not os.path.exists(config.dream_state_path)
     capsys.readouterr()
 
@@ -416,13 +416,13 @@ def test_messages_that_arrive_after_a_crash_are_staged_separately_not_merged_or_
 
 
 def test_a_torn_last_line_is_not_a_staged_batch_and_is_ended_before_the_next_record(config, data):
-    seed(config, ("user", "I adopted a dog named Rocky"))
+    seed(config, ("user", "I adopted a cat named Pixel"))
     (data / "pending.jsonl").write_bytes(b'{"timestamp": "x", "first_message_id": 1, "last_mess')  # crash mid-write
-    d, client = dreamer(config, text_reply("- dog: Rocky"))
+    d, client = dreamer(config, text_reply("- cat: Pixel"))
     d.dream_cycle()
     assert len(client.chat_calls) == 1  # the fragment did not count as "already staged"
     lines = (data / "pending.jsonl").read_bytes().split(b"\n")
-    assert lines[0].startswith(b'{"timestamp": "x"') and json.loads(lines[1])["facts"] == ["- dog: Rocky"]
+    assert lines[0].startswith(b'{"timestamp": "x"') and json.loads(lines[1])["facts"] == ["- cat: Pixel"]
     assert [(r["first_message_id"], r["last_message_id"]) for r in d.staged_batches()] == [(1, 1)]
     assert state(config) == {"last_message_id": 1}
 
@@ -442,13 +442,13 @@ def test_lines_that_are_not_well_formed_records_are_ignored(config, data, junk):
 
 
 def test_the_pending_file_is_never_read_or_written_in_direct_mode(direct, data):
-    seed(direct, ("user", "I adopted a dog named Rocky"))
+    seed(direct, ("user", "I adopted a cat named Pixel"))
     # a record that WOULD match in staged mode must not short-circuit direct mode
     (data / "pending.jsonl").write_text(
         json.dumps({"first_message_id": 1, "last_message_id": 1, "facts": ["x"]}) + "\n"
     )
     before = (data / "pending.jsonl").read_bytes()
-    d, client = dreamer(direct, text_reply("- dog: Rocky"))
+    d, client = dreamer(direct, text_reply("- cat: Pixel"))
     d.dream_cycle()
     assert len(client.chat_calls) == 1
     assert (data / "pending.jsonl").read_bytes() == before
@@ -457,30 +457,30 @@ def test_the_pending_file_is_never_read_or_written_in_direct_mode(direct, data):
 # --- direct mode: the original behaviour, kept as an explicit compatibility option -----------------
 
 def test_direct_mode_appends_to_the_profile_exactly_as_before(direct, data, capsys):
-    seed(direct, ("user", "I adopted a dog named Rocky"), ("assistant", "Congrats on the puppy!"))
+    seed(direct, ("user", "I adopted a cat named Pixel"), ("assistant", "Congrats on the kitten!"))
     (data / "profile.txt").write_text("- likes tea\n")
-    d, _ = dreamer(direct, text_reply("  - has a dog named Rocky\n"))
+    d, _ = dreamer(direct, text_reply("  - has a cat named Pixel\n"))
     d.dream_cycle()
-    assert (data / "profile.txt").read_text() == "- likes tea\n- has a dog named Rocky\n"  # appended, not replaced
+    assert (data / "profile.txt").read_text() == "- likes tea\n- has a cat named Pixel\n"  # appended, not replaced
     assert state(direct) == {"last_message_id": 2}  # the last message overall, assistant's included
-    assert capsys.readouterr().out == "New facts appended:\n- has a dog named Rocky\n"
+    assert capsys.readouterr().out == "New facts appended:\n- has a cat named Pixel\n"
     assert not (data / "pending.jsonl").exists()
 
 
 def test_direct_mode_next_cycle_only_sees_newer_messages(direct, data):
-    store = seed(direct, ("user", "I adopted a dog named Rocky"))
-    dreamer(direct, text_reply("- dog: Rocky"))[0].dream_cycle()
+    store = seed(direct, ("user", "I adopted a cat named Pixel"))
+    dreamer(direct, text_reply("- cat: Pixel"))[0].dream_cycle()
     store.add_message(store.list_threads()[0][0], "user", "My favourite colour is teal")
     second, client = dreamer(direct, text_reply("- likes teal"))
     second.dream_cycle()
     prompt = client.chat_calls[0]["messages"][0]["content"]
-    assert "teal" in prompt and "Rocky" not in prompt
-    assert (data / "profile.txt").read_text() == "- dog: Rocky\n- likes teal\n"
+    assert "teal" in prompt and "Pixel" not in prompt
+    assert (data / "profile.txt").read_text() == "- cat: Pixel\n- likes teal\n"
     assert state(direct) == {"last_message_id": 2}
 
 
 def test_direct_mode_keeps_the_original_order_checkpoint_first_then_the_profile(direct, data, monkeypatch):
-    seed(direct, ("user", "I adopted a dog named Rocky"))
+    seed(direct, ("user", "I adopted a cat named Pixel"))
     seen = []
     real_save = Dreamer.save_last_dreamed_id
 
@@ -489,14 +489,14 @@ def test_direct_mode_keeps_the_original_order_checkpoint_first_then_the_profile(
         return real_save(self, message_id)
 
     monkeypatch.setattr(Dreamer, "save_last_dreamed_id", spy_save)
-    dreamer(direct, text_reply("- dog: Rocky"))[0].dream_cycle()
+    dreamer(direct, text_reply("- cat: Pixel"))[0].dream_cycle()
     assert seen == [False]
 
 
 # --- main(): what Task Scheduler actually runs ---------------------------------------------------
 
 def test_main_sends_everything_to_the_log_and_nothing_to_the_console(config):
-    seed(config, ("user", "I adopted a dog named Rocky"))
+    seed(config, ("user", "I adopted a cat named Pixel"))
     result = run_script(pathlib.Path(config.db_path).parent, script_env(config))
     assert result.returncode == 0
     assert result.stdout == "" and result.stderr == ""
@@ -532,7 +532,7 @@ def test_main_records_a_bad_setting_in_the_default_log(config, tmp_path):
 
 
 def test_main_refuses_an_unknown_profile_mode_and_changes_nothing(config, data):
-    seed(config, ("user", "I adopted a dog named Rocky"))
+    seed(config, ("user", "I adopted a cat named Pixel"))
     env = {**script_env(config), "DIYA_DREAM_PROFILE_MODE": "auto"}
     result = run_script(data, env)
     assert result.returncode == 1 and result.stdout == "" and result.stderr == ""
@@ -588,18 +588,18 @@ EXECUTABLES = [
 
 @pytest.mark.parametrize("exe", EXECUTABLES)
 def test_end_to_end_staged_run_stages_and_leaves_the_profile_alone(config, data, fake_ollama, exe):
-    url, requests = fake_ollama("- has a dog named Rocky")
-    seed(config, ("user", "I adopted a dog named Rocky"), ("assistant", "Congrats!"))
+    url, requests = fake_ollama("- has a cat named Pixel")
+    seed(config, ("user", "I adopted a cat named Pixel"), ("assistant", "Congrats!"))
     (data / "profile.txt").write_bytes(b"- likes tea\r\n")
     env = {**script_env(config), "DIYA_OLLAMA_URL": url}
 
     result = run_script(data, env, exe=exe, stdin=subprocess.DEVNULL)
     assert result.returncode == 0 and result.stdout == "" and result.stderr == ""
     log = pathlib.Path(config.dream_log_path).read_text(encoding="utf-8")
-    assert log.startswith("\n--- dream cycle at ") and STAGED_HEADER + "- has a dog named Rocky" in log
+    assert log.startswith("\n--- dream cycle at ") and STAGED_HEADER + "- has a cat named Pixel" in log
     (record,) = pending(config)
     assert (record["first_message_id"], record["last_message_id"], record["model"]) == (1, 2, "qwen2.5:3b")
-    assert record["facts"] == ["- has a dog named Rocky"]
+    assert record["facts"] == ["- has a cat named Pixel"]
     assert state(config) == {"last_message_id": 2}
     assert (data / "profile.txt").read_bytes() == b"- likes tea\r\n"
     assert len(requests) == 1 and requests[0]["model"] == "qwen2.5:3b"
@@ -611,13 +611,13 @@ def test_end_to_end_staged_run_stages_and_leaves_the_profile_alone(config, data,
 
 @pytest.mark.parametrize("exe", EXECUTABLES)
 def test_end_to_end_direct_run_is_the_original_behaviour(config, data, fake_ollama, exe):
-    url, _ = fake_ollama("- has a dog named Rocky")
-    seed(config, ("user", "I adopted a dog named Rocky"))
+    url, _ = fake_ollama("- has a cat named Pixel")
+    seed(config, ("user", "I adopted a cat named Pixel"))
     env = {**script_env(config), "DIYA_OLLAMA_URL": url, "DIYA_DREAM_PROFILE_MODE": "direct"}
 
     result = run_script(data, env, exe=exe, stdin=subprocess.DEVNULL)
     assert result.returncode == 0 and result.stdout == "" and result.stderr == ""
-    assert (data / "profile.txt").read_text(encoding="utf-8") == "- has a dog named Rocky\n"
-    assert "New facts appended:\n- has a dog named Rocky" in pathlib.Path(config.dream_log_path).read_text(encoding="utf-8")
+    assert (data / "profile.txt").read_text(encoding="utf-8") == "- has a cat named Pixel\n"
+    assert "New facts appended:\n- has a cat named Pixel" in pathlib.Path(config.dream_log_path).read_text(encoding="utf-8")
     assert state(config) == {"last_message_id": 1}
     assert not (data / "pending.jsonl").exists()
