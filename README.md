@@ -53,9 +53,9 @@ dreaming.py (run separately) reads diya.db -> dream_pending.jsonl
 `diya_config.py` reads all settings from `DIYA_*` environment variables (blank means unset), for
 example `DIYA_MODEL`, `DIYA_OLLAMA_URL`, `DIYA_DB_PATH`, `DIYA_NOTES_DIR` and `DIYA_PORT`.
 `sample_notes/` holds fictional demo notes, embedded into an in-memory Chroma index at each start.
-`milestone*.py` and `ROADMAP.md` record Phase 1; `diya_chat.py` is an early tool-less terminal chat;
-`PRODUCT_VISION.md` is a dated development log and some entries are superseded by the code.
-`diya.db`, `user_profile.txt`, the `dream_*` and `watcher_*` files and `*.pem` are gitignored.
+`milestone*.py` and `archive/phase1-learning-roadmap.md` record Phase 1; `ROADMAP.md` is the current
+Stage 0 checklist; `diya_chat.py` is an early tool-less chat; `PRODUCT_VISION.md` is a dated log,
+partly superseded by the code. `diya.db`, `user_profile.txt`, `dream_*`, `watcher_*` and `*.pem` are gitignored.
 
 ## Setup
 
