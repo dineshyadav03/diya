@@ -43,6 +43,7 @@ There is no lock file yet, so versions are unpinned. Settings are `DIYA_*` envir
 - [LAN mode and certificates](docs/lan.md): use Diya from a phone, and the mkcert details.
 - [Dreaming](docs/dreaming.md): how staged memory works, and how to run and schedule it.
 - [Roadmap](ROADMAP.md): the Stage 0 checklist and later stages. [Product vision](PRODUCT_VISION.md): the current state.
+- [Research](RESEARCH.md): a dated index of market and technical signals.
 
 ## Architecture
 

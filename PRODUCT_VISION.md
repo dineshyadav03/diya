@@ -3,6 +3,7 @@
 This document describes what Diya is meant to be and what it is today. The install and run steps are
 in the [README](README.md); the Stage 0 work list is in [ROADMAP.md](ROADMAP.md). It is rewritten
 when the state changes, not appended to. Last checked against the code on 2026-09-21.
+Market and technical context is kept in [RESEARCH.md](RESEARCH.md).
 
 ## Promise
 
