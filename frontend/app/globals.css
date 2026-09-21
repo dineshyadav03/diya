@@ -4,8 +4,11 @@
 
    The brand assets are still the source of truth for colour (public/diya-flame.svg:
    cream #faf8f4, amber #c9812f, bronze #8a5a1f). On this dark surface cream is the
-   text and amber the accent (bronze is only 2.7:1 here). The assets themselves are
-   untouched, so the flame keeps its own cream tile.
+   text. The accent is OAT (#cbbfa8): the logo's own cream tile, dimmed and desaturated
+   (hue 39 deg vs the tile's 40; 25% saturation vs the flame's 62%), so the flame is the
+   only saturated colour on screen and the mark is never competed with. (The flame's
+   amber was the accent until it was rejected; the asset's bronze is only 2.7:1 here.)
+   The assets themselves are untouched, so the flame keeps its own cream tile.
 
    Hierarchy comes from ELEVATION, never from a second background colour: translucent
    cream lifts (--elev-*) and hairlines (--border) over the same surface. Every text
@@ -19,8 +22,8 @@
   --ring: rgba(250, 248, 244, 0.14);    /* the composer's outline */
   --text: #faf8f4;            /* asset cream: 14.9:1 on --bg */
   --text-dim: #b3aa99;        /* 6.9:1 on --bg, 5.2:1 on the hover elevation */
-  --accent: #c9812f;          /* asset flame: 5.0:1 on --bg, so it works as link/focus colour here */
-  --accent-text: #2b2417;     /* text on --accent: 4.9:1 */
+  --accent: #cbbfa8;          /* oat: 8.7:1 on --bg, so it serves as fill, focus ring and border colour */
+  --accent-text: #2b2417;     /* text on --accent: 8.5:1 */
   --danger: #d9634a;          /* fills and outlines */
   --danger-text: #ee8b72;     /* the same red as text: 6.5:1 (--danger itself is 4.4:1) */
   --focus: 2px solid var(--accent);
@@ -108,8 +111,8 @@ header input[type="checkbox"] { accent-color: var(--accent); width: 15px; height
   text-align: center;
 }
 /* A message that never reached the server: outlined instead of filled (it is not "sent"),
-   with the reason and a way out directly beneath it. Same wording and same amber
-   "Try again" as the history error state. */
+   with the reason and a way out directly beneath it. Same wording and same accent
+   "Try again" button as the history error state. */
 .user.failed { background: transparent; color: var(--text); border: 1.5px dashed var(--danger); }
 .send-error {
   align-self: flex-end; max-width: 82%; margin-top: -4px;

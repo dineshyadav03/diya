@@ -294,3 +294,13 @@ without one actually installed on the device, no amount of code can make the voi
 ## Working agreement addendum
 This project has no deadline and no fixed scope ceiling. Progress is tracked in this file and in
 `ROADMAP.md`, updated every session, so nothing depends on memory surviving between sessions.
+
+## Frontend palette and surface (2026-09-21) -- supersedes the 2026-09-17 palette note above
+The UI is now one dark surface: the app's background is the composer's own surface (`#25221d`),
+so header, chat, history and composer read as one piece; hierarchy comes from elevation
+(translucent cream lifts and hairlines), not from a second background colour. Text is the asset
+cream. The accent is **oat `#cbbfa8`** -- the logo's cream tile, dimmed and desaturated -- so the
+flame in `diya-flame.svg` is the only saturated colour on screen; the earlier warm-gold accent
+(`#c9812f`) was rejected. The assets in `frontend/public/` are unchanged. Checked with the
+headless rig in `frontend/tools/design-rig` (WCAG AA text contrast plus DOM checks) at 1280, 375
+and 320px.

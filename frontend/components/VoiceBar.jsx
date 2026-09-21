@@ -262,9 +262,11 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
                   {/* Metal ring only when there's something to send: idle, Send
                       is as flat as its neighbours, and the ring reads as "armed".
                       Not just strength={0} -- the wrapper's own rim and dark fill
-                      would still set this button apart from mic and plus. */}
+                      would still set this button apart from mic and plus. The preset is
+                      "silver", not the library's warm "gold": the ring is a neutral metal,
+                      so no amber is left in the interface for the accent to compete with. */}
                   {hasText ? (
-                    <MetalFx variant="circle" preset="gold">
+                    <MetalFx variant="circle" preset="silver">
                       {SEND_BUTTON}
                     </MetalFx>
                   ) : (
