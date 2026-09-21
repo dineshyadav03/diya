@@ -12,6 +12,7 @@ import diya_web
 from fakes import FakeClient, text_reply
 
 DEAD_OLLAMA = {"DIYA_OLLAMA_URL": "http://127.0.0.1:9/v1"}
+LOCAL = "https://localhost"  # a Host name the API answers to; TestClient would otherwise say "testserver"
 
 
 class FakeTranscriber:
@@ -38,7 +39,7 @@ def build(config, *replies, transcriber=None):
     model = FakeClient(replies)
     agent = diya.Agent(config, client=model)
     transcriber = transcriber or FakeTranscriber()
-    return TestClient(diya_web.create_app(config, agent, transcriber)), agent, model, transcriber
+    return TestClient(diya_web.create_app(config, agent, transcriber), base_url=LOCAL), agent, model, transcriber
 
 
 # --- importing and building are free of side effects -------------------------------
@@ -71,7 +72,7 @@ def test_building_the_default_app_touches_nothing(run_python, tmp_path):
 
 def test_the_default_app_follows_the_environment(monkeypatch, tmp_path):
     monkeypatch.setenv("DIYA_DB_PATH", str(tmp_path / "env.db"))
-    client = TestClient(diya_web.create_app(transcriber=FakeTranscriber()))
+    client = TestClient(diya_web.create_app(transcriber=FakeTranscriber()), base_url=LOCAL)
     assert client.get("/api/threads").json() == {"threads": []}
     assert (tmp_path / "env.db").exists()
 
@@ -165,14 +166,14 @@ def test_transcribe_defaults_to_webm_and_reports_errors_as_json(config):
     assert not os.path.exists(transcriber.calls[0]["path"])
 
 
-def test_cors_is_still_wildcard_today(config):
-    # Pins CURRENT behaviour so the tightening later in Stage 0 is a deliberate, visible change.
+def test_cors_names_the_ui_origin_and_is_no_longer_a_wildcard(config):
     client, _, _, _ = build(config)
     response = client.options(
         "/api/chat",
-        headers={"Origin": "https://anywhere.example", "Access-Control-Request-Method": "POST"},
+        headers={"Origin": "https://localhost:3000", "Access-Control-Request-Method": "POST",
+                 "Access-Control-Request-Headers": "content-type"},
     )
-    assert response.headers["access-control-allow-origin"] == "*"
+    assert response.headers["access-control-allow-origin"] == "https://localhost:3000"  # not "*"
 
 
 def test_apps_built_from_different_agents_do_not_share_data(config, tmp_path):
@@ -218,7 +219,7 @@ def test_whisper_warm_up_prints_the_legacy_progress_lines(fake_whisper, capsys):
 def test_the_default_transcriber_uses_the_configured_model(monkeypatch, fake_whisper):
     monkeypatch.setenv("DIYA_WHISPER_MODEL", "tiny")
     app = diya_web.create_app(agent=diya.Agent(client=FakeClient()))
-    TestClient(app).post("/api/transcribe", files={"audio": ("c.webm", b"x", "audio/webm")})
+    TestClient(app, base_url=LOCAL).post("/api/transcribe", files={"audio": ("c.webm", b"x", "audio/webm")})
     assert fake_whisper == [("tiny", "cpu", "int8")]
 
 
@@ -249,10 +250,48 @@ def test_main_serves_with_config_values_and_a_discovered_mkcert_pair(served, tmp
     assert os.path.basename(served["ssl_keyfile"]) == "some-host+3-key.pem"
 
 
-def test_main_defaults_match_the_previous_hard_coded_server(served, tmp_path):
+def test_main_listens_on_this_computer_only_by_default(served, tmp_path):
     write_mkcert_pair(tmp_path)
     diya_web.main()
+    assert (served["host"], served["port"]) == ("127.0.0.1", 8080)  # it used to be 0.0.0.0
+
+
+def test_main_refuses_to_listen_beyond_this_computer_without_lan_mode(served, tmp_path, monkeypatch, capsys):
+    write_mkcert_pair(tmp_path)
+    monkeypatch.setenv("DIYA_HOST", "0.0.0.0")  # what the server used to do by default
+    with pytest.raises(SystemExit) as caught:
+        diya_web.main()
+    assert caught.value.code == 1
+    assert "DIYA_LAN=1" in capsys.readouterr().out
+    assert "app" not in served  # uvicorn was never asked to listen
+
+
+def test_main_refuses_lan_mode_that_names_no_hosts(served, tmp_path, monkeypatch, capsys):
+    write_mkcert_pair(tmp_path)
+    monkeypatch.setenv("DIYA_LAN", "1")
+    with pytest.raises(SystemExit):
+        diya_web.main()
+    assert "DIYA_ALLOWED_HOSTS" in capsys.readouterr().out
+    assert "app" not in served
+
+
+def test_main_in_lan_mode_listens_on_all_interfaces_and_answers_to_the_named_hosts(served, tmp_path, monkeypatch, capsys):
+    write_mkcert_pair(tmp_path)
+    monkeypatch.setenv("DIYA_LAN", "1")
+    monkeypatch.setenv("DIYA_ALLOWED_HOSTS", "phone.local")
+    diya_web.main()
     assert (served["host"], served["port"]) == ("0.0.0.0", 8080)
+    out = capsys.readouterr().out
+    assert "LAN mode" in out and "phone.local" in out
+    client = TestClient(served["app"], base_url="https://phone.local")
+    assert client.get("/openapi.json").status_code == 200  # (the fake agent here has no store to list)
+    assert client.get("/openapi.json", headers={"Host": "other.example"}).status_code == 400
+
+
+def test_main_says_when_it_is_listening_on_this_computer_only(served, tmp_path, capsys):
+    write_mkcert_pair(tmp_path)
+    diya_web.main()
+    assert "this computer only" in capsys.readouterr().out
 
 
 def test_main_prefers_an_explicit_cert_pair(served, tmp_path, monkeypatch):

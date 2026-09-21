@@ -25,8 +25,11 @@ def test_defaults_are_the_previously_hardcoded_values():
         dream_pending_path="dream_pending.jsonl",
         dream_profile_mode="staged",
         whisper_model="base",
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=8080,
+        lan=False,
+        allowed_hosts=(),
+        frontend_port=3000,
         ssl_certfile=None,
         ssl_keyfile=None,
     )
@@ -40,8 +43,10 @@ def test_every_setting_can_be_overridden():
         "DIYA_DREAM_PENDING_PATH": "q.jsonl", "DIYA_DREAM_PROFILE_MODE": "direct",
         "DIYA_WHISPER_MODEL": "small", "DIYA_HOST": "127.0.0.1", "DIYA_PORT": "9000",
         "DIYA_SSL_CERT": "c.pem", "DIYA_SSL_KEY": "k.pem",
+        "DIYA_LAN": "1", "DIYA_ALLOWED_HOSTS": "phone.local, 10.1.2.3", "DIYA_FRONTEND_PORT": "3443",
     }
     cfg = load_config(env)
+    assert (cfg.lan, cfg.allowed_hosts, cfg.frontend_port) == (True, ("phone.local", "10.1.2.3"), 3443)
     assert (cfg.db_path, cfg.model, cfg.embed_model, cfg.ollama_url) == ("x.db", "m", "e", "http://o:1/v1")
     assert (cfg.notes_dir, cfg.profile_path, cfg.whisper_model) == ("n", "p.txt", "small")
     assert (cfg.host, cfg.port, cfg.ssl_certfile, cfg.ssl_keyfile) == ("127.0.0.1", 9000, "c.pem", "k.pem")

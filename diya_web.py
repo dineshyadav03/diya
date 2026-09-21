@@ -5,10 +5,55 @@ import threading
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 import diya
 import diya_config
+
+
+def _hostname(host_header):
+    """The host name in a Host header, without the port ("[::1]:8080" -> "::1")."""
+    value = host_header.strip().lower()
+    if value.startswith("["):
+        end = value.find("]")
+        return value[1:end] if end != -1 else ""
+    return value.split(":", 1)[0]
+
+
+class BoundaryMiddleware:
+    """Answers only requests for an allowed Host name and, when a browser sends an Origin, from an
+    allowed origin -- on every route, including the auto-generated docs.
+
+    Host: a request whose Host isn't one of ours (DNS rebinding points an attacker's name at this
+    computer) is refused. Origin: a web page from anywhere else on the internet can make the
+    user's browser call localhost; without this check it could read the chat history. Requests
+    with no Origin (curl, scripts, a server-side proxy) are not browsers, so CSRF doesn't apply.
+    """
+
+    def __init__(self, app, allowed_hosts, allowed_origins):
+        self.app = app
+        self.allowed_hosts = frozenset(h.lower() for h in allowed_hosts)
+        self.allowed_origins = frozenset(allowed_origins)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+        headers = dict(scope["headers"])
+        problem = None
+        if _hostname(headers.get(b"host", b"").decode("latin-1")) not in self.allowed_hosts:
+            problem = (400, "Invalid host header")
+        else:
+            origin = headers.get(b"origin")
+            if origin is not None and origin.decode("latin-1") not in self.allowed_origins:
+                problem = (403, "Origin not allowed")
+        if problem is None:
+            await self.app(scope, receive, send)
+        elif scope["type"] == "websocket":
+            await send({"type": "websocket.close", "code": 1008})
+        else:
+            await PlainTextResponse(problem[1], status_code=problem[0])(scope, receive, send)
 
 
 class ChatRequest(BaseModel):
@@ -57,15 +102,20 @@ def create_app(config=None, agent=None, transcriber=None):
     transcriber = transcriber or WhisperTranscriber(config.whisper_model)
 
     app = FastAPI()
-    # The actual UI now lives in frontend/ (Next.js, on its own port) -- this
-    # server is a pure JSON API. No allow_credentials, so a wildcard origin is
-    # fine here; this only ever runs on the local LAN, never the open internet.
+    # The UI lives in frontend/ (Next.js, on its own port) and calls this JSON API from the
+    # browser, so exactly that origin -- on each allowed host name -- gets CORS access. It used to
+    # be "*", which let a page from any website read the chat history through the user's browser.
+    allowed_hosts = diya_config.api_allowed_hosts(config)
+    allowed_origins = diya_config.api_allowed_origins(config)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=list(allowed_origins),
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
     )
+    # Added last, so it is the outermost layer: nothing (routes, docs, CORS preflights) is reached
+    # by a request for the wrong Host or from the wrong Origin.
+    app.add_middleware(BoundaryMiddleware, allowed_hosts=allowed_hosts, allowed_origins=allowed_origins)
 
     @app.get("/api/threads")
     def api_threads():
@@ -117,6 +167,7 @@ def main():
     diya.configure_console()
     try:
         config = diya_config.load_config()
+        diya_config.check_exposure(config)
         tls = diya_config.tls_files(config)
     except diya_config.ConfigError as exc:
         print(f"Couldn't start Diya's server: {exc}.")
@@ -134,6 +185,11 @@ def main():
     transcriber = WhisperTranscriber(config.whisper_model)
     transcriber.warm_up()
 
+    if config.lan:
+        print(f"Diya's API is in LAN mode: listening on {config.host}:{config.port}, "
+              f"answering to {', '.join(diya_config.api_allowed_hosts(config))}.")
+    else:
+        print(f"Diya's API is listening on {config.host}:{config.port} (this computer only).")
     uvicorn.run(
         create_app(config, agent, transcriber),
         host=config.host,

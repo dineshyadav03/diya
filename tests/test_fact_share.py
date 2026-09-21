@@ -173,7 +173,7 @@ def test_an_empty_reply_to_a_fact_share_is_retried_without_tools_and_falls_back(
 def test_a_fact_share_over_the_web_saves_the_message_verbatim_and_creates_no_reminder(config):
     fact = "I have a dentist appointment next Tuesday at 3pm."
     agent, client = agent_with(config, text_reply("Noted, your dentist appointment is next Tuesday at 3pm."))
-    web = TestClient(diya_web.create_app(config, agent, transcriber=object()))
+    web = TestClient(diya_web.create_app(config, agent, transcriber=object()), base_url="https://localhost")
     body = web.post("/api/chat", json={"message": fact}).json()
 
     assert body["answer"] == "Noted, your dentist appointment is next Tuesday at 3pm."
