@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { ThinkingOrb } from 'thinking-orbs'
@@ -92,8 +92,15 @@ export default function ChatPage() {
     logRef.current?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages])
 
+  // Messages get an id so a failed one can be found again (marked, retried) later.
+  const nextIdRef = useRef(1)
   function addMsg(role, text) {
-    setMessages((prev) => [...prev, { role, text }])
+    const id = nextIdRef.current++
+    setMessages((prev) => [...prev, { id, role, text }])
+    return id
+  }
+  function setFailed(id, failed) {
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, failed } : m)))
   }
 
   // `force` is for an explicit click ("Test voice"), which should always speak.
@@ -136,27 +143,52 @@ export default function ChatPage() {
     }
   }
 
-  async function handleSend(text) {
-    addMsg('user', text)
+  // Sends one message. If the server can't be reached -- or answers with an error or
+  // something that isn't a reply -- the failure is shown on the message itself (outlined,
+  // with the reason and a "Try again"). It used to be swallowed: the message sat there
+  // looking delivered, and an HTTP error rendered an empty reply and saved the thread id
+  // as "undefined".
+  async function sendMessage(text, id) {
     setThinking(true)
     try {
-      const res = await fetch(`${apiBase()}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ thread_id: threadIdRef.current, message: text }),
-      })
-      const data = await res.json()
-      threadIdRef.current = data.thread_id
-      localStorage.setItem('diya_thread_id', data.thread_id)
+      let data
+      try {
+        const res = await fetch(`${apiBase()}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ thread_id: threadIdRef.current, message: text }),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        data = await res.json()
+        if (typeof data.answer !== 'string') throw new Error('not a reply')
+      } catch {
+        setFailed(id, true)
+        return
+      }
+      setFailed(id, false)
+      if (data.thread_id != null) {
+        threadIdRef.current = data.thread_id
+        localStorage.setItem('diya_thread_id', data.thread_id)
+      }
       const usedTools = [...new Set(data.tools_called || [])].filter((name) => TOOL_ORB[name])
       if (usedTools.length) {
-        setMessages((prev) => [...prev, { role: 'tools', tools: usedTools }])
+        setMessages((prev) => [...prev, { id: nextIdRef.current++, role: 'tools', tools: usedTools }])
       }
       addMsg('assistant', data.answer)
       speak(data.answer)
     } finally {
       setThinking(false)
     }
+  }
+
+  async function handleSend(text) {
+    const id = addMsg('user', text)
+    await sendMessage(text, id)
+  }
+
+  function retrySend(id, text) {
+    setFailed(id, false)
+    sendMessage(text, id)
   }
 
   function handleNewChat() {
@@ -236,7 +268,7 @@ export default function ChatPage() {
         {messages.map((m, i) => {
           if (m.role === 'tools') {
             return (
-              <div key={i} className="msg system tool-recap">
+              <div key={m.id ?? 'h' + i} className="msg system tool-recap">
                 {m.tools.map((name) => (
                   <span key={name} className="tool-recap-item">
                     <ThinkingOrb state={TOOL_ORB[name].state} size={20} theme="dark" />
@@ -246,8 +278,24 @@ export default function ChatPage() {
               </div>
             )
           }
+          if (m.role === 'user' && m.failed) {
+            return (
+              <Fragment key={m.id ?? 'h' + i}>
+                <div className="msg user failed">{m.text}</div>
+                <div className="send-error" role="alert">
+                  <span className="send-error-icon" aria-hidden="true">
+                    !
+                  </span>
+                  <span>Didn&rsquo;t send. Diya&rsquo;s server didn&rsquo;t answer.</span>
+                  <button type="button" className="cta small" onClick={() => retrySend(m.id, m.text)}>
+                    Try again
+                  </button>
+                </div>
+              </Fragment>
+            )
+          }
           return (
-            <div key={i} className={'msg ' + m.role}>
+            <div key={m.id ?? 'h' + i} className={'msg ' + m.role}>
               {m.text}
             </div>
           )

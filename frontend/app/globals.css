@@ -107,6 +107,21 @@ header input[type="checkbox"] { accent-color: var(--accent); width: 15px; height
   padding: 2px 8px;
   text-align: center;
 }
+/* A message that never reached the server: outlined instead of filled (it is not "sent"),
+   with the reason and a way out directly beneath it. Same wording and same amber
+   "Try again" as the history error state. */
+.user.failed { background: transparent; color: var(--text); border: 1.5px dashed var(--danger); }
+.send-error {
+  align-self: flex-end; max-width: 82%; margin-top: -4px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 10px;
+  font-size: 13px; line-height: 1.35; color: var(--danger-text);
+}
+.send-error-icon {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--danger-text); color: var(--accent-text); font-size: 11px; font-weight: 800; line-height: 1; /* 6.3:1 (on --danger it was 4.3:1) */
+}
+.cta.small { margin-top: 0; min-height: 34px; padding: 0 14px; border-radius: 10px; font-size: 13.5px; }
 .thinking-row { display: flex; align-items: center; padding: 9px 15px; }
 .tool-recap { display: flex; flex-direction: column; gap: 4px; font-family: ui-monospace, "SF Mono", monospace; }
 .tool-recap-item { display: flex; align-items: center; gap: 6px; }

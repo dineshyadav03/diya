@@ -121,8 +121,18 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
     const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'webm'
     const form = new FormData()
     form.append('audio', blob, 'recording.' + ext)
-    const res = await fetch(`${apiBase()}/api/transcribe`, { method: 'POST', body: form })
-    const data = await res.json()
+    let data
+    try {
+      const res = await fetch(`${apiBase()}/api/transcribe`, { method: 'POST', body: form })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      data = await res.json()
+    } catch {
+      // The server didn't answer. This used to throw here, leaving the mic disabled on
+      // "Transcribing..." for good; give it back and say what happened.
+      setMicDisabled(false)
+      onSystemMessage("Couldn't reach Diya's server to transcribe that. Hold the mic to try again.")
+      return
+    }
     setMicDisabled(false)
 
     if (data.error) {
