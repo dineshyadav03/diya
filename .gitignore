@@ -29,3 +29,6 @@ __pycache__/
 # --- Test / tool caches ---
 .pytest_cache/
 .ruff_cache/
+
+# --- Personal working notes (kept locally, never published) ---
+CLAUDE.md
