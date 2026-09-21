@@ -47,7 +47,10 @@ function loadVoices() {
 
 export default function ChatPage() {
   const [messages, setMessages] = useState([])
-  const [speakOn, setSpeakOn] = useState(true)
+  // Speaking is opt-in: off until the user ticks "Speak", then remembered per browser.
+  // (The saved choice is read in the mount effect, not here, so the server render
+  // and the first client render agree -- same reason as the suppressHydrationWarning below.)
+  const [speakOn, setSpeakOn] = useState(false)
   const [thinking, setThinking] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   // Once revealed, freeze the shader/scheduler rather than let it render
@@ -59,6 +62,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    setSpeakOn(localStorage.getItem('diya_speak') === '1')
     const urlThread = params.get('thread')
     const threadId = urlThread || localStorage.getItem('diya_thread_id')
     if (urlThread) localStorage.setItem('diya_thread_id', urlThread)
@@ -85,8 +89,9 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, { role, text }])
   }
 
-  async function speak(text) {
-    if (!speakOn) return
+  // `force` is for an explicit click ("Test voice"), which should always speak.
+  async function speak(text, { force = false } = {}) {
+    if (!speakOn && !force) return
     if (!('speechSynthesis' in window)) {
       addMsg('system', 'No speechSynthesis in this browser')
       return
@@ -109,6 +114,9 @@ export default function ChatPage() {
     utter.onend = () => setSpeaking(false)
     utter.onerror = (e) => {
       setSpeaking(false)
+      // cancel() (unticking Speak, or a newer reply cutting this one off) reports
+      // "canceled"/"interrupted" -- a deliberate stop, not a voice failure.
+      if (e.error === 'canceled' || e.error === 'interrupted') return
       addMsg('system', 'Voice error: ' + e.error)
     }
     // iOS Safari can silently drop speak() if it's called right after cancel() --
@@ -186,7 +194,7 @@ export default function ChatPage() {
           </Link>
           <button
             className="icon-btn"
-            onClick={() => speak('This is a test of the voice output.')}
+            onClick={() => speak('This is a test of the voice output.', { force: true })}
             suppressHydrationWarning
           >
             Test voice
@@ -195,7 +203,11 @@ export default function ChatPage() {
             <input
               type="checkbox"
               checked={speakOn}
-              onChange={(e) => setSpeakOn(e.target.checked)}
+              onChange={(e) => {
+                setSpeakOn(e.target.checked)
+                localStorage.setItem('diya_speak', e.target.checked ? '1' : '0')
+                if (!e.target.checked) window.speechSynthesis?.cancel()
+              }}
               suppressHydrationWarning
             />{' '}
             Speak
