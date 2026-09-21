@@ -3,9 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "next dev --experimental-https --experimental-https-key ../192.168.0.174+2-key.pem --experimental-https-cert ../192.168.0.174+2.pem -H 0.0.0.0 -p 3000",
+    "dev": "node tools/next-tls.mjs dev",
+    "dev:lan": "node tools/next-tls.mjs dev --lan",
     "build": "next build",
-    "start": "next start -H 0.0.0.0 -p 3000"
+    "start": "node tools/next-tls.mjs start",
+    "start:lan": "node tools/next-tls.mjs start --lan"
   },
   "dependencies": {
     "border-beam": "^1.3.0",

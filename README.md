@@ -76,9 +76,8 @@ mkcert -install
 mkcert localhost 127.0.0.1 ::1     # writes localhost+2.pem and localhost+2-key.pem
 ```
 
-Keep exactly one such pair in the repo root (the backend finds it; or set `DIYA_SSL_CERT` and
-`DIYA_SSL_KEY`). The `dev` script in `frontend/package.json` names its two certificate files
-explicitly, so change those two paths to match yours.
+Keep exactly one such pair in the repo root. The backend and `npm run dev` both find it, or use
+`DIYA_SSL_CERT` and `DIYA_SSL_KEY` (relative paths are read from the repo root).
 
 **Run it** (Ollama must be running):
 
@@ -98,13 +97,14 @@ Open <https://localhost:3000>. The UI calls `https://<page hostname>:8080`; that
    Settings > General > About > Certificate Trust Settings).
 3. Start the API in LAN mode with that same name or address. PowerShell:
    `$env:DIYA_LAN = "1"; $env:DIYA_ALLOWED_HOSTS = "<name-or-ip>"; python diya_web.py`
-4. Open `https://<name-or-ip>:3000` on the device, and allow inbound TCP 8080 and 3000 in the firewall.
+4. Start the UI with `npm run dev:lan`, open `https://<name-or-ip>:3000` on the device, and allow
+   inbound TCP 8080 and 3000 in the firewall.
 
 LAN mode listens on all interfaces but answers only loopback and the names in `DIYA_ALLOWED_HOSTS`
 (plain names or IPv4 addresses, no port or wildcard), and accepts browser origins
 `https://<allowed name>:<DIYA_FRONTEND_PORT>` (default 3000). The server refuses to start with a
-non-loopback `DIYA_HOST` and no `DIYA_LAN=1`, or with `DIYA_LAN=1` and no allowed hosts. The `dev`
-script serves the UI on all interfaces (`-H 0.0.0.0`) in either mode; only the API is restricted.
+non-loopback `DIYA_HOST` and no `DIYA_LAN=1`, or with `DIYA_LAN=1` and no allowed hosts.
+`npm run dev` listens on 127.0.0.1 only; `dev:lan` listens on all interfaces.
 
 **Dreaming.** `python dreaming.py` runs one pass and logs to `dream_log.txt`; run it on a schedule
 (the author uses Windows Task Scheduler, every 30 minutes). `DIYA_DREAM_PROFILE_MODE` is `staged` or `direct`.
