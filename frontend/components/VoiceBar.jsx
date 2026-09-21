@@ -175,7 +175,10 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
                   capturing your voice, then Whisper turning it into text. */}
               {(recording || micDisabled) && (
                 <div className="mic-status" role="status">
-                  <ThinkingOrb state={recording ? 'listening' : 'working'} size={16} theme="dark" />
+                  {/* thinking-orbs ships exactly two size presets, 64 and 20. Any other
+                      size makes it throw while rendering, which takes the whole page
+                      down ("Application error") the moment the mic is held. */}
+                  <ThinkingOrb state={recording ? 'listening' : 'working'} size={20} theme="dark" />
                   {recording ? 'Listening...' : 'Transcribing...'}
                 </div>
               )}
