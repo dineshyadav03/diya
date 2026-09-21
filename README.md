@@ -54,8 +54,8 @@ dreaming.py (run separately) reads diya.db -> dream_pending.jsonl
 example `DIYA_MODEL`, `DIYA_OLLAMA_URL`, `DIYA_DB_PATH`, `DIYA_NOTES_DIR` and `DIYA_PORT`.
 `sample_notes/` holds fictional demo notes, embedded into an in-memory Chroma index at each start.
 `milestone*.py` and `archive/phase1-learning-roadmap.md` record Phase 1; `ROADMAP.md` is the current
-Stage 0 checklist; `diya_chat.py` is an early tool-less chat; `PRODUCT_VISION.md` is a dated log,
-partly superseded by the code. `diya.db`, `user_profile.txt`, `dream_*`, `watcher_*` and `*.pem` are gitignored.
+Stage 0 checklist; `diya_chat.py` is an early tool-less chat; `PRODUCT_VISION.md` describes the
+current state. `diya.db`, `user_profile.txt`, `dream_*`, `watcher_*` and `*.pem` are gitignored.
 
 ## Setup
 
@@ -135,7 +135,7 @@ Stage 0, safety and reproducibility:
 - [ ] `pyproject.toml`, locked dependencies, and models pinned by digest (tags only today)
 - [ ] Database migrations (the schema is `CREATE TABLE IF NOT EXISTS`)
 - [ ] CI (no `.github/` yet)
-- [ ] Stale docs: this README is current; `PRODUCT_VISION.md` is not
+- [x] Docs rewritten from the current code (`README.md`, `PRODUCT_VISION.md`)
 
 Later stages: (1) hardware and model benchmark; (2) trustworthy memory, including the
 review-and-promote step for staged facts; (3) connectors and permissions; (4) durable workflows;

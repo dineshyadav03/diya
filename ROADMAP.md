@@ -12,6 +12,7 @@ Done:
 - [x] Tests and evals cannot touch the live database
 - [x] Line endings and text encoding pinned (`.gitattributes`, UTF-8; a test enforces it)
 - [x] Network boundary: loopback by default, Host and Origin allowlists, no wildcard CORS
+- [x] Docs rewritten from the current code (`README.md`, `PRODUCT_VISION.md`)
 
 Remaining:
 
