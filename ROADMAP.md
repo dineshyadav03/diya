@@ -19,8 +19,19 @@ Done:
       bytes actually sent
 - [x] `pyproject.toml` pins every direct Python dependency to an exact version, checked against
       what is actually installed and passing the test suite (`pip install .`, verified with
-      `pip install --dry-run`). Transitive versions are not locked -- a real lock file (`uv.lock`
-      or `pip-compile` output, with hashes) would be the next step
+      `pip install --dry-run`).
+- [x] `requirements.lock` pins the full transitive tree with hashes (96 packages), generated with
+      `uv pip compile pyproject.toml --extra dev -o requirements.lock --generate-hashes` (the
+      `--extra dev` was added to the command tried first, which produced a lock with no pytest in
+      it -- and no way to run the suite from it). Proved for real: `pip install --require-hashes
+      -r requirements.lock` into a brand new virtualenv (nothing else installed), then the full
+      suite there -- 425 passed. The lock is resolved for this dev machine's platform (Windows,
+      Python 3.13), not universal: confirmed by trying the same `pip install --require-hashes`
+      inside a Linux container, which refused outright (`uvloop`, a Linux-only dependency of
+      `uvicorn[standard]`, has no entry, since the Windows resolution never needed it). CI
+      therefore keeps installing from `pyproject.toml` (`pip install ".[dev]"`), not the lock,
+      which resolves correctly per-platform on its own; a genuinely cross-platform lock would need
+      `uv pip compile --universal` and its own proof, and is not done
 - [x] CI: `.github/workflows/ci.yml` runs on every push and pull request -- checkout, Python 3.13,
       `pip install ".[dev]"`, the full test suite, then `scripts/check_hardcoded_addresses.py` (a
       repo-wide version of the private-range-IP check `test_config.py` already did for

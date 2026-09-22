@@ -21,9 +21,13 @@ npm install
 npm run dev                                # then open https://localhost:3000
 ```
 
-`pyproject.toml` pins every direct dependency to an exact version; transitive versions are not
-locked. Settings are `DIYA_*` environment variables (see `diya_config.py`). For a terminal chat
-instead of the UI: `python diya.py new`.
+`pyproject.toml` pins every direct dependency to an exact version. `requirements.lock` pins the
+full dependency tree with hashes; `pip install --require-hashes -r requirements.lock` is the most
+reproducible install, proved in a fresh virtualenv against the full test suite. It is resolved for
+this project's own platform (Windows, Python 3.13) -- regenerate it for another platform with
+`uv pip compile pyproject.toml --extra dev -o requirements.lock --generate-hashes`. Settings are
+`DIYA_*` environment variables (see `diya_config.py`). For a terminal chat instead of the UI:
+`python diya.py new`.
 
 ## Works today
 
