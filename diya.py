@@ -1,5 +1,8 @@
+import fnmatch
+import functools
 import json
 import os
+import pathlib
 import sys
 import threading
 import uuid
@@ -35,8 +38,38 @@ class OllamaUnavailable(RuntimeError):
 # ---- Diya's default toolkit ----
 # Tools that need no state live here as plain functions; the ones that need the
 # model server (search_notes) or the database (reminders) are Agent methods.
-def list_files(directory="."):
-    return "\n".join(os.listdir(directory))
+def _is_secret_name(name):
+    """True for anything list_files must never show, even from a directory it is allowed to list:
+    dotfiles and dot-directories (.ssh, .git -- this alone already covers .env and .env.* too,
+    since both start with "."), plus the two secret-shaped extensions .gitignore already treats as
+    secrets everywhere else in this repo."""
+    if name.startswith("."):
+        return True
+    return fnmatch.fnmatch(name, "*.pem") or fnmatch.fnmatch(name, "*.key")
+
+
+def list_files(directory=".", roots=()):
+    """List the files in `directory`, restricted to a configured set of allowed folders.
+
+    `roots` is empty by default -- deny by default, not "look everywhere" -- so a direct call that
+    forgets to pass it sees nothing, rather than the whole filesystem. Agent binds the real,
+    configured roots (diya_config.resolved_files_roots) when it registers this as a tool.
+
+    `directory` is resolved against each root in turn: os.path.join already leaves an *absolute*
+    directory unchanged (so the same code handles both "a bare relative folder name under a root"
+    and "an absolute path that happens to already be inside one"), and os.path.realpath -- not
+    just normpath -- is what the containment check runs against, so a symlink inside a root that
+    points outside it is caught the same way a plain ../ escape is (normpath resolves ".."
+    textually; it has no idea a symlink exists). Secret-shaped entries are filtered out of the
+    result even from a directory that is itself allowed.
+    """
+    for root in roots:
+        real_root = os.path.realpath(root)
+        candidate = os.path.realpath(os.path.join(root, directory))
+        if pathlib.Path(candidate).is_relative_to(real_root):
+            names = os.listdir(candidate)
+            return "\n".join(name for name in names if not _is_secret_name(name))
+    return f"Can't list '{directory}': outside the allowed folders."
 
 
 NETWORK_TIMEOUT = 5.0  # seconds -- fail fast instead of hanging when there's no connection
@@ -106,7 +139,10 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "list_files",
-            "description": "List the files in a directory on this computer.",
+            "description": (
+                "List the files in a directory you're allowed to see (a configured folder, not "
+                "the user's whole computer)."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -257,7 +293,9 @@ class Agent:
         self._notes = None
         self._notes_lock = threading.Lock()
         self._functions = {
-            "list_files": list_files,
+            "list_files": functools.partial(
+                list_files, roots=diya_config.resolved_files_roots(self.config)
+            ),
             "search_notes": self.search_notes,
             "get_weather": get_weather,
             "web_search": web_search,

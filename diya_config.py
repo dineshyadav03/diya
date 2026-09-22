@@ -62,6 +62,10 @@ class Config:
     max_transcribe_bytes: int = 25_000_000
     ssl_certfile: str | None = None
     ssl_keyfile: str | None = None
+    # Folders `list_files` may look inside, beyond the default folder (see default_files_root());
+    # DIYA_FILES_ROOTS. Empty means "the default folder only" -- never the repo root, never the
+    # home directory at large.
+    files_roots: tuple = ()
 
 
 _STRING_SETTINGS = {
@@ -125,6 +129,14 @@ def load_config(env=None) -> Config:
                 )
             names.append(name)
         values["allowed_hosts"] = tuple(dict.fromkeys(names))
+
+    files_roots = read("DIYA_FILES_ROOTS")
+    if files_roots is not None:
+        # Comma-list, same shape as DIYA_ALLOWED_HOSTS above -- but a file path, unlike a host
+        # name, is legitimately case-sensitive and legitimately contains ":", "\\", "/" and
+        # spaces, so it is stripped and deduplicated only, never lowercased or character-checked.
+        paths = [item.strip() for item in files_roots.split(",")]
+        values["files_roots"] = tuple(dict.fromkeys(p for p in paths if p))
 
     frontend_port = read("DIYA_FRONTEND_PORT")
     if frontend_port is not None:
@@ -198,6 +210,22 @@ def api_allowed_origins(config: Config) -> tuple[str, ...]:
         f"https://{'[' + h + ']' if ':' in h else h}:{config.frontend_port}"
         for h in api_allowed_hosts(config)
     )
+
+
+def default_files_root() -> str:
+    """Where `list_files` may look when DIYA_FILES_ROOTS hasn't been set: a dedicated folder, not
+    the repo root and not the home directory at large, so a fresh install starts able to see
+    nothing sensitive by default."""
+    return os.path.join(os.path.expanduser("~"), "Documents", "Diya")
+
+
+def resolved_files_roots(config: Config) -> tuple[str, ...]:
+    """The folders `list_files` may look inside: whatever DIYA_FILES_ROOTS configured, or the one
+    dedicated default folder if nothing was configured. Configuring DIYA_FILES_ROOTS replaces the
+    default rather than adding to it -- the same way every other path setting in this module
+    (DIYA_DB_PATH, DIYA_NOTES_DIR, ...) is a full replacement, not an addition -- so a user who
+    wants the default folder alongside something else lists both explicitly."""
+    return config.files_roots or (default_files_root(),)
 
 
 def check_exposure(config: Config) -> None:
