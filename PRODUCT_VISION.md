@@ -99,7 +99,7 @@ scripts; the assistant does not read that file.
 **Known gaps.** There is no per-install token, so any local process can call the API (and in LAN mode,
 any device that sends an allowed `Host`). `list_files` lists any folder, and the model can call it.
 Models are pulled by tag, not pinned -- `ollama pull` has no way to require an exact digest. The
-schema has no migrations, and there is no CI. These are the Stage 0 items in `ROADMAP.md`.
+schema has no migrations. These are the Stage 0 items in `ROADMAP.md`.
 
 ## Deployment today
 
@@ -114,6 +114,8 @@ to `dream_log.txt` and `watcher_log.txt`.
   varies between runs.
 - Voice input and output were exercised from a phone browser on the local network, before the loopback
   default; LAN mode has not been re-tested on a device since.
+- CI (`.github/workflows/ci.yml`) has not had a real GitHub-hosted run yet; its three commands were
+  run in a plain Linux container first, which is where it is verified from for now.
 
 ## Known limitations
 
@@ -127,5 +129,5 @@ to `dream_log.txt` and `watcher_log.txt`.
 ## Next
 
 Stage 0 (`ROADMAP.md`): `list_files` restricted to a configured root, the per-install token behind a
-Next.js proxy, model pinning (blocked on Ollama's own tooling), migrations, CI. Then the review and
+Next.js proxy, model pinning (blocked on Ollama's own tooling), migrations. Then the review and
 promotion step for staged facts. The stage list is in the roadmap.

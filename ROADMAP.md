@@ -21,6 +21,33 @@ Done:
       what is actually installed and passing the test suite (`pip install .`, verified with
       `pip install --dry-run`). Transitive versions are not locked -- a real lock file (`uv.lock`
       or `pip-compile` output, with hashes) would be the next step
+- [x] CI: `.github/workflows/ci.yml` runs on every push and pull request -- checkout, Python 3.13,
+      `pip install ".[dev]"`, the full test suite, then `scripts/check_hardcoded_addresses.py` (a
+      repo-wide version of the private-range-IP check `test_config.py` already did for
+      `diya_config.py` alone; also covered by `tests/test_hardcoded_address_scan.py` so a
+      regression is caught locally too, not only in CI). One job, no matrix, no caching.
+      Encoding/CR enforcement needed no new step -- `tests/test_text_files.py` already does it, so
+      it runs as part of the test-suite step. Verified for real, not just read: the exact three
+      commands above were run inside a plain `python:3.13-slim` container (not just reasoned
+      about) -- 410 passed, 15 skipped (Node and `pythonw.exe`, both absent from that minimal
+      image; GitHub's real `ubuntu-latest` ships Node, so some of those will likely run there
+      instead of skipping), 0 failed. That run caught two real bugs before they reached CI: the
+      address-scan script's own docstring named a placeholder address literally, tripping its own
+      check once it covered `scripts/` too; and a pyproject test assumed the `dossier` extra
+      (`reportlab`, for `render_pdf.py`, not installed by `pip install ".[dev]"`) would always be
+      present. Both fixed. Not yet verified: an actual GitHub-hosted run (only a real push does
+      that) and Node-dependent behaviour on `ubuntu-latest` specifically.
+- [ ] **A broader personal-data scan (names, cities, device labels -- not just addresses) is not a
+      clean CI gate, and is not being forced into one.** Every pre-push audit so far has grepped
+      for a short list of terms tied to specific past incidents (a real LAN IP, a pet's name, a
+      device model, a sync-folder name), reviewing each match by hand. That works as a one-off
+      human check; it does not work as an unattended pass/fail gate, because some of those exact
+      words are legitimately part of the code going forward (`diya.py`'s `CITY_ALIASES` table
+      genuinely needs the string "bangalore"; a future eval or note could legitimately mention a
+      real city). A gate that fails on legitimate code trains everyone to ignore or bypass it. The
+      hardcoded-address scan above stays narrow (address-shaped strings only) precisely because
+      that shape has no legitimate use in application code outside `tests/`; a name/place denylist
+      has no equally clean boundary. This stays a manual step in the pre-push audit.
 
 Remaining:
 
@@ -44,7 +71,6 @@ Remaining:
       After pulling, run `ollama list`: if the ID column's first 12 characters don't match these,
       the tag has moved since this was checked.
 - [ ] Database migrations (the schema is `CREATE TABLE IF NOT EXISTS`)
-- [ ] CI
 - [ ] Add a screenshot or demo GIF to the README (a placeholder comment marks the spot, e.g. `docs/demo.gif`)
 - [ ] Generate `truffle-research.html` from `render_pdf.py` (until then it is a marked hand copy)
 

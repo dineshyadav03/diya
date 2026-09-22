@@ -34,11 +34,19 @@ def test_every_pinned_version_matches_what_is_actually_installed():
         assert metadata.version(name) == version, (name, "installed", metadata.version(name), "pinned", version)
 
 
-def test_optional_extras_are_pinned_too():
+def test_optional_extras_are_pinned_exactly_and_match_when_installed():
+    """dev (pytest) is installed everywhere the suite runs; dossier (reportlab, for render_pdf.py)
+    is not part of CI's `pip install ".[dev]"`, so it is checked only when it happens to be
+    present -- an extra nobody asked to install here is not a broken pin."""
     for group in load()["project"]["optional-dependencies"].values():
         for spec in group:
+            assert re.fullmatch(r"[A-Za-z0-9_.-]+==[A-Za-z0-9_.!+-]+", spec), spec
             name, version = spec.split("==")
-            assert metadata.version(name) == version, (name, metadata.version(name), version)
+            try:
+                installed = metadata.version(name)
+            except metadata.PackageNotFoundError:
+                continue
+            assert installed == version, (name, "installed", installed, "pinned", version)
 
 
 def test_no_two_dependencies_are_pinned_more_than_once():

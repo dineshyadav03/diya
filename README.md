@@ -37,7 +37,7 @@ instead of the UI: `python diya.py new`.
 
 - Staged facts are not reviewed or promoted yet, so they never reach the model.
 - There is no login: any local process can call the API, and `list_files` can list any folder.
-- Models are pulled by tag, not pinned; there is no CI, and the 3B model sometimes calls tools it should not.
+- Models are pulled by tag, not pinned; the 3B model sometimes calls tools it should not.
 
 ## Docs
 
