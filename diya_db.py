@@ -3,34 +3,85 @@ from datetime import datetime, timezone
 
 import diya_config
 
-_SCHEMA = (
-    """
-    CREATE TABLE IF NOT EXISTS threads (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT,
-        created_at TEXT NOT NULL
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        thread_id INTEGER NOT NULL,
-        role TEXT NOT NULL,
-        content TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (thread_id) REFERENCES threads(id)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS reminders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        content TEXT NOT NULL,
-        due_at TEXT,
-        created_at TEXT NOT NULL,
-        done INTEGER NOT NULL DEFAULT 0
-    )
-    """,
+# Migration 1 is the schema that has always existed here, unchanged: CREATE TABLE IF NOT EXISTS,
+# so it is just as safe to run against a brand-new file as against a database that already has
+# these tables from before this migrations system existed (see apply_migrations()). A shipped
+# migration's SQL is never edited or removed -- a schema change is always a new, higher-numbered
+# entry appended to this tuple, so what apply_migrations() already recorded as "applied" for an
+# existing database stays a true description of what it actually ran.
+MIGRATIONS = (
+    (1, (
+        """
+        CREATE TABLE IF NOT EXISTS threads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            created_at TEXT NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            thread_id INTEGER NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (thread_id) REFERENCES threads(id)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS reminders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT NOT NULL,
+            due_at TEXT,
+            created_at TEXT NOT NULL,
+            done INTEGER NOT NULL DEFAULT 0
+        )
+        """,
+    )),
 )
+
+
+def apply_migrations(conn):
+    """Bring `conn`'s database up to the latest schema, recording which migrations have run in a
+    `migrations` table (version, applied_at). Safe to call on every connection, not just the
+    first:
+
+    - A fresh database has no tables at all -- every migration runs, in order, from nothing.
+    - A database from before this system existed has the three tables already, but no `migrations`
+      table -- it gets created empty, migration 1 runs (a no-op for those three tables, since they
+      already exist; CREATE TABLE IF NOT EXISTS never touches existing rows), and is then recorded
+      as applied. No data is read, changed, or lost in the process.
+    - A database already at the latest migration has every version recorded -- nothing in
+      MIGRATIONS runs again, and nothing is written; migrating an up-to-date database is a no-op,
+      not just a harmless repeat.
+
+    Returns the version numbers newly applied, oldest first (empty if the database was already
+    current) -- used by tests to tell these three cases apart; nothing else needs it, since
+    migrating is meant to be invisible in normal use.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS migrations (
+            version INTEGER PRIMARY KEY,
+            applied_at TEXT NOT NULL
+        )
+        """
+    )
+    applied = {row[0] for row in conn.execute("SELECT version FROM migrations")}
+    newly_applied = []
+    for version, statements in MIGRATIONS:
+        if version in applied:
+            continue
+        for statement in statements:
+            conn.execute(statement)
+        conn.execute(
+            "INSERT INTO migrations (version, applied_at) VALUES (?, ?)",
+            (version, datetime.now(timezone.utc).isoformat()),
+        )
+        newly_applied.append(version)
+    if newly_applied:
+        conn.commit()
+    return newly_applied
 
 
 class Store:
@@ -47,8 +98,7 @@ class Store:
 
     def connect(self):
         conn = sqlite3.connect(self.path)
-        for ddl in _SCHEMA:
-            conn.execute(ddl)
+        apply_migrations(conn)
         return conn
 
     def add_reminder(self, content, due_at=None):

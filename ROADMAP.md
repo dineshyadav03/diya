@@ -48,6 +48,25 @@ Done:
       (`reportlab`, for `render_pdf.py`, not installed by `pip install ".[dev]"`) would always be
       present. Both fixed. Not yet verified: an actual GitHub-hosted run (only a real push does
       that) and Node-dependent behaviour on `ubuntu-latest` specifically.
+- [x] Database migrations: `diya_db.py`'s `MIGRATIONS` (an ordered, numbered tuple) replaces the
+      old bare `_SCHEMA`; `apply_migrations(conn)`, called from `Store.connect()` exactly where the
+      old schema DDL used to run, tracks applied versions in a `migrations` table and only runs
+      what a database doesn't already have recorded. Migration 1 is the original three-table
+      schema, unchanged -- `CREATE TABLE IF NOT EXISTS`, so no schema or connection behaviour
+      changed for existing callers. Proved, not just written (`tests/test_migrations.py`, 16
+      tests, 6/6 meaningful mutations caught -- a 7th, an unconditional `commit()`, survived
+      because it's genuinely harmless, not a gap): a fresh database gets every table and exactly
+      the columns migration 1 specifies (checked via `PRAGMA table_info`, not a text diff); a
+      database frozen at the pre-migrations shape (`LEGACY_SCHEMA`, a deliberate copy of the
+      original schema that must never be updated) gains a `migrations` table and is marked current,
+      with its existing rows unchanged byte-for-byte; a database already current gets nothing
+      newly applied on a second call, its migration record is never rewritten, and -- checked by
+      watching every statement the connection actually runs, not just the end state -- no `INSERT`
+      or table-creating `CREATE TABLE` is even attempted again. Also run for real against a copy
+      of the live `diya.db` (33 threads, 143 messages, 5 reminders): all rows identical before and
+      after, `Store.list_threads()` still works, a second `apply_migrations()` call changed
+      nothing. The live file itself was never touched, only a copy. 445 tests pass overall (was
+      429).
 - [ ] **A broader personal-data scan (names, cities, device labels -- not just addresses) is not a
       clean CI gate, and is not being forced into one.** Every pre-push audit so far has grepped
       for a short list of terms tied to specific past incidents (a real LAN IP, a pet's name, a
@@ -81,7 +100,6 @@ Remaining:
       `sha256:0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f`.
       After pulling, run `ollama list`: if the ID column's first 12 characters don't match these,
       the tag has moved since this was checked.
-- [ ] Database migrations (the schema is `CREATE TABLE IF NOT EXISTS`)
 - [ ] Add a screenshot or demo GIF to the README (a placeholder comment marks the spot, e.g. `docs/demo.gif`)
 - [ ] Generate `truffle-research.html` from `render_pdf.py` (until then it is a marked hand copy)
 
