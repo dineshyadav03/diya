@@ -13,13 +13,16 @@ Done:
 - [x] Line endings and text encoding pinned (`.gitattributes`, UTF-8; a test enforces it)
 - [x] Network boundary: loopback by default, Host and Origin allowlists, no wildcard CORS
 - [x] Docs rewritten from the current code (`README.md`, `PRODUCT_VISION.md`)
+- [x] Request body-size limits: `DIYA_MAX_BODY_BYTES` (default 1,000,000), `DIYA_MAX_TRANSCRIBE_BYTES`
+      for `/api/transcribe` (default 25,000,000); an over-limit request gets a 413 before any
+      route -- or the model -- sees it, checked against both a declared Content-Length and the
+      bytes actually sent
 
 Remaining:
 
 - [ ] Auth, remaining increments:
   - [ ] Per-install token, stored hashed
   - [ ] Next.js proxy, so the browser holds no secret
-  - [ ] Request body-size limits
   - [ ] Restrict `list_files` to a configured root: the next auth increment. The default root is a
         dedicated `Documents\Diya` folder, not the repo root
 - [ ] `pyproject.toml` and locked dependencies

@@ -89,14 +89,17 @@ scripts; the assistant does not read that file.
   refuses to start with a non-loopback host otherwise.
 - Every route rejects a `Host` that is not allowed (400) and a browser `Origin` that is not the UI's
   (403). CORS names the UI origin; it is never `*`.
+- A request body over `DIYA_MAX_BODY_BYTES` gets a 413 before any route -- or the model -- sees it;
+  `/api/transcribe` has its own, larger `DIYA_MAX_TRANSCRIBE_BYTES` for audio. Enforced against the
+  bytes actually sent, not just a declared Content-Length.
 - TLS is required (an mkcert pair); the microphone needs a secure origin.
 - Personal data (`diya.db`, `user_profile.txt`, the `dream_*` and `watcher_*` files, certificates) is
   gitignored. The test suite and the evals cannot reach the live database.
 
 **Known gaps.** There is no per-install token, so any local process can call the API (and in LAN mode,
 any device that sends an allowed `Host`). `list_files` lists any folder, and the model can call it.
-Requests have no body-size limit. Dependencies and models are not pinned, the schema has no
-migrations, and there is no CI. These are the Stage 0 items in `ROADMAP.md`.
+Dependencies and models are not pinned, the schema has no migrations, and there is no CI. These are
+the Stage 0 items in `ROADMAP.md`.
 
 ## Deployment today
 
@@ -124,5 +127,5 @@ to `dream_log.txt` and `watcher_log.txt`.
 ## Next
 
 Stage 0 (`ROADMAP.md`): `list_files` restricted to a configured root, the per-install token behind a
-Next.js proxy, body limits, packaging with a lock file, pinned models, migrations, CI. Then the review
-and promotion step for staged facts. The stage list is in the roadmap.
+Next.js proxy, packaging with a lock file, pinned models, migrations, CI. Then the review and
+promotion step for staged facts. The stage list is in the roadmap.

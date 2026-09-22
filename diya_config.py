@@ -53,6 +53,13 @@ class Config:
     lan: bool = False
     allowed_hosts: tuple = ()  # extra names the API answers to, beyond loopback (LAN mode)
     frontend_port: int = 3000  # where the Next.js UI is served; only its origins may call the API
+    # Requests over this size get a 413 before any route -- or the model -- ever sees them.
+    # 1,000,000 bytes is generous for a chat message (or any other JSON payload) and far below
+    # what an audio recording needs.
+    max_body_bytes: int = 1_000_000
+    # /api/transcribe gets its own, larger allowance: audio uploads are legitimately much bigger
+    # than a chat message. 25,000,000 bytes is a few minutes of compressed audio at typical bitrates.
+    max_transcribe_bytes: int = 25_000_000
     ssl_certfile: str | None = None
     ssl_keyfile: str | None = None
 
@@ -127,6 +134,28 @@ def load_config(env=None) -> Config:
             raise ConfigError(f"DIYA_FRONTEND_PORT must be an integer, got {frontend_port!r}") from None
         if not 1 <= values["frontend_port"] <= 65535:
             raise ConfigError(f"DIYA_FRONTEND_PORT must be between 1 and 65535, got {values['frontend_port']}")
+
+    max_body = read("DIYA_MAX_BODY_BYTES")
+    if max_body is not None:
+        try:
+            values["max_body_bytes"] = int(max_body)
+        except ValueError:
+            raise ConfigError(f"DIYA_MAX_BODY_BYTES must be an integer, got {max_body!r}") from None
+        if values["max_body_bytes"] < 1:
+            raise ConfigError(f"DIYA_MAX_BODY_BYTES must be at least 1, got {values['max_body_bytes']}")
+
+    max_transcribe = read("DIYA_MAX_TRANSCRIBE_BYTES")
+    if max_transcribe is not None:
+        try:
+            values["max_transcribe_bytes"] = int(max_transcribe)
+        except ValueError:
+            raise ConfigError(
+                f"DIYA_MAX_TRANSCRIBE_BYTES must be an integer, got {max_transcribe!r}"
+            ) from None
+        if values["max_transcribe_bytes"] < 1:
+            raise ConfigError(
+                f"DIYA_MAX_TRANSCRIBE_BYTES must be at least 1, got {values['max_transcribe_bytes']}"
+            )
 
     mode = read("DIYA_DREAM_PROFILE_MODE")
     if mode is not None:

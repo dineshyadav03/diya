@@ -30,7 +30,7 @@ There is no lock file yet, so versions are unpinned. Settings are `DIYA_*` envir
 - Hold-to-talk voice input through local Whisper, and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
 - Facts it extracts wait in a review queue; nothing enters your profile automatically.
-- The API listens on localhost only and checks Host and Origin; 380 tests pass (as of 2026-09-21).
+- The API listens on localhost only, checks Host and Origin, and rejects an over-size body (413); 409 tests pass (as of 2026-09-22).
 
 ## Known limits
 

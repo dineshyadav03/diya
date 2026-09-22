@@ -56,6 +56,75 @@ class BoundaryMiddleware:
             await PlainTextResponse(problem[1], status_code=problem[0])(scope, receive, send)
 
 
+class BodyLimitMiddleware:
+    """Rejects a request body over a configured size with 413, before any route -- or the model --
+    ever sees it. Most paths get `default_limit`; a path named in `limit_overrides` gets its own
+    (the transcription endpoint's audio uploads are legitimately bigger than a chat message).
+
+    A client-declared Content-Length over the limit is rejected immediately, without reading a
+    byte of the body. Otherwise the body is read here and buffered, stopping the instant the
+    limit is passed -- so a request with no Content-Length, or one that understates it, cannot get
+    more through than an honest one could. A body that fits is handed to the app exactly as
+    received, in one piece (the app never sees this middleware was there).
+    """
+
+    def __init__(self, app, default_limit, limit_overrides=None):
+        self.app = app
+        self.default_limit = default_limit
+        self.limit_overrides = dict(limit_overrides or {})
+
+    def _limit_for(self, path):
+        return self.limit_overrides.get(path, self.default_limit)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        limit = self._limit_for(scope["path"])
+        headers = dict(scope["headers"])
+        declared = headers.get(b"content-length")
+        if declared is not None:
+            try:
+                if int(declared) > limit:
+                    await self._reject(scope, receive, send, limit)
+                    return
+            except ValueError:
+                pass  # a malformed header is the framework's problem, not ours
+
+        chunks = []
+        total = 0
+        more_body = True
+        while more_body:
+            message = await receive()
+            if message["type"] != "http.request":
+                break  # e.g. the client disconnected while we were still reading
+            chunk = message.get("body", b"")
+            more_body = message.get("more_body", False)
+            total += len(chunk)
+            if total > limit:
+                await self._reject(scope, receive, send, limit)
+                return
+            chunks.append(chunk)
+
+        body = b"".join(chunks)
+        delivered = False
+
+        async def replay_receive():
+            nonlocal delivered
+            if not delivered:
+                delivered = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return await receive()  # the real body is exhausted; only a disconnect is left to hear
+
+        await self.app(scope, replay_receive, send)
+
+    @staticmethod
+    async def _reject(scope, receive, send, limit):
+        message = f"Request body too large (limit {limit} bytes)"
+        await PlainTextResponse(message, status_code=413)(scope, receive, send)
+
+
 class ChatRequest(BaseModel):
     thread_id: int | None = None
     message: str
@@ -113,8 +182,16 @@ def create_app(config=None, agent=None, transcriber=None):
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
     )
-    # Added last, so it is the outermost layer: nothing (routes, docs, CORS preflights) is reached
-    # by a request for the wrong Host or from the wrong Origin.
+    # /api/transcribe carries audio, not JSON, so it gets its own, larger limit (see
+    # BodyLimitMiddleware). Added before BoundaryMiddleware below, so it runs after it: a request
+    # for the wrong Host or Origin is refused before any effort goes into buffering its body.
+    app.add_middleware(
+        BodyLimitMiddleware,
+        default_limit=config.max_body_bytes,
+        limit_overrides={"/api/transcribe": config.max_transcribe_bytes},
+    )
+    # Added last, so it is the outermost layer: nothing (routes, docs, CORS preflights, the body
+    # limit above) is reached by a request for the wrong Host or from the wrong Origin.
     app.add_middleware(BoundaryMiddleware, allowed_hosts=allowed_hosts, allowed_origins=allowed_origins)
 
     @app.get("/api/threads")
