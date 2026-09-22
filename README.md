@@ -12,7 +12,7 @@ Setup note: Diya has only been run on Windows; other systems are untested. Run t
 ```bash
 ollama pull qwen2.5:3b
 ollama pull nomic-embed-text
-pip install fastapi uvicorn python-multipart openai chromadb httpx ddgs faster-whisper
+pip install .                              # every version pinned in pyproject.toml
 mkcert -install                            # once per machine
 mkcert localhost 127.0.0.1 ::1             # writes localhost+2.pem and localhost+2-key.pem here
 python diya_web.py                         # Ollama must be running; first run downloads Whisper
@@ -21,8 +21,9 @@ npm install
 npm run dev                                # then open https://localhost:3000
 ```
 
-There is no lock file yet, so versions are unpinned. Settings are `DIYA_*` environment variables
-(see `diya_config.py`). For a terminal chat instead of the UI: `python diya.py new`.
+`pyproject.toml` pins every direct dependency to an exact version; transitive versions are not
+locked. Settings are `DIYA_*` environment variables (see `diya_config.py`). For a terminal chat
+instead of the UI: `python diya.py new`.
 
 ## Works today
 
@@ -36,7 +37,7 @@ There is no lock file yet, so versions are unpinned. Settings are `DIYA_*` envir
 
 - Staged facts are not reviewed or promoted yet, so they never reach the model.
 - There is no login: any local process can call the API, and `list_files` can list any folder.
-- Dependencies and models are unpinned, there is no CI, and the 3B model sometimes calls tools it should not.
+- Models are pulled by tag, not pinned; there is no CI, and the 3B model sometimes calls tools it should not.
 
 ## Docs
 
@@ -62,7 +63,7 @@ dreaming.py (run separately) reads diya.db -> dream_pending.jsonl
 ## Tests and evals
 
 ```bash
-pip install pytest && python -m pytest    # about 2 minutes, from the repo root
+pip install ".[dev]" && python -m pytest  # about 2 minutes, from the repo root
 python diya_evals.py                      # needs Ollama and both models; exits 1 if any case fails
 ```
 

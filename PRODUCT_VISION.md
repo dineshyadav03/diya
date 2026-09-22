@@ -98,8 +98,8 @@ scripts; the assistant does not read that file.
 
 **Known gaps.** There is no per-install token, so any local process can call the API (and in LAN mode,
 any device that sends an allowed `Host`). `list_files` lists any folder, and the model can call it.
-Dependencies and models are not pinned, the schema has no migrations, and there is no CI. These are
-the Stage 0 items in `ROADMAP.md`.
+Models are pulled by tag, not pinned -- `ollama pull` has no way to require an exact digest. The
+schema has no migrations, and there is no CI. These are the Stage 0 items in `ROADMAP.md`.
 
 ## Deployment today
 
@@ -127,5 +127,5 @@ to `dream_log.txt` and `watcher_log.txt`.
 ## Next
 
 Stage 0 (`ROADMAP.md`): `list_files` restricted to a configured root, the per-install token behind a
-Next.js proxy, packaging with a lock file, pinned models, migrations, CI. Then the review and
+Next.js proxy, model pinning (blocked on Ollama's own tooling), migrations, CI. Then the review and
 promotion step for staged facts. The stage list is in the roadmap.

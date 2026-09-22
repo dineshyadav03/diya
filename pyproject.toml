@@ -1,0 +1,48 @@
+[project]
+name = "diya"
+version = "0.1.0"
+description = "Diya: a local-first personal AI assistant with staged memory review"
+requires-python = ">=3.10"
+# What diya.py, diya_web.py, dreaming.py and the test suite actually import (checked against the
+# code, not guessed -- see the static import scan this file was built from). Every version is
+# what is installed and passing the test suite today (2026-09-22), not the latest release.
+#
+# This pins DIRECT dependencies only. Transitive versions (numpy, onnxruntime, tokenizers, and
+# the rest of what chromadb and faster-whisper pull in) are not locked -- a real lock file
+# (uv.lock, or pip-compile output, with hashes) would be the next step; see ROADMAP.md.
+dependencies = [
+    "fastapi==0.141.1",
+    # Pinned explicitly, not left as a transitive dependency of fastapi: another package's
+    # resolution once silently upgraded starlette alone and broke the installed fastapi
+    # (PRODUCT_VISION.md, "Web client"). Pinning it here stops that from happening again unseen.
+    "starlette==1.6.0",
+    "uvicorn==0.34.3",
+    "python-multipart==0.0.20",  # FastAPI needs this for File/UploadFile; never imported by name
+    "pydantic==2.11.5",
+    "openai==1.84.0",
+    "chromadb==1.5.9",
+    "httpx==0.28.1",
+    "ddgs==9.16.0",
+    "faster-whisper==1.2.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.4.0"]
+# Only for render_pdf.py, which regenerates Truffle_Research_Dossier.pdf -- not part of the
+# running app or the test suite.
+dossier = ["reportlab==5.0.1"]
+
+# milestone2_mcp_server.py and milestone2_mcp_client_test.py (Phase 1, archived learning scripts)
+# need the `mcp` package. They are not part of the maintained app and are not pinned here.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Diya is run as a folder of scripts (`python diya_web.py`), not imported from an installed
+# package -- this file exists to pin dependency versions, not to package the code. Declaring zero
+# packages is what lets `pip install .` do exactly that: without it, setuptools' automatic
+# discovery finds frontend/, tests/, sample_notes/, docs/ and archive/ alongside the top-level
+# scripts and refuses to guess which of them is "the package".
+packages = []

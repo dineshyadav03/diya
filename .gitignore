@@ -21,6 +21,7 @@ node_modules/
 .next/
 __pycache__/
 *.pyc
+*.egg-info/
 
 # --- Editor / OS / tooling ---
 .DS_Store
