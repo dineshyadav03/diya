@@ -1,6 +1,6 @@
 # Stage 1: Trust -- design spec
 
-> **Status (2026-09-24):** units 1-3 are built (`fb74358`, `8c90c2f`, token middleware); 4-5 not.
+> **Status (2026-09-24):** units 1-4 are built (`fb74358`, `8c90c2f`, token, proxy); 5 is not.
 > The "today" / "currently" statements and file:line references below are as of `8ae09d6`.
 
 This is a design document, not an implementation. Nothing in the codebase changes as a result of

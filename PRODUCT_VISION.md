@@ -99,9 +99,14 @@ scripts; the assistant does not read that file.
 - A per-install access token is generated on the first start and shown once; only its SHA-256 is
   kept, in `diya_token.hash`. An outermost middleware answers 401 (`WWW-Authenticate: Bearer`) to
   any request without `Authorization: Bearer <token>`, on every route, comparing hashes with
-  `hmac.compare_digest`. It is off by default (`DIYA_REQUIRE_TOKEN`): the browser cannot send the
-  token until the Next.js proxy exists, so requiring it now would lock the UI out.
-  `--rotate-token` (or `DIYA_ROTATE_TOKEN=1`) replaces it.
+  `hmac.compare_digest`. It is off by default (`DIYA_REQUIRE_TOKEN`); turning it on works now, with
+  `DIYA_TOKEN` set for the UI. `--rotate-token` (or `DIYA_ROTATE_TOKEN=1`) replaces it.
+- The browser never holds that token. It calls the UI's own `/api/*` routes; the Next.js server
+  forwards each to the API at a fixed loopback address (`127.0.0.1:<DIYA_PORT>`, never derived from
+  the request, so a forged `Host` cannot steer the token) and adds `Authorization: Bearer
+  $DIYA_TOKEN`. Nothing else is copied from the browser's request, the token is sent only over
+  https or to this computer, and a thread id must be a whole number. A phone that reaches the UI at
+  a LAN address therefore needs no LAN mode on the API.
 - `get_weather` reaches only the hosts in `DIYA_TOOL_ALLOWED_HOSTS` (default: the two Open-Meteo
   hosts). The host is checked before any request is sent, by two URL parsers that must agree, and
   redirects are not followed; loopback and private addresses are refused like any host that is not
@@ -143,6 +148,6 @@ to `dream_log.txt` and `watcher_log.txt`.
 
 ## Next
 
-Stage 0 (`ROADMAP.md`): the Next.js proxy, then requiring the
-per-install token by default, and model pinning (blocked on Ollama's own tooling). Then the review and
+Stage 0 (`ROADMAP.md`): requiring the per-install token by default
+(the proxy that lets the UI hold it is built), and model pinning (blocked on Ollama's own tooling). Then the review and
 promotion step for staged facts. The stage list is in the roadmap.

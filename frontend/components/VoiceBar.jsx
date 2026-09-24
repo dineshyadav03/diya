@@ -6,7 +6,6 @@ import { VoiceBeam } from 'voice-glow'
 import { BorderBeam } from 'border-beam'
 import { Liquid } from 'liquid-gooey'
 import { ThinkingOrb } from 'thinking-orbs'
-import { apiBase } from '../lib/api'
 
 // A plain host element (not a component) because MetalFx measures its child
 // as a DOM host. Shared so the ring-on, ring-off and loading states are the
@@ -123,7 +122,8 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
     form.append('audio', blob, 'recording.' + ext)
     let data
     try {
-      const res = await fetch(`${apiBase()}/api/transcribe`, { method: 'POST', body: form })
+      // same-origin: app/api/transcribe forwards the upload, with the access token, from the server
+      const res = await fetch('/api/transcribe', { method: 'POST', body: form })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       data = await res.json()
     } catch {

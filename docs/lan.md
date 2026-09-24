@@ -24,24 +24,50 @@ pairs are an error, not a guess. To use files elsewhere, set `DIYA_SSL_CERT` and
    (`mkcert localhost 127.0.0.1 ::1 <name-or-ip>`) and remove the old pair.
 2. Install and trust mkcert's root CA on the device. `mkcert -CAROOT` shows where it is; on iOS,
    trust it under Settings > General > About > Certificate Trust Settings.
-3. Start the API in LAN mode with that same name or address.
+3. Start the UI with `npm run dev:lan` (in `frontend/`), open `https://<name-or-ip>:3000` on the
+   device, and allow inbound TCP 3000 in the operating system's firewall. The API can stay as it is,
+   on this computer only: see "How the UI reaches the API" below.
+4. Only if another device should call the API directly (curl, a script), start it in LAN mode with
+   that same name or address, and allow inbound TCP 8080 too.
    PowerShell: `$env:DIYA_LAN = "1"; $env:DIYA_ALLOWED_HOSTS = "<name-or-ip>"; python diya_web.py`
    POSIX: `DIYA_LAN=1 DIYA_ALLOWED_HOSTS=<name-or-ip> python diya_web.py`
-4. Start the UI with `npm run dev:lan` (in `frontend/`), open `https://<name-or-ip>:3000` on the
-   device, and allow inbound TCP 8080 and 3000 in the operating system's firewall.
+
+## How the UI reaches the API
+
+The browser only ever talks to the UI, on its own origin. The UI's `/api/*` routes
+(`frontend/app/api`) run on the UI's server, which forwards each one to the API at
+`https://127.0.0.1:<DIYA_PORT>` (default 8080) and hands the answer back. The address comes from
+configuration, never from the browser's request, so a phone at `https://<name-or-ip>:3000`, or a
+request with a forged `Host`, changes nothing about where the forwarded request goes.
+
+- **Access token.** If the API requires one (`DIYA_REQUIRE_TOKEN=1`), the UI server attaches it, so
+  the browser never holds it. Put the token the API printed at first start in `DIYA_TOKEN` in the
+  environment of the terminal that runs `npm run dev` (PowerShell: `$env:DIYA_TOKEN = "<token>"`), or
+  in `frontend/.env.local` (gitignored). Without it the API's 401 comes straight through. Only the
+  content type and that token are taken from the browser's request; its cookies, `Authorization`
+  and everything else are dropped. The token is only sent over https, or to this computer itself.
+- **Settings.** `DIYA_PORT` (the API's port; the UI server follows it, so a non-default port now
+  works) and `DIYA_API_URL` (an `https://host:port` origin, for an API that is not on this
+  computer's loopback address).
+- **Certificate trust.** The UI server's own HTTPS call to the API must trust your mkcert root CA,
+  and Node, unlike a browser, does not use the operating system's trust store unless told to.
+  `npm run dev` starts Node with `--use-system-ca` (Node 22.15 or newer), which reads the store
+  `mkcert -install` filled. On an older Node, set `NODE_EXTRA_CA_CERTS` to the `rootCA.pem` in the
+  folder `mkcert -CAROOT` prints. If it fails, `/api/*` answers 502 with a message saying so.
 
 ## What LAN mode does
 
 - The API listens on all interfaces but answers only loopback and the names in
   `DIYA_ALLOWED_HOSTS` (plain names or IPv4 addresses, no port or wildcard). Any other `Host` gets a 400.
 - It accepts browser origins `https://<allowed name>:<DIYA_FRONTEND_PORT>` (default 3000) and
-  refuses others with a 403. CORS names those origins; it is never `*`.
+  refuses others with a 403. CORS names those origins; it is never `*`. The UI no longer makes
+  such cross-origin calls itself, so these matter for a page that calls the API directly.
 - The server refuses to start with a non-loopback `DIYA_HOST` and no `DIYA_LAN=1`, or with
   `DIYA_LAN=1` and no allowed hosts.
-- `npm run dev` listens on 127.0.0.1 only; `npm run dev:lan` on all interfaces. `npm run dev:lan` does
-  not turn LAN mode on for the API: step 3 does.
-- The UI calls the API at `https://<page hostname>:8080`. That port is fixed in `frontend/lib/api.js`.
+- `npm run dev` listens on 127.0.0.1 only; `npm run dev:lan` on all interfaces. Neither turns LAN
+  mode on for the API: step 4 does, and the UI does not need it.
 
-**There is no login yet.** In LAN mode, any device that can reach the port and sends an allowed
-`Host` can use the API. Use it on a network you trust. The per-install token is on the
-[roadmap](../ROADMAP.md).
+**The access token is not required by default yet.** With `DIYA_REQUIRE_TOKEN=1` on the API and
+`DIYA_TOKEN` set for the UI it is enforced today; without them, any device that can reach a port
+the API is listening on, and sends an allowed `Host`, can use it. In LAN mode use it on a network you
+trust. Requiring the token by default is on the [roadmap](../ROADMAP.md).

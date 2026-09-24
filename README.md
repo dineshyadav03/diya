@@ -9,7 +9,7 @@ they're ever trusted.
 
 ## Quickstart
 
-Needs Python 3.10+, Node 18.18+, [Ollama](https://ollama.com) and [mkcert](https://github.com/FiloSottile/mkcert).
+Needs Python 3.10+, Node 18.18+ (22.15+ trusts the mkcert certificate on its own, see [docs/lan.md](docs/lan.md)), [Ollama](https://ollama.com) and [mkcert](https://github.com/FiloSottile/mkcert).
 Setup note: Diya has only been run on Windows; other systems are untested. Run them from the repo root (the last three in a second terminal):
 
 ```bash
@@ -39,12 +39,12 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Hold-to-talk voice input through local Whisper, and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
 - Facts it extracts wait in a review queue; nothing enters your profile automatically.
-- The API listens on localhost only, checks Host and Origin, and rejects an over-size body (413); 590 tests pass on Windows (as of 2026-09-24).
+- The API listens on localhost only, checks Host and Origin, and rejects an over-size body (413); 658 tests pass on Windows (as of 2026-09-24).
 
 ## Known limits
 
 - Staged facts are not reviewed or promoted yet, so they never reach the model.
-- The access token is not required yet: it is shown once at first start (only its hash is kept, in `diya_token.hash`), but any local process can still call the API until `DIYA_REQUIRE_TOKEN=1`, which locks the UI out until its proxy exists.
+- The access token is not required yet: it is shown once at first start (only its hash is kept, in `diya_token.hash`). Until you set `DIYA_REQUIRE_TOKEN=1` for the API and `DIYA_TOKEN=<the token>` for the UI, any local process can call the API.
 - `web_search` is not covered by the outbound-host allowlist that limits `get_weather` to Open-Meteo (`DIYA_TOOL_ALLOWED_HOSTS`).
 - Models are pulled by tag, not pinned; the 3B model sometimes calls tools it should not.
 
@@ -58,10 +58,11 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 ## Architecture
 
 ```
-browser (Next.js, :3000, HTTPS) -> FastAPI diya_web.py (:8080, HTTPS)
-                                     |- diya.py Agent (tool loop) -> Ollama :11434 (qwen2.5:3b, nomic-embed-text)
-                                     |- diya_db.py -> SQLite diya.db (threads, messages, reminders)
-                                     '- faster-whisper (base)
+browser -> Next.js UI (:3000, HTTPS): its /api/* routes forward to the API, holding the token
+             -> FastAPI diya_web.py (127.0.0.1:8080, HTTPS)
+                  |- diya.py Agent (tool loop) -> Ollama :11434 (qwen2.5:3b, nomic-embed-text)
+                  |- diya_db.py -> SQLite diya.db (threads, messages, reminders)
+                  '- faster-whisper (base)
 dreaming.py (run separately) reads diya.db -> dream_pending.jsonl
 ```
 

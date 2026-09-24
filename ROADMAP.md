@@ -85,14 +85,43 @@ Done:
       so a request with no token is refused before the Host/Origin check or the body limit runs;
       it answers 401 with `WWW-Authenticate: Bearer` on every route, including the docs and any
       route added later, and compares hashes with `hmac.compare_digest`. It only enforces when
-      `DIYA_REQUIRE_TOKEN` is on, and that defaults to off: the UI cannot send a token until the
-      Next.js proxy exists, so nothing changes for it yet (turning it on today locks the UI out,
-      including its CORS preflights). `--rotate-token` or `DIYA_ROTATE_TOKEN=1` replaces the
+      `DIYA_REQUIRE_TOKEN` is on, and that defaults to off, so nothing changed for the UI when it
+      landed (the browser cannot send a token; the proxy of the next entry is what lets the UI
+      hold one, and direct browser calls, CORS preflights included, are refused once it is
+      required). `--rotate-token` or `DIYA_ROTATE_TOKEN=1` replaces the
       token at the next start (leave the variable set and every start rotates). Only a hash is
       stored, so the token cannot be read back: if it is lost, rotate. Required with no stored
       hash refuses everything, and a token file that is not a hash stops startup rather than being
       overwritten. `tests/test_token.py` (65 tests, 30 of 30 mutations caught, including the
       design's five), plus a live run against a real server on a spare port over real TLS.
+- [x] Next.js proxy, so the browser holds no token (Stage 1 design unit 4,
+      [`docs/STAGE1_DESIGN.md`](docs/STAGE1_DESIGN.md) section 3). The browser now calls the UI's
+      own `/api/chat`, `/api/threads`, `/api/history/<id>` and `/api/transcribe`
+      (`frontend/app/api`, thin route files over `frontend/lib/proxy.mjs`); the UI's server forwards
+      each to the API and adds `Authorization: Bearer $DIYA_TOKEN` (the token the API printed once,
+      in the UI's environment or in `frontend/.env.local`, which is gitignored). `frontend/lib/api.js`,
+      which pointed the browser at `https://<page host>:8080`, is gone. Only the content type is
+      copied from the browser's request (its own `Authorization` and cookies are dropped), the
+      token is only sent over https or to this computer, and a thread id must be a whole number.
+      **Two deliberate departures from the design.** (1) The destination is configuration
+      (`https://127.0.0.1:<DIYA_PORT or 8080>`, or `DIYA_API_URL`), not the request's hostname as
+      `apiBase()` derived it: a hostname taken from the request is chosen by whoever sends it, so
+      it would let them steer the token to a host of their choosing, and with the API on loopback
+      (the default) a phone at a LAN name would be sent to a port nothing listens on. So the UI now
+      works from another device with the API left on this computer only. (2) The UI server has to
+      trust mkcert's root CA and Node does not read the OS store, so `npm run dev` starts Node with
+      `--use-system-ca` (Node 22.15+; older Node needs `NODE_EXTRA_CA_CERTS`). `mkcert -CAROOT` is
+      not a reliable source for that root: on the dev machine the certificate in the repo folder
+      was signed by a different root than the one it reports. `tests/test_frontend_proxy.py` (59)
+      runs the real route files and proxy module under Node, against a fake API that records what
+      arrives and against the real FastAPI app with the token required (the API accepting or
+      refusing the forwarded header is the assertion), plus 9 launcher tests; 31 of 31 mutations
+      caught (one survived at first: a helper that could not see a base64-encoded response body).
+      Verified live, real API (loopback only, token required) + real Next dev server in LAN mode +
+      real headless Edge: a message typed into the UI got an answer, the browser's only API
+      requests were same-origin and none carried an `Authorization` header on the wire, and the UI
+      answered at the machine's LAN address while the API was unreachable there. Not verified:
+      `next build` / `next start`, Node older than 22.15, a phone.
 - [x] Outbound destination allowlist for `get_weather` (Stage 1 design unit 2,
       [`docs/STAGE1_DESIGN.md`](docs/STAGE1_DESIGN.md) section 4): both of its calls now go through
       `diya._fetch`, which refuses any host not in `DIYA_TOOL_ALLOWED_HOSTS` before a request is
@@ -127,9 +156,9 @@ Done:
 Remaining:
 
 - [ ] Auth, remaining increments:
-  - [ ] Next.js proxy, so the browser holds no secret (Stage 1 design unit 4)
-  - [ ] Require the token by default, with a `DIYA_REQUIRE_TOKEN=0` opt-out (unit 5): only after
-        the proxy is live, or the UI is locked out. A test fails on purpose when the default changes
+  - [ ] Require the token by default, with a `DIYA_REQUIRE_TOKEN=0` opt-out (unit 5). The proxy
+        that lets the UI hold the token is live, so this is the default flip plus its docs; a test
+        fails on purpose when the default changes
 - [ ] **Models pinned by digest: not possible with the current tooling.** `ollama pull` (CLI 0.34.2)
       rejects a `name@sha256:digest` model reference outright ("invalid model name"), tried as
       `qwen2.5:3b@sha256:...`, `qwen2.5@sha256:...` and `library/qwen2.5@sha256:...`; only a tag

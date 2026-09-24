@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { apiBase } from '../../lib/api'
 
 export default function HistoryPage() {
   // null = loading, false = the server couldn't be reached, [] = no chats yet.
   const [threads, setThreads] = useState(null)
 
   useEffect(() => {
-    fetch(`${apiBase()}/api/threads`)
+    fetch('/api/threads') // same-origin: app/api/threads forwards it, with the access token, from the server
       .then((r) => r.json())
       .then((data) => setThreads(data.threads))
       .catch(() => setThreads(false))

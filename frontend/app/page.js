@@ -5,7 +5,9 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { ThinkingOrb } from 'thinking-orbs'
 import VoiceBar from '../components/VoiceBar'
-import { apiBase } from '../lib/api'
+
+// Every /api/... call below is same-origin: this app's own route handlers (app/api) forward it to
+// the Python API and attach the access token on the server. The browser never holds the token.
 
 // WebGL/three -- keep off the server render entirely rather than rely on
 // the library deferring canvas setup to an effect on its own.
@@ -73,7 +75,7 @@ export default function ChatPage() {
 
     // If opened from History, load and show that thread's real past messages.
     if (threadId) {
-      fetch(`${apiBase()}/api/history/${threadId}`)
+      fetch(`/api/history/${threadId}`)
         .then((r) => r.json())
         .then((data) => {
           const loaded = data.messages
@@ -153,7 +155,7 @@ export default function ChatPage() {
     try {
       let data
       try {
-        const res = await fetch(`${apiBase()}/api/chat`, {
+        const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ thread_id: threadIdRef.current, message: text }),

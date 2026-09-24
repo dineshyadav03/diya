@@ -32,7 +32,7 @@ def pair(folder, name="localhost+2"):
 
 
 def launch(tree, *argv, env=None):
-    full_env = {k: v for k, v in os.environ.items() if not k.startswith("DIYA_")}
+    full_env = {k: v for k, v in os.environ.items() if not k.startswith("DIYA_") and k != "NODE_OPTIONS"}
     full_env.update(env or {})
     result = subprocess.run(
         ["node", str(tree / "frontend" / "tools" / "next-tls.mjs"), *argv, "--dry-run"],
@@ -119,6 +119,86 @@ def test_start_needs_no_certificate_and_is_loopback_too(tree):
 def test_an_unknown_mode_is_refused(tree):
     result, _ = launch(tree, "build")
     assert result.returncode == 1 and "usage" in result.stderr
+
+
+def node_reads_the_system_trust_store():
+    """Whether this Node has --use-system-ca (22.15+/23.9+): the launcher only adds what it has."""
+    found = subprocess.run(
+        ["node", "-p", "process.allowedNodeEnvironmentFlags.has('--use-system-ca')"], capture_output=True, text=True
+    )
+    return found.stdout.strip() == "true"
+
+
+SYSTEM_CA = node_reads_the_system_trust_store()
+needs_system_ca = pytest.mark.skipif(not SYSTEM_CA, reason="this Node has no --use-system-ca")
+
+
+@pytest.mark.parametrize("argv", [("dev",), ("dev", "--lan"), ("start",), ("start", "--lan")])
+def test_the_ui_server_is_started_trusting_the_system_certificate_store(tree, argv):
+    """Its own HTTPS calls to the API (app/api) must verify an mkcert certificate; Node ignores
+    the OS trust store, where mkcert puts its root, unless asked -- and is never handed a flag it
+    does not know."""
+    pair(tree)
+    _, plan = launch(tree, *argv)
+    assert plan["env"] == ({"NODE_OPTIONS": "--use-system-ca"} if SYSTEM_CA else {})
+
+
+@needs_system_ca
+def test_an_existing_node_options_is_kept_and_the_flag_is_not_added_twice(tree):
+    pair(tree)
+    _, plan = launch(tree, "dev", env={"NODE_OPTIONS": "--max-old-space-size=512"})
+    assert plan["env"] == {"NODE_OPTIONS": "--max-old-space-size=512 --use-system-ca"}
+    _, plan = launch(tree, "dev", env={"NODE_OPTIONS": "--use-system-ca --max-old-space-size=512"})
+    assert plan["env"] == {}  # already there: nothing to change
+
+
+def test_lan_mode_differs_from_loopback_only_in_the_interface_it_listens_on(tree):
+    """The proxy adds nothing to LAN mode: the UI server is the same in both, on a wider interface,
+    and no name or address of the other device is baked in anywhere."""
+    pair(tree)
+    _, loopback = launch(tree, "dev")
+    _, lan = launch(tree, "dev", "--lan")
+    assert loopback["env"] == lan["env"]
+    assert [a for a in loopback["args"] if a != "127.0.0.1"] == [a for a in lan["args"] if a != "0.0.0.0"]
+    assert not re.findall(r"\d{1,3}(?:\.\d{1,3}){3}", json.dumps(lan).replace("0.0.0.0", ""))
+
+
+def test_the_launcher_never_carries_the_access_token(tree):
+    pair(tree)
+    result, _ = launch(tree, "dev", env={"DIYA_TOKEN": "not-a-real-token-1234567890"})
+    assert result.returncode == 0 and "not-a-real-token" not in result.stdout + result.stderr
+
+
+def real_start(tree, *argv, env=None):
+    """Run the launcher for real (not --dry-run) against a stand-in for `next` that reports how it
+    was started, so what the child process actually receives is checked, not just what is planned."""
+    stub = tree / "frontend" / "node_modules" / "next" / "dist" / "bin" / "next"
+    stub.parent.mkdir(parents=True, exist_ok=True)
+    stub.write_text("console.log(JSON.stringify({args: process.argv.slice(2), node_options: process.env.NODE_OPTIONS ?? null, token: process.env.DIYA_TOKEN ?? null}))")
+    full_env = {k: v for k, v in os.environ.items() if not k.startswith("DIYA_") and k != "NODE_OPTIONS"}
+    full_env.update(env or {})
+    result = subprocess.run(
+        ["node", str(tree / "frontend" / "tools" / "next-tls.mjs"), *argv], capture_output=True, text=True, env=full_env, timeout=30
+    )
+    return result, (json.loads(result.stdout) if result.returncode == 0 else None)
+
+
+@needs_system_ca
+def test_the_ui_server_process_really_receives_the_trust_flag(tree):
+    pair(tree)
+    result, child = real_start(tree, "dev", env={"DIYA_TOKEN": "t-1234567890abcdefghij"})
+    assert result.returncode == 0, result.stderr
+    assert child["node_options"] == "--use-system-ca"
+    assert child["token"] == "t-1234567890abcdefghij"  # the environment is inherited: this is how DIYA_TOKEN reaches the routes
+    assert child["args"][0] == "dev"
+
+
+def test_lan_mode_says_the_api_needs_no_lan_mode_for_the_ui(tree):
+    pair(tree)
+    result, _ = real_start(tree, "dev", "--lan")
+    assert "the API needs neither DIYA_LAN nor DIYA_ALLOWED_HOSTS for the UI" in " ".join(result.stderr.split())
+    quiet, _ = real_start(tree, "dev")
+    assert "LAN mode" not in quiet.stderr
 
 
 def test_package_json_scripts_name_no_address_or_certificate_file():

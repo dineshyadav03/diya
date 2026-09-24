@@ -7,8 +7,12 @@
 // repo root, where the backend is run), otherwise the single mkcert pair (<name>+N.pem and
 // <name>+N-key.pem) in the repo root -- the same rule as diya_config.tls_files().
 // Port: DIYA_FRONTEND_PORT (default 3000), the same setting the backend uses to allow this origin.
-// Host: 127.0.0.1. --lan listens on every interface instead; the backend must then also run with
-// DIYA_LAN=1 and DIYA_ALLOWED_HOSTS set to the name or address the other device uses.
+// Host: 127.0.0.1. --lan listens on every interface instead. The browser only ever talks to this
+// server: its /api/* calls are forwarded to the Python API from here (app/api, lib/proxy.mjs), so
+// the API stays on this computer and needs DIYA_LAN=1 only for a device that calls it directly.
+// Trust: those forwarded calls are HTTPS to the API, and Node -- unlike a browser -- ignores the
+// operating system's trust store, where `mkcert -install` puts its root CA. So the child is started
+// with --use-system-ca (Node 22.15+/23.9+) unless it is already there.
 // `next start` cannot serve TLS, so only `dev` is HTTPS; `start` is plain HTTP.
 import { spawn } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
@@ -46,6 +50,16 @@ function certificate(env) {
   return pairs[0]
 }
 
+// The environment the UI server must be started with so that its own HTTPS calls to the API
+// verify. `supported` says whether this Node has the flag at all (process.allowedNodeEnvironmentFlags
+// lists exactly what NODE_OPTIONS may contain, so an older Node is never handed one it rejects).
+function trustEnvironment(env) {
+  const options = (env.NODE_OPTIONS || '').trim()
+  const supported = process.allowedNodeEnvironmentFlags.has('--use-system-ca')
+  if (!supported || options.includes('--use-system-ca')) return { supported, env: {} }
+  return { supported, env: { NODE_OPTIONS: options ? `${options} --use-system-ca` : '--use-system-ca' } }
+}
+
 function plan(argv, env) {
   const mode = argv[0]
   if (mode !== 'dev' && mode !== 'start') fail('usage: next-tls.mjs <dev|start> [--lan] [--dry-run]')
@@ -59,21 +73,34 @@ function plan(argv, env) {
     const [certFile, keyFile] = certificate(env)
     args.push('--experimental-https', '--experimental-https-key', keyFile, '--experimental-https-cert', certFile)
   }
-  return { mode, lan, host: args[2], port, args }
+  const trust = trustEnvironment(env)
+  return { mode, lan, host: args[2], port, args, env: trust.env, systemTrust: trust.supported }
 }
 
-const { lan, args, host, port } = plan(process.argv.slice(2), process.env)
+const { lan, args, host, port, env: extraEnv, systemTrust } = plan(process.argv.slice(2), process.env)
 
 if (process.argv.includes('--dry-run')) {
-  console.log(JSON.stringify({ host, port, lan, args }))
+  console.log(JSON.stringify({ host, port, lan, args, env: extraEnv }))
 } else {
   if (lan) {
     console.warn(
-      `LAN mode: the UI is served on every interface. The API must also run with DIYA_LAN=1 and ` +
-        `DIYA_ALLOWED_HOSTS=<the name or address the other device uses>, or it will refuse that device.`,
+      `LAN mode: the UI is served on every interface. Its server forwards the browser's API calls to ` +
+        `the API on this computer, so the API needs neither DIYA_LAN nor DIYA_ALLOWED_HOSTS for the UI; ` +
+        `those only matter for another device that calls the API directly.`,
+    )
+  }
+  if (!systemTrust && !(process.env.NODE_EXTRA_CA_CERTS || '').trim()) {
+    console.warn(
+      `This Node (${process.version}) cannot read the system trust store, so the UI server may not ` +
+        `trust the API's mkcert certificate. Set NODE_EXTRA_CA_CERTS to your mkcert root CA ` +
+        `(rootCA.pem in the folder "mkcert -CAROOT" prints), or use Node 22.15 or newer.`,
     )
   }
   const nextBin = createRequire(import.meta.url).resolve('next/dist/bin/next')
-  const child = spawn(process.execPath, [nextBin, ...args], { cwd: frontendDir, stdio: 'inherit' })
+  const child = spawn(process.execPath, [nextBin, ...args], {
+    cwd: frontendDir,
+    stdio: 'inherit',
+    env: { ...process.env, ...extraEnv },
+  })
   child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)))
 }
