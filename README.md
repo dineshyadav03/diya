@@ -39,12 +39,12 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Hold-to-talk voice input through local Whisper, and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
 - Facts it extracts wait in a review queue; nothing enters your profile automatically.
-- The API listens on localhost only, checks Host and Origin, and rejects an over-size body (413); 525 tests pass on Windows (as of 2026-09-24).
+- The API listens on localhost only, checks Host and Origin, and rejects an over-size body (413); 590 tests pass on Windows (as of 2026-09-24).
 
 ## Known limits
 
 - Staged facts are not reviewed or promoted yet, so they never reach the model.
-- There is no login: any local process can call the API.
+- The access token is not required yet: it is shown once at first start (only its hash is kept, in `diya_token.hash`), but any local process can still call the API until `DIYA_REQUIRE_TOKEN=1`, which locks the UI out until its proxy exists.
 - `web_search` is not covered by the outbound-host allowlist that limits `get_weather` to Open-Meteo (`DIYA_TOOL_ALLOWED_HOSTS`).
 - Models are pulled by tag, not pinned; the 3B model sometimes calls tools it should not.
 

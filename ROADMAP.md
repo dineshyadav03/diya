@@ -78,6 +78,21 @@ Done:
       symlink needs elevation); it ran and passed on the Linux CI runner, and a mocked-`realpath`
       test covers the same property locally. The `diya_evals.py` "file listing" case now reads a
       pinned fixture folder instead of the repo.
+- [x] Per-install access token, generated but not required (Stage 1 design unit 3,
+      [`docs/STAGE1_DESIGN.md`](docs/STAGE1_DESIGN.md) section 3). The first start after this
+      generates a random 32-byte token, prints it once and stores only its SHA-256 in
+      `diya_token.hash` (`DIYA_TOKEN_PATH`; gitignored). `TokenMiddleware` is the outermost layer,
+      so a request with no token is refused before the Host/Origin check or the body limit runs;
+      it answers 401 with `WWW-Authenticate: Bearer` on every route, including the docs and any
+      route added later, and compares hashes with `hmac.compare_digest`. It only enforces when
+      `DIYA_REQUIRE_TOKEN` is on, and that defaults to off: the UI cannot send a token until the
+      Next.js proxy exists, so nothing changes for it yet (turning it on today locks the UI out,
+      including its CORS preflights). `--rotate-token` or `DIYA_ROTATE_TOKEN=1` replaces the
+      token at the next start (leave the variable set and every start rotates). Only a hash is
+      stored, so the token cannot be read back: if it is lost, rotate. Required with no stored
+      hash refuses everything, and a token file that is not a hash stops startup rather than being
+      overwritten. `tests/test_token.py` (65 tests, 30 of 30 mutations caught, including the
+      design's five), plus a live run against a real server on a spare port over real TLS.
 - [x] Outbound destination allowlist for `get_weather` (Stage 1 design unit 2,
       [`docs/STAGE1_DESIGN.md`](docs/STAGE1_DESIGN.md) section 4): both of its calls now go through
       `diya._fetch`, which refuses any host not in `DIYA_TOOL_ALLOWED_HOSTS` before a request is
@@ -112,8 +127,9 @@ Done:
 Remaining:
 
 - [ ] Auth, remaining increments:
-  - [ ] Per-install token, stored hashed
-  - [ ] Next.js proxy, so the browser holds no secret
+  - [ ] Next.js proxy, so the browser holds no secret (Stage 1 design unit 4)
+  - [ ] Require the token by default, with a `DIYA_REQUIRE_TOKEN=0` opt-out (unit 5): only after
+        the proxy is live, or the UI is locked out. A test fails on purpose when the default changes
 - [ ] **Models pinned by digest: not possible with the current tooling.** `ollama pull` (CLI 0.34.2)
       rejects a `name@sha256:digest` model reference outright ("invalid model name"), tried as
       `qwen2.5:3b@sha256:...`, `qwen2.5@sha256:...` and `library/qwen2.5@sha256:...`; only a tag

@@ -1,4 +1,7 @@
+import hashlib
+import hmac
 import os
+import secrets
 import sys
 import tempfile
 import threading
@@ -10,6 +13,46 @@ from pydantic import BaseModel
 
 import diya
 import diya_config
+
+
+# ---- the per-install access token (docs/STAGE1_DESIGN.md section 3) ----
+# A random token is generated once and shown once; only its SHA-256 is kept, in a small file. A
+# request proves it holds the token by sending `Authorization: Bearer <token>`, which is hashed and
+# compared with the stored hash. Nothing here needs the token itself after it has been printed.
+
+def hash_token(token):
+    """The SHA-256 of a token, as the lowercase hex string that is stored."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def read_token_hash(path):
+    """The stored token hash (64 hex characters), or None if there is no token file yet. A file
+    that exists but doesn't hold a hash is an error, never quietly treated as "no token"."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            value = f.read().strip()
+    except FileNotFoundError:
+        return None
+    if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+        raise diya_config.ConfigError(
+            f"{path} doesn't hold a token hash; delete it to have a new token generated "
+            "(or start with --rotate-token)"
+        )
+    return value
+
+
+def ensure_token(path, rotate=False):
+    """Make sure a token hash is stored at `path`. Returns the new plaintext token if one was just
+    generated -- the only moment it exists outside the caller's own memory -- and None if a token
+    was already stored. `rotate` replaces an existing one; the old token stops working."""
+    if not rotate and read_token_hash(path) is not None:
+        return None
+    token = secrets.token_urlsafe(32)
+    temporary = path + ".tmp"
+    with open(temporary, "w", encoding="utf-8", newline="\n") as f:
+        f.write(hash_token(token) + "\n")
+    os.replace(temporary, path)  # never leaves a half-written file where the real one was
+    return token
 
 
 def _hostname(host_header):
@@ -54,6 +97,48 @@ class BoundaryMiddleware:
             await send({"type": "websocket.close", "code": 1008})
         else:
             await PlainTextResponse(problem[1], status_code=problem[0])(scope, receive, send)
+
+
+class TokenMiddleware:
+    """When `required`, answers only requests that carry `Authorization: Bearer <token>` for the
+    stored token, with 401 and `WWW-Authenticate: Bearer` otherwise -- on every route, including
+    the auto-generated docs and routes added later, because it wraps the whole app rather than
+    listing paths. It is the outermost layer, so a request with no token is turned away before
+    the Host/Origin check, the body limit or any route spends effort on it.
+
+    Only a hash of the token is ever held (`token_hash`, 64 hex characters). The presented token
+    is hashed and the two hashes compared with hmac.compare_digest, which takes the same time
+    however many leading bytes match. `required` False makes this a pure pass-through, which is
+    the default for now. Required with no stored hash refuses everything: it fails closed.
+    """
+
+    def __init__(self, app, token_hash, required):
+        self.app = app
+        self.required = required
+        self.token_hash = bytes.fromhex(token_hash) if token_hash else None
+
+    def _authorized(self, headers):
+        presented = [value for name, value in headers if name == b"authorization"]
+        if self.token_hash is None or len(presented) != 1:  # one credential, exactly
+            return False
+        parts = presented[0].split(None, 1)
+        if len(parts) != 2 or parts[0].lower() != b"bearer":  # the scheme name is case-insensitive
+            return False
+        return hmac.compare_digest(hashlib.sha256(parts[1]).digest(), self.token_hash)
+
+    async def __call__(self, scope, receive, send):
+        if not self.required or scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+        elif self._authorized(scope["headers"]):
+            await self.app(scope, receive, send)
+        elif scope["type"] == "websocket":
+            await send({"type": "websocket.close", "code": 1008})
+        else:
+            await PlainTextResponse(
+                "Missing or invalid access token",
+                status_code=401,
+                headers={"WWW-Authenticate": "Bearer"},
+            )(scope, receive, send)
 
 
 class BodyLimitMiddleware:
@@ -193,6 +278,14 @@ def create_app(config=None, agent=None, transcriber=None):
     # Added last, so it is the outermost layer: nothing (routes, docs, CORS preflights, the body
     # limit above) is reached by a request for the wrong Host or from the wrong Origin.
     app.add_middleware(BoundaryMiddleware, allowed_hosts=allowed_hosts, allowed_origins=allowed_origins)
+    # Added after that, so it is outermost of all: a request with no token is refused before the
+    # Host/Origin check has spent any effort on it. Off unless DIYA_REQUIRE_TOKEN is set (the
+    # stored hash is only read when it is needed, so the default touches no file).
+    app.add_middleware(
+        TokenMiddleware,
+        token_hash=read_token_hash(config.token_path) if config.require_token else None,
+        required=config.require_token,
+    )
 
     @app.get("/api/threads")
     def api_threads():
@@ -256,6 +349,26 @@ def main():
         print("Put an mkcert pair (<name>+N.pem and <name>+N-key.pem) in this folder, "
               "or set DIYA_SSL_CERT and DIYA_SSL_KEY.")
         sys.exit(1)
+
+    # Only once the server is known to be startable, so a run that refuses to start never mints a
+    # token nobody was shown. The plaintext is printed here, at the moment it exists, and nowhere
+    # else: only its hash is stored.
+    rotate = config.rotate_token or "--rotate-token" in sys.argv[1:]
+    try:
+        new_token = ensure_token(config.token_path, rotate=rotate)
+    except (diya_config.ConfigError, OSError) as exc:
+        print(f"Couldn't start Diya's server: {exc}.")
+        sys.exit(1)
+    if new_token:
+        print("A new access token was generated for Diya's API. Save it now: it is shown only this "
+              f"once, and only its hash is kept (in {config.token_path}).")
+        if rotate:
+            print("The previous token no longer works.")
+        print(f"    {new_token}")
+        if config.require_token:
+            print("Send it as 'Authorization: Bearer <token>' on every request.")
+        else:
+            print("Nothing requires it yet; set DIYA_REQUIRE_TOKEN=1 to make the API demand it.")
 
     agent = diya.Agent(config)
     diya.warm_up_or_exit(agent)

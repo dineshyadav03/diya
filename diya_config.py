@@ -74,6 +74,13 @@ class Config:
     # Hosts the agent's own network tools may reach (checked in diya._fetch, before any request is
     # sent); DIYA_TOOL_ALLOWED_HOSTS. Setting it replaces the default rather than adding to it.
     tool_allowed_hosts: tuple = DEFAULT_TOOL_ALLOWED_HOSTS
+    # The per-install access token (docs/STAGE1_DESIGN.md section 3). Only its SHA-256 is stored,
+    # at `token_path`. Enforcement is OFF by default: the mechanism ships first, and it becomes the
+    # default only once the Next.js proxy exists to hold the token for the browser (step 5 of the
+    # rollout plan) -- until then, requiring it would lock the UI out.
+    token_path: str = "diya_token.hash"  # DIYA_TOKEN_PATH
+    require_token: bool = False  # DIYA_REQUIRE_TOKEN
+    rotate_token: bool = False  # DIYA_ROTATE_TOKEN: replace the stored token at the next start
 
 
 def _parse_host_list(setting: str, raw: str) -> tuple:
@@ -106,6 +113,7 @@ _STRING_SETTINGS = {
     "dream_pending_path": "DIYA_DREAM_PENDING_PATH",
     "whisper_model": "DIYA_WHISPER_MODEL",
     "host": "DIYA_HOST",
+    "token_path": "DIYA_TOKEN_PATH",
 }
 
 
@@ -132,12 +140,23 @@ def load_config(env=None) -> Config:
         if not 1 <= values["port"] <= 65535:
             raise ConfigError(f"DIYA_PORT must be between 1 and 65535, got {values['port']}")
 
-    lan = read("DIYA_LAN")
-    if lan is not None:
-        if lan.lower() in _TRUE_WORDS:
-            values["lan"] = True
-        elif lan.lower() not in _FALSE_WORDS:
-            raise ConfigError(f"DIYA_LAN must be one of {', '.join(_TRUE_WORDS + _FALSE_WORDS)}, got {lan!r}")
+    def read_flag(name):
+        """True, False, or None if unset; a value that is neither is an error, not a guess."""
+        value = read(name)
+        if value is None:
+            return None
+        if value.lower() in _TRUE_WORDS:
+            return True
+        if value.lower() in _FALSE_WORDS:
+            return False
+        raise ConfigError(f"{name} must be one of {', '.join(_TRUE_WORDS + _FALSE_WORDS)}, got {value!r}")
+
+    if read_flag("DIYA_LAN"):
+        values["lan"] = True
+    for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN")):
+        flag = read_flag(name)
+        if flag is not None:
+            values[field] = flag
     if values.get("lan") and "host" not in values:
         values["host"] = "0.0.0.0"  # LAN mode with no explicit interface: listen on all of them
 

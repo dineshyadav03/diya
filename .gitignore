@@ -4,6 +4,9 @@
 *.key
 .env
 .env.*
+# The API access token's hash (Diya creates it), and a saved copy of the token if you keep one
+diya_token.hash
+diya_token.txt
 
 # --- Personal data and runtime state (Diya creates these as it runs) ---
 diya.db
