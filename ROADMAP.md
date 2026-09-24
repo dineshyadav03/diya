@@ -67,6 +67,17 @@ Done:
       after, `Store.list_threads()` still works, a second `apply_migrations()` call changed
       nothing. The live file itself was never touched, only a copy. 445 tests pass overall (was
       429).
+- [x] `list_files` restricted to configured folders (Stage 1 design unit 1,
+      [`docs/STAGE1_DESIGN.md`](docs/STAGE1_DESIGN.md)): it refuses any path outside
+      `DIYA_FILES_ROOTS` (comma-separated; the default is `Documents/Diya` under the home folder,
+      never the repo root). The check runs on the fully resolved path, so a `../` escape and a
+      symlink that points outside are both refused, and dotfiles, `.env*`, `*.pem` and `*.key` are
+      left out of every listing. Setting `DIYA_FILES_ROOTS` replaces the default rather than adding
+      to it; list both to keep both. `tests/test_list_files_allowlist.py` (22 tests, 8 of 8
+      mutations caught). The real-symlink test cannot run on the Windows dev machine (creating a
+      symlink needs elevation); it ran and passed on the Linux CI runner, and a mocked-`realpath`
+      test covers the same property locally. The `diya_evals.py` "file listing" case now reads a
+      pinned fixture folder instead of the repo.
 - [ ] **A broader personal-data scan (names, cities, device labels -- not just addresses) is not a
       clean CI gate, and is not being forced into one.** Every pre-push audit so far has grepped
       for a short list of terms tied to specific past incidents (a real LAN IP, a pet's name, a
@@ -84,8 +95,6 @@ Remaining:
 - [ ] Auth, remaining increments:
   - [ ] Per-install token, stored hashed
   - [ ] Next.js proxy, so the browser holds no secret
-  - [ ] Restrict `list_files` to a configured root: the next auth increment. The default root is a
-        dedicated `Documents\Diya` folder, not the repo root
 - [ ] **Models pinned by digest: not possible with the current tooling.** `ollama pull` (CLI 0.34.2)
       rejects a `name@sha256:digest` model reference outright ("invalid model name"), tried as
       `qwen2.5:3b@sha256:...`, `qwen2.5@sha256:...` and `library/qwen2.5@sha256:...`; only a tag
@@ -100,7 +109,7 @@ Remaining:
       `sha256:0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f`.
       After pulling, run `ollama list`: if the ID column's first 12 characters don't match these,
       the tag has moved since this was checked.
-- [ ] Add a screenshot or demo GIF to the README (a placeholder comment marks the spot, e.g. `docs/demo.gif`)
+- [ ] Add a screenshot or demo GIF to the README (a placeholder line marks the spot, e.g. `docs/demo.gif`)
 - [ ] Generate `truffle-research.html` from `render_pdf.py` (until then it is a marked hand copy)
 
 ## Later stages

@@ -24,7 +24,7 @@ describes a commercial local-first assistant. Diya is a one-person project; the 
 | Area | Status |
 |---|---|
 | Local inference | Done. Ollama, `qwen2.5:3b` for chat, `nomic-embed-text` for embeddings, via the OpenAI-compatible API. |
-| Tools | Six, in `diya.py`: `search_notes`, `web_search`, `get_weather`, `add_reminder`, `list_reminders`, `list_files`. Loop capped at 8 rounds; network tools time out after 5 s. No MCP app store. |
+| Tools | Six, in `diya.py`: `search_notes`, `web_search`, `get_weather`, `add_reminder`, `list_reminders`, `list_files`. Loop capped at 8 rounds; network tools time out after 5 s. `list_files` only lists inside `DIYA_FILES_ROOTS` (default `Documents/Diya`). No MCP app store. |
 | Conversations | Done. Threads and messages in SQLite, a history page, reopening a thread. Not built: renaming, search. |
 | Notes memory | Partial. `search_notes` searches `sample_notes/` (or `DIYA_NOTES_DIR`) through an in-memory Chroma index rebuilt at each start. No ingestion beyond that folder. |
 | Long-term memory | Partial. Dreaming stages candidate facts; nothing reviews or promotes them yet (see below). |
@@ -93,12 +93,14 @@ scripts; the assistant does not read that file.
   `/api/transcribe` has its own, larger `DIYA_MAX_TRANSCRIBE_BYTES` for audio. Enforced against the
   bytes actually sent, not just a declared Content-Length.
 - TLS is required (an mkcert pair); the microphone needs a secure origin.
+- `list_files` only lists inside the folders in `DIYA_FILES_ROOTS` (default: `Documents/Diya` under
+  the home folder, never the repo). A path is judged after it is fully resolved, so `../` and a
+  symlink that points outside are refused, and dotfiles, `.env*`, `*.pem` and `*.key` never appear.
 - Personal data (`diya.db`, `user_profile.txt`, the `dream_*` and `watcher_*` files, certificates) is
   gitignored. The test suite and the evals cannot reach the live database.
 
 **Known gaps.** There is no per-install token, so any local process can call the API (and in LAN mode,
-any device that sends an allowed `Host`). `list_files` lists any folder, and the model can call it.
-Models are pulled by tag, not pinned -- `ollama pull` has no way to require an exact digest. These
+any device that sends an allowed `Host`). Models are pulled by tag, not pinned -- `ollama pull` has no way to require an exact digest. These
 are the Stage 0 items in `ROADMAP.md`.
 
 ## Deployment today
@@ -128,6 +130,6 @@ to `dream_log.txt` and `watcher_log.txt`.
 
 ## Next
 
-Stage 0 (`ROADMAP.md`): `list_files` restricted to a configured root, the per-install token behind a
+Stage 0 (`ROADMAP.md`): the per-install token behind a
 Next.js proxy, model pinning (blocked on Ollama's own tooling). Then the review and
 promotion step for staged facts. The stage list is in the roadmap.
