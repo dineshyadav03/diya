@@ -7,7 +7,10 @@ import diya
 import diya_config
 
 # The cases below were written against these fixture notes (a dentist note saying "Thursday
-# at 3pm"), so they are pinned here rather than following DIYA_NOTES_DIR to real notes.
+# at 3pm"), so they are pinned here rather than following DIYA_NOTES_DIR to real notes. The same
+# folder doubles as the eval agent's only allowed list_files root (see make_eval_agent) -- pinned
+# for the same reason: the file-listing case needs a folder with known, fixed contents, not
+# whatever DIYA_FILES_ROOTS resolves to on the machine actually running the evals.
 FIXTURE_NOTES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample_notes")
 
 TEST_CASES = [
@@ -32,9 +35,9 @@ TEST_CASES = [
     },
     {
         "name": "file listing",
-        "prompt": "What files are in this project?",
+        "prompt": "What files are in the current folder?",
         "expected_tool": "list_files",
-        "expected_in_answer": ["diya.py"],
+        "expected_in_answer": ["dentist.txt"],
     },
     {
         "name": "add a reminder",
@@ -98,11 +101,13 @@ def assert_isolated(agent):
 
 def make_eval_agent(workdir, client=None):
     """An Agent whose database lives in `workdir`. Model, embedding model and Ollama URL still
-    follow DIYA_* settings (that's what is being evaluated); notes are the fixture set."""
+    follow DIYA_* settings (that's what is being evaluated); notes and the list_files root are
+    the fixture set, not whatever DIYA_NOTES_DIR/DIYA_FILES_ROOTS resolve to on this machine."""
     config = dataclasses.replace(
         diya_config.load_config(),
         db_path=os.path.join(workdir, "evals.db"),
         notes_dir=FIXTURE_NOTES,
+        files_roots=(FIXTURE_NOTES,),
     )
     agent = diya.Agent(config, client=client)
     assert_isolated(agent)

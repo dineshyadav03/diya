@@ -1,8 +1,11 @@
 # Diya
 
-Diya is a local-first personal AI assistant: the model and your memory stay on your machine, and facts it learns about you are staged for review before they are trusted.
+Diya is the beginning of a local-first AI appliance: a private assistant that runs entirely on
+hardware you own, not a cloud subscription. Today that means the model, your memory, and your
+speech all stay on this machine, and facts it learns about you are staged for review before
+they're ever trusted.
 
-<!-- Screenshot or demo GIF goes here, e.g. docs/demo.gif -->
+**[ Screenshot of the chat UI goes here. ]**
 
 ## Quickstart
 
@@ -32,15 +35,16 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 ## Works today
 
 - Chat with six tools (notes search, web search, weather, reminders, file listing); threads are saved.
+  File listing is limited to `Documents/Diya` under your home folder, or the folders in `DIYA_FILES_ROOTS`.
 - Hold-to-talk voice input through local Whisper, and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
 - Facts it extracts wait in a review queue; nothing enters your profile automatically.
-- The API listens on localhost only, checks Host and Origin, and rejects an over-size body (413); 409 tests pass (as of 2026-09-22).
+- The API listens on localhost only, checks Host and Origin, and rejects an over-size body (413); 467 tests pass on Windows (as of 2026-09-24).
 
 ## Known limits
 
 - Staged facts are not reviewed or promoted yet, so they never reach the model.
-- There is no login: any local process can call the API, and `list_files` can list any folder.
+- There is no login: any local process can call the API.
 - Models are pulled by tag, not pinned; the 3B model sometimes calls tools it should not.
 
 ## Docs
@@ -48,7 +52,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - [LAN mode and certificates](docs/lan.md): use Diya from a phone, and the mkcert details.
 - [Dreaming](docs/dreaming.md): how staged memory works, and how to run and schedule it.
 - [Roadmap](ROADMAP.md): the Stage 0 checklist and later stages. [Product vision](PRODUCT_VISION.md): the current state.
-- [Research](RESEARCH.md): a dated index of market and technical signals.
+- [Research](RESEARCH.md): a dated index of market and technical signals. [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec for what's next.
 
 ## Architecture
 

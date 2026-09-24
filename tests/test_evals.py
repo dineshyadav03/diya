@@ -57,6 +57,22 @@ def test_the_eval_agent_pins_the_fixture_notes_even_if_notes_are_configured(monk
     assert os.path.isfile(os.path.join(diya_evals.FIXTURE_NOTES, "dentist.txt"))
 
 
+def test_the_eval_agent_pins_list_files_to_the_fixture_folder_even_if_roots_are_configured(monkeypatch, tmp_path):
+    # Same reason as the notes: the file-listing case needs a folder with known contents, not
+    # whatever DIYA_FILES_ROOTS (or the Documents/Diya default) points at on this machine.
+    monkeypatch.setenv("DIYA_FILES_ROOTS", str(tmp_path / "my_real_files"))
+    agent, _ = eval_agent(tmp_path)
+    assert agent.config.files_roots == (diya_evals.FIXTURE_NOTES,)
+    assert "dentist.txt" in agent._functions["list_files"](directory=".").split("\n")
+
+
+def test_the_file_listing_case_expects_something_the_fixture_folder_really_contains():
+    case = next(c for c in diya_evals.TEST_CASES if c["name"] == "file listing")
+    assert case["expected_tool"] == "list_files"
+    in_fixture = set(os.listdir(diya_evals.FIXTURE_NOTES))
+    assert any(term in in_fixture for term in case["expected_in_answer"])
+
+
 def test_the_eval_agent_still_follows_the_model_settings(monkeypatch, tmp_path):
     monkeypatch.setenv("DIYA_MODEL", "some-bigger-model")
     monkeypatch.setenv("DIYA_OLLAMA_URL", "http://other-host:11434/v1")
