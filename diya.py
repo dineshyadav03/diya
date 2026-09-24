@@ -5,6 +5,7 @@ import os
 import pathlib
 import sys
 import threading
+import urllib.parse
 import uuid
 
 import httpx
@@ -75,6 +76,39 @@ def list_files(directory=".", roots=()):
 NETWORK_TIMEOUT = 5.0  # seconds -- fail fast instead of hanging when there's no connection
 
 
+class HostNotAllowed(RuntimeError):
+    """_fetch refused a URL whose host isn't on the tool allowlist. No request was sent."""
+
+
+def _request_host(url):
+    """The host `url` points at, or None if it can't be read unambiguously. It is read by both
+    urllib.parse (the check docs/STAGE1_DESIGN.md names) and httpx (the parser that will actually
+    make the connection), and only accepted if the two agree: a URL the two would read
+    differently (a leading space, a tab, no "//") is refused rather than trusted to one of them."""
+    try:
+        by_urllib = urllib.parse.urlsplit(url).hostname
+        by_httpx = httpx.URL(url).host
+    except (ValueError, httpx.InvalidURL):
+        return None
+    return by_urllib if by_urllib and by_urllib == by_httpx else None
+
+
+def _fetch(url, params, timeout, allowed_hosts=diya_config.DEFAULT_TOOL_ALLOWED_HOSTS):
+    """httpx.get, but only to a host on `allowed_hosts` -- checked before anything is sent.
+
+    The allowlist is a positive list of external services: a loopback or private address, or the
+    machine's own API, is refused like any other host that isn't on it. Redirects are not followed
+    (httpx's default, which tests/test_tool_allowlist.py pins), so an allowed host can't hand the
+    request on to one that isn't. `allowed_hosts` defaults to the two hosts get_weather uses, so a
+    direct call with no allowlist still can't reach anywhere else.
+    """
+    host = _request_host(url)
+    if host is None or host not in allowed_hosts:
+        label = repr(host) if host else "that address"
+        raise HostNotAllowed(f"{label} isn't an allowed destination for this tool")
+    return httpx.get(url, params=params, timeout=timeout)
+
+
 # The geocoding API doesn't reliably treat old/colonial city names as aliases of the
 # current official name -- "Bangalore" alone can return only the wrong country's match,
 # with nothing to disambiguate against. Normalize well-known cases before querying.
@@ -86,13 +120,14 @@ CITY_ALIASES = {
 }
 
 
-def get_weather(location):
+def get_weather(location, allowed_hosts=diya_config.DEFAULT_TOOL_ALLOWED_HOSTS):
     location = CITY_ALIASES.get(location.strip().lower(), location)
     try:
-        geo = httpx.get(
+        geo = _fetch(
             "https://geocoding-api.open-meteo.com/v1/search",
-            params={"name": location, "count": 5},
-            timeout=NETWORK_TIMEOUT,
+            {"name": location, "count": 5},
+            NETWORK_TIMEOUT,
+            allowed_hosts,
         ).json()
         results = geo.get("results")
         if not results:
@@ -101,16 +136,19 @@ def get_weather(location):
         # Prefer the most populous match -- avoids silently picking an obscure same-named place.
         best = max(results, key=lambda r: r.get("population", 0))
 
-        weather = httpx.get(
+        weather = _fetch(
             "https://api.open-meteo.com/v1/forecast",
-            params={
+            {
                 "latitude": best["latitude"],
                 "longitude": best["longitude"],
                 "current": "temperature_2m,weather_code,wind_speed_10m",
                 "timezone": "auto",
             },
-            timeout=NETWORK_TIMEOUT,
+            NETWORK_TIMEOUT,
+            allowed_hosts,
         ).json()["current"]
+    except HostNotAllowed as exc:
+        return f"Weather lookup blocked: {exc}."
     except httpx.TimeoutException:
         return "Couldn't reach the weather service -- no internet connection right now."
     except httpx.HTTPError as exc:
@@ -124,6 +162,11 @@ def get_weather(location):
     )
 
 
+# Known gap, on purpose: web_search is NOT covered by the tool allowlist. ddgs makes its own
+# requests through primp (a Rust HTTP client this code neither imports nor can wrap), so there is
+# nowhere here to check a destination, and "reach the open web on request" has no short list of
+# hosts to allow anyway. docs/STAGE1_DESIGN.md section 4 records the options; tests/
+# test_tool_allowlist.py pins the fact, so replacing ddgs is a deliberate, visible change.
 def web_search(query):
     try:
         results = DDGS(timeout=NETWORK_TIMEOUT).text(query, max_results=3)
@@ -297,7 +340,9 @@ class Agent:
                 list_files, roots=diya_config.resolved_files_roots(self.config)
             ),
             "search_notes": self.search_notes,
-            "get_weather": get_weather,
+            "get_weather": functools.partial(
+                get_weather, allowed_hosts=self.config.tool_allowed_hosts
+            ),
             "web_search": web_search,
             "add_reminder": self.add_reminder,
             "list_reminders": self.list_reminders,

@@ -78,6 +78,25 @@ Done:
       symlink needs elevation); it ran and passed on the Linux CI runner, and a mocked-`realpath`
       test covers the same property locally. The `diya_evals.py` "file listing" case now reads a
       pinned fixture folder instead of the repo.
+- [x] Outbound destination allowlist for `get_weather` (Stage 1 design unit 2,
+      [`docs/STAGE1_DESIGN.md`](docs/STAGE1_DESIGN.md) section 4): both of its calls now go through
+      `diya._fetch`, which refuses any host not in `DIYA_TOOL_ALLOWED_HOSTS` before a request is
+      sent (default: the two Open-Meteo hosts, so nothing changes for a fresh install; setting it
+      replaces the default). The host is read by both `urllib.parse` and `httpx` and only trusted
+      if they agree (an addition to the design: they differ on a leading space, a tab or a
+      missing `//`, and `httpx` is the parser that makes the connection); redirects are not
+      followed (`httpx`'s default, pinned by a test); loopback and private addresses are refused
+      like any host that is not on the list. `tests/test_tool_allowlist.py` (58 tests, 16 of 16
+      mutations caught, including the design's three: checked but not enforced, checked after the
+      request went out, and too narrow), plus a live run against the real hosts.
+- [ ] **`web_search` is not covered by that allowlist, and cannot be without replacing `ddgs`.**
+      `ddgs` 9.16.0 makes its own requests through `primp` (a Rust HTTP client; its runtime
+      dependencies are `click`, `lxml` and `primp`, not `httpx` or `requests`), so this code has
+      no point at which to check a destination, and "reach the open web on request" has no short
+      list of hosts to allow. Recorded, not faked, the same way the model-digest limit is. The
+      options (replace `ddgs` with one fixed search API called through `_fetch`; an OS-level
+      egress rule; accept the gap) are in `docs/STAGE1_DESIGN.md` section 4, which recommends
+      accepting it for now. A test asserts it, so replacing `ddgs` shows up as a deliberate change.
 - [ ] **A broader personal-data scan (names, cities, device labels -- not just addresses) is not a
       clean CI gate, and is not being forced into one.** Every pre-push audit so far has grepped
       for a short list of terms tied to specific past incidents (a real LAN IP, a pet's name, a

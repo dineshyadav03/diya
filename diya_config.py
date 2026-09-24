@@ -25,6 +25,11 @@ DREAM_PROFILE_MODES = ("staged", "direct")
 # The names the API always answers to. Anything else is only reachable when the user has both
 # switched LAN mode on and said which names other devices will use (see check_exposure()).
 LOOPBACK_NAMES = ("localhost", "127.0.0.1", "::1")
+
+# The only hosts get_weather (diya.py) reaches -- what used to be hard-coded there. A positive
+# list of external services: nothing local or on the LAN is on it, and nothing gets on it by
+# being loopback or a private address (see DIYA_TOOL_ALLOWED_HOSTS).
+DEFAULT_TOOL_ALLOWED_HOSTS = ("geocoding-api.open-meteo.com", "api.open-meteo.com")
 _TRUE_WORDS = ("1", "true", "yes", "on")
 _FALSE_WORDS = ("0", "false", "no", "off")
 
@@ -66,6 +71,27 @@ class Config:
     # DIYA_FILES_ROOTS. Empty means "the default folder only" -- never the repo root, never the
     # home directory at large.
     files_roots: tuple = ()
+    # Hosts the agent's own network tools may reach (checked in diya._fetch, before any request is
+    # sent); DIYA_TOOL_ALLOWED_HOSTS. Setting it replaces the default rather than adding to it.
+    tool_allowed_hosts: tuple = DEFAULT_TOOL_ALLOWED_HOSTS
+
+
+def _parse_host_list(setting: str, raw: str) -> tuple:
+    """A comma-separated list of plain host names or IPv4 addresses, as DIYA_ALLOWED_HOSTS and
+    DIYA_TOOL_ALLOWED_HOSTS both take: lowercased, blanks skipped, duplicates dropped, order kept.
+    One parser for both, so the two settings can't quietly drift apart."""
+    names = []
+    for item in raw.split(","):
+        name = item.strip().lower()
+        if not name:
+            continue
+        if name == "0.0.0.0" or any(ch in name for ch in "*/:@?# \t"):
+            raise ConfigError(
+                f"{setting} entries must be plain host names or IPv4 addresses "
+                f"(no scheme, port, path or wildcard), got {item.strip()!r}"
+            )
+        names.append(name)
+    return tuple(dict.fromkeys(names))
 
 
 _STRING_SETTINGS = {
@@ -117,18 +143,11 @@ def load_config(env=None) -> Config:
 
     hosts = read("DIYA_ALLOWED_HOSTS")
     if hosts is not None:
-        names = []
-        for item in hosts.split(","):
-            name = item.strip().lower()
-            if not name:
-                continue
-            if name == "0.0.0.0" or any(ch in name for ch in "*/:@?# \t"):
-                raise ConfigError(
-                    "DIYA_ALLOWED_HOSTS entries must be plain host names or IPv4 addresses "
-                    f"(no scheme, port, path or wildcard), got {item.strip()!r}"
-                )
-            names.append(name)
-        values["allowed_hosts"] = tuple(dict.fromkeys(names))
+        values["allowed_hosts"] = _parse_host_list("DIYA_ALLOWED_HOSTS", hosts)
+
+    tool_hosts = read("DIYA_TOOL_ALLOWED_HOSTS")
+    if tool_hosts is not None:
+        values["tool_allowed_hosts"] = _parse_host_list("DIYA_TOOL_ALLOWED_HOSTS", tool_hosts)
 
     files_roots = read("DIYA_FILES_ROOTS")
     if files_roots is not None:

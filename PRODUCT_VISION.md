@@ -24,7 +24,7 @@ describes a commercial local-first assistant. Diya is a one-person project; the 
 | Area | Status |
 |---|---|
 | Local inference | Done. Ollama, `qwen2.5:3b` for chat, `nomic-embed-text` for embeddings, via the OpenAI-compatible API. |
-| Tools | Six, in `diya.py`: `search_notes`, `web_search`, `get_weather`, `add_reminder`, `list_reminders`, `list_files`. Loop capped at 8 rounds; network tools time out after 5 s. `list_files` only lists inside `DIYA_FILES_ROOTS` (default `Documents/Diya`). No MCP app store. |
+| Tools | Six, in `diya.py`: `search_notes`, `web_search`, `get_weather`, `add_reminder`, `list_reminders`, `list_files`. Loop capped at 8 rounds; network tools time out after 5 s. `list_files` only lists inside `DIYA_FILES_ROOTS` (default `Documents/Diya`); `get_weather` only reaches the hosts in `DIYA_TOOL_ALLOWED_HOSTS` (default: the two Open-Meteo hosts). No MCP app store. |
 | Conversations | Done. Threads and messages in SQLite, a history page, reopening a thread. Not built: renaming, search. |
 | Notes memory | Partial. `search_notes` searches `sample_notes/` (or `DIYA_NOTES_DIR`) through an in-memory Chroma index rebuilt at each start. No ingestion beyond that folder. |
 | Long-term memory | Partial. Dreaming stages candidate facts; nothing reviews or promotes them yet (see below). |
@@ -96,12 +96,19 @@ scripts; the assistant does not read that file.
 - `list_files` only lists inside the folders in `DIYA_FILES_ROOTS` (default: `Documents/Diya` under
   the home folder, never the repo). A path is judged after it is fully resolved, so `../` and a
   symlink that points outside are refused, and dotfiles, `.env*`, `*.pem` and `*.key` never appear.
+- `get_weather` reaches only the hosts in `DIYA_TOOL_ALLOWED_HOSTS` (default: the two Open-Meteo
+  hosts). The host is checked before any request is sent, by two URL parsers that must agree, and
+  redirects are not followed; loopback and private addresses are refused like any host that is not
+  on the list. `web_search` is not covered (see Known gaps).
 - Personal data (`diya.db`, `user_profile.txt`, the `dream_*` and `watcher_*` files, certificates) is
   gitignored. The test suite and the evals cannot reach the live database.
 
 **Known gaps.** There is no per-install token, so any local process can call the API (and in LAN mode,
-any device that sends an allowed `Host`). Models are pulled by tag, not pinned -- `ollama pull` has no way to require an exact digest. These
-are the Stage 0 items in `ROADMAP.md`.
+any device that sends an allowed `Host`). `web_search` is outside the outbound-host allowlist: its
+requests are made by the `ddgs` library (through `primp`), which this code cannot wrap, and "the open
+web on request" has no short list of hosts to allow; the options are in `docs/STAGE1_DESIGN.md`
+section 4. Models are pulled by tag, not pinned -- `ollama pull` has no way to require an exact
+digest. The token and the model pinning are Stage 0 items in `ROADMAP.md`.
 
 ## Deployment today
 
