@@ -1,5 +1,8 @@
 # Stage 1: Trust -- design spec
 
+> **Status (2026-09-24):** units 1-2 of section 6 are built (`fb74358`, `8c90c2f`); 3-5 are not.
+> The "today" / "currently" statements and file:line references below are as of `8ae09d6`.
+
 This is a design document, not an implementation. Nothing in the codebase changes as a result of
 writing it. It covers the three items `ROADMAP.md` already lists under "Auth, remaining
 increments" (per-install token, Next.js proxy, `list_files` restricted to a configured root) plus
