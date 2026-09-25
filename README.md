@@ -45,7 +45,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Hold-to-talk voice input through local Whisper, and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
 - Facts it extracts wait in a review queue; nothing enters your profile automatically.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 748 tests pass on Windows (as of 2026-09-25).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 754 tests pass on Windows (as of 2026-09-25).
 
 ## Known limits
 
@@ -58,7 +58,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - [LAN mode and certificates](docs/lan.md): use Diya from a phone, and the mkcert details.
 - [Dreaming](docs/dreaming.md): how staged memory works, and how to run and schedule it.
 - [Roadmap](ROADMAP.md): the Stage 0 checklist and later stages. [Product vision](PRODUCT_VISION.md): the current state.
-- [Research](RESEARCH.md): a dated index of market and technical signals. [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec for what's next.
+- [Research](RESEARCH.md): a dated index of market and technical signals. [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (design; not built yet).
 
 ## Architecture
 
