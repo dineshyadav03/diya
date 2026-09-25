@@ -1,7 +1,7 @@
 # Stage 2: Trustworthy memory (review and promote) -- design spec
 
 > **Status (2026-09-25):** designed; being built unit by unit. **Built: U1 (storage), U2 (ingest and
-> legacy import).** The "today" statements in sections 1-2 describe the code before Stage 2 (as of
+> legacy import), U3 (deterministic checks).** The "today" statements in sections 1-2 describe the code before Stage 2 (as of
 > `8c8231a`); the `file:line`
 > references into `diya_db.py` are current, the others are as of that commit. Two things the first
 > draft reported were fixed before any Stage 2 unit: the migration-runner race (`43dcb76`, see
@@ -268,6 +268,23 @@ extractor saw, `dreaming.py:157`), stored in `flags`:
 The thresholds are **not** fixed by this document. U3 sets them from a written-down labelled set of
 fictional cases, and the test asserts the precision and recall it measured, so a change of threshold
 is a visible change.
+
+*As built (U3):* the pure methods are in `diya_checks.py` (a small new module, so `diya_memory.py` stays
+about storage) and `Memory.run_checks` records their answer in each candidate's `flags` as text, with
+an id after a colon where there is one (`source_message:14`, `duplicate:3`, `similar:3`,
+`previously_rejected:5`; plus `ungrounded`, `instruction_shaped` and `no_source`, the last for a fact
+whose source messages are no longer in the database). The flags are recomputed every run, because they
+depend on the other facts (a `duplicate` stops being one when the accepted copy is retired), and a
+`flagged` event with the old and new flags is written only when they change. The flags cleaning gave a
+line (`preamble`, `too_long`) are kept as they are. A check never changes a status; a test fails if one
+ever does. Measured on the hand-written fictional cases in `tests/labelled_facts.py` and asserted by the
+tests: grounding at 60% catches 18 of 20 unsupported facts and falsely alarms on 3 of 24 supported ones,
+and every one of those 5 failures is a case labelled as a known limit (a paraphrase the words cannot see,
+or the right words with the wrong name); similarity finds 6 of 6 related pairs and no unrelated one;
+instruction shape gets 38 of 38 (after two rules the first cases showed were too broad). The cases were
+written by the author of the rules, so this shows the rules do what they say, not how they will do on
+real conversations. Run on the real staged facts (copies; counts only), all 4 were grounded and none
+was flagged.
 
 Because the extractor is given every user message in the batch at once (`dreaming.py:157`), a fact
 cannot be traced to one message with certainty. What is stored is a message range (certain) and a

@@ -247,6 +247,17 @@ class Store:
         conn.close()
         return [{"id": r[0], "created_at": r[1], "preview": r[2] or "(empty thread)"} for r in rows]
 
+    def get_messages_between(self, first_id, last_id):
+        """All messages across every thread with first_id <= id <= last_id (both ends included), oldest
+        first: the messages a batch of staged facts was extracted from. Read-only."""
+        conn = self.connect()
+        rows = conn.execute(
+            "SELECT id, thread_id, role, content FROM messages WHERE id BETWEEN ? AND ? ORDER BY id",
+            (first_id, last_id),
+        ).fetchall()
+        conn.close()
+        return [{"id": r[0], "thread_id": r[1], "role": r[2], "content": r[3]} for r in rows]
+
     def get_messages_since(self, message_id):
         """All messages across every thread with id > message_id, oldest first."""
         conn = self.connect()

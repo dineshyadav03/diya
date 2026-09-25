@@ -62,6 +62,7 @@ EVENT_STATUS = {
     "retired": "retired",
     "restored": "accepted",
     "edited": None,
+    "flagged": None,  # the advisory checks changed what they say about a fact; never its status
 }
 
 
@@ -419,7 +420,55 @@ class Memory:
             conn.execute("UPDATE facts SET text = ?, text_key = ? WHERE id = ?", (text, text_key(text), fact_id))
             self._event(conn, fact_id, "edited", actor, now, json.dumps({"from": old}))
 
-    # ---- checking ----
+    # ---- the advisory checks (docs/STAGE2_DESIGN.md, D5; the methods are in diya_checks.py) ----
+    def set_flags(self, fact_id, flags, actor):
+        """Replace a fact's flags. Never touches its status. Records a `flagged` event, with the old and new
+        flags, only if they actually changed; returns whether they did."""
+        _check_actor(actor)
+        if not isinstance(flags, (list, tuple)) or not all(isinstance(flag, str) for flag in flags):
+            raise InvalidFact("flags are a list of text")
+        new = list(flags)
+        with self._write() as conn:
+            row = conn.execute("SELECT flags FROM facts WHERE id = ?", (fact_id,)).fetchone()
+            if row is None:
+                raise UnknownFact(f"there is no fact {fact_id}")
+            old = json.loads(row[0])
+            if old == new:
+                return False
+            conn.execute("UPDATE facts SET flags = ? WHERE id = ?", (json.dumps(new), fact_id))
+            self._event(conn, fact_id, "flagged", actor, _now(), json.dumps({"from": old, "to": new}))
+            return True
+
+    def run_checks(self, actor="system"):
+        """Run the deterministic checks on every candidate and record what they say. Advisory only: no
+        fact's status changes, whatever a check finds. The checks look at the user messages a fact was
+        extracted from and at every other fact, so they are recomputed each time -- a fact that was a
+        `duplicate` stops being one when the accepted copy is retired. The flags cleaning gave a line
+        (preamble, too_long) are kept as they are. Returns (candidates checked, how many changed)."""
+        import diya_checks
+
+        every = self.facts()
+        checked = changed = 0
+        for fact in every:
+            if fact["status"] != "candidate":
+                continue
+            checked += 1
+            if fact["batch_first"] is None:
+                messages = []
+            else:
+                messages = [
+                    (m["id"], m["content"])
+                    for m in self.store.get_messages_between(fact["batch_first"], fact["batch_last"])
+                    if m["role"] == "user"  # the extractor only ever saw the user's own words
+                ]
+            others = [{"id": o["id"], "text": o["text"], "status": o["status"]} for o in every if o["id"] != fact["id"]]
+            kept = [flag for flag in fact["flags"] if flag in diya_checks.CLEANING_FLAGS]
+            flags = kept + diya_checks.check_flags({"id": fact["id"], "text": fact["text"]}, messages, others)
+            if self.set_flags(fact["id"], flags, actor):
+                changed += 1
+        return checked, changed
+
+    # ---- checking the store itself ----
     def verify_integrity(self):
         """Everything that should always be true of the store, checked; returns a list of problems
         (empty when it is sound). SQLite does not enforce the foreign key here, so this is where an
