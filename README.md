@@ -45,7 +45,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Hold-to-talk voice input through local Whisper, and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
 - Facts it extracts wait in a review queue; nothing enters your profile automatically.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 741 tests pass on Windows (as of 2026-09-25).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 745 tests pass on Windows (as of 2026-09-25).
 
 ## Known limits
 

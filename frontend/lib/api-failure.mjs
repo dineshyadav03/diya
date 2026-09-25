@@ -37,7 +37,8 @@ export function describeSendFailure(status) {
   }
 }
 
-// The sentence under "Couldn't load your chats" on the History page.
+// The sentence under a "Couldn't load ..." headline: the History page's list of chats, and a saved
+// chat that the chat page could not open.
 export function describeLoadFailure(status) {
   switch (classify(status)) {
     case 'unreachable':

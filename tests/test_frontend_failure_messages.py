@@ -152,7 +152,7 @@ def test_no_message_names_a_secret_or_an_address():
 
 def test_the_chat_page_reports_the_status_the_request_actually_got():
     source = CHAT.read_text(encoding="utf-8")
-    assert re.search(r"import \{ describeSendFailure \} from '\.\./lib/api-failure\.mjs'", source)
+    assert re.search(r"import \{[^}]*\bdescribeSendFailure\b[^}]*\} from '\.\./lib/api-failure\.mjs'", source)
     fetch_at = source.index("fetch('/api/chat'")
     assert fetch_at < source.index("status = res.status") < source.index("if (!res.ok) throw")  # noted before the check
     assert "setFailed(id, describeSendFailure(status))" in source
@@ -187,6 +187,52 @@ def test_the_microphone_says_why_a_recording_could_not_be_transcribed():
     assert "onSystemMessage(describeTranscribeFailure(status))" in source
     assert "let status" in source and source.index("let status") < fetch_at
     assert "setMicDisabled(false)" in source[source.index("catch {"):source.index("return\n    }")]  # never stuck on "Transcribing..."
+
+
+def loading_a_saved_chat():
+    """The source of the chat page's loadThread(), which fetches a saved chat's messages."""
+    source = CHAT.read_text(encoding="utf-8")
+    start = source.index("function loadThread")
+    return source[start:source.index("\n  }\n", start)]
+
+
+def test_the_chat_page_says_why_a_saved_chat_could_not_be_opened():
+    source = CHAT.read_text(encoding="utf-8")
+    assert re.search(r"import \{ describeLoadFailure, describeSendFailure \} from '\.\./lib/api-failure\.mjs'", source)
+    load = loading_a_saved_chat()
+    fetch_at = load.index("fetch(`/api/history/${threadId}`)")
+    assert load.index("let status") < fetch_at < load.index("status = r.status") < load.index("if (!r.ok) throw")
+    assert ".catch(() => setLoadProblem(describeLoadFailure(status)))" in load
+    assert "Array.isArray(data.messages)" in load  # a reply that isn't a message list is 'unreadable', not a crash
+    assert load.index(".catch(") < load.index(".finally(() => setReady(true))")  # the page is shown either way
+    assert ".catch(() => {})" not in source  # nothing on this page swallows a failure silently any more
+
+
+def test_opening_a_saved_chat_starts_by_clearing_any_earlier_problem_and_is_used_on_mount_and_retry():
+    source = CHAT.read_text(encoding="utf-8")
+    load = loading_a_saved_chat()
+    assert load.index("setLoadProblem('')") < load.index("fetch(")
+    assert "if (threadId) loadThread(threadId)" in source  # the mount effect
+    assert "onClick={() => loadThread(threadIdRef.current)}" in source  # "Try again" loads the same chat again
+
+
+def test_a_chat_that_would_not_open_is_shown_instead_of_the_empty_chat_with_a_way_out():
+    source = CHAT.read_text(encoding="utf-8")
+    shown = source[source.index("(loadProblem ? ("):source.index("Ask Diya anything")]
+    assert 'role="alert"' in shown and "<p>{loadProblem}</p>" in shown and "Try again" in shown
+    assert "Couldn&rsquo;t load this chat" in shown
+    # starting a new chat is the way out of one that will never open, and must clear the error
+    new_chat = source[source.index("function handleNewChat"):]
+    assert "setLoadProblem('')" in new_chat.split("\n  }\n")[0]
+
+
+def test_the_design_rig_covers_opening_a_saved_chat_that_fails_and_what_can_be_done_about_it():
+    rig = RIG.read_text(encoding="utf-8")
+    for scenario in ("chat-resume-failed", "chat-resume-unauthorized", "chat-resume-server-error", "chat-resume-retry",
+                     "chat-resume-retry-still-failing", "chat-resume-failed-new-chat"):
+        assert f"name: '{scenario}'" in rig, scenario
+    assert "window.__historyMode" in rig and "hm === '401'" in rig and "hm === 'down'" in rig
+    assert "RESUME_FAIL_CHECKS" in rig
 
 
 def test_no_page_or_component_keeps_its_own_fixed_sentence_for_a_failed_call():

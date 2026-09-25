@@ -5,7 +5,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { ThinkingOrb } from 'thinking-orbs'
 import VoiceBar from '../components/VoiceBar'
-import { describeSendFailure } from '../lib/api-failure.mjs'
+import { describeLoadFailure, describeSendFailure } from '../lib/api-failure.mjs'
 
 // Every /api/... call below is same-origin: this app's own route handlers (app/api) forward it to
 // the Python API and attach the access token on the server. The browser never holds the token.
@@ -59,6 +59,9 @@ export default function ChatPage() {
   // True once we know whether there is a past thread to load, so the empty state
   // doesn't flash up for a moment before an existing conversation arrives.
   const [ready, setReady] = useState(false)
+  // Why a saved chat couldn't be opened ('' when it loaded, or none was asked for). It replaces the
+  // empty state: an empty chat would say the thread has nothing in it, which is not what happened.
+  const [loadProblem, setLoadProblem] = useState('')
   // Once revealed, freeze the shader/scheduler rather than let it render
   // forever -- see IMG_FX_ENABLED above for why this alone isn't enough
   // to make it safe by default.
@@ -75,21 +78,32 @@ export default function ChatPage() {
     threadIdRef.current = threadId
 
     // If opened from History, load and show that thread's real past messages.
-    if (threadId) {
-      fetch(`/api/history/${threadId}`)
-        .then((r) => r.json())
-        .then((data) => {
-          const loaded = data.messages
-            .filter((m) => m.role === 'user' || m.role === 'assistant')
-            .map((m) => ({ role: m.role, text: m.content }))
-          setMessages(loaded)
-        })
-        .catch(() => {})
-        .finally(() => setReady(true))
-    } else {
-      setReady(true)
-    }
+    if (threadId) loadThread(threadId)
+    else setReady(true)
   }, [])
+
+  // Fetch a saved chat's past messages. When that fails, say why and offer to try again: it used to
+  // be swallowed, leaving an empty chat that looked as if the thread had nothing in it.
+  function loadThread(threadId) {
+    let status // stays undefined when the request never got an answer at all
+    setLoadProblem('')
+    setReady(false)
+    fetch(`/api/history/${threadId}`)
+      .then((r) => {
+        status = r.status
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then((data) => {
+        if (!Array.isArray(data.messages)) throw new Error('not a history')
+        const loaded = data.messages
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m) => ({ role: m.role, text: m.content }))
+        setMessages(loaded)
+      })
+      .catch(() => setLoadProblem(describeLoadFailure(status)))
+      .finally(() => setReady(true))
+  }
 
   useEffect(() => {
     logRef.current?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -201,6 +215,7 @@ export default function ChatPage() {
     threadIdRef.current = null
     localStorage.removeItem('diya_thread_id')
     window.history.replaceState(null, '', '/')
+    setLoadProblem('') // starting over is the way out of a chat that wouldn't open
     setMessages([])
   }
 
@@ -264,13 +279,22 @@ export default function ChatPage() {
         </div>
       </header>
       <div id="log" ref={logRef}>
-        {ready && messages.length === 0 && !thinking && (
+        {ready && messages.length === 0 && !thinking && (loadProblem ? (
+          <div className="empty-state" role="alert">
+            <img src="/diya-flame.svg" alt="" className="empty-mark" />
+            <h1>Couldn&rsquo;t load this chat</h1>
+            <p>{loadProblem}</p>
+            <button type="button" className="cta" onClick={() => loadThread(threadIdRef.current)}>
+              Try again
+            </button>
+          </div>
+        ) : (
           <div className="empty-state">
             <img src="/diya-flame.svg" alt="" className="empty-mark" />
             <h1>Ask Diya anything</h1>
             <p>Type below, or hold the mic to talk.</p>
           </div>
-        )}
+        ))}
         {messages.map((m, i) => {
           if (m.role === 'tools') {
             return (

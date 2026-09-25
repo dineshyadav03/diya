@@ -58,6 +58,13 @@ const LOAD_FAIL_CHECKS = [
   { name: 'no thread rows are shown', js: `document.querySelectorAll('.thread').length === 0` },
 ]
 
+const RESUME_FAIL_CHECKS = [
+  { name: 'a "couldn\'t load this chat" state is shown, as an alert', js: `!!document.querySelector('.empty-state[role="alert"]') && /couldn.t load this chat/i.test(document.querySelector('.empty-state h1').textContent)` },
+  { name: 'it is not the ordinary empty chat', js: `!/ask diya anything/i.test(document.body.textContent)` },
+  { name: 'a "Try again" button is offered', js: `!!Array.from(document.querySelectorAll('.empty-state button')).find((b) => /try again/i.test(b.textContent))` },
+  { name: 'no message is shown as if the thread were empty', js: `document.querySelectorAll('#log .msg').length === 0` },
+]
+
 const FAIL_CHECKS = [
   { name: 'the failed message is marked as failed', js: `document.querySelectorAll('.msg.user.failed').length === 1` },
   { name: 'an alert explains it was not sent', js: `!!document.querySelector('.send-error[role="alert"]') && /didn.t send/i.test(document.querySelector('.send-error').textContent)` },
@@ -84,6 +91,45 @@ const SCENARIOS = [
     checks: [
       { name: 'the empty state never flashed while the thread loaded', js: `window.__emptySeen === 0` },
       { name: 'the past messages are shown', js: `document.querySelectorAll('#log .msg').length === 2` },
+    ],
+  },
+  // Opening a saved chat that can't be loaded: it used to show an empty chat, as if the thread had
+  // nothing in it. Now it says why, and offers to try again.
+  {
+    name: 'chat-resume-failed', path: '/', stub: { thread: '55', historyMode: 'down' }, steps: [],
+    checks: [...RESUME_FAIL_CHECKS, { name: 'nothing answered: it says the server did not answer', js: `/didn.t answer/i.test(document.querySelector('.empty-state p').textContent)` }],
+  },
+  {
+    name: 'chat-resume-unauthorized', path: '/', stub: { thread: '55', historyMode: '401' }, steps: [],
+    checks: [...RESUME_FAIL_CHECKS,
+      { name: 'it says the access token is the problem', js: `/access token/i.test(document.querySelector('.empty-state p').textContent)` },
+      { name: 'it does not claim the server did not answer', js: `!/didn.t answer/i.test(document.querySelector('.empty-state p').textContent)` }],
+  },
+  {
+    name: 'chat-resume-server-error', path: '/', stub: { thread: '55', historyMode: '500' }, steps: [],
+    checks: [...RESUME_FAIL_CHECKS, { name: 'an error status is reported as an error, with its number', js: `/HTTP 500/.test(document.querySelector('.empty-state p').textContent)` }],
+  },
+  {
+    name: 'chat-resume-retry', path: '/',
+    stub: { thread: '55', historyMode: 'down', history: [{ role: 'user', content: 'earlier question' }, { role: 'assistant', content: 'earlier answer' }] },
+    steps: [`window.__historyMode = 'ok'`, `document.querySelector('.empty-state button').click(); await __wait(900)`],
+    checks: [
+      { name: 'the past messages are shown after trying again', js: `document.querySelectorAll('#log .msg').length === 2` },
+      { name: 'the error is gone', js: `!document.querySelector('.empty-state')` },
+    ],
+  },
+  {
+    name: 'chat-resume-retry-still-failing', path: '/', stub: { thread: '55', historyMode: 'down' },
+    steps: [`document.querySelector('.empty-state button').click(); await __wait(900)`],
+    checks: [...RESUME_FAIL_CHECKS, { name: 'exactly one error state (not stacked)', js: `document.querySelectorAll('.empty-state').length === 1` }],
+  },
+  {
+    name: 'chat-resume-failed-new-chat', path: '/', stub: { thread: '55', historyMode: '401' },
+    steps: [`document.querySelector('.mock-vchat-btn--liquid').click(); await __wait(900)`, `document.querySelector('button[aria-label="Confirm new chat"]').click(); await __wait(600)`],
+    checks: [
+      { name: 'starting a new chat clears the error', js: `!document.querySelector('.empty-state[role="alert"]')` },
+      { name: 'the ordinary empty state is back', js: `/ask diya anything/i.test(document.querySelector('.empty-state h1').textContent)` },
+      { name: 'the old thread is forgotten', js: `localStorage.getItem('diya_thread_id') === null` },
     ],
   },
   { name: 'history-list', path: '/history', stub: { threads: THREADS }, steps: [] },
@@ -186,13 +232,20 @@ const stubSource = (stub) => `(() => {
   const sc = ${JSON.stringify(stub)};
   window.__chatMode = sc.chat || 'ok';   // ok | pending | down (network error) | 500
   window.__txMode = sc.tx || 'pending';  // pending | down | ok
+  window.__historyMode = sc.historyMode || 'ok';  // ok | down | 401 | 500 -- how loading a saved chat's messages answers
   const rf = window.fetch.bind(window);
   const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json' } });
   window.fetch = (url, opts) => {
     const u = String(url);
     const refused = () => new Response('Missing or invalid access token', { status: 401, headers: { 'Content-Type': 'text/plain' } });
     if (u.includes('/api/threads')) return sc.threads === 'pending' ? new Promise(() => {}) : sc.threads === 'error' ? Promise.reject(new TypeError('Failed to fetch')) : sc.threads === '401' ? Promise.resolve(refused()) : sc.threads === '500' ? Promise.resolve(json({ detail: 'Internal Server Error' }, 500)) : Promise.resolve(json({ threads: sc.threads || [] }));
-    if (u.includes('/api/history/')) return new Promise((r) => setTimeout(() => r(json({ messages: sc.history || [] })), sc.historyDelay || 0));
+    if (u.includes('/api/history/')) {
+      const hm = window.__historyMode;
+      if (hm === 'down') return Promise.reject(new TypeError('Failed to fetch'));
+      if (hm === '401') return Promise.resolve(refused());
+      if (hm === '500') return Promise.resolve(json({ detail: 'Internal Server Error' }, 500));
+      return new Promise((r) => setTimeout(() => r(json({ messages: sc.history || [] })), sc.historyDelay || 0));
+    }
     if (u.includes('/api/transcribe')) return window.__txMode === 'down' ? Promise.reject(new TypeError('Failed to fetch')) : window.__txMode === '401' ? Promise.resolve(refused()) : window.__txMode === '500' ? Promise.resolve(json({ detail: 'Internal Server Error' }, 500)) : window.__txMode === 'ok' ? Promise.resolve(json({ text: 'what is on my list today' })) : new Promise(() => {});
     if (u.includes('/api/chat')) {
       const mode = window.__chatMode;
