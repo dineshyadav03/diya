@@ -141,7 +141,7 @@ def test_chat_injects_the_profile_but_never_saves_it(config, tmp_path):
     client, agent, model, _ = build(config, text_reply("Nice."))
     body = client.post("/api/chat", json={"message": "hi"}).json()
     sent = model.chat_calls[0]["messages"]
-    assert sent[0] == {"role": "system", "content": "What you know about the user so far:\nPlays guitar."}
+    assert sent[0] == {"role": "system", "content": "What you know about the user so far:\n- Plays guitar."}
     assert all(m["role"] != "system" for m in agent.store.get_history(body["thread_id"]))
 
 
@@ -236,6 +236,7 @@ def served(monkeypatch):
     calls = {}
     monkeypatch.setattr("uvicorn.run", lambda app, **kw: calls.update(app=app, **kw))
     monkeypatch.setattr(diya, "Agent", lambda config=None: types.SimpleNamespace(config=config, warm_up=lambda: None))
+    monkeypatch.setattr(diya, "memory_startup_lines", lambda agent: [])  # the fake agent has no store; see test_switch.py
     monkeypatch.setattr(diya_web, "WhisperTranscriber", lambda name: types.SimpleNamespace(name=name, warm_up=lambda: None))
     return calls
 

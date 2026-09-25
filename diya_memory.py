@@ -294,6 +294,17 @@ class Memory:
         """The accepted facts as the model is given them; '' when there are none."""
         return render_profile(self.accepted_texts())
 
+    def has_legacy_import(self):
+        """Has the old profile ever been taken in? True whatever became of those facts since, so a fact
+        someone retired never causes the file to be imported again."""
+        with self._read() as conn:
+            return conn.execute("SELECT 1 FROM facts WHERE source = 'legacy_profile' LIMIT 1").fetchone() is not None
+
+    def known_keys(self):
+        """The identity (text_key) of every fact of any status: everything the store has seen."""
+        with self._read() as conn:
+            return {row[0] for row in conn.execute("SELECT text_key FROM facts")}
+
     # ---- adding ----
     def add_candidate(self, text, *, batch_first, batch_last, position, model, extracted_at, raw,
                       flags=(), actor="system"):
@@ -613,3 +624,22 @@ def import_legacy_profile(memory, config, actor="import"):
         if fact is not None:
             items.append((fact.text, line, fact.flags))
     return memory.import_legacy(items, actor=actor)
+
+
+def profile_lines_not_in_memory(memory, config):
+    """How many lines of the old profile file are in no fact at all. A fact of any status counts as "in
+    memory" (it has been seen, and a rejected or retired one was decided about), so this only counts lines
+    that were never brought in: once the model reads memory and not the file, those lines are invisible to
+    it. 0 if there is no readable file."""
+    try:
+        with open(config.profile_path, encoding="utf-8", errors="replace") as f:
+            lines = f.read().split("\n")
+    except OSError:
+        return 0
+    known = memory.known_keys()
+    missing = 0
+    for line in lines:
+        fact = normalise_fact(line)
+        if fact is not None and text_key(fact.text) not in known:
+            missing += 1
+    return missing

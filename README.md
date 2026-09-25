@@ -44,14 +44,14 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   File listing is limited to `Documents/Diya` under your home folder, or the folders in `DIYA_FILES_ROOTS`.
 - Hold-to-talk voice input through local Whisper, and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
-- Facts it extracts wait in a review queue; nothing enters your profile automatically.
+- Facts it extracts wait in a review queue; nothing reaches the model unless you accept it.
   `python diya_review.py list` shows them, and `accept`, `reject` and `edit` decide (see [Dreaming](docs/dreaming.md)).
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 1179 tests pass on Windows (as of 2026-09-25).
+  The model is told the accepted facts, in every chat; your old `user_profile.txt` was imported once.
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 1187 tests pass on Windows (as of 2026-09-25).
 
 ## Known limits
 
-- Reviewed facts are not given to the model yet: `diya_review.py` works, but the switch that makes the model
-  read accepted facts (Stage 2, unit 5) is not built, so the model still reads only `user_profile.txt`.
+- Facts are reviewed on the command line only; reviewing in the browser (Stage 2, unit 6) is not built.
 - `web_search` is not covered by the outbound-host allowlist that limits `get_weather` to Open-Meteo (`DIYA_TOOL_ALLOWED_HOSTS`).
 - Models are pulled by tag, not pinned; the 3B model sometimes calls tools it should not.
 
@@ -60,7 +60,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - [LAN mode and certificates](docs/lan.md): use Diya from a phone, and the mkcert details.
 - [Dreaming](docs/dreaming.md): how staged memory works, and how to run and schedule it.
 - [Roadmap](ROADMAP.md): the Stage 0 checklist and later stages. [Product vision](PRODUCT_VISION.md): the current state.
-- [Research](RESEARCH.md): a dated index of market and technical signals. [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (design; not built yet).
+- [Research](RESEARCH.md): a dated index of market and technical signals. [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built except the browser review and an optional verifier).
 
 ## Architecture
 
@@ -71,7 +71,7 @@ browser -> Next.js UI (:3000, HTTPS): its /api/* routes forward to the API, hold
                   |- diya_db.py -> SQLite diya.db (threads, messages, reminders)
                   '- faster-whisper (base)
 dreaming.py (run separately) reads diya.db -> dream_pending.jsonl
-diya_review.py (run by hand) reads dream_pending.jsonl -> reviewed facts in diya.db (not yet read by the model)
+diya_review.py (run by hand) reads dream_pending.jsonl -> reviewed facts in diya.db -> the model, if accepted
 ```
 
 `sample_notes/` holds fictional demo notes, embedded into an in-memory Chroma index at each start.

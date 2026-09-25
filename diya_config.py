@@ -16,10 +16,13 @@ import os
 from dataclasses import dataclass
 
 
-# "staged": Dreaming writes candidate facts to a review queue and never touches the trusted
-# profile. "direct": the original behaviour (append straight to the profile), kept only as an
-# explicit compatibility option.
-DREAM_PROFILE_MODES = ("staged", "direct")
+# Dreaming always stages: what it extracts goes to a review queue (dream_pending.jsonl) and never
+# to anything the model reads. DIYA_DREAM_PROFILE_MODE once offered "direct" too (append unreviewed
+# facts straight to user_profile.txt). It was retired in Stage 2 unit 5 (docs/STAGE2_DESIGN.md, D8):
+# the model now reads reviewed memory rather than that file, so direct mode would have written text
+# nothing reads, and it was the one path that broke the stage's premise. "staged" is still accepted
+# so an existing setting keeps working; "direct" is an error that says what to do instead.
+RETIRED_DREAM_MODE = "direct"
 
 
 # The names the API always answers to. Anything else is only reachable when the user has both
@@ -49,7 +52,6 @@ class Config:
     dream_log_path: str = "dream_log.txt"
     dream_state_path: str = "dream_state.json"
     dream_pending_path: str = "dream_pending.jsonl"
-    dream_profile_mode: str = "staged"
     whisper_model: str = "base"
     # The API listens on this computer only. Reaching it from another device (the iPhone) is an
     # explicit choice: DIYA_LAN=1 plus DIYA_ALLOWED_HOSTS (never an accident of the default).
@@ -77,8 +79,7 @@ class Config:
     # The per-install access token (docs/STAGE1_DESIGN.md section 3). Only its SHA-256 is stored,
     # at `token_path`. It is REQUIRED by default (step 5 of the rollout plan): the Next.js proxy
     # holds the token for the UI, so nothing needs the browser to. DIYA_REQUIRE_TOKEN=0 is the
-    # explicit opt-out, kept only for anyone who deliberately wants the old unauthenticated API --
-    # the same way DIYA_DREAM_PROFILE_MODE=direct is an explicit opt into old behaviour.
+    # explicit opt-out, kept only for anyone who deliberately wants the old unauthenticated API.
     token_path: str = "diya_token.hash"  # DIYA_TOKEN_PATH
     require_token: bool = True  # DIYA_REQUIRE_TOKEN
     rotate_token: bool = False  # DIYA_ROTATE_TOKEN: replace the stored token at the next start
@@ -210,11 +211,15 @@ def load_config(env=None) -> Config:
 
     mode = read("DIYA_DREAM_PROFILE_MODE")
     if mode is not None:
-        if mode.lower() not in DREAM_PROFILE_MODES:
+        if mode.lower() == RETIRED_DREAM_MODE:
             raise ConfigError(
-                f"DIYA_DREAM_PROFILE_MODE must be one of {', '.join(DREAM_PROFILE_MODES)}, got {mode!r}"
+                "DIYA_DREAM_PROFILE_MODE=direct was retired: it appended unreviewed facts to user_profile.txt, "
+                "and the model now reads reviewed memory instead of that file. Remove the setting; Dreaming "
+                "stages what it finds, and `python diya_review.py` reviews it (`python diya_review.py add ...` "
+                "adds a fact yourself)"
             )
-        values["dream_profile_mode"] = mode.lower()
+        if mode.lower() != "staged":
+            raise ConfigError(f"DIYA_DREAM_PROFILE_MODE can only be 'staged' (or left unset), got {mode!r}")
 
     cert, key = read("DIYA_SSL_CERT"), read("DIYA_SSL_KEY")
     if (cert is None) != (key is None):

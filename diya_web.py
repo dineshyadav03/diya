@@ -373,6 +373,8 @@ def main():
 
     agent = diya.Agent(config)
     diya.warm_up_or_exit(agent)
+    for line in diya.memory_startup_lines(agent):
+        print(line)
     transcriber = WhisperTranscriber(config.whisper_model)
     transcriber.warm_up()
 

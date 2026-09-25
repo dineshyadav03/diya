@@ -28,7 +28,6 @@ def config(tmp_path):
         dream_state_path=str(tmp_path / "state.json"),
         dream_pending_path=str(tmp_path / "pending.jsonl"),
         notes_dir=str(tmp_path / "notes"),
-        dream_profile_mode="direct",
     )
 
 
@@ -36,7 +35,9 @@ def agent_for(config):
     return diya.Agent(config, client=FakeClient())
 
 
-# --- the agent reads the profile as UTF-8, whatever the line endings ----------------------------
+# --- the old profile file is read as UTF-8, whatever the line endings ---------------------------
+# (It is read once, when the agent first needs it, to import its lines as accepted facts: see
+# tests/test_switch.py. These pin that the reading itself did not regress.)
 
 def test_a_non_ascii_profile_is_read_as_utf8_not_the_platform_codec(config):
     pathlib.Path(config.profile_path).write_bytes("- Loves café and naïve art\n".encode("utf-8"))
@@ -68,32 +69,20 @@ def test_notes_are_read_as_utf8(config):
 
 # --- Dreaming writes UTF-8 and LF only -------------------------------------------------------------
 
-def test_direct_mode_appends_utf8_with_lf_only(config):
-    Store(config.db_path)  # (lazy) -- the message below creates it
-    store = Store(config.db_path)
-    store.add_message(store.create_thread(), "user", "I love the café")
-    profile = pathlib.Path(config.profile_path)
-    profile.write_bytes(b"- likes tea\n")  # an LF profile, as it is now
-    Dreamer(config, client=FakeClient([text_reply("- loves the café")])).dream_cycle()
-    assert profile.read_bytes() == b"- likes tea\n- loves the caf\xc3\xa9\n"  # UTF-8, and no CR anywhere
+def test_a_non_ascii_fact_survives_dreaming_review_and_the_agent(config):
+    """The original mismatch (Dreaming wrote UTF-8, the agent read cp1252), end to end through the whole
+    path a fact takes now: staged by Dreaming, ingested, accepted, told to the model."""
+    from diya_memory import Memory, ingest_queue
 
-
-def test_dreaming_and_the_agent_agree_on_a_non_ascii_fact(config):
-    """The original mismatch, end to end: Dreaming appended UTF-8, the agent read cp1252."""
     store = Store(config.db_path)
     store.add_message(store.create_thread(), "user", "My cat is called Zoë")
     Dreamer(config, client=FakeClient([text_reply("- cat is called Zoë")])).dream_cycle()
+    queue = pathlib.Path(config.dream_pending_path).read_bytes()
+    assert "Zoë".encode("utf-8") in queue and b"\r" not in queue  # UTF-8, and no CR anywhere
+    memory = Memory(store)
+    ingest_queue(memory, config)
+    memory.decide(1, "accept", "cli")
     assert "- cat is called Zoë" in agent_for(config).with_profile([])[0]["content"]
-
-
-def test_save_profile_writes_utf8_and_lf(config):
-    Dreamer(config, client=FakeClient()).save_profile("  - café  \n\n")
-    assert pathlib.Path(config.profile_path).read_bytes() == b"- caf\xc3\xa9\n"
-
-
-def test_load_profile_reads_utf8(config):
-    pathlib.Path(config.profile_path).write_bytes("- café\n".encode("utf-8"))
-    assert Dreamer(config, client=FakeClient()).load_profile() == "- café"
 
 
 def test_the_checkpoint_file_is_lf_only_ascii_json(config):

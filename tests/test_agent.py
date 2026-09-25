@@ -177,12 +177,14 @@ def test_with_profile_ignores_an_empty_profile(config, tmp_path):
 
 
 def test_with_profile_prepends_a_system_message_without_mutating_history(config, tmp_path):
+    """The old profile file's lines were imported as accepted facts (test_switch.py has the details), and
+    accepted facts are what the model is told, one bullet each."""
     (tmp_path / "agent_profile.txt").write_text("Likes guitar.\n")
     agent, _ = make_agent(config)
     history = [{"role": "user", "content": "hi"}]
     result = agent.with_profile(history)
     assert result == [
-        {"role": "system", "content": "What you know about the user so far:\nLikes guitar."},
+        {"role": "system", "content": "What you know about the user so far:\n- Likes guitar."},
         {"role": "user", "content": "hi"},
     ]
     assert history == [{"role": "user", "content": "hi"}]

@@ -1,13 +1,14 @@
 # Stage 2: Trustworthy memory (review and promote) -- design spec
 
 > **Status (2026-09-25):** designed; being built unit by unit. **Built: U1 (storage), U2 (ingest and
-> legacy import), U3 (deterministic checks), U4 (review
-> command line).** The "today" statements in sections 1-2 describe the code before Stage 2 (as of
-> `8c8231a`); the `file:line`
-> references into `diya_db.py` are current, the others are as of that commit. Two things the first
-> draft reported were fixed before any Stage 2 unit: the migration-runner race (`43dcb76`, see
-> "Migration impact") and a stale comment in `diya.py` that named a promotion step that does not
-> exist (`8c8231a`). The recommendations in section 5 are being followed as written.
+> legacy import), U3 (deterministic checks), U4 (review command line), U5 (the switch).** Remaining:
+> U6 (review in the browser), U7 (an optional advisory verifier). The "today" statements in sections 1-2
+> describe the code before Stage 2 (as of `8c8231a`); the `file:line` references into `diya_db.py` are
+> current, the others are as of that commit. Two things the first draft reported were fixed before any
+> Stage 2 unit: the migration-runner race (`43dcb76`, see "Migration impact") and a stale comment in
+> `diya.py` that named a promotion step that does not exist (`8c8231a`). The recommendations in section 5
+> are being followed as written: the owner asked for the work to continue through the roadmap and gave no
+> separate answer to each decision (D8 removed an option, see its "As built" note).
 
 This is a design document, not an implementation. Nothing in the codebase changes as a result of
 writing it. It covers the first item under "Trustworthy memory" in `ROADMAP.md` ("Later stages", 2):
@@ -347,6 +348,23 @@ are now recomputed from the current text on every check.
   documented as compatibility only (`diya_config.py:19-22`). This removes an option, so it needs the
   owner's explicit yes.
 
+*As built (U5):* the retirement was carried out as recommended, on the owner's instruction to keep
+working through the roadmap rather than a separate answer to this decision; it is one commit to revert
+if the option is wanted back. `DIYA_DREAM_PROFILE_MODE=direct` is now a configuration error naming the
+alternative (`staged`, the only mode, is still accepted), the `dream_profile_mode` field, Dreaming's
+direct path and its now-dead profile helpers are gone, and nothing on the dev machine (environment or the
+scheduled task) had it set. The import is `Agent.ensure_profile_imported`: it runs at startup with a
+visible message (the terminal chat and the API) **and** on the first `with_profile` of any agent, so no
+entry point can start without the facts the model used to be given; it runs only if nothing has ever been
+imported (a fact someone retired is never brought back), so hand edits to the old file afterwards are not
+picked up, and startup says how many of its lines are in no fact. `Agent.with_profile` reads only the
+accepted facts. Checked against the real API process (spare port, scratch data, a stand-in model server
+that records what it is sent): the first start imports and reports, the model receives the same text as
+before byte for byte, a fact accepted while the server runs is told on the very next message, a staged
+candidate never is, a retired fact stays retired across a restart although the old file still says it, and
+the old file is byte-identical throughout. **The API must be restarted to pick this up**: a running
+server keeps its old code, and until then it keeps reading the old file.
+
 ### D9. What "retire" means, honestly
 
 Retiring removes a fact from what the model sees, immediately (the next turn), and is reversible
@@ -378,7 +396,8 @@ sees**, and it must not land before what feeds it (import, checks, a way to revi
 | U6 | **HTTP and UI.** Endpoints, same-origin routes, the page, failure messages in the `describe*Failure` style | `diya_web.py`, `frontend/app/api/memory/*`, `frontend/app/memory/`, `frontend/lib/*`, `tests/test_token.py` | UI restart; a "facts waiting" badge is a follow-up |
 | U7 | **Advisory model verifier**, gated. Only after U1-U6 have produced decisions to measure against; a case set in `diya_evals.py` (needs Ollama), not pytest | `diya_memory.py`, `diya_evals.py` | Adds a flag; never a status change |
 
-Dreaming (`dreaming.py`) is not edited by any unit.
+Dreaming (`dreaming.py`) is edited by no unit except U5, which removes its retired `direct` path and the
+two helpers that only that path used.
 
 ### Migration impact
 

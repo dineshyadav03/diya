@@ -210,12 +210,14 @@ Remaining:
 
 1. Hardware and model benchmark. Includes the 3B model calling `add_reminder` on plain arithmetic
    questions (roughly 40-50% of past runs), which prompt and temperature changes did not fix.
-2. Trustworthy memory. Includes the review-and-promote step for staged facts: nothing reads
-   `dream_pending.jsonl` yet, so staged facts never reach the model. Reference for the
+2. Trustworthy memory. The review-and-promote step for staged facts. Reference for the
    verification step: the solver/verifier separation (Apodex). Designed in
-   [`docs/STAGE2_DESIGN.md`](docs/STAGE2_DESIGN.md): seven units (storage, ingest, checks, a review
-   command line, the switch that makes accepted facts reach the model, an API and UI, an optional
-   advisory verifier). Units 1 (storage: `diya_memory.py`, migration 2), 2 (cleaning staged lines, ingesting the queue, importing the old profile) 3 (deterministic checks: `diya_checks.py`) and 4 (the review command line, `diya_review.py`) are built.
+   [`docs/STAGE2_DESIGN.md`](docs/STAGE2_DESIGN.md) as seven units. **Built (units 1 to 5):** storage
+   (`diya_memory.py`, migration 2); cleaning staged lines, ingesting the queue and importing the old
+   profile; deterministic checks (`diya_checks.py`); the review command line (`diya_review.py`); and the
+   switch: the model is told the accepted facts, the old `user_profile.txt` was imported once, and
+   `DIYA_DREAM_PROFILE_MODE=direct` was retired. **Remaining:** reviewing in the browser (unit 6) and an
+   optional, advisory model verifier (unit 7).
 3. Connectors and permissions.
 4. Durable workflows. The competitive battleground: every comparable leads with "describe an
    outcome, it follows through". Reference: Muse-style approval gates and action trails.

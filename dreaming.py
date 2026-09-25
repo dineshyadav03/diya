@@ -16,16 +16,16 @@ def _is_message_id(value):
 
 
 class Dreamer:
-    """One memory-consolidation pass, bound to one config (database, profile, state file).
+    """One memory-consolidation pass, bound to one config (database, state file, review queue).
 
     Nothing is opened or connected until it's used, so importing this module -- or building
-    a Dreamer -- has no side effects. The profile, state and log locations come from
-    DIYA_* settings, defaulting to the same relative files as before.
+    a Dreamer -- has no side effects. The state, queue and log locations come from DIYA_*
+    settings, defaulting to the same relative files as before.
 
-    By default (DIYA_DREAM_PROFILE_MODE=staged) Dreaming never writes the trusted profile:
-    what it extracts is queued in a JSONL file for review, one record per extraction. The
-    original behaviour -- appending straight to the profile -- remains only as the explicit
-    "direct" compatibility mode.
+    Dreaming only ever stages: what it extracts is queued in a JSONL file for review, one
+    record per extraction, and nothing it writes is read by the model. Reviewing the queue
+    is diya_review.py's job (docs/STAGE2_DESIGN.md). It used to have a "direct" mode that
+    appended straight to the profile; that was retired in Stage 2 unit 5.
     """
 
     def __init__(self, config=None, client=None, store=None):
@@ -39,20 +39,8 @@ class Dreamer:
             self._client = OpenAI(base_url=self.config.ollama_url, api_key="ollama")
         return self._client
 
-    # Every file Dreaming touches is UTF-8, and the profile is LF-only: text-mode writes on
-    # Windows translate "\n" to CRLF, which is how the profile ended up with mixed endings
-    # (lines Dreaming appended were CRLF, the rest LF) and, read back with the platform codec,
-    # garbled non-ASCII. Diya reads it with the same encoding (see Agent.with_profile).
-    def load_profile(self):
-        if os.path.exists(self.config.profile_path):
-            with open(self.config.profile_path, encoding="utf-8", errors="replace") as f:
-                return f.read().strip()
-        return "(no profile yet -- this is the first dream cycle)"
-
-    def save_profile(self, text):
-        with open(self.config.profile_path, "w", encoding="utf-8", newline="\n") as f:
-            f.write(text.strip() + "\n")
-
+    # Every file Dreaming writes is UTF-8 with LF line endings: text-mode writes on Windows
+    # translate "\n" to CRLF, which once left a file with mixed endings.
     def load_last_dreamed_id(self):
         if os.path.exists(self.config.dream_state_path):
             with open(self.config.dream_state_path, encoding="utf-8") as f:
@@ -127,27 +115,25 @@ class Dreamer:
             print("Nothing new to dream about.")
             return
 
-        staged = self.config.dream_profile_mode == "staged"
         first_message_id, last_message_id = new_messages[0]["id"], new_messages[-1]["id"]
 
-        if staged:
-            # A batch always starts at the first message after the checkpoint, and batches never
-            # overlap, so a record with this first id means the batch was staged but the process
-            # died before the checkpoint moved. Finish that step instead of extracting again --
-            # this is what makes a retry idempotent.
-            try:
-                already = self._find_staged(first_message_id)
-            except OSError as exc:
-                # Can't tell whether this batch was staged already, so stage nothing this cycle.
-                print(f"[error] Could not read the review queue ({exc}). Checkpoint left unchanged; will retry next cycle.")
-                return
-            if already is not None:
-                self.save_last_dreamed_id(already["last_message_id"])
-                print(
-                    f"Messages {already['first_message_id']}-{already['last_message_id']} were already "
-                    "staged; checkpoint advanced, nothing staged again."
-                )
-                return
+        # A batch always starts at the first message after the checkpoint, and batches never
+        # overlap, so a record with this first id means the batch was staged but the process
+        # died before the checkpoint moved. Finish that step instead of extracting again --
+        # this is what makes a retry idempotent.
+        try:
+            already = self._find_staged(first_message_id)
+        except OSError as exc:
+            # Can't tell whether this batch was staged already, so stage nothing this cycle.
+            print(f"[error] Could not read the review queue ({exc}). Checkpoint left unchanged; will retry next cycle.")
+            return
+        if already is not None:
+            self.save_last_dreamed_id(already["last_message_id"])
+            print(
+                f"Messages {already['first_message_id']}-{already['last_message_id']} were already "
+                "staged; checkpoint advanced, nothing staged again."
+            )
+            return
 
         # Extraction-only, deliberately: the model never sees or has to reproduce the existing
         # profile. Two real, measured attempts at "rewrite the whole profile, keep what's still
@@ -176,11 +162,7 @@ class Dreamer:
             return
 
         new_facts = response.choices[0].message.content.strip()
-
-        if staged:
-            self._finish_staged(new_facts, first_message_id, last_message_id)
-        else:
-            self._finish_direct(new_facts, last_message_id)
+        self._finish_staged(new_facts, first_message_id, last_message_id)
 
     def _finish_staged(self, new_facts, first_message_id, last_message_id):
         if not new_facts or new_facts.upper().startswith("NONE"):
@@ -207,21 +189,6 @@ class Dreamer:
 
         print("New facts staged for review (not added to profile):")
         print(new_facts)
-
-    def _finish_direct(self, new_facts, last_message_id):
-        """The original behaviour, unchanged: checkpoint first, then append to the profile."""
-        self.save_last_dreamed_id(last_message_id)
-
-        if not new_facts or new_facts.upper().startswith("NONE"):
-            print("No genuine new facts found.")
-            return
-
-        with open(self.config.profile_path, "a", encoding="utf-8", newline="\n") as f:
-            f.write(new_facts + "\n")
-
-        print("New facts appended:")
-        print(new_facts)
-
 
 def main():
     """The scheduled entry point: one cycle, with all output going to the log file.

@@ -15,6 +15,7 @@ from openai import OpenAI
 import diya_config
 import diya_db
 import diya_intent
+import diya_memory
 
 WEATHER_CODES = {
     0: "clear sky", 1: "mainly clear", 2: "partly cloudy", 3: "overcast",
@@ -335,6 +336,7 @@ class Agent:
         self._client = client
         self._notes = None
         self._notes_lock = threading.Lock()
+        self._profile_import_checked = False
         self._functions = {
             "list_files": functools.partial(
                 list_files, roots=diya_config.resolved_files_roots(self.config)
@@ -406,24 +408,36 @@ class Agent:
             for rid, content, due_at, done in rows
         )
 
+    def ensure_profile_imported(self):
+        """Give the old `user_profile.txt` a home in reviewed memory, once. Before memory was reviewed
+        the model was told that file's text on every turn; now it is told the ACCEPTED facts, so the
+        file's lines have to be facts too or the model would silently lose everything it knew.
+
+        Only if nothing has ever been imported (a fact someone retired is not brought back by a later
+        call), and only if the file exists. The file is never changed, and after this it is never read
+        again: what the model knows is changed with `python diya_review.py`, not by editing the file.
+        Returns the ImportResult if this call imported anything, else None."""
+        memory = diya_memory.Memory(self.store)
+        if memory.has_legacy_import() or not os.path.exists(self.config.profile_path):
+            return None
+        result = diya_memory.import_legacy_profile(memory, self.config)
+        return result if result.imported else None
+
     def with_profile(self, history):
-        """Prepend Dreaming's output as a system message, if any exists -- shared by every
-        entry point (terminal, web, evals) so this can't silently be missing from one of them
-        again. Injected fresh each call, never saved into a thread's own persisted history --
-        it should always reflect the latest profile, not a frozen snapshot."""
-        path = self.config.profile_path
-        if os.path.exists(path):
-            # The profile is UTF-8 with LF line endings (that is how Dreaming's `direct` mode writes
-            # it; nothing else writes it yet). It used to be read with the platform default codec
-            # (cp1252 on Windows), so any non-ASCII fact came back as mojibake. A universal-newline
-            # read also copes with a legacy CRLF profile; 'replace' so a stray byte can't take
-            # chat down.
-            with open(path, encoding="utf-8", errors="replace") as f:
-                profile = f.read().strip()
-            if profile:
-                return [
-                    {"role": "system", "content": f"What you know about the user so far:\n{profile}"}
-                ] + history
+        """Prepend what the model knows about the user -- the ACCEPTED facts of reviewed memory, never a
+        candidate, a rejected or a retired one -- as a system message, if there are any. Shared by every
+        entry point (terminal, web) so this can't silently be missing from one of them. Injected fresh
+        each call, never saved into a thread's own persisted history: it should always reflect the
+        current memory, not a frozen snapshot.
+
+        The first call also makes sure the old profile file has been imported (ensure_profile_imported),
+        so no entry point can start without the facts the model used to be given."""
+        if not self._profile_import_checked:
+            self.ensure_profile_imported()
+            self._profile_import_checked = True
+        profile = diya_memory.Memory(self.store).render()
+        if profile:
+            return [{"role": "system", "content": f"What you know about the user so far:\n{profile}"}] + history
         return history
 
     def _model_messages(self, messages, fact_share):
@@ -521,6 +535,38 @@ def warm_up_or_exit(agent):
         sys.exit(1)
 
 
+def memory_startup_lines(agent):
+    """What to tell the person about Diya's memory when it starts (the terminal chat and the web server
+    both print these): that the old profile file was taken in, if it was; how much the model is being
+    told; whether facts are waiting for review; and whether the old file has lines that are in no fact
+    (that file is no longer read). Imports the old profile if that has not happened yet."""
+    memory = diya_memory.Memory(agent.store)
+    lines = []
+    try:
+        imported = agent.ensure_profile_imported()
+    except diya_memory.SourceUnreadable as exc:
+        imported = None
+        lines.append(f"Memory: could not take in the old profile: {exc}")
+    if imported is not None:
+        lines.append(
+            f"Memory: took {imported.imported} lines of {agent.config.profile_path} in as accepted facts. That file "
+            "was not changed and is not read any more: change what Diya knows with `python diya_review.py`."
+        )
+    counts = memory.counts()
+    used = len(memory.render())
+    lines.append(
+        f"Memory: {counts['accepted']} accepted facts ({used} of {diya_memory.MAX_PROFILE_CHARS} characters) are "
+        f"given to the model; {counts['candidate']} candidates wait for review (`python diya_review.py list`)."
+    )
+    stray = diya_memory.profile_lines_not_in_memory(memory, agent.config)
+    if stray:
+        lines.append(
+            f"Memory: {stray} lines in {agent.config.profile_path} are in no fact, and that file is not read any "
+            "more. `python diya_review.py import-profile` takes them in."
+        )
+    return lines
+
+
 def chat_loop(agent, thread_id, history):
     print(f"[Diya -- thread {thread_id}. Type 'exit' (or Ctrl+C) to stop.]")
     for m in history:
@@ -582,6 +628,8 @@ def main():
         print(f"assistant> {answer}")
         return
 
+    for line in memory_startup_lines(agent):  # only in the live chat: a one-off run's output is for scripts
+        print(f"[{line}]")
     chat_loop(agent, thread_id, history)
 
 

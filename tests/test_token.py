@@ -351,6 +351,7 @@ def served(monkeypatch):
     calls = {}
     monkeypatch.setattr("uvicorn.run", lambda app, **kw: calls.update(app=app, **kw))
     monkeypatch.setattr(diya, "Agent", lambda config=None: types.SimpleNamespace(config=config, warm_up=lambda: None))
+    monkeypatch.setattr(diya, "memory_startup_lines", lambda agent: [])  # the fake agent has no store; see test_switch.py
     monkeypatch.setattr(diya_web, "WhisperTranscriber", lambda name: types.SimpleNamespace(name=name, warm_up=lambda: None))
     return calls
 
