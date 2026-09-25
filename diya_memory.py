@@ -91,7 +91,7 @@ class BudgetExceeded(FactError):
 # screen say something the stored text does not (design doc, T3). U+200C/U+200D (joiners) are NOT
 # listed: real scripts and emoji sequences need them.
 _INVISIBLE = frozenset(
-    "؜​‎‏‪‫‬‭‮⁠⁦⁧⁨⁩﻿"
+    "\u061c\u200b\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2060\u2066\u2067\u2068\u2069\ufeff"
 )
 
 

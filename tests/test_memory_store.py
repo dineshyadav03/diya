@@ -93,7 +93,7 @@ def test_the_size_limits_are_the_ones_the_design_proposes():
 
 @pytest.mark.parametrize("text", [
     "likes tea", "has a cat named Pixel", "café owner", "Zoë's birthday is in May",
-    "山田 lives in Osaka", "a family \U0001F468‍\U0001F469‍\U0001F467 photo",  # joiners are legitimate
+    "山田 lives in Osaka", "a family \U0001F468\u200d\U0001F469\u200d\U0001F467 photo",  # joiners are legitimate
     "x", "a" * 500,  # length is a rule of accepting, not of what may be recorded
 ])
 def test_ordinary_text_is_a_fact(text):
@@ -101,11 +101,11 @@ def test_ordinary_text_is_a_fact(text):
 
 
 @pytest.mark.parametrize("text", [
-    "", " ", " leading", "trailing ", "two  spaces", "a\nb", "a\rb", "a\r\nb", "a\tb", "a b",
+    "", " ", " leading", "trailing ", "two  spaces", "a\nb", "a\rb", "a\r\nb", "a\tb", "a\u00a0b",
     "esc \x1b[31mred", "nul \x00 byte", "bell \x07", "del \x7f", "c1 \x85 control",
-    "a b", "a b",
-    "bidi ‮override", "bidi ⁦isolate", "left-to-right ‎mark", "arabic letter ؜mark",
-    "zero​width", "word⁠joiner", "﻿bom", "lone \ud800 surrogate", "private  use",
+    "a\u2028b", "a\u2029b",
+    "bidi \u202eoverride", "bidi \u2066isolate", "left-to-right \u200emark", "arabic letter \u061cmark",
+    "zero\u200bwidth", "word\u2060joiner", "\ufeffbom", "lone \ud800 surrogate", "private \ue000 use",
 ])
 def test_anything_that_is_not_one_clean_line_is_refused(text):
     with pytest.raises(InvalidFact):

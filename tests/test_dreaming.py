@@ -302,13 +302,13 @@ def test_each_staged_extraction_is_its_own_record_with_a_disjoint_range(config):
 
 def test_a_multi_line_reply_becomes_a_fact_list_and_the_file_stays_one_line_per_record(config):
     seed(config, ("user", "lots of facts"))
-    reply = "- likes teal\n\n  - café owner  with a separator\n- has a dog"
+    reply = "- likes teal\n\n  - café owner \u2028with a separator\n- has a dog"
     dreamer(config, text_reply(reply))[0].dream_cycle()
     raw = pathlib.Path(config.dream_pending_path).read_bytes()
     assert raw.count(b"\n") == 1 and b"\r" not in raw and raw.endswith(b"\n")
     (record,) = pending(config)
-    assert record["facts"] == ["- likes teal", "- café owner  with a separator", "- has a dog"]
-    assert " " not in raw.decode("utf-8")  # escaped, so line-splitting readers can't tear the record
+    assert record["facts"] == ["- likes teal", "- café owner \u2028with a separator", "- has a dog"]
+    assert "\u2028" not in raw.decode("utf-8")  # escaped, so line-splitting readers can't tear the record
 
 
 def test_the_record_is_flushed_to_disk_before_the_checkpoint_moves(config, monkeypatch):

@@ -140,3 +140,51 @@ def test_every_tracked_text_file_is_utf8_without_a_bom_and_has_no_cr():
         except UnicodeDecodeError as exc:
             problems.append(f"{name}: not valid UTF-8 ({exc})")
     assert not problems, "\n".join(problems)
+
+
+# --- nothing invisible in the source ----------------------------------------------------------------
+
+# Characters that are invisible, or that change how text is displayed: zero-width and bidirectional
+# marks, overrides and isolates (Cf), line and paragraph separators, private-use and surrogate code
+# points, and control characters other than tab and line ends. In source or docs they hide things from
+# a reviewer -- a bidirectional override can make code read differently from how it runs. A test that
+# needs one of them writes it as an escape sequence, which is visible in the file.
+INVISIBLE_CATEGORIES = {"Cf", "Zl", "Zp", "Co", "Cs"}
+SCANNED_EXT = {".py", ".js", ".jsx", ".mjs", ".json", ".md", ".yml", ".yaml", ".toml", ".css", ".txt", ".html", ".ini", ".cfg"}
+
+
+def find_invisible(text):
+    """(line number, code point) for every invisible or display-altering character in `text`."""
+    import unicodedata
+
+    found = []
+    for number, line in enumerate(text.split("\n"), 1):
+        for char in line:
+            category = unicodedata.category(char)
+            if category in INVISIBLE_CATEGORIES or (category == "Cc" and char not in "\t\r"):
+                found.append((number, f"U+{ord(char):04X}"))
+    return found
+
+
+def test_the_invisible_character_finder_finds_what_it_should_and_nothing_else():
+    hidden = [chr(0x202E), chr(0x2066), chr(0x200B), chr(0x200D), chr(0xFEFF), chr(0x2028), chr(0xE000), chr(27), chr(0)]
+    for char in hidden:
+        assert find_invisible(f"a{char}b") == [(1, f"U+{ord(char):04X}")], hex(ord(char))
+    assert find_invisible("line one\nline " + chr(0x202E) + "two") == [(2, "U+202E")]  # the line is reported
+    ordinary = "caf\u00e9 \u5c71\u7530 \U0001F468 tabs\tand\r\nlines, quotes \u201c\u201d, a dash \u2014, nbsp\u00a0"
+    assert find_invisible(ordinary) == []
+
+
+def test_no_tracked_source_or_doc_contains_an_invisible_or_display_altering_character():
+    problems = []
+    for name in _git("ls-files").splitlines():
+        path = ROOT / name
+        if path.suffix.lower() not in SCANNED_EXT or not path.is_file() or "node_modules" in path.parts:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue  # test_every_tracked_text_file_is_utf8... reports that
+        for number, code_point in find_invisible(text):
+            problems.append(f"{name}:{number}: {code_point}")
+    assert not problems, "invisible characters (write them as escapes):\n" + "\n".join(problems)
