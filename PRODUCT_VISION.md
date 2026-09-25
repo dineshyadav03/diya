@@ -16,7 +16,7 @@ Diya is a personal assistant for one person that keeps the sensitive parts local
 3. **Proactive, not only reactive.** Scheduled jobs act without being asked.
 4. **Extensible.** New tools are added as functions with a schema and tests.
 
-The design follows the architecture in the Truffle research dossier (source: `render_pdf.py`), which
+The design follows the architecture in the Truffle research dossier (source: `dossier_content.py`), which
 describes a commercial local-first assistant. Diya is a one-person project; the table below shows how far it is.
 
 ## Current state

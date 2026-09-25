@@ -1,4 +1,4 @@
-# Rendering helpers and styles for the dossier PDF. The content lives in render_pdf.py, which imports this.
+# Rendering helpers and styles for the dossier PDF. The content lives in dossier_content.py; render_pdf.py imports both.
 import re
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.units import inch

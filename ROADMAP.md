@@ -204,7 +204,11 @@ Remaining:
       After pulling, run `ollama list`: if the ID column's first 12 characters don't match these,
       the tag has moved since this was checked.
 - [ ] Add a screenshot or demo GIF to the README (a placeholder line marks the spot, e.g. `docs/demo.gif`)
-- [ ] Generate `truffle-research.html` from `render_pdf.py` (until then it is a marked hand copy)
+- [x] Generate `truffle-research.html` from the same content as the PDF (2026-09-25): the text moved out of
+      `render_pdf.py` into `dossier_content.py` (the PDF is byte-identical to before, checked with reportlab's
+      deterministic mode), `render_html.py` builds the page with the standard library only, and
+      `tests/test_dossier.py` fails if the committed page is not what the content produces. The old
+      hand-written page is gone; the generated one has a numbered contents list and no web fonts.
 
 ## Later stages
 

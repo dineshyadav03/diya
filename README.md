@@ -47,7 +47,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Facts it extracts wait in a review queue; nothing reaches the model unless you accept it.
   Review them on the **Memory** page of the UI, or with `python diya_review.py list`, `accept`, `reject` and `edit` (see [Dreaming](docs/dreaming.md)).
   The model is told the accepted facts, in every chat; your old `user_profile.txt` was imported once.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 1363 tests pass on Windows (as of 2026-09-25).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 1384 tests pass on Windows (as of 2026-09-25).
 
 ## Known limits
 
@@ -94,4 +94,5 @@ calls Open-Meteo. Results vary between runs on a 3B model.
 All rights reserved: the code is published to read, and no license to use, copy, modify or distribute
 it is granted. Third-party parts keep their own licenses (the composer is ported from the MIT-licensed
 [Libraries.dev](https://github.com/Jakubantalik/Libraries.dev); see [notices](THIRD_PARTY_NOTICES.md)).
-The project is modeled on a research dossier: `render_pdf.py` is its source; the PDF is generated from it.
+The project is modeled on a research dossier: `dossier_content.py` is its source; the PDF (`render_pdf.py`) and the web page
+(`render_html.py`, standard library only) are both generated from it, and a test fails if the committed page is stale.
