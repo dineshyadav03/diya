@@ -202,9 +202,10 @@ def test_the_chat_page_says_why_a_saved_chat_could_not_be_opened():
     load = loading_a_saved_chat()
     fetch_at = load.index("fetch(`/api/history/${threadId}`)")
     assert load.index("let status") < fetch_at < load.index("status = r.status") < load.index("if (!r.ok) throw")
-    assert ".catch(() => setLoadProblem(describeLoadFailure(status)))" in load
+    catch = load[load.index(".catch("):load.index(".finally(")]
+    assert "setLoadProblem(describeLoadFailure(status))" in catch
     assert "Array.isArray(data.messages)" in load  # a reply that isn't a message list is 'unreadable', not a crash
-    assert load.index(".catch(") < load.index(".finally(() => setReady(true))")  # the page is shown either way
+    assert "setReady(true)" in load[load.index(".finally("):]  # the page is shown either way
     assert ".catch(() => {})" not in source  # nothing on this page swallows a failure silently any more
 
 
@@ -212,6 +213,7 @@ def test_opening_a_saved_chat_starts_by_clearing_any_earlier_problem_and_is_used
     source = CHAT.read_text(encoding="utf-8")
     load = loading_a_saved_chat()
     assert load.index("setLoadProblem('')") < load.index("fetch(")
+    assert load.index("setLoadingChat(true)") < load.index("fetch(")  # the composer is off for as long as the load is in flight
     assert "if (threadId) loadThread(threadId)" in source  # the mount effect
     assert "onClick={() => loadThread(threadIdRef.current)}" in source  # "Try again" loads the same chat again
 
@@ -224,6 +226,56 @@ def test_a_chat_that_would_not_open_is_shown_instead_of_the_empty_chat_with_a_wa
     # starting a new chat is the way out of one that will never open, and must clear the error
     new_chat = source[source.index("function handleNewChat"):]
     assert "setLoadProblem('')" in new_chat.split("\n  }\n")[0]
+
+
+def test_nothing_can_be_sent_into_a_chat_that_is_loading_or_failed_to_load():
+    """A message sent while the saved chat is not on screen would be added to a thread the person
+    can't see (and, during a retry, lost when the load lands). The composer is off, and the page
+    refuses too."""
+    page = CHAT.read_text(encoding="utf-8")
+    assert "const [loadingChat, setLoadingChat] = useState(false)" in page
+    # the page tells the composer why it is off, for both reasons
+    given = page[page.index("<VoiceBar"):page.index("/>", page.index("<VoiceBar"))]
+    assert "unavailable={" in given and "loadingChat" in given and "loadProblem" in given
+    assert "Loading this chat" in given and "didn’t load" in given
+    # ...and the page's own handler is a backstop, before anything is added or sent
+    send = page[page.index("async function handleSend"):]
+    assert send.index("if (loadingChat || loadProblem) return") < send.index("addMsg('user'")
+
+    voice = VOICE.read_text(encoding="utf-8")
+    assert "unavailable = ''" in voice.split("export default function VoiceBar")[1].split(")")[0]
+    submit = voice[voice.index("function submit"):voice.index("async function startRecording")]
+    assert submit.index("if (unavailable) return") < submit.index("setValue('')")  # typed text is left where it is
+    assert "if (unavailable) return" in voice[voice.index("async function startRecording"):voice.index("try {", voice.index("async function startRecording"))]
+    assert "disabled={!!unavailable}" in voice and "placeholder={unavailable || 'Message Diya...'}" in voice
+    assert "disabled={micDisabled || !!unavailable}" in voice
+    assert voice.count("sendButton(!!unavailable)") == 2  # with and without the metal ring
+    assert "const hasText = value.trim().length > 0 && !unavailable" in voice  # the "armed" ring is never lit when nothing can be sent
+    # New chat, in the menu, is the way out and must stay usable
+    menu = voice[voice.index("<Liquid"):voice.index("</Liquid>")]
+    assert "unavailable" not in menu and "disabled" not in menu
+
+
+def test_a_load_that_finishes_late_cannot_touch_a_chat_that_has_since_been_left():
+    page = CHAT.read_text(encoding="utf-8")
+    load = loading_a_saved_chat()
+    assert "const seq = ++loadSeqRef.current" in load
+    assert load.count("stale()") >= 3  # before applying messages, before reporting a problem, before revealing the page
+    assert "if (stale()) return" in load[load.index(".then((data)"):load.index(".catch(")]
+    assert "if (!stale()) setLoadProblem" in load
+    assert "if (stale()) return" in load[load.index(".finally("):]
+    new_chat = page[page.index("function handleNewChat"):].split("\n  }\n")[0]
+    assert "loadSeqRef.current += 1" in new_chat  # whatever is in flight is for the chat being left
+    assert "setLoadingChat(false)" in new_chat and "setReady(true)" in new_chat  # nothing is left waiting on it
+
+
+def test_the_design_rig_covers_the_blocked_composer_and_the_stale_load():
+    rig = RIG.read_text(encoding="utf-8")
+    for scenario in ("chat-resume-failed-blocked", "chat-resume-loading-blocked",
+                     "chat-resume-retry-blocked-while-loading", "chat-resume-new-chat-while-loading"):
+        assert f"name: '{scenario}'" in rig, scenario
+    assert "hm === 'held'" in rig and "window.__releaseHistory" in rig and "window.__chatCalls" in rig
+    assert "window.__chatCalls === 0" in rig  # the message that must not be sent never reached /api/chat
 
 
 def test_the_design_rig_covers_opening_a_saved_chat_that_fails_and_what_can_be_done_about_it():

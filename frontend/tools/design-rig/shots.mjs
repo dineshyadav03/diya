@@ -116,6 +116,59 @@ const SCENARIOS = [
     checks: [
       { name: 'the past messages are shown after trying again', js: `document.querySelectorAll('#log .msg').length === 2` },
       { name: 'the error is gone', js: `!document.querySelector('.empty-state')` },
+      { name: 'the composer is usable again', js: `!document.querySelector('.mock-vchat-input').disabled && /message diya/i.test(document.querySelector('.mock-vchat-input').placeholder)` },
+    ],
+  },
+  // While the saved chat is not on screen (still loading, or it failed) nothing can be sent: a
+  // message sent now would be added to a thread the person can't see.
+  {
+    name: 'chat-resume-failed-blocked', path: '/', stub: { thread: '55', historyMode: 'down', mic: 'ok' },
+    steps: [`await __send("Remind me to call the dentist on Monday", 600)`, `await __micDown(700); await __micUp(300)`],
+    checks: [
+      { name: 'the message box is off and says why', js: `document.querySelector('.mock-vchat-input').disabled && /didn.t load/i.test(document.querySelector('.mock-vchat-input').placeholder)` },
+      { name: 'Send and the microphone are off', js: `document.querySelector('button[aria-label="Send"]').disabled && document.querySelector('button[aria-label="Hold to talk"]').disabled` },
+      { name: 'Send is not shown armed (no metal ring) even with text typed', js: `document.querySelector('button[aria-label="Send"]').parentElement.classList.contains('mock-vchat-actions')` },
+      { name: 'a submit that got through anyway sent nothing', js: `window.__chatCalls === 0 && document.querySelectorAll('#log .msg').length === 0` },
+      { name: 'what was typed is still there, not thrown away', js: `document.querySelector('.mock-vchat-input').value === 'Remind me to call the dentist on Monday'` },
+      { name: 'the microphone did not start recording', js: `!document.querySelector('.mic-status')` },
+      { name: 'the error is still shown, with its way out', js: `!!document.querySelector('.empty-state[role="alert"] button')` },
+    ],
+  },
+  {
+    name: 'chat-resume-loading-blocked', path: '/', stub: { thread: '55', historyMode: 'held' }, steps: [],
+    checks: [
+      { name: 'the message box is off and says the chat is loading', js: `document.querySelector('.mock-vchat-input').disabled && /loading this chat/i.test(document.querySelector('.mock-vchat-input').placeholder)` },
+      { name: 'neither the empty chat nor an error is shown yet', js: `!document.querySelector('.empty-state')` },
+    ],
+  },
+  {
+    name: 'chat-resume-retry-blocked-while-loading', path: '/',
+    stub: { thread: '55', historyMode: 'down', history: [{ role: 'user', content: 'earlier question' }, { role: 'assistant', content: 'earlier answer' }] },
+    steps: [
+      `window.__historyMode = 'held'`,
+      `document.querySelector('.empty-state button').click(); await __wait(500); const i = document.querySelector('.mock-vchat-input'); window.__mid = { off: i.disabled, hint: i.placeholder }`,
+      `window.__releaseHistory(); await __wait(700)`,
+    ],
+    checks: [
+      { name: 'while trying again the composer is off and says the chat is loading', js: `window.__mid.off === true && /loading this chat/i.test(window.__mid.hint)` },
+      { name: 'the past messages are shown once it loads', js: `document.querySelectorAll('#log .msg').length === 2` },
+      { name: 'the composer is usable again', js: `!document.querySelector('.mock-vchat-input').disabled` },
+    ],
+  },
+  {
+    // Starting a new chat while a saved one is still loading: the old load must not land in it.
+    name: 'chat-resume-new-chat-while-loading', path: '/',
+    stub: { thread: '55', historyMode: 'held', history: [{ role: 'user', content: 'earlier question' }, { role: 'assistant', content: 'earlier answer' }] },
+    steps: [
+      `document.querySelector('.mock-vchat-btn--liquid').click(); await __wait(900)`,
+      `document.querySelector('button[aria-label="Confirm new chat"]').click(); await __wait(600)`,
+      `window.__releaseHistory(); await __wait(700)`,
+    ],
+    checks: [
+      { name: 'the old chat did not land in the new one', js: `document.querySelectorAll('#log .msg').length === 0` },
+      { name: 'the ordinary empty chat is showing', js: `/ask diya anything/i.test(document.querySelector('.empty-state h1').textContent)` },
+      { name: 'the composer is usable', js: `!document.querySelector('.mock-vchat-input').disabled` },
+      { name: 'the old thread is forgotten', js: `localStorage.getItem('diya_thread_id') === null` },
     ],
   },
   {
@@ -130,6 +183,7 @@ const SCENARIOS = [
       { name: 'starting a new chat clears the error', js: `!document.querySelector('.empty-state[role="alert"]')` },
       { name: 'the ordinary empty state is back', js: `/ask diya anything/i.test(document.querySelector('.empty-state h1').textContent)` },
       { name: 'the old thread is forgotten', js: `localStorage.getItem('diya_thread_id') === null` },
+      { name: 'the composer is usable again', js: `!document.querySelector('.mock-vchat-input').disabled` },
     ],
   },
   { name: 'history-list', path: '/history', stub: { threads: THREADS }, steps: [] },
@@ -232,7 +286,8 @@ const stubSource = (stub) => `(() => {
   const sc = ${JSON.stringify(stub)};
   window.__chatMode = sc.chat || 'ok';   // ok | pending | down (network error) | 500
   window.__txMode = sc.tx || 'pending';  // pending | down | ok
-  window.__historyMode = sc.historyMode || 'ok';  // ok | down | 401 | 500 -- how loading a saved chat's messages answers
+  window.__historyMode = sc.historyMode || 'ok';  // ok | down | 401 | 500 | held -- how loading a saved chat's messages answers ("held" waits for window.__releaseHistory())
+  window.__chatCalls = 0;  // how many times /api/chat was called: a message that must not be sent must not reach it
   const rf = window.fetch.bind(window);
   const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json' } });
   window.fetch = (url, opts) => {
@@ -244,10 +299,12 @@ const stubSource = (stub) => `(() => {
       if (hm === 'down') return Promise.reject(new TypeError('Failed to fetch'));
       if (hm === '401') return Promise.resolve(refused());
       if (hm === '500') return Promise.resolve(json({ detail: 'Internal Server Error' }, 500));
+      if (hm === 'held') return new Promise((r) => { window.__releaseHistory = () => r(json({ messages: sc.history || [] })); });
       return new Promise((r) => setTimeout(() => r(json({ messages: sc.history || [] })), sc.historyDelay || 0));
     }
     if (u.includes('/api/transcribe')) return window.__txMode === 'down' ? Promise.reject(new TypeError('Failed to fetch')) : window.__txMode === '401' ? Promise.resolve(refused()) : window.__txMode === '500' ? Promise.resolve(json({ detail: 'Internal Server Error' }, 500)) : window.__txMode === 'ok' ? Promise.resolve(json({ text: 'what is on my list today' })) : new Promise(() => {});
     if (u.includes('/api/chat')) {
+      window.__chatCalls++;
       const mode = window.__chatMode;
       if (mode === 'pending') return new Promise(() => {});
       if (mode === 'down') return Promise.reject(new TypeError('Failed to fetch'));

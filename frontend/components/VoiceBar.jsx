@@ -11,11 +11,13 @@ import { describeTranscribeFailure } from '../lib/api-failure.mjs'
 // A plain host element (not a component) because MetalFx measures its child
 // as a DOM host. Shared so the ring-on, ring-off and loading states are the
 // same button.
-const SEND_BUTTON = (
-  <button type="submit" className="mock-vchat-btn" aria-label="Send" suppressHydrationWarning>
-    <span className="mk-ico mk-ico-arrow" />
-  </button>
-)
+function sendButton(disabled = false) {
+  return (
+    <button type="submit" className="mock-vchat-btn" aria-label="Send" disabled={disabled} suppressHydrationWarning>
+      <span className="mk-ico mk-ico-arrow" />
+    </button>
+  )
+}
 
 // WebGL2 support can only be checked client-side (isMetalFxSupported()), so
 // SSR and the client render differently -- a real hydration mismatch, not
@@ -25,7 +27,7 @@ const SEND_BUTTON = (
 // the moment after the first keystroke.
 const MetalFx = dynamic(() => import('metal-fx').then((m) => m.MetalFx), {
   ssr: false,
-  loading: () => SEND_BUTTON,
+  loading: () => sendButton(),
 })
 
 // Authored width of the chat-input mock this bar is ported from
@@ -62,7 +64,12 @@ function useFitScale() {
   return [ref, scale]
 }
 
-export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processing }) {
+// `unavailable` is why nothing can be sent right now ('' when something can): the page is still
+// loading, or failed to load, the saved chat a message would continue. It is shown as the
+// placeholder, and while it is set typing, Send and the microphone are all off -- a message sent
+// into a chat the page hasn't shown would be added to a thread the person can't see. New chat (the
+// menu) stays available: it is the way out.
+export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processing, unavailable = '' }) {
   const [value, setValue] = useState('')
   const [stream, setStream] = useState(null)
   const [recording, setRecording] = useState(false)
@@ -71,10 +78,12 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const [fitRef, fitScale] = useFitScale()
-  // Same test submit() uses, so the ring is lit exactly when Send would send.
-  const hasText = value.trim().length > 0
+  // Same test submit() uses, so the ring is lit exactly when Send would send (and not while nothing
+  // can be sent).
+  const hasText = value.trim().length > 0 && !unavailable
 
   function submit(text) {
+    if (unavailable) return // leave what was typed where it is
     const trimmed = text.trim()
     if (!trimmed) return
     setValue('')
@@ -82,6 +91,7 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
   }
 
   async function startRecording() {
+    if (unavailable) return
     try {
       const mic = await navigator.mediaDevices.getUserMedia({ audio: true })
       audioChunksRef.current = []
@@ -177,7 +187,8 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
               <input
                 className="mock-vchat-input"
                 type="text"
-                placeholder="Message Diya..."
+                placeholder={unavailable || 'Message Diya...'}
+                disabled={!!unavailable}
                 aria-label="Message"
                 autoComplete="off"
                 spellCheck={false}
@@ -255,7 +266,7 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
                     type="button"
                     className={'mock-vchat-btn' + (recording ? ' recording' : '')}
                     aria-label="Hold to talk"
-                    disabled={micDisabled}
+                    disabled={micDisabled || !!unavailable}
                     onPointerDown={startRecording}
                     onPointerUp={stopRecording}
                     onPointerLeave={stopRecording}
@@ -271,10 +282,10 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
                       so no amber is left in the interface for the accent to compete with. */}
                   {hasText ? (
                     <MetalFx variant="circle" preset="silver">
-                      {SEND_BUTTON}
+                      {sendButton(!!unavailable)}
                     </MetalFx>
                   ) : (
-                    SEND_BUTTON
+                    sendButton(!!unavailable)
                   )}
                 </div>
               </div>

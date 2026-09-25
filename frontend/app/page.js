@@ -62,6 +62,13 @@ export default function ChatPage() {
   // Why a saved chat couldn't be opened ('' when it loaded, or none was asked for). It replaces the
   // empty state: an empty chat would say the thread has nothing in it, which is not what happened.
   const [loadProblem, setLoadProblem] = useState('')
+  // True while a saved chat's messages are being fetched (and not for a brand new chat, so nothing
+  // is disabled for a moment on ordinary page loads).
+  const [loadingChat, setLoadingChat] = useState(false)
+  // Which load is the current one. A load that finishes after a newer one started, or after New
+  // chat, is stale and must not touch the page: it would drop the old thread's messages into a chat
+  // that has since been started over.
+  const loadSeqRef = useRef(0)
   // Once revealed, freeze the shader/scheduler rather than let it render
   // forever -- see IMG_FX_ENABLED above for why this alone isn't enough
   // to make it safe by default.
@@ -86,7 +93,10 @@ export default function ChatPage() {
   // be swallowed, leaving an empty chat that looked as if the thread had nothing in it.
   function loadThread(threadId) {
     let status // stays undefined when the request never got an answer at all
+    const seq = ++loadSeqRef.current
+    const stale = () => seq !== loadSeqRef.current
     setLoadProblem('')
+    setLoadingChat(true)
     setReady(false)
     fetch(`/api/history/${threadId}`)
       .then((r) => {
@@ -95,14 +105,21 @@ export default function ChatPage() {
         return r.json()
       })
       .then((data) => {
+        if (stale()) return
         if (!Array.isArray(data.messages)) throw new Error('not a history')
         const loaded = data.messages
           .filter((m) => m.role === 'user' || m.role === 'assistant')
           .map((m) => ({ role: m.role, text: m.content }))
         setMessages(loaded)
       })
-      .catch(() => setLoadProblem(describeLoadFailure(status)))
-      .finally(() => setReady(true))
+      .catch(() => {
+        if (!stale()) setLoadProblem(describeLoadFailure(status))
+      })
+      .finally(() => {
+        if (stale()) return
+        setLoadingChat(false)
+        setReady(true)
+      })
   }
 
   useEffect(() => {
@@ -202,6 +219,9 @@ export default function ChatPage() {
   }
 
   async function handleSend(text) {
+    // The composer is off in these states (see `unavailable`); this is the backstop. A message sent
+    // into a chat that isn't on screen would be added to a thread the person can't see.
+    if (loadingChat || loadProblem) return
     const id = addMsg('user', text)
     await sendMessage(text, id)
   }
@@ -215,7 +235,10 @@ export default function ChatPage() {
     threadIdRef.current = null
     localStorage.removeItem('diya_thread_id')
     window.history.replaceState(null, '', '/')
+    loadSeqRef.current += 1 // whatever load is still in flight is for the chat being left
     setLoadProblem('') // starting over is the way out of a chat that wouldn't open
+    setLoadingChat(false)
+    setReady(true)
     setMessages([])
   }
 
@@ -341,6 +364,13 @@ export default function ChatPage() {
         onSystemMessage={(t) => addMsg('system', t)}
         onNewChat={handleNewChat}
         processing={thinking || speaking}
+        unavailable={
+          loadingChat
+            ? 'Loading this chat…'
+            : loadProblem
+              ? 'This chat didn’t load. Try again, or start a new one.'
+              : ''
+        }
       />
     </div>
   )
