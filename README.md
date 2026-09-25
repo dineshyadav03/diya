@@ -45,11 +45,13 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Hold-to-talk voice input through local Whisper, and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
 - Facts it extracts wait in a review queue; nothing enters your profile automatically.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 1134 tests pass on Windows (as of 2026-09-25).
+  `python diya_review.py list` shows them, and `accept`, `reject` and `edit` decide (see [Dreaming](docs/dreaming.md)).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 1179 tests pass on Windows (as of 2026-09-25).
 
 ## Known limits
 
-- Staged facts are not reviewed or promoted yet, so they never reach the model.
+- Reviewed facts are not given to the model yet: `diya_review.py` works, but the switch that makes the model
+  read accepted facts (Stage 2, unit 5) is not built, so the model still reads only `user_profile.txt`.
 - `web_search` is not covered by the outbound-host allowlist that limits `get_weather` to Open-Meteo (`DIYA_TOOL_ALLOWED_HOSTS`).
 - Models are pulled by tag, not pinned; the 3B model sometimes calls tools it should not.
 
@@ -69,6 +71,7 @@ browser -> Next.js UI (:3000, HTTPS): its /api/* routes forward to the API, hold
                   |- diya_db.py -> SQLite diya.db (threads, messages, reminders)
                   '- faster-whisper (base)
 dreaming.py (run separately) reads diya.db -> dream_pending.jsonl
+diya_review.py (run by hand) reads dream_pending.jsonl -> reviewed facts in diya.db (not yet read by the model)
 ```
 
 `sample_notes/` holds fictional demo notes, embedded into an in-memory Chroma index at each start.

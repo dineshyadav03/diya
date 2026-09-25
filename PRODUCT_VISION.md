@@ -75,8 +75,11 @@ agent, the database, the notes index and the Whisper model are created on first 
 4. **Profile.** `user_profile.txt`, if it exists, is given to the model in every thread. In `staged`
    mode Dreaming never writes it. `DIYA_DREAM_PROFILE_MODE=direct` appends unreviewed facts straight
    to it and is kept only as an explicit compatibility option.
-5. **Promotion: not built.** Nothing reads the staged queue yet, so staged facts do not reach the
-   model. Reviewing and promoting them is the next memory feature.
+5. **Review and promotion: half built.** `diya_review.py` (Stage 2, units 1 to 4) copies staged facts
+   into `diya.db` as candidates, checks each against the messages it came from, and lets you accept,
+   reject, edit, retire or restore them, with every change recorded. **Accepted facts do not reach the
+   model yet:** until the switch (unit 5) the model is still given `user_profile.txt` and nothing else.
+   Design: `docs/STAGE2_DESIGN.md`.
 
 **Two scheduled jobs, not one.** Dreaming (`dreaming.py`) reads the database, writes the staged queue,
 and runs every 30 minutes in the reference deployment. The notes watcher (`milestone4_watcher.py`,

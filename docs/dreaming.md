@@ -36,8 +36,31 @@ the model is unreachable, the pass logs it and retries next time.
 | `staged` (default) | Facts go to `dream_pending.jsonl`. `user_profile.txt` is never written. |
 | `direct` | Facts are appended to `user_profile.txt` with no review. Kept as an explicit compatibility option. |
 
-If `user_profile.txt` exists, its text is given to the model in every thread. **Nothing reads the
-staged queue yet**, so staged facts do not reach the model; the review-and-promote step is not built.
+If `user_profile.txt` exists, its text is given to the model in every thread. **Staged facts do not
+reach the model**, and neither yet do reviewed ones: the review tool below records your decisions in
+`diya.db`, but the switch that makes the model read accepted facts is not built (Stage 2, unit 5;
+[design](STAGE2_DESIGN.md)). Until then the model reads `user_profile.txt` and nothing else.
+
+## Reviewing staged facts
+
+```bash
+python diya_review.py ingest          # copy newly staged facts in as candidates, and check them
+python diya_review.py list            # the candidates; `list accepted`, `list all` show the rest
+python diya_review.py show 3          # one fact: its flags, the messages it came from, its history
+python diya_review.py accept 3        # ...or reject 3, edit 3 reworded text, retire 3, restore 3, reopen 3
+python diya_review.py add likes tea   # a fact you type yourself goes in already accepted
+python diya_review.py export          # the accepted facts, in the user_profile.txt format
+python diya_review.py import-profile  # take the existing user_profile.txt in (the file is never changed)
+python diya_review.py verify          # check the store is consistent
+```
+
+It needs no model and no network. Each candidate is checked, by plain code, against the messages it was
+extracted from: `ungrounded` (few of its words appear in them), `duplicate` or `similar` to another fact,
+`previously_rejected`, `instruction_shaped` (it talks to the assistant or gives an order rather than stating
+something about you). These are hints beside the fact, never decisions: only you accept. A fact is limited
+to 200 characters and the accepted facts to 2,000 in total, so what the model is eventually given stays
+small; retire a fact to make room. Nothing is ever deleted: every change is recorded in `fact_events`, and
+everything the tool prints from the database has its control and invisible characters shown as escapes.
 
 ## Files and settings
 

@@ -1,7 +1,8 @@
 # Stage 2: Trustworthy memory (review and promote) -- design spec
 
 > **Status (2026-09-25):** designed; being built unit by unit. **Built: U1 (storage), U2 (ingest and
-> legacy import), U3 (deterministic checks).** The "today" statements in sections 1-2 describe the code before Stage 2 (as of
+> legacy import), U3 (deterministic checks), U4 (review
+> command line).** The "today" statements in sections 1-2 describe the code before Stage 2 (as of
 > `8c8231a`); the `file:line`
 > references into `diya_db.py` are current, the others are as of that commit. Two things the first
 > draft reported were fixed before any Stage 2 unit: the migration-runner race (`43dcb76`, see
@@ -298,6 +299,15 @@ best-matching message (a computed guess, labelled as one).
   Stage 1 used for the token. Commands: `ingest`, `list`, `show <id>` (the fact, its flags and the
   source user messages), `accept`, `reject`, `edit`, `retire`, `restore`, `add`, `export`,
   `import-profile`. Commands, not prompts, so tests can drive them. No model and no network.
+*As built (U4):* `diya_review.py` has the commands listed here plus `reopen` and `verify` (integrity), with
+`ingest` also running the checks and every decision, edit and typed fact re-running them, since the flags
+depend on the other facts. Everything it prints from the database goes through one function that turns
+control, invisible and direction-changing characters into visible escapes; a line break in a message
+becomes a space. Its output is UTF-8 with LF line endings even on Windows, so `export > user_profile.txt`
+is a valid profile (the first real-data run found it writing CRLF). Two bugs the tests found on the way
+were fixed in the units below it: an edited candidate kept its stale `too_long` flag, so cleaning's flags
+are now recomputed from the current text on every check.
+
 - **The UI is the eventual home** (the daily surface is the browser), so U6 is planned, not
   optional. What it adds: `GET /api/memory` and `POST /api/memory/<id>/<action>`; same-origin routes
   in `frontend/app/api/memory/`; a page at `frontend/app/memory/`. **Only GET and POST**: CORS allows
