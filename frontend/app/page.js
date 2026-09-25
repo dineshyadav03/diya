@@ -5,6 +5,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { ThinkingOrb } from 'thinking-orbs'
 import VoiceBar from '../components/VoiceBar'
+import { describeSendFailure } from '../lib/send-failure.mjs'
 
 // Every /api/... call below is same-origin: this app's own route handlers (app/api) forward it to
 // the Python API and attach the access token on the server. The browser never holds the token.
@@ -154,17 +155,20 @@ export default function ChatPage() {
     setThinking(true)
     try {
       let data
+      let status // stays undefined when the request never got an answer at all
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ thread_id: threadIdRef.current, message: text }),
         })
+        status = res.status
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         data = await res.json()
         if (typeof data.answer !== 'string') throw new Error('not a reply')
       } catch {
-        setFailed(id, true)
+        // the reason is stored on the message (a string, so still truthy) and shown as its error text
+        setFailed(id, describeSendFailure(status))
         return
       }
       setFailed(id, false)
@@ -288,7 +292,7 @@ export default function ChatPage() {
                   <span className="send-error-icon" aria-hidden="true">
                     !
                   </span>
-                  <span>Didn&rsquo;t send. Diya&rsquo;s server didn&rsquo;t answer.</span>
+                  <span>{m.failed}</span>
                   <button type="button" className="cta small" onClick={() => retrySend(m.id, m.text)}>
                     Try again
                   </button>

@@ -46,7 +46,9 @@ request with a forged `Host`, changes nothing about where the forwarded request 
   POSIX: `export DIYA_TOKEN=<token>`), or on a line `DIYA_TOKEN=<token>` in `frontend/.env.local`
   (gitignored). Only a hash is kept, so a lost token can't be shown again: start the API once with
   `--rotate-token` (or `DIYA_ROTATE_TOKEN=1`, removed again afterwards) and use the new one. Without
-  `DIYA_TOKEN` the API's 401 comes straight through and `npm run dev` says so at startup. Only the
+  `DIYA_TOKEN` (or with a wrong one) the API's 401 comes straight through, `npm run dev` says so at
+  startup, and a message sent in the chat says the access token the UI sends is missing or wrong,
+  rather than that the server didn't answer (which is what it says when nothing is listening). Only the
   content type and that token are taken from the browser's request; its cookies, `Authorization`
   and everything else are dropped. The token is only sent over https, or to this computer itself.
 - **Settings.** `DIYA_PORT` (the API's port; the UI server follows it, so a non-default port now

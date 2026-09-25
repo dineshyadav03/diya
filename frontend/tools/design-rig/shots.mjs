@@ -89,13 +89,29 @@ const SCENARIOS = [
   {
     name: 'chat-send-failed', path: '/', stub: { replies: CONVO },
     steps: [`await __send("What did I say about my dentist?")`, `window.__chatMode = 'down'`, `await __send("Remind me to call the dentist on Monday")`],
-    checks: [...FAIL_CHECKS, { name: 'the earlier successful exchange is untouched', js: `document.querySelectorAll('.msg.assistant:not(.thinking-row)').length === 1` }],
+    checks: [
+      ...FAIL_CHECKS,
+      { name: 'the earlier successful exchange is untouched', js: `document.querySelectorAll('.msg.assistant:not(.thinking-row)').length === 1` },
+      { name: 'a request that got no answer says the server did not answer', js: `/didn.t answer/i.test(document.querySelector('.send-error').textContent)` },
+    ],
+  },
+  {
+    // The API refuses the access token the UI sends (missing or wrong): that is not "the server
+    // didn't answer", and used to be reported as if it were.
+    name: 'chat-send-failed-401', path: '/', stub: {},
+    steps: [`window.__chatMode = '401'`, `await __send("Remind me to call the dentist on Monday")`],
+    checks: [
+      ...FAIL_CHECKS,
+      { name: 'it says the access token is the problem', js: `/access token/i.test(document.querySelector('.send-error').textContent)` },
+      { name: 'it does not claim the server did not answer', js: `!/didn.t answer/i.test(document.querySelector('.send-error').textContent)` },
+    ],
   },
   {
     name: 'chat-send-failed-500', path: '/', stub: {},
     steps: [`window.__chatMode = '500'`, `await __send("Remind me to call the dentist on Monday")`],
     checks: [
       ...FAIL_CHECKS,
+      { name: 'an error status is reported as an error, with its number', js: `/HTTP 500/.test(document.querySelector('.send-error').textContent)` },
       { name: 'no empty assistant bubble is shown', js: `!Array.from(document.querySelectorAll('.msg.assistant:not(.thinking-row)')).some((m) => !m.textContent.trim())` },
       { name: 'the saved thread id is not corrupted ("undefined")', js: `localStorage.getItem('diya_thread_id') !== 'undefined'` },
     ],
@@ -150,6 +166,7 @@ const stubSource = (stub) => `(() => {
       if (mode === 'pending') return new Promise(() => {});
       if (mode === 'down') return Promise.reject(new TypeError('Failed to fetch'));
       if (mode === '500') return Promise.resolve(json({ detail: 'Internal Server Error' }, 500));
+      if (mode === '401') return Promise.resolve(new Response('Missing or invalid access token', { status: 401, headers: { 'Content-Type': 'text/plain' } }));
       const msg = JSON.parse(opts.body).message;
       return Promise.resolve(json({ thread_id: 7, ...((sc.replies || {})[msg] || { answer: 'OK', tools_called: [] }) }));
     }

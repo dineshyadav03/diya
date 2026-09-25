@@ -388,20 +388,23 @@ def test_a_whole_number_thread_id_is_forwarded(thread_id):
 # --- the browser side holds no token and no direct address ---------------------------------------
 
 def browser_files():
-    """Every source file shipped to the browser: the pages and components, but not app/api, which
-    is the server-side half."""
+    """Every source file shipped to the browser: the pages and components, and the shared helpers
+    in lib/ they import -- but not app/api or lib/proxy.mjs, which are the server-side half."""
     server_side = FRONTEND / "app" / "api"
-    return [
+    files = [
         path
         for folder in ("app", "components")
         for path in (FRONTEND / folder).rglob("*")
         if path.suffix in (".js", ".jsx") and server_side not in path.parents
     ]
+    files += [p for p in (FRONTEND / "lib").iterdir() if p.suffix in (".js", ".jsx", ".mjs") and p.name != "proxy.mjs"]
+    return files
 
 
 def test_browser_code_never_mentions_the_token_the_api_port_or_the_proxy_module():
     files = browser_files()
-    assert {p.name for p in files} >= {"page.js", "VoiceBar.jsx", "layout.js"}
+    assert {p.name for p in files} >= {"page.js", "VoiceBar.jsx", "layout.js", "send-failure.mjs"}
+    assert "proxy.mjs" not in {p.name for p in files}  # the server-side half is exactly what this must exclude
     for path in files:
         source = path.read_text(encoding="utf-8")
         for forbidden in ("Authorization", "authorization", "DIYA_TOKEN", "NEXT_PUBLIC", "8080", "apiBase", "proxy.mjs", "Bearer"):
