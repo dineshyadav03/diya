@@ -279,6 +279,9 @@ export default function ChatPage() {
           <Link className="icon-btn" href="/history" style={{ textDecoration: 'none' }}>
             History
           </Link>
+          <Link className="icon-btn nav-wide" href="/memory" style={{ textDecoration: 'none' }}>
+            Memory
+          </Link>
           <button
             className="icon-btn"
             onClick={() => speak('This is a test of the voice output.', { force: true })}

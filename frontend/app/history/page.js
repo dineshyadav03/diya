@@ -33,6 +33,9 @@ export default function HistoryPage() {
           Diya
         </div>
         <div className="controls">
+          <Link className="icon-btn" href="/memory">
+            Memory
+          </Link>
           <Link className="icon-btn" href="/">
             &larr; Back to chat
           </Link>

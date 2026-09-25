@@ -367,3 +367,58 @@ header input[type="checkbox"] { accent-color: var(--accent); width: 15px; height
 }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .thread-skeleton { animation: none; } }
+
+/* ── Memory: what Diya knows, and what is waiting for a decision ─────────────
+   The same surfaces and hairlines as History; the only colour that is not oat or cream is the danger red,
+   used for a fact the checks doubt and for the "forget" and "reject" buttons. */
+.memory-page .history-inner > h1 { margin-bottom: 8px; }
+.memory-lede { margin: 0 0 14px; color: var(--text-dim); font-size: 14.5px; line-height: 1.45; }
+.memory-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 14px; font-size: 13px; color: var(--text-dim); }
+.memory-meter { flex: 1 1 120px; min-width: 100px; height: 6px; border-radius: 3px; background: var(--elev-2); overflow: hidden; }
+.memory-meter > div { height: 100%; background: var(--accent); border-radius: 3px; }
+.memory-page h2 { margin: 22px 0 8px; font-size: 16px; font-weight: 600; }
+.memory-page h3 { margin: 10px 0 4px; font-size: 12.5px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.memory-dim { margin: 0; color: var(--text-dim); font-size: 13.5px; line-height: 1.45; }
+.memory-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.memory-fact { padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--elev-1); }
+.memory-fact[data-status="candidate"] { border-color: var(--accent); }
+.memory-text { margin: 0; font-size: 15.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.memory-flags { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.memory-flag { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--danger); font-size: 12px; color: var(--danger-text); }
+.memory-flag--source { border-color: var(--border); color: var(--text-dim); }
+.memory-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.memory-btn {
+  min-height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--elev-1); color: var(--text); font: inherit; font-size: 13.5px; cursor: pointer;
+  transition: background 0.15s ease, filter 0.15s ease;
+}
+.memory-btn:hover:not(:disabled) { background: var(--elev-2); }
+.memory-btn:disabled { opacity: 0.5; cursor: default; }
+.memory-btn:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.memory-btn--primary { background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 600; }
+.memory-btn--primary:hover:not(:disabled) { background: var(--accent); filter: brightness(0.95); }
+.memory-btn--danger { color: var(--danger-text); border-color: var(--danger); background: transparent; }
+.memory-btn--quiet { border-color: transparent; background: transparent; color: var(--text-dim); }
+@media (pointer: coarse) { .memory-btn { min-height: 40px; } }
+.memory-input {
+  flex: 1 1 200px; min-height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--elev-1); color: var(--text); font: inherit; font-size: 14.5px;
+}
+.memory-input:focus-visible { outline: var(--focus); outline-offset: 1px; }
+.memory-edit, .memory-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.memory-add { margin-top: 12px; }
+.memory-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.memory-notice, .memory-error { margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.4; }
+.memory-notice { background: var(--elev-1); border: 1px solid var(--border); }
+.memory-error { border: 1.5px dashed var(--danger); color: var(--danger-text); }
+.memory-why { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 13.5px; line-height: 1.45; }
+.memory-why ul { margin: 4px 0; padding-left: 18px; }
+.memory-why code { font-size: 12.5px; overflow-wrap: anywhere; }
+.memory-history { color: var(--text-dim); font-size: 12.5px; }
+.memory-page details { margin-top: 8px; }
+.memory-page summary { cursor: pointer; color: var(--text-dim); font-size: 14px; padding: 6px 0; }
+.memory-page details .memory-list { margin-top: 6px; }
+/* The chat header has no slack on a phone (see .ambient-orb), so its Memory link only shows where there is
+   room; History always links to Memory. */
+header .icon-btn.nav-wide { display: none; }
+@media (min-width: 421px) { header .icon-btn.nav-wide { display: inline-flex; } }

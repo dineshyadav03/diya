@@ -67,7 +67,7 @@ def test_no_route_answers_to_a_foreign_host_including_the_docs(tmp_path):
     paths = {route.path for route in app.routes}
     assert {"/docs", "/openapi.json", "/api/threads", "/api/chat", "/api/transcribe"} <= paths
     for path in sorted(paths):
-        concrete = path.replace("{thread_id}", "1")
+        concrete = path.replace("{thread_id}", "1").replace("{fact_id}", "1").replace("{action}", "accept")
         for method in ("GET", "POST", "OPTIONS"):
             response = client.request(method, concrete, headers={"Host": "evil.example"})
             assert response.status_code == 400, (method, path)

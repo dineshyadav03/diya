@@ -27,74 +27,10 @@ import sys
 import diya_config
 import diya_memory
 from diya_db import Store
-from diya_memory import STATUSES, FactError, Memory, SourceUnreadable, normalise_fact
+from diya_memory import STATUSES, FactError, Memory, SourceUnreadable, flag_long, flag_short, normalise_fact, printable
 
 EXIT_OK, EXIT_REFUSED, EXIT_USAGE = 0, 1, 2
 SOURCE_CHARS = 300  # how much of a source message is shown
-
-
-def printable(text, limit=None):
-    """`text` as one line that is safe to print: whitespace of every kind becomes a single space, and
-    every control, invisible or direction-changing character is shown as a visible escape (a backslash,
-    u and four hex digits) instead of being sent to the terminal. Cut to `limit` characters, with an
-    ellipsis, if given."""
-    text = " ".join(str(text).split())
-    if limit is not None and len(text) > limit:
-        text = text[:limit].rstrip() + "..."
-    out = []
-    for char in text:
-        if diya_memory._unwanted(char):
-            code = ord(char)
-            out.append(chr(92) + ("u" + format(code, "04x") if code <= 0xFFFF else "U" + format(code, "08x")))
-        else:
-            out.append(char)
-    return "".join(out)
-
-
-_FLAG_SHORT = {
-    "ungrounded": "ungrounded",
-    "instruction_shaped": "looks like an instruction",
-    "no_source": "its source messages are gone",
-    "preamble": "looks like an introduction, not a fact",
-    "too_long": "too long to accept as it is",
-}
-
-
-def _flag_short(flag):
-    name, _, arg = flag.partition(":")
-    if name == "source_message":
-        return f"source message {printable(arg)}"
-    if name == "duplicate":
-        return f"same as fact {printable(arg)}"
-    if name == "similar":
-        return f"similar to fact {printable(arg)}"
-    if name == "previously_rejected":
-        return f"rejected before as fact {printable(arg)}"
-    return _FLAG_SHORT.get(name) or printable(flag)
-
-
-def _flag_long(memory, flag):
-    name, _, arg = flag.partition(":")
-    detail = {
-        "ungrounded": "few of its words appear in the messages it was extracted from",
-        "instruction_shaped": "it talks to the assistant or gives an order, rather than stating something about you",
-        "no_source": "none of the messages it was extracted from are in the database any more",
-        "preamble": "it reads like the model introducing its list",
-        "too_long": f"it is over {diya_memory.MAX_FACT_CHARS} characters; edit it shorter before accepting",
-    }
-    if name in detail:
-        return f"{name}: {detail[name]}"
-    if name == "source_message":
-        return f"source_message: the message it best matches is {printable(arg)}"
-    if name in ("duplicate", "similar", "previously_rejected"):
-        verb = {"duplicate": "says the same as", "similar": "shares most of its words with",
-                "previously_rejected": "is the same as one you rejected,"}[name]
-        try:
-            other = memory.get(int(arg))
-            return f"{name}: {verb} fact {arg} ({other['status']}): {printable(other['text'], 120)}"
-        except (ValueError, FactError):
-            return f"{name}: {verb} fact {printable(arg)}"
-    return printable(flag)
 
 
 def _usage_line(memory):
@@ -131,7 +67,7 @@ def cmd_list(memory, config, args, out):
     for fact in facts:
         print(f"{fact['id']:>4}  {fact['status']:<9}  {printable(fact['text'])}", file=out)
         if fact["flags"]:
-            print(f"      flags: {', '.join(_flag_short(f) for f in fact['flags'])}", file=out)
+            print(f"      flags: {', '.join(flag_short(f) for f in fact['flags'])}", file=out)
     return EXIT_OK
 
 
@@ -144,7 +80,7 @@ def cmd_show(memory, config, args, out):
     if fact["model"] is not None:
         print(f"  by:      {printable(fact['model'])}, staged {printable(fact['extracted_at'])}", file=out)
     for flag in fact["flags"]:
-        print(f"  flag:    {_flag_long(memory, flag)}", file=out)
+        print(f"  flag:    {flag_long(memory, flag)}", file=out)
     if fact["batch_first"] is not None:
         shown = [m for m in memory.store.get_messages_between(fact["batch_first"], fact["batch_last"]) if m["role"] == "user"]
         print(f"  extracted from your messages {fact['batch_first']} to {fact['batch_last']} (the ones the model was shown):", file=out)

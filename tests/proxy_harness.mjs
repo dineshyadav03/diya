@@ -25,6 +25,11 @@ const ROUTES = {
   threads: join(root, 'frontend', 'app', 'api', 'threads', 'route.js'),
   transcribe: join(root, 'frontend', 'app', 'api', 'transcribe', 'route.js'),
   history: join(root, 'frontend', 'app', 'api', 'history', '[thread_id]', 'route.js'),
+  memory: join(root, 'frontend', 'app', 'api', 'memory', 'route.js'),
+  memoryAdd: join(root, 'frontend', 'app', 'api', 'memory', 'add', 'route.js'),
+  memoryIngest: join(root, 'frontend', 'app', 'api', 'memory', 'ingest', 'route.js'),
+  memoryFact: join(root, 'frontend', 'app', 'api', 'memory', '[fact_id]', 'route.js'),
+  memoryAction: join(root, 'frontend', 'app', 'api', 'memory', '[fact_id]', '[action]', 'route.js'),
 }
 
 async function loadRoute(name) {

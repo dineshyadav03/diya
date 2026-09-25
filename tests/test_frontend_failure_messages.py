@@ -302,3 +302,105 @@ def test_the_design_rig_covers_each_kind_of_failure_in_each_place():
         assert f"name: '{scenario}'" in rig, scenario
     assert "mode === '401'" in rig and "sc.threads === '401'" in rig and "__txMode === '401'" in rig
     assert "/access token/i" in rig and "/HTTP 500/" in rig and "/didn.t answer/i" in rig and "/couldn.t reach diya.s server/i" in rig
+
+
+# --- the memory page (docs/STAGE2_DESIGN.md, unit 6) ------------------------------------------------
+
+MEMORY = FRONTEND / "app" / "memory" / "page.js"
+CODE_ACTION = (
+    "import { pathToFileURL } from 'node:url'\n"
+    "const m = await import(pathToFileURL(process.argv[1]).href)\n"
+    "const cases = JSON.parse(process.argv[2])\n"
+    "process.stdout.write(JSON.stringify(cases.map(([s, d]) => m.describeActionFailure(s === null ? undefined : s, d))))\n"
+)
+
+
+def describe_action(*cases):
+    """describeActionFailure(status, detail) for each (status, detail); status None means no answer."""
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", CODE_ACTION, str(MODULE), json.dumps([list(c) for c in cases])],
+        capture_output=True, text=True, encoding="utf-8", timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+ACTION_UNANSWERED = "Diya’s server didn’t answer, so nothing was changed. Check that it’s running, then try again."
+
+
+@needs_node
+@pytest.mark.parametrize("status", [None, 502, 503, 504, 404.5])
+def test_an_action_nobody_answered_says_nothing_was_changed(status):
+    assert describe_action((status, None), (status, "a reason that must not matter")) == [ACTION_UNANSWERED] * 2
+
+
+@needs_node
+def test_an_action_the_api_refused_the_token_for_points_at_the_token_not_at_the_server():
+    (text,) = describe_action((401, "ignored"))
+    assert text == f"Diya’s server refused it, so nothing was changed: {REFUSED}."
+    assert "didn’t answer" not in text
+
+
+@needs_node
+@pytest.mark.parametrize("status", [200, 201, 299])
+def test_an_action_whose_reply_could_not_be_read_says_to_refresh(status):
+    (text,) = describe_action((status, None))
+    assert text == "Diya’s server sent back something this page couldn’t read. Refresh to see what it did."
+
+
+@needs_node
+def test_a_refusal_with_a_reason_shows_the_reason_in_the_apis_own_words():
+    texts = describe_action(
+        (409, "fact 1 is accepted; only a candidate fact can be accepted"),
+        (409, "memory is full: 1990 of 2000 characters are used and this fact needs 25 more. Retire a fact first."),
+        (422, "  a fact cannot be empty  "),
+        (404, "there is no fact 99"),
+        (500, "could not read the staged queue"),
+    )
+    assert texts == [
+        "Not done: fact 1 is accepted; only a candidate fact can be accepted.",
+        "Not done: memory is full: 1990 of 2000 characters are used and this fact needs 25 more. Retire a fact first.",  # no doubled full stop
+        "Not done: a fact cannot be empty.",
+        "Not done: there is no fact 99.",
+        "Not done: could not read the staged queue.",
+    ]
+
+
+@needs_node
+def test_markup_in_a_reason_stays_text_for_the_page_to_render_as_text():
+    (text,) = describe_action((409, "<img src=x onerror=alert(1)>"))
+    assert text == "Not done: <img src=x onerror=alert(1)>."  # the page renders it as a text node, never as markup
+
+
+@needs_node
+@pytest.mark.parametrize("detail", [None, "", "   ", [{"loc": ["body", "text"], "msg": "field required"}], {"a": 1}, 5, True])
+@pytest.mark.parametrize("status", [404, 409, 422, 500])
+def test_a_refusal_with_no_usable_reason_reports_the_error_number(status, detail):
+    (text,) = describe_action((status, detail))
+    assert text == f"Diya’s server answered with an error (HTTP {status}), so nothing was changed."
+
+
+def test_the_memory_page_uses_the_shared_messages_and_keeps_no_fixed_sentence_of_its_own():
+    source = MEMORY.read_text(encoding="utf-8")
+    assert "from '../../lib/api-failure.mjs'" in source
+    assert "describeLoadFailure(" in source and "describeActionFailure(" in source
+    for fixed in ("didn&rsquo;t answer", "didn't answer", "didn’t answer", "Couldn't reach Diya", "Didn&rsquo;t send", "Didn't send"):
+        assert fixed not in source, fixed
+
+
+def test_the_memory_page_only_ever_renders_what_it_is_given_as_text():
+    source = MEMORY.read_text(encoding="utf-8")
+    for markup_sink in ("dangerouslySetInnerHTML", "innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval("):
+        assert markup_sink not in source, markup_sink
+
+
+def test_the_memory_page_changes_things_only_with_posts_to_its_own_api_paths_and_never_builds_a_url_from_typed_text():
+    source = MEMORY.read_text(encoding="utf-8")
+    assert source.count("method: 'POST'") == 4  # decide, edit, add, ingest
+    for other in ("method: 'PUT'", "method: 'DELETE'", "method: 'PATCH'", 'method: "'):
+        assert other not in source, other
+    targets = re.findall(r"fetch\(\s*([`'\"])(.*?)\1", source)
+    assert len(targets) == 6  # the list, one fact's detail, and the four changes
+    for _quote, target in targets:
+        assert target.startswith("/api/memory"), target
+        assert "typed" not in target and "text" not in target and "editing" not in target, target  # ids and actions only

@@ -27,7 +27,7 @@ describes a commercial local-first assistant. Diya is a one-person project; the 
 | Tools | Six, in `diya.py`: `search_notes`, `web_search`, `get_weather`, `add_reminder`, `list_reminders`, `list_files`. Loop capped at 8 rounds; network tools time out after 5 s. `list_files` only lists inside `DIYA_FILES_ROOTS` (default `Documents/Diya`); `get_weather` only reaches the hosts in `DIYA_TOOL_ALLOWED_HOSTS` (default: the two Open-Meteo hosts). No MCP app store. |
 | Conversations | Done. Threads and messages in SQLite, a history page, reopening a thread. Not built: renaming, search. |
 | Notes memory | Partial. `search_notes` searches `sample_notes/` (or `DIYA_NOTES_DIR`) through an in-memory Chroma index rebuilt at each start. No ingestion beyond that folder. |
-| Long-term memory | Done for the loop, at small scale: Dreaming stages candidate facts, `diya_review.py` reviews them, and the model is told the accepted ones (see below). Not built: reviewing in the browser, a model verifier, finding facts by relevance. |
+| Long-term memory | Done for the loop, at small scale: Dreaming stages candidate facts, `diya_review.py` reviews them, and the model is told the accepted ones (see below). Reviewed on the command line or on the UI's Memory page. Not built: a model verifier, finding facts by relevance. |
 | Proactivity | Dreaming runs on a schedule. The notes watcher is a Phase 1 script and is not connected to the assistant. |
 | Client | Done for the web. A Next.js UI with chat, history, hold-to-talk voice input and optional spoken replies. No native apps. |
 | Self-authored tools | Not built. |
@@ -77,9 +77,9 @@ agent, the database, the notes index and the Whisper model are created on first 
    reject, edit, retire or restore them. Nothing Dreaming writes is read by the model.
 5. **What the model is told.** The **accepted** facts, as one system message in every thread, at most
    2,000 characters. The old `user_profile.txt` was imported once as accepted facts and is no longer
-   read; the `direct` mode that appended unreviewed facts to it was retired. Built: Stage 2 units 1 to 5
-   (`docs/STAGE2_DESIGN.md`). Not built: reviewing in the browser (unit 6), an optional advisory model
-   verifier (unit 7).
+   read; the `direct` mode that appended unreviewed facts to it was retired. Built: Stage 2 units 1 to 6
+   (`docs/STAGE2_DESIGN.md`), so the same review is on the UI's Memory page. Not built: an optional
+   advisory model verifier (unit 7).
 
 **Two scheduled jobs, not one.** Dreaming (`dreaming.py`) reads the database, writes the staged queue,
 and runs every 30 minutes in the reference deployment. The notes watcher (`milestone4_watcher.py`,
@@ -153,5 +153,6 @@ to `dream_log.txt` and `watcher_log.txt`.
 ## Next
 
 Stage 0 (`ROADMAP.md`): model pinning (blocked on Ollama's own tooling); the rest of the Stage 1
-trust design is built, and so is the review and promotion step for staged facts up to the switch. Next:
-reviewing in the browser (Stage 2 unit 6). The stage list is in the roadmap.
+trust design is built, and so is the review and promotion step for staged facts, on the command line and
+in the UI. Next: the optional advisory model verifier (Stage 2 unit 7), then the later stages. The stage
+list is in the roadmap.

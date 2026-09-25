@@ -643,3 +643,73 @@ def profile_lines_not_in_memory(memory, config):
         if fact is not None and text_key(fact.text) not in known:
             missing += 1
     return missing
+
+
+# ---- showing facts to a person (the command line and the web UI share these) ---------------------
+
+
+def printable(text, limit=None):
+    """`text` as one line that is safe to show: whitespace of every kind becomes a single space, and
+    every control, invisible or direction-changing character is shown as a visible escape (a backslash,
+    u and four hex digits) instead of being passed on. Cut to `limit` characters, with an ellipsis, if
+    given. Everything read back from the database that a person is shown goes through this: it is model
+    output, or something someone typed or pasted, and it must not be able to rewrite what a screen says."""
+    text = " ".join(str(text).split())
+    if limit is not None and len(text) > limit:
+        text = text[:limit].rstrip() + "..."
+    out = []
+    for char in text:
+        if _unwanted(char):
+            code = ord(char)
+            out.append(chr(92) + ("u" + format(code, "04x") if code <= 0xFFFF else "U" + format(code, "08x")))
+        else:
+            out.append(char)
+    return "".join(out)
+
+
+_FLAG_SHORT = {
+    "ungrounded": "ungrounded",
+    "instruction_shaped": "looks like an instruction",
+    "no_source": "its source messages are gone",
+    "preamble": "looks like an introduction, not a fact",
+    "too_long": "too long to accept as it is",
+}
+
+
+def flag_short(flag):
+    """A flag in a few words, for a list."""
+    name, _, arg = flag.partition(":")
+    if name == "source_message":
+        return f"source message {printable(arg)}"
+    if name == "duplicate":
+        return f"same as fact {printable(arg)}"
+    if name == "similar":
+        return f"similar to fact {printable(arg)}"
+    if name == "previously_rejected":
+        return f"rejected before as fact {printable(arg)}"
+    return _FLAG_SHORT.get(name) or printable(flag)
+
+
+def flag_long(memory, flag):
+    """A flag in a sentence, for one fact's detail; names the other fact when the flag points at one."""
+    name, _, arg = flag.partition(":")
+    detail = {
+        "ungrounded": "few of its words appear in the messages it was extracted from",
+        "instruction_shaped": "it talks to the assistant or gives an order, rather than stating something about you",
+        "no_source": "none of the messages it was extracted from are in the database any more",
+        "preamble": "it reads like the model introducing its list",
+        "too_long": f"it is over {MAX_FACT_CHARS} characters; edit it shorter before accepting",
+    }
+    if name in detail:
+        return f"{name}: {detail[name]}"
+    if name == "source_message":
+        return f"source_message: the message it best matches is {printable(arg)}"
+    if name in ("duplicate", "similar", "previously_rejected"):
+        verb = {"duplicate": "says the same as", "similar": "shares most of its words with",
+                "previously_rejected": "is the same as one you rejected,"}[name]
+        try:
+            other = memory.get(int(arg))
+            return f"{name}: {verb} fact {arg} ({other['status']}): {printable(other['text'], 120)}"
+        except (ValueError, FactError):
+            return f"{name}: {verb} fact {printable(arg)}"
+    return printable(flag)

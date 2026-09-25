@@ -415,7 +415,10 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
     targets = []
     for path in browser_files():
         targets += [m.group(2) for m in re.finditer(r"fetch\(\s*([`'\"])(.*?)\1", path.read_text(encoding="utf-8"))]
-    assert sorted(targets) == sorted(["/api/history/${threadId}", "/api/chat", "/api/threads", "/api/transcribe"])
+    assert sorted(targets) == sorted([
+        "/api/history/${threadId}", "/api/chat", "/api/threads", "/api/transcribe",
+        "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
+    ])
     assert not [p for p in browser_files() if re.search(r"fetch\(\s*[^`'\"\s]", p.read_text(encoding="utf-8"))]  # no computed URLs
 
 
@@ -451,10 +454,109 @@ def proxy_route_files():
 
 def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_path):
     routes, proxies = api_routes(tmp_path), proxy_route_files()
-    assert set(routes) == {"/api/threads", "/api/history/{thread_id}", "/api/chat", "/api/transcribe"}
+    assert set(routes) == {
+        "/api/threads", "/api/history/{thread_id}", "/api/chat", "/api/transcribe",
+        "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/{fact_id}/{action}",
+    }
     assert set(proxies) == set(routes), "an API route with no proxy route (or the reverse)"
     for path, methods in routes.items():
         exported, source = proxies[path]
         assert exported == methods, path
-        assert "lib/proxy.mjs" in source and ("forward(" in source or "forwardHistory(" in source), path
+        assert "lib/proxy.mjs" in source and any(name in source for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(")), path
         assert "force-dynamic" in source, path  # never cached
+
+
+# --- the memory page's routes (docs/STAGE2_DESIGN.md, unit 6) -------------------------------------
+
+MEMORY_CALLS = [
+    ("memory", "GET", None, "/api/memory"),
+    ("memoryFact", "GET", {"fact_id": "12"}, "/api/memory/12"),
+    ("memoryAction", "POST", {"fact_id": "12", "action": "accept"}, "/api/memory/12/accept"),
+    ("memoryAdd", "POST", None, "/api/memory/add"),
+    ("memoryIngest", "POST", None, "/api/memory/ingest"),
+]
+
+
+@needs_node
+def test_the_memory_routes_work_end_to_end_through_the_ui_server_with_no_token_in_the_browser(api):
+    from diya_memory import Memory
+
+    memory = Memory(api.agent.store)
+    memory.add_candidate("likes tea", batch_first=1, batch_last=1, position=0, model="m",
+                         extracted_at="2026-01-01T00:00:00+00:00", raw="- likes tea")
+    listed, detail, accepted, added, ingested = through_the_ui(
+        api,
+        [
+            call("memory", "GET"),
+            call("memoryFact", "GET", params={"fact_id": "1"}),
+            call("memoryAction", "POST", params={"fact_id": "1", "action": "accept"}),
+            json_call("memoryAdd", {"text": "plays chess"}),
+            call("memoryIngest", "POST"),
+        ],
+    )
+    assert [a["status"] for a in (listed, detail, accepted, added, ingested)] == [200, 200, 200, 201, 200]
+    assert json.loads(unb64(listed["bodyB64"]))["facts"][0]["text"] == "likes tea"
+    assert json.loads(unb64(detail["bodyB64"]))["staged"] == "- likes tea"
+    assert json.loads(unb64(accepted["bodyB64"]))["fact"]["status"] == "accepted"
+    assert memory.accepted_texts() == ["likes tea", "plays chess"]
+
+
+@needs_node
+def test_the_api_refuses_the_memory_routes_without_the_token_and_nothing_is_written(api):
+    from diya_memory import Memory
+
+    memory = Memory(api.agent.store)
+    fact_id = memory.add_candidate("likes tea", batch_first=1, batch_last=1, position=0, model="m",
+                                   extracted_at="2026-01-01T00:00:00+00:00", raw="- likes tea")
+    answers = through_the_ui(api, [call("memory", "GET"), call("memoryAction", "POST", params={"fact_id": str(fact_id), "action": "accept"}),
+                                   json_call("memoryAdd", {"text": "x"})], token=None)
+    assert [a["status"] for a in answers] == [401, 401, 401]
+    assert memory.get(fact_id)["status"] == "candidate" and len(memory.facts()) == 1
+
+
+@needs_node
+def test_the_memory_routes_forward_to_their_own_path_and_method_with_the_token_and_nothing_else_of_the_browsers():
+    calls = [call(route, method, {"content-type": "application/json", "authorization": "Bearer from-the-browser", "cookie": "a=b"},
+                  "{}" if method == "POST" else None, params)  # a browser cannot send a body with a GET
+             for route, method, params, _ in MEMORY_CALLS]
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": calls})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [(m, u) for _, m, _, u in MEMORY_CALLS]
+    for captured in out["captured"]:
+        assert captured["headers"]["authorization"] == f"Bearer {TOKEN}"
+        assert "cookie" not in captured["headers"]
+    assert "from-the-browser" not in json.dumps(out["captured"])
+
+
+@needs_node
+def test_a_memory_route_answers_only_the_method_the_api_route_does():
+    wrong = {"memory": "POST", "memoryFact": "POST", "memoryAction": "GET", "memoryAdd": "GET", "memoryIngest": "GET"}
+    calls = [call(route, wrong[route], params={"fact_id": "1", "action": "accept"}) for route in wrong]
+    out = run_harness({"mode": "route", "env": {}, "calls": calls})
+    assert out["results"] == [{"noHandler": True}] * len(wrong) and out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("fact_id", ["abc", "1.5", "-1", "1e3", "", " 1", "1 ", "1%2F2", "../1", "1/../2", "9" * 19, "0x10"])
+def test_a_fact_id_that_is_not_a_whole_number_is_refused_before_anything_is_sent(fact_id):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [
+        call("memoryFact", "GET", params={"fact_id": fact_id}),
+        call("memoryAction", "POST", params={"fact_id": fact_id, "action": "accept"}),
+    ]})
+    assert [r["status"] for r in out["results"]] == [404, 404]
+    assert out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("action", ["dance", "ACCEPT", "Accept", "", "accept/../x", "accept?x=1", "add", "ingest", "delete", "retire%2Fx", "accept "])
+def test_an_action_the_api_does_not_have_is_refused_before_anything_is_sent(action):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call("memoryAction", "POST", params={"fact_id": "1", "action": action})]})
+    assert out["results"][0]["status"] == 404
+    assert out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("action", ["accept", "reject", "reopen", "retire", "restore", "edit"])
+@pytest.mark.parametrize("fact_id", ["1", "12", "9" * 18])
+def test_every_real_action_on_a_whole_number_fact_is_forwarded_to_its_own_path(action, fact_id):
+    out = run_harness({"mode": "route", "env": {}, "calls": [call("memoryAction", "POST", params={"fact_id": fact_id, "action": action})]})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [("POST", f"/api/memory/{fact_id}/{action}")]

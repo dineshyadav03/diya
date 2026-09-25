@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 import diya
 import diya_config
+import diya_memory_api
 
 
 # ---- the per-install access token (docs/STAGE1_DESIGN.md section 3) ----
@@ -327,6 +328,9 @@ def create_app(config=None, agent=None, transcriber=None):
         else:
             agent.store.add_message(thread_id, "assistant", answer)
         return {"thread_id": thread_id, "answer": answer, "tools_called": tools_called}
+
+    # Reviewing what Dreaming staged (docs/STAGE2_DESIGN.md, unit 6): the same rules as diya_review.py.
+    diya_memory_api.register(app, config, agent)
 
     return app
 

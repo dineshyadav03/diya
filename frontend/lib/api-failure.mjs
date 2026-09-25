@@ -66,3 +66,25 @@ export function describeTranscribeFailure(status) {
       return `Couldn't transcribe that: Diya's server answered with an error (HTTP ${status}). Hold the mic to try again.`
   }
 }
+
+// The red line on the memory page when something the person asked for -- accept, reject, edit, add, check
+// for new facts -- was not carried out. Each text makes that clear, because it is true of a refusal.
+//
+// The API refuses with a reason in `detail` (404 no such fact, 409 it doesn't apply or would repeat or
+// overflow the memory, 422 text that may not be stored). That reason is already in words for a person, so
+// it is shown as it is; a detail that is not a plain string (a validation error list) is not.
+export function describeActionFailure(status, detail) {
+  const reason = typeof detail === 'string' && detail.trim() ? detail.trim() : ''
+  switch (classify(status)) {
+    case 'unreachable':
+      return 'Diya’s server didn’t answer, so nothing was changed. Check that it’s running, then try again.'
+    case 'unauthorized':
+      return `Diya’s server refused it, so nothing was changed: ${REFUSED}.`
+    case 'unreadable':
+      return 'Diya’s server sent back something this page couldn’t read. Refresh to see what it did.'
+    default:
+      return reason
+        ? `Not done: ${reason}${/[.!?]$/.test(reason) ? '' : '.'}`
+        : `Diya’s server answered with an error (HTTP ${status}), so nothing was changed.`
+  }
+}

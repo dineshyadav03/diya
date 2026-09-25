@@ -1,8 +1,8 @@
 # Stage 2: Trustworthy memory (review and promote) -- design spec
 
 > **Status (2026-09-25):** designed; being built unit by unit. **Built: U1 (storage), U2 (ingest and
-> legacy import), U3 (deterministic checks), U4 (review command line), U5 (the switch).** Remaining:
-> U6 (review in the browser), U7 (an optional advisory verifier). The "today" statements in sections 1-2
+> legacy import), U3 (deterministic checks), U4 (review command line), U5 (the switch), U6 (review in
+> the browser).** Remaining: U7 (an optional advisory verifier). The "today" statements in sections 1-2
 > describe the code before Stage 2 (as of `8c8231a`); the `file:line` references into `diya_db.py` are
 > current, the others are as of that commit. Two things the first draft reported were fixed before any
 > Stage 2 unit: the migration-runner race (`43dcb76`, see "Migration impact") and a stale comment in
@@ -317,6 +317,25 @@ are now recomputed from the current text on every check.
   code (`diya_web.py:102-141` wraps the whole app), and `tests/test_token.py:163` fails until the new
   routes are added to its endpoint list (and its `{thread_id}` substitution learns the new path
   parameters), so the inventory cannot drift.
+
+*As built (U6):* `diya_memory_api.py` registers `GET /api/memory` (every fact, its flags in words and the
+memory's size), `GET /api/memory/{id}` (the messages it came from, the staged line, its history),
+`POST /api/memory/ingest`, `POST /api/memory/add` (201) and `POST /api/memory/{id}/{action}` (accept,
+reject, reopen, retire, restore, or edit with `{"text": ...}`). Every change runs the same store rules as the
+command line and then re-runs the checks; a refusal is an HTTP error with the reason in `detail` (404 no such
+fact or action, 409 a change that does not apply, a repeat or a full memory, 422 text that may not be stored)
+and changes nothing. The routes are registered directly on the app, not through a router: in the FastAPI
+version pinned here an included router hides its routes' paths from `app.routes`, which the token and Host
+tests enumerate, and registration looks nothing up (`create_app` stays free). Everything read back from the
+database goes through `diya_memory.printable`, which moved out of the command line so both share it, as did
+the flag descriptions. The UI half is five same-origin route files over two new proxy functions that turn
+away an id that is not a whole number and an action the API does not have before anything is sent, and a
+page at `/memory` (waiting for review, what Diya knows, decided before, an add box, "Check for new facts",
+"Why?" panels) that renders everything as text, uses only `GET` and `POST`, explains a failed load or action
+with the shared failure messages (a new `describeActionFailure` shows the API's own reason), and is linked
+from History always and from the chat header only on screens wider than a phone (the header has no slack on
+one). Not done: the "facts waiting" badge, and design-rig scenarios (the rig is the screenshot harness;
+the page was driven in a real browser instead, see below).
 
 ### D7. What reaches the model, and how much
 

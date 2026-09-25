@@ -47,6 +47,11 @@ upgrading to this.
 
 ## Reviewing staged facts
 
+On the **Memory** page of the UI (linked from History, and from the chat header on wide screens) or from the
+command line. The page lists what is waiting and what Diya knows; each fact can be accepted, edited, rejected
+or forgotten, "Why?" shows the messages it came from, "Check for new facts" copies what Dreaming staged in,
+and a refusal (a repeat, no room left) says why and changes nothing. From the command line:
+
 ```bash
 python diya_review.py ingest          # copy newly staged facts in as candidates, and check them
 python diya_review.py list            # the candidates; `list accepted`, `list all` show the rest

@@ -121,3 +121,22 @@ export async function forwardHistory(request, context, options) {
   if (!/^[0-9]{1,18}$/.test(String(threadId))) return errorResponse(404, 'No such thread')
   return forward(request, `/api/history/${threadId}`, options)
 }
+
+// The memory page's routes (docs/STAGE2_DESIGN.md, unit 6). A fact id is a whole number and an action is
+// one of a fixed few; anything else -- a path, a query, an encoded slash, an action the API doesn't have --
+// is turned away here instead of being pasted into the URL of the API request.
+const FACT_ACTIONS = new Set(['accept', 'reject', 'reopen', 'retire', 'restore', 'edit'])
+const WHOLE_NUMBER = /^[0-9]{1,18}$/
+
+export async function forwardFact(request, context, options) {
+  const { fact_id: factId } = await context.params
+  if (!WHOLE_NUMBER.test(String(factId))) return errorResponse(404, 'No such fact')
+  return forward(request, `/api/memory/${factId}`, options)
+}
+
+export async function forwardFactAction(request, context, options) {
+  const { fact_id: factId, action } = await context.params
+  if (!WHOLE_NUMBER.test(String(factId))) return errorResponse(404, 'No such fact')
+  if (!FACT_ACTIONS.has(String(action))) return errorResponse(404, 'No such action')
+  return forward(request, `/api/memory/${factId}/${action}`, options)
+}

@@ -23,6 +23,7 @@ import diya
 import diya_config
 import diya_web
 from diya_config import ConfigError, load_config
+from diya_memory import Memory
 from fakes import FakeClient, text_reply
 
 HOST = "https://localhost"
@@ -45,6 +46,9 @@ def client_for(tmp_path, require=None):
         profile_path=str(tmp_path / "t_profile.txt"),
     )
     agent = diya.Agent(config, client=FakeClient([text_reply("ok")] * 20))
+    # one candidate fact (id 1), so the routes that need a fact have one to act on
+    Memory(agent.store).add_candidate("seeded candidate", batch_first=1, batch_last=1, position=0, model="m",
+                                      extracted_at="2026-01-01T00:00:00+00:00", raw="- seeded candidate")
     app = diya_web.create_app(config, agent, transcriber=object())
     return TestClient(app, base_url=HOST), app
 
@@ -55,10 +59,23 @@ def token(tmp_path):
     return diya_web.ensure_token(str(tmp_path / "token.hash"))
 
 
+OK = (200, 201)  # adding a fact answers 201
+
+
+def concrete_path(path):
+    """A route's path with a real id and action in place of its parameters."""
+    return path.replace("{thread_id}", "1").replace("{fact_id}", "1").replace("{action}", "accept")
+
+
 # Every route the app has today, with a request that succeeds once it is past the token layer.
 ENDPOINTS = [
     ("GET", "/api/threads", {}),
     ("GET", "/api/history/1", {}),
+    ("GET", "/api/memory", {}),
+    ("GET", "/api/memory/1", {}),
+    ("POST", "/api/memory/ingest", {}),
+    ("POST", "/api/memory/add", {"json": {"text": "a typed fact"}}),
+    ("POST", "/api/memory/1/accept", {}),
     ("POST", "/api/chat", {"json": {"message": "hi"}}),
     ("POST", "/api/transcribe", {"files": {"audio": ("a.webm", b"x", "audio/webm")}}),
     ("GET", "/docs", {}),
@@ -157,12 +174,12 @@ def test_more_than_one_authorization_header_is_refused_even_if_one_is_right(tmp_
 def test_the_right_token_succeeds_and_no_token_does_not_on_every_route(tmp_path, token, method, path, kwargs):
     client, _ = client_for(tmp_path)
     assert client.request(method, path, **kwargs).status_code == 401
-    assert client.request(method, path, headers=auth(token), **kwargs).status_code == 200
+    assert client.request(method, path, headers=auth(token), **kwargs).status_code in OK
 
 
 def test_the_endpoint_list_above_covers_every_route_the_app_has(tmp_path, token):
     _, app = client_for(tmp_path)
-    routes = {route.path.replace("{thread_id}", "1") for route in app.routes}
+    routes = {concrete_path(route.path) for route in app.routes}
     assert routes == {path for _, path, _ in ENDPOINTS}  # a new route means a new line above
 
 
@@ -171,7 +188,7 @@ def test_every_route_the_app_has_refuses_no_token_including_ones_added_later(tmp
     because the middleware wraps the whole app rather than naming paths."""
     client, app = client_for(tmp_path)
     for path in sorted({route.path for route in app.routes}):
-        concrete = path.replace("{thread_id}", "1")
+        concrete = concrete_path(path)
         for method in ("GET", "POST", "OPTIONS"):
             assert client.request(method, concrete).status_code == 401, (method, path)
             assert client.request(method, concrete, headers=auth(token)).status_code != 401, (method, path)
@@ -234,14 +251,14 @@ def test_a_fresh_install_requires_the_token_on_every_route(tmp_path, token):
     client, _ = client_for(tmp_path)  # DIYA_REQUIRE_TOKEN unset: the default
     for method, path, kwargs in ENDPOINTS:
         assert client.request(method, path, **kwargs).status_code == 401, (method, path)
-        assert client.request(method, path, headers=auth(token), **kwargs).status_code == 200, (method, path)
+        assert client.request(method, path, headers=auth(token), **kwargs).status_code in OK, (method, path)
 
 
 @pytest.mark.parametrize("require", ["0", "false", "off", "no"])
 def test_the_explicit_opt_out_means_no_route_asks_for_a_token(tmp_path, require):
     client, app = client_for(tmp_path, require=require)
     for method, path, kwargs in ENDPOINTS:
-        assert client.request(method, path, **kwargs).status_code == 200, (method, path)
+        assert client.request(method, path, **kwargs).status_code in OK, (method, path)
     # and a header that would be wrong if it were checked is simply ignored
     assert client.get("/api/threads", headers=auth("not-a-token")).status_code == 200
 
