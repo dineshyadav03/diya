@@ -12,11 +12,18 @@ changes to diya_db.MIGRATIONS -- the whole point is to keep proving that a real 
 diya.db, in the exact shape it was actually created in, still upgrades cleanly today.
 """
 import sqlite3
+from unittest import mock
 
 import pytest
 
 import diya_db
 from diya_db import Store, apply_migrations
+
+# Every migration the real code ships, and just the first. The tests below that are about ONE
+# migration (the original schema) or about racing for a migration (section 4) do not care how many
+# there are, so adding a migration never breaks them.
+REAL_VERSIONS = [v for v, _ in diya_db.MIGRATIONS]
+MIGRATION_1 = diya_db.MIGRATIONS[:1]
 
 LEGACY_SCHEMA = (
     """
@@ -62,15 +69,16 @@ def migrations_rows(conn):
 
 # --- 1. a fresh database ends up correct ------------------------------------------------------
 
-def test_a_fresh_database_gets_every_table_and_records_migration_1(tmp_path):
+def test_a_fresh_database_gets_every_table_and_records_every_migration(tmp_path):
     conn = sqlite3.connect(tmp_path / "fresh.db")
     applied = apply_migrations(conn)
-    assert applied == [1]
-    assert {"threads", "messages", "reminders", "migrations"} <= tables(conn)
+    assert applied == REAL_VERSIONS
+    assert {"threads", "messages", "reminders", "facts", "fact_events", "migrations"} <= tables(conn)
     rows = migrations_rows(conn)
-    assert [v for v, _ in rows] == [1]
+    assert [v for v, _ in rows] == REAL_VERSIONS
     from datetime import datetime
-    datetime.fromisoformat(rows[0][1])  # a real timestamp, not a placeholder
+    for _, applied_at in rows:
+        datetime.fromisoformat(applied_at)  # a real timestamp, not a placeholder
 
 
 def test_a_fresh_database_has_exactly_the_expected_columns():
@@ -104,7 +112,7 @@ def test_a_fresh_store_used_through_its_normal_methods_also_gets_the_migrations_
     store = Store(str(tmp_path / "used.db"))
     store.create_thread()
     conn = sqlite3.connect(tmp_path / "used.db")
-    assert migrations_rows(conn) == [(1, migrations_rows(conn)[0][1])]
+    assert [v for v, _ in migrations_rows(conn)] == REAL_VERSIONS
 
 
 # --- 2. a database at the old, no-migrations-table state upgrades cleanly, data untouched --------
@@ -131,8 +139,8 @@ def test_an_old_database_with_no_migrations_table_gains_one_and_is_marked_curren
 
     conn = sqlite3.connect(path)
     applied = apply_migrations(conn)
-    assert applied == [1]  # migration 1 is newly recorded, even though its tables already existed
-    assert migrations_rows(conn) == [(1, migrations_rows(conn)[0][1])]
+    assert applied == REAL_VERSIONS  # migration 1 is newly recorded, even though its tables already existed
+    assert [v for v, _ in migrations_rows(conn)] == REAL_VERSIONS
 
 
 def test_an_old_databases_existing_data_survives_the_upgrade_byte_for_byte(tmp_path):
@@ -167,7 +175,7 @@ def test_an_old_database_upgraded_through_the_real_store_still_answers_normally(
 
 def test_a_current_database_gets_nothing_newly_applied_the_second_time(tmp_path):
     conn = sqlite3.connect(tmp_path / "current.db")
-    assert apply_migrations(conn) == [1]
+    assert apply_migrations(conn) == REAL_VERSIONS
     assert apply_migrations(conn) == []  # nothing left to do
 
 
@@ -245,8 +253,8 @@ def test_running_migrations_twice_leaves_the_database_file_byte_identical(tmp_pa
 def test_apply_migrations_is_idempotent_across_any_number_of_calls(tmp_path, times):
     conn = sqlite3.connect(tmp_path / "repeat.db")
     results = [apply_migrations(conn) for _ in range(times)]
-    assert results == [[1]] + [[]] * (times - 1)
-    assert len(migrations_rows(conn)) == 1
+    assert results == [REAL_VERSIONS] + [[]] * (times - 1)
+    assert len(migrations_rows(conn)) == len(REAL_VERSIONS)
 
 
 # --- 4. two connections migrating the same database at the same moment ---------------------------
@@ -261,14 +269,16 @@ SECOND_MIGRATION = (2, ("CREATE TABLE IF NOT EXISTS extra (id INTEGER PRIMARY KE
 
 @pytest.fixture
 def two_migrations(monkeypatch):
-    """The real migrations plus one more, so there is something for a second connection to race for."""
-    monkeypatch.setattr(diya_db, "MIGRATIONS", diya_db.MIGRATIONS + (SECOND_MIGRATION,))
+    """Migration 1 plus a stand-in second one, so there is something for a second connection to race
+    for. Deliberately not "the real list plus one": the real list grows."""
+    monkeypatch.setattr(diya_db, "MIGRATIONS", MIGRATION_1 + (SECOND_MIGRATION,))
 
 
 def _database_at_migration_1(path):
-    """A database that has only ever seen migration 1 (taken before the fixture adds a second)."""
+    """A database that has only ever seen migration 1, whatever else the real code has since added."""
     conn = sqlite3.connect(path)
-    assert apply_migrations(conn) == [1]
+    with mock.patch.object(diya_db, "MIGRATIONS", MIGRATION_1):
+        assert apply_migrations(conn) == [1]
     conn.close()
 
 
@@ -304,7 +314,7 @@ def test_a_second_connection_arriving_mid_migration_never_makes_either_of_them_f
     first.create_function("rival", 0, rival)
     monkeypatch.setattr(
         diya_db, "MIGRATIONS",
-        diya_db.MIGRATIONS + ((2, ("SELECT rival()",) + SECOND_MIGRATION[1]),),
+        MIGRATION_1 + ((2, ("SELECT rival()",) + SECOND_MIGRATION[1]),),
     )
 
     mine = apply_migrations(first)  # must not raise
@@ -383,7 +393,7 @@ def test_the_write_lock_is_held_from_the_first_statement_until_the_version_is_re
     first.set_trace_callback(on_statement)
     monkeypatch.setattr(
         diya_db, "MIGRATIONS",
-        diya_db.MIGRATIONS + ((2, ("SELECT probe()",) + SECOND_MIGRATION[1]),),
+        MIGRATION_1 + ((2, ("SELECT probe()",) + SECOND_MIGRATION[1]),),
     )
 
     assert apply_migrations(first) == [2]
@@ -396,7 +406,9 @@ def test_an_up_to_date_database_is_never_held_up_by_someone_elses_write(tmp_path
     """The fast path must not need the write lock: every Store call connects, and most of them find
     nothing to do. Someone else holding a write transaction must not stall them."""
     path = str(tmp_path / "busy.db")
-    _database_at_migration_1(path)
+    current = sqlite3.connect(path)
+    assert apply_migrations(current) == REAL_VERSIONS  # every real migration: nothing left pending
+    current.close()
     writer = sqlite3.connect(path)
     writer.execute("BEGIN IMMEDIATE")
     try:
@@ -413,7 +425,7 @@ def test_a_migration_that_fails_part_way_is_not_half_applied(tmp_path, monkeypat
     _database_at_migration_1(path)
     monkeypatch.setattr(
         diya_db, "MIGRATIONS",
-        diya_db.MIGRATIONS + ((2, ("CREATE TABLE IF NOT EXISTS half (id INTEGER)", "THIS IS NOT SQL")),),
+        MIGRATION_1 + ((2, ("CREATE TABLE IF NOT EXISTS half (id INTEGER)", "THIS IS NOT SQL")),),
     )
     conn = sqlite3.connect(path)
 
@@ -454,6 +466,93 @@ def test_many_pairs_of_simultaneous_migrators_never_raise(tmp_path, two_migratio
             t.join()
         assert _versions(path) == [1, 2]
     assert errors == []
+
+
+# --- 5. migration 2: the tables reviewed memory lives in (docs/STAGE2_DESIGN.md, D3) ----------------
+
+def test_migration_2_creates_the_fact_tables_with_exactly_the_expected_columns():
+    """A behaviour-level pin of the shipped schema, like the one for migration 1. Once migration 2 has
+    run on a real database it is never edited: a change is migration 3."""
+    conn = sqlite3.connect(":memory:")
+    apply_migrations(conn)
+    assert columns(conn, "facts") == [
+        ("id", "INTEGER", False, None, True),
+        ("text", "TEXT", True, None, False),
+        ("text_key", "TEXT", True, None, False),
+        ("status", "TEXT", True, None, False),
+        ("source", "TEXT", True, None, False),
+        ("batch_first", "INTEGER", False, None, False),
+        ("batch_last", "INTEGER", False, None, False),
+        ("position", "INTEGER", False, None, False),
+        ("model", "TEXT", False, None, False),
+        ("extracted_at", "TEXT", False, None, False),
+        ("raw", "TEXT", False, None, False),
+        ("flags", "TEXT", True, "'[]'", False),
+        ("created_at", "TEXT", True, None, False),
+    ]
+    assert columns(conn, "fact_events") == [
+        ("id", "INTEGER", False, None, True),
+        ("fact_id", "INTEGER", True, None, False),
+        ("event", "TEXT", True, None, False),
+        ("actor", "TEXT", True, None, False),
+        ("at", "TEXT", True, None, False),
+        ("detail", "TEXT", False, None, False),
+    ]
+
+
+def _insert_fact(conn, text, status="candidate", source="dreaming", batch_first=None, position=None):
+    conn.execute(
+        "INSERT INTO facts (text, text_key, status, source, batch_first, position, created_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, 'now')",
+        (text, text.casefold(), status, source, batch_first, position),
+    )
+
+
+def test_the_status_column_refuses_anything_but_the_four_statuses():
+    conn = sqlite3.connect(":memory:")
+    apply_migrations(conn)
+    for status in ("candidate", "accepted", "rejected", "retired"):
+        _insert_fact(conn, f"fact {status}", status=status, source="manual")
+    for bad in ("pending", "ACCEPTED", "", "accepted "):
+        with pytest.raises(sqlite3.IntegrityError):
+            _insert_fact(conn, f"fact {bad!r}", status=bad, source="manual")
+
+
+def test_a_queue_slot_can_be_recorded_only_once_but_other_sources_are_not_held_to_it():
+    """(batch_first, position) identifies a staged fact, which is what makes ingesting twice harmless.
+    It constrains only rows that came from the queue: the old profile's lines and typed facts have no
+    slot, and must not collide with each other."""
+    conn = sqlite3.connect(":memory:")
+    apply_migrations(conn)
+    _insert_fact(conn, "first", batch_first=7, position=0)
+    _insert_fact(conn, "second", batch_first=7, position=1)  # same record, next position
+    _insert_fact(conn, "third", batch_first=9, position=0)  # next record, same position
+    with pytest.raises(sqlite3.IntegrityError):
+        _insert_fact(conn, "again", batch_first=7, position=0)
+    for n in range(3):  # no slot: any number of these
+        _insert_fact(conn, f"typed {n}", source="manual")
+        _insert_fact(conn, f"imported {n}", source="legacy_profile")
+
+
+def test_only_one_accepted_fact_can_have_a_given_identity_but_other_statuses_can_repeat():
+    conn = sqlite3.connect(":memory:")
+    apply_migrations(conn)
+    _insert_fact(conn, "Likes tea", status="accepted", source="manual")
+    with pytest.raises(sqlite3.IntegrityError):
+        _insert_fact(conn, "likes tea", status="accepted", source="manual")  # same fact, other capitals
+    for status in ("candidate", "rejected", "retired"):
+        _insert_fact(conn, "likes tea", status=status, source="manual")  # a repeat is not accepted yet
+    _insert_fact(conn, "likes coffee", status="accepted", source="manual")
+
+
+def test_the_fact_tables_start_empty_and_an_old_databases_own_rows_are_untouched(tmp_path):
+    path = tmp_path / "legacy.db"
+    _make_legacy_database(path)
+    apply_migrations(sqlite3.connect(path))
+    conn = sqlite3.connect(path)
+    assert conn.execute("SELECT COUNT(*) FROM facts").fetchone() == (0,)
+    assert conn.execute("SELECT COUNT(*) FROM fact_events").fetchone() == (0,)
+    assert conn.execute("SELECT COUNT(*) FROM messages").fetchone() == (1,)  # and the old data is still there
 
 
 # --- the migrations table itself --------------------------------------------------------------

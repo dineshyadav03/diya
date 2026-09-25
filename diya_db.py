@@ -38,6 +38,56 @@ MIGRATIONS = (
         )
         """,
     )),
+    # Migration 2: reviewed memory (docs/STAGE2_DESIGN.md, D3). `facts` is one row per fact with a
+    # status; `fact_events` is the append-only trail of every change to it. Nothing reads either
+    # table until diya_memory.py does, and nothing here touches an existing table.
+    #
+    # SQLite does not enforce FOREIGN KEY unless a connection asks (nothing here does), so the
+    # reference below documents intent; diya_memory.Memory.verify_integrity() is what checks it.
+    # `text_key` is the case-folded text: the identity used to refuse a second accepted copy of the
+    # same fact. `source` and `event` are checked in code, not here, so a later stage can add a
+    # value without rebuilding the table.
+    (2, (
+        """
+        CREATE TABLE IF NOT EXISTS facts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            text TEXT NOT NULL,
+            text_key TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('candidate', 'accepted', 'rejected', 'retired')),
+            source TEXT NOT NULL,
+            batch_first INTEGER,
+            batch_last INTEGER,
+            position INTEGER,
+            model TEXT,
+            extracted_at TEXT,
+            raw TEXT,
+            flags TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL
+        )
+        """,
+        # one row per (queue record, position in its facts list): what makes ingesting idempotent
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS facts_one_per_queue_slot
+            ON facts (batch_first, position) WHERE source = 'dreaming'
+        """,
+        # at most one accepted fact per identity, whatever the code above it does
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS facts_one_accepted_per_key
+            ON facts (text_key) WHERE status = 'accepted'
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS fact_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fact_id INTEGER NOT NULL,
+            event TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            at TEXT NOT NULL,
+            detail TEXT,
+            FOREIGN KEY (fact_id) REFERENCES facts(id)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS fact_events_by_fact ON fact_events (fact_id)",
+    )),
 )
 
 

@@ -1,9 +1,11 @@
 # Stage 2: Trustworthy memory (review and promote) -- design spec
 
-> **Status (2026-09-25):** design only, nothing in this document is built. The "today" statements and
-> `file:line` references are as of `8c8231a`. Two things the first draft reported were fixed before
-> any Stage 2 unit: the migration-runner race (`43dcb76`, see "Migration impact") and a stale comment
-> in `diya.py` that named a promotion step that does not exist (`8c8231a`).
+> **Status (2026-09-25):** designed; being built unit by unit. **Built: U1 (storage).** The "today"
+> statements in sections 1-2 describe the code before Stage 2 (as of `8c8231a`); the `file:line`
+> references into `diya_db.py` are current, the others are as of that commit. Two things the first
+> draft reported were fixed before any Stage 2 unit: the migration-runner race (`43dcb76`, see
+> "Migration impact") and a stale comment in `diya.py` that named a promotion step that does not
+> exist (`8c8231a`). The recommendations in section 5 are being followed as written.
 
 This is a design document, not an implementation. Nothing in the codebase changes as a result of
 writing it. It covers the first item under "Trustworthy memory" in `ROADMAP.md` ("Later stages", 2):
@@ -89,7 +91,7 @@ the extractor is good or bad; it makes each promoted fact something a person has
   next :13 or :43, before any push and without anyone restarting anything. Landing a commit that
   changes `diya_db.py` therefore changes what runs against the live `diya.db` within half an hour.
 - Both call `Store.connect()`, which calls `apply_migrations` on every connection
-  (`diya_db.py:119-122`). A schema change is applied by whichever process connects first.
+  (`diya_db.py:169-172`). A schema change is applied by whichever process connects first.
 
 ## 2. Threat and failure model
 
@@ -167,7 +169,7 @@ scheduled job.
 
 ### D3. Data model and lifecycle
 
-Two tables, added as migration 2 (the migrations system, `diya_db.py:12-104`, exists for exactly this;
+Two tables, added as migration 2 (the migrations system, `diya_db.py:12-154`, exists for exactly this;
 a shipped migration is never edited, so this is a new entry). Sketch; final names are settled in U1:
 
 ```
@@ -358,7 +360,7 @@ Dreaming (`dreaming.py`) is not edited by any unit.
   practice, the first time the API (or the CLI) and the scheduled Dreaming process connected in the
   same instant after a new migration, one of them would have failed once (Dreaming logs a traceback
   and exits 1; an API request returns 500). It now takes the write lock first, looks again under it
-  and applies what is left in one transaction (`diya_db.py:44-104`); an up-to-date database still
+  and applies what is left in one transaction (`diya_db.py:94-154`); an up-to-date database still
   never asks for the lock. Re-measured: 0 failures in 120 real-process rounds, and a copy of the live
   `diya.db` is byte-identical after connecting through the new runner.
 - **Nothing here deletes anything.** No unit deletes rows from `diya.db`, or touches

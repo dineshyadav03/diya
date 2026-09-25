@@ -215,7 +215,7 @@ Remaining:
    verification step: the solver/verifier separation (Apodex). Designed in
    [`docs/STAGE2_DESIGN.md`](docs/STAGE2_DESIGN.md): seven units (storage, ingest, checks, a review
    command line, the switch that makes accepted facts reach the model, an API and UI, an optional
-   advisory verifier).
+   advisory verifier). Unit 1 (storage: `diya_memory.py`, migration 2) is built.
 3. Connectors and permissions.
 4. Durable workflows. The competitive battleground: every comparable leads with "describe an
    outcome, it follows through". Reference: Muse-style approval gates and action trails.
