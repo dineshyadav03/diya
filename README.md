@@ -5,7 +5,11 @@ hardware you own, not a cloud subscription. Today that means the model, your mem
 speech all stay on this machine, and facts it learns about you are staged for review before
 they're ever trusted.
 
-**[ Screenshot of the chat UI goes here. ]**
+![The chat, with a saved conversation](docs/screenshot-chat.png)
+
+![The Memory page: facts waiting for review, and what Diya knows](docs/screenshot-memory.png)
+
+*Screenshots of the real UI on invented data (`sample_notes/` and made-up facts), taken in headless Edge.*
 
 ## Quickstart
 

@@ -203,7 +203,8 @@ Remaining:
       `sha256:0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f`.
       After pulling, run `ollama list`: if the ID column's first 12 characters don't match these,
       the tag has moved since this was checked.
-- [ ] Add a screenshot or demo GIF to the README (a placeholder line marks the spot, e.g. `docs/demo.gif`)
+- [x] Add a screenshot to the README (2026-09-25): two screenshots of the real UI (the chat and the Memory page)
+      taken in headless Edge against a scratch database of invented data, in `docs/`. A demo GIF is not done.
 - [x] Generate `truffle-research.html` from the same content as the PDF (2026-09-25): the text moved out of
       `render_pdf.py` into `dossier_content.py` (the PDF is byte-identical to before, checked with reportlab's
       deterministic mode), `render_html.py` builds the page with the standard library only, and
