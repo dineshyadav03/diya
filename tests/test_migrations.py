@@ -249,6 +249,213 @@ def test_apply_migrations_is_idempotent_across_any_number_of_calls(tmp_path, tim
     assert len(migrations_rows(conn)) == 1
 
 
+# --- 4. two connections migrating the same database at the same moment ---------------------------
+# The API and the scheduled Dreaming process both call apply_migrations on every connection, so the
+# first migration after a code change is applied by whichever connects first -- and sometimes both
+# do. Measured before this was fixed: two simultaneous migrators on a fresh file, 5 of 150 rounds one
+# of them raised "UNIQUE constraint failed: migrations.version" (the database itself came out right).
+# These tests interleave the two connections deterministically instead of hoping to hit the window.
+
+SECOND_MIGRATION = (2, ("CREATE TABLE IF NOT EXISTS extra (id INTEGER PRIMARY KEY)",))
+
+
+@pytest.fixture
+def two_migrations(monkeypatch):
+    """The real migrations plus one more, so there is something for a second connection to race for."""
+    monkeypatch.setattr(diya_db, "MIGRATIONS", diya_db.MIGRATIONS + (SECOND_MIGRATION,))
+
+
+def _database_at_migration_1(path):
+    """A database that has only ever seen migration 1 (taken before the fixture adds a second)."""
+    conn = sqlite3.connect(path)
+    assert apply_migrations(conn) == [1]
+    conn.close()
+
+
+def _versions(path):
+    conn = sqlite3.connect(path)
+    try:
+        return [v for v, _ in migrations_rows(conn)]
+    finally:
+        conn.close()
+
+
+def test_a_second_connection_arriving_mid_migration_never_makes_either_of_them_fail(tmp_path, monkeypatch):
+    """A rival connection is let in at the worst moment: after the first connection has decided
+    migration 2 is pending, and before it has recorded it. Before the fix the rival applied and
+    recorded migration 2 in that gap and the first connection's own INSERT then raised
+    IntegrityError. The interleave is forced with an SQL function that a migration statement calls."""
+    path = str(tmp_path / "race.db")
+    _database_at_migration_1(path)
+    rival_result = {}
+
+    def rival():
+        other = sqlite3.connect(path, timeout=0)  # give up at once if the file is locked
+        other.create_function("rival", 0, lambda: 0)  # migration 2 calls it on this connection too; here it does nothing
+        try:
+            rival_result["applied"] = apply_migrations(other)
+        except sqlite3.OperationalError as exc:  # "database is locked": the first connection holds it
+            rival_result["blocked"] = str(exc)
+        finally:
+            other.close()
+        return 0
+
+    first = sqlite3.connect(path)
+    first.create_function("rival", 0, rival)
+    monkeypatch.setattr(
+        diya_db, "MIGRATIONS",
+        diya_db.MIGRATIONS + ((2, ("SELECT rival()",) + SECOND_MIGRATION[1]),),
+    )
+
+    mine = apply_migrations(first)  # must not raise
+
+    assert rival_result, "the rival never ran, so nothing was interleaved"
+    assert sorted(mine + rival_result.get("applied", [])) == [2]  # exactly one of them applied it
+    assert _versions(path) == [1, 2]
+    assert "extra" in tables(sqlite3.connect(path))
+
+
+def test_a_migration_another_connection_finished_after_the_first_look_is_not_applied_again(tmp_path, two_migrations):
+    """The other gap: the rival finishes between "migration 2 is pending" and taking the lock. The
+    first connection has to look again once it holds the lock, or it applies migration 2 a second
+    time. The rival is let in by a trace hook on the statement that takes the lock."""
+    path = str(tmp_path / "race.db")
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)")
+    conn.execute("INSERT INTO migrations (version, applied_at) VALUES (1, '2026-01-01T00:00:00+00:00')")
+    for ddl in LEGACY_SCHEMA:
+        conn.execute(ddl)
+    conn.commit()
+    rival_applied = []
+    hook_fired = []
+
+    def on_statement(sql):
+        if sql.lstrip().upper().startswith("BEGIN") and not hook_fired:
+            hook_fired.append(sql)
+            other = sqlite3.connect(path, timeout=0)
+            try:
+                rival_applied.extend(apply_migrations(other))
+            finally:
+                other.close()
+
+    conn.set_trace_callback(on_statement)
+
+    mine = apply_migrations(conn)  # must not raise
+
+    conn.set_trace_callback(None)
+    assert hook_fired, "no BEGIN was issued, so the rival was never let in between the look and the lock"
+    assert rival_applied == [2] and mine == []  # the rival got there first, and this one found nothing left
+    assert _versions(path) == [1, 2]
+
+
+def test_the_write_lock_is_held_from_the_first_statement_until_the_version_is_recorded(tmp_path, monkeypatch):
+    """The property the two tests above rely on, checked directly: at each point where a rival could
+    slip in, ask a second connection whether it can take the write lock. It must not be able to --
+    while a migration's statements run, and at the moment the version is about to be recorded. (A
+    deferred BEGIN holds no write lock yet at the first point; a commit before the INSERT has
+    released it at the second.)"""
+    path = str(tmp_path / "lock.db")
+    _database_at_migration_1(path)
+    probes = []
+
+    def lock_is_free():
+        other = sqlite3.connect(path, timeout=0)
+        try:
+            other.execute("BEGIN IMMEDIATE")
+            other.rollback()
+            return True
+        except sqlite3.OperationalError:  # "database is locked": the connection under test holds it
+            return False
+        finally:
+            other.close()
+
+    def probe():
+        probes.append(("while a statement runs", lock_is_free()))
+        return 0
+
+    first = sqlite3.connect(path)
+    first.create_function("probe", 0, probe)
+
+    def on_statement(sql):
+        if sql.lstrip().startswith("INSERT INTO migrations"):
+            probes.append(("as the version is recorded", lock_is_free()))
+
+    first.set_trace_callback(on_statement)
+    monkeypatch.setattr(
+        diya_db, "MIGRATIONS",
+        diya_db.MIGRATIONS + ((2, ("SELECT probe()",) + SECOND_MIGRATION[1]),),
+    )
+
+    assert apply_migrations(first) == [2]
+
+    first.set_trace_callback(None)
+    assert probes == [("while a statement runs", False), ("as the version is recorded", False)]
+
+
+def test_an_up_to_date_database_is_never_held_up_by_someone_elses_write(tmp_path):
+    """The fast path must not need the write lock: every Store call connects, and most of them find
+    nothing to do. Someone else holding a write transaction must not stall them."""
+    path = str(tmp_path / "busy.db")
+    _database_at_migration_1(path)
+    writer = sqlite3.connect(path)
+    writer.execute("BEGIN IMMEDIATE")
+    try:
+        reader = sqlite3.connect(path, timeout=0)
+        assert apply_migrations(reader) == []  # returns at once instead of "database is locked"
+        reader.close()
+    finally:
+        writer.rollback()
+        writer.close()
+
+
+def test_a_migration_that_fails_part_way_is_not_half_applied(tmp_path, monkeypatch):
+    path = str(tmp_path / "broken.db")
+    _database_at_migration_1(path)
+    monkeypatch.setattr(
+        diya_db, "MIGRATIONS",
+        diya_db.MIGRATIONS + ((2, ("CREATE TABLE IF NOT EXISTS half (id INTEGER)", "THIS IS NOT SQL")),),
+    )
+    conn = sqlite3.connect(path)
+
+    with pytest.raises(sqlite3.OperationalError):
+        apply_migrations(conn)
+
+    assert not conn.in_transaction  # nothing left open to hold the lock
+    assert "half" not in tables(conn)  # the statement that did run was undone with the rest
+    assert _versions(path) == [1]  # and migration 2 was not recorded as applied
+    other = sqlite3.connect(path, timeout=0)
+    other.execute("CREATE TABLE probe (id INTEGER)")  # the file is writable again
+    other.close()
+
+
+def test_many_pairs_of_simultaneous_migrators_never_raise(tmp_path, two_migrations):
+    """The measurement that found the problem, kept as a backstop. Each round is a brand new file
+    and two threads that start together; on the unfixed code about 1 round in 30 raised."""
+    import threading
+
+    errors = []
+    for round_no in range(60):
+        path = str(tmp_path / f"round{round_no}.db")
+        barrier = threading.Barrier(2)
+
+        def worker():
+            try:
+                conn = sqlite3.connect(path)
+                barrier.wait()
+                apply_migrations(conn)
+                conn.close()
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{type(exc).__name__}: {exc}")
+
+        threads = [threading.Thread(target=worker) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert _versions(path) == [1, 2]
+    assert errors == []
+
+
 # --- the migrations table itself --------------------------------------------------------------
 
 def test_migrations_are_declared_in_order_starting_at_1():

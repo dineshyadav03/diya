@@ -53,11 +53,19 @@ def apply_migrations(conn):
       as applied. No data is read, changed, or lost in the process.
     - A database already at the latest migration has every version recorded -- nothing in
       MIGRATIONS runs again, and nothing is written; migrating an up-to-date database is a no-op,
-      not just a harmless repeat.
+      not just a harmless repeat. That path never asks for the write lock, so it is never held up
+      by someone else's write.
+
+    Two processes can arrive at a database with a migration pending at the same moment -- the API
+    and the scheduled Dreaming run both connect through here. So when something is pending the
+    write lock is taken first (BEGIN IMMEDIATE), the applied versions are read again under it, and
+    the pending migrations are applied in that one transaction: whoever gets the lock applies, the
+    other waits (for the connection's busy timeout), then finds nothing left to do. A migration that
+    fails part way is rolled back whole, not left half applied.
 
     Returns the version numbers newly applied, oldest first (empty if the database was already
-    current) -- used by tests to tell these three cases apart; nothing else needs it, since
-    migrating is meant to be invisible in normal use.
+    current) -- used by tests to tell these cases apart; nothing else needs it, since migrating is
+    meant to be invisible in normal use.
     """
     conn.execute(
         """
@@ -67,21 +75,33 @@ def apply_migrations(conn):
         )
         """
     )
-    applied = {row[0] for row in conn.execute("SELECT version FROM migrations")}
-    newly_applied = []
-    for version, statements in MIGRATIONS:
-        if version in applied:
-            continue
-        for statement in statements:
-            conn.execute(statement)
-        conn.execute(
-            "INSERT INTO migrations (version, applied_at) VALUES (?, ?)",
-            (version, datetime.now(timezone.utc).isoformat()),
-        )
-        newly_applied.append(version)
-    if newly_applied:
+    applied = _applied_versions(conn)
+    if all(version in applied for version, _ in MIGRATIONS):
+        return []
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        # Look again: another connection may have applied some of these since the look above.
+        applied = _applied_versions(conn)
+        newly_applied = []
+        for version, statements in MIGRATIONS:
+            if version in applied:
+                continue
+            for statement in statements:
+                conn.execute(statement)
+            conn.execute(
+                "INSERT INTO migrations (version, applied_at) VALUES (?, ?)",
+                (version, datetime.now(timezone.utc).isoformat()),
+            )
+            newly_applied.append(version)
         conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
     return newly_applied
+
+
+def _applied_versions(conn):
+    return {row[0] for row in conn.execute("SELECT version FROM migrations")}
 
 
 class Store:

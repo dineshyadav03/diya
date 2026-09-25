@@ -67,6 +67,20 @@ Done:
       after, `Store.list_threads()` still works, a second `apply_migrations()` call changed
       nothing. The live file itself was never touched, only a copy. 445 tests pass overall (was
       429).
+      **Follow-up: a race in the runner, found while designing Stage 2.** The API and the
+      scheduled Dreaming run both call `apply_migrations` on every connection, so a migration
+      that is pending is sometimes applied by both at once. Measured on a scratch file with a
+      stand-in second migration (the real list has only one): with two simultaneous migrators,
+      5 of 150 rounds one of them raised `UNIQUE constraint failed: migrations.version` (the
+      database itself came out right). Fixed: when a migration is pending the runner takes the
+      write lock first (`BEGIN IMMEDIATE`), reads the applied versions again under it and applies
+      what is left in that one transaction, rolling back whole if a statement fails; an
+      up-to-date database still costs the same two statements and never asks for the lock.
+      `tests/test_migrations.py` is now 22 tests: the race is forced deterministically (an SQL
+      function called from a migration statement, and a trace hook on the lock statement, let a
+      rival connection in at the two worst moments), and 5 of the 6 new tests fail on the old
+      code (the sixth guards against a fix that takes the lock on every connect); 10 of 10
+      mutations of the fix are caught.
 - [x] `list_files` restricted to configured folders (Stage 1 design unit 1,
       [`docs/STAGE1_DESIGN.md`](docs/STAGE1_DESIGN.md)): it refuses any path outside
       `DIYA_FILES_ROOTS` (comma-separated; the default is `Documents/Diya` under the home folder,
