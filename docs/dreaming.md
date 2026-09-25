@@ -61,12 +61,25 @@ python diya_review.py add likes tea   # a fact you type yourself goes in already
 python diya_review.py export          # the accepted facts, in the user_profile.txt format
 python diya_review.py import-profile  # take the existing user_profile.txt in (the file is never changed)
 python diya_review.py verify          # check the store is consistent
+python diya_review.py judge           # optional: ask the local model for a second opinion (see below)
 ```
 
-It needs no model and no network. Each candidate is checked, by plain code, against the messages it was
+Apart from `judge`, it needs no model and no network. Each candidate is checked, by plain code, against the messages it was
 extracted from: `ungrounded` (few of its words appear in them), `duplicate` or `similar` to another fact,
 `previously_rejected`, `instruction_shaped` (it talks to the assistant or gives an order rather than stating
-something about you). These are hints beside the fact, never decisions: only you accept. A fact is limited
+something about you). These are hints beside the fact, never decisions: only you accept.
+
+`python diya_review.py judge [ID...] [--again]` adds one more hint, and only when you run it: the same local model is
+shown just the fact and the messages of yours it came from, in a fresh conversation, and asked whether they support it.
+Its answer is a flag ("model's second look: supported, not supported, or no clear answer (unreliable)") beside the
+fact, on the Memory page too; it never accepts, rejects or edits anything, and editing a fact drops it. It is the same
+small model that proposed the facts, so it is wrong in the same ways: on the fictional cases it was measured on it never
+passed an invented fact, but it also said "not supported" to true facts that were only implied (it said no to
+"is married" from "my wife's birthday"), and a message telling it what to answer steered it once. Treat it as a
+reason to read a fact more carefully, not as a reason to trust or reject one. The numbers and the cases are in
+[Stage 2 design](STAGE2_DESIGN.md) ("As built (U7)"); `python diya_evals.py --verifier` reruns them (it needs Ollama).
+
+A fact is limited
 to 200 characters and the accepted facts to 2,000 in total, so what the model is eventually given stays
 small (a fact that would take it over is refused, with the reason, never silently cut); retire a fact to
 make room. Nothing is ever deleted: every change is recorded in `fact_events`, and

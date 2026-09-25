@@ -45,13 +45,14 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Hold-to-talk voice input through local Whisper, and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
 - Facts it extracts wait in a review queue; nothing reaches the model unless you accept it.
-  Review them on the **Memory** page of the UI, or with `python diya_review.py list`, `accept`, `reject` and `edit` (see [Dreaming](docs/dreaming.md)).
+  Review them on the **Memory** page of the UI, or with `python diya_review.py list`, `accept`, `reject` and `edit` (see [Dreaming](docs/dreaming.md)); `judge` asks the local model for an optional second opinion.
   The model is told the accepted facts, in every chat; your old `user_profile.txt` was imported once.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 1384 tests pass on Windows (as of 2026-09-25).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 1444 tests pass on Windows (as of 2026-09-25).
 
 ## Known limits
 
-- Reviewing facts has no model check yet: the checks that flag a doubtful fact are plain code (Stage 2's optional model verifier, unit 7, is not built).
+- The optional model check on a staged fact (`python diya_review.py judge`) is the same small model that proposed it, and it was measured only on
+  a few dozen invented cases: it says "not supported" to true facts that are only implied, and a message can steer it. It is a hint, never a decision.
 - `web_search` is not covered by the outbound-host allowlist that limits `get_weather` to Open-Meteo (`DIYA_TOOL_ALLOWED_HOSTS`).
 - Models are pulled by tag, not pinned; the 3B model sometimes calls tools it should not.
 
@@ -60,7 +61,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - [LAN mode and certificates](docs/lan.md): use Diya from a phone, and the mkcert details.
 - [Dreaming](docs/dreaming.md): how staged memory works, and how to run and schedule it.
 - [Roadmap](ROADMAP.md): the Stage 0 checklist and later stages. [Product vision](PRODUCT_VISION.md): the current state.
-- [Research](RESEARCH.md): a dated index of market and technical signals. [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built except an optional model verifier).
+- [Research](RESEARCH.md): a dated index of market and technical signals. [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built, including an optional, measured model verifier).
 
 ## Architecture
 

@@ -11,10 +11,11 @@
     python diya_review.py export            the accepted facts, as the old user_profile.txt held them
     python diya_review.py import-profile    take the old user_profile.txt in (the file is never changed)
     python diya_review.py verify            check the store is consistent
+    python diya_review.py judge [ID...]     ask the local model for a second opinion on candidates (advisory)
 
-Commands, not prompts, so it can be scripted and tested. No model and no network: the checks are plain
-code. Nothing the model has not been told changes until you accept a fact -- and until the switch (unit 5)
-even an accepted fact is not yet given to the model.
+Commands, not prompts, so it can be scripted and tested. Only `judge` uses the model, and only when you run
+it: everything else is plain code and touches no network. The model is told a fact only once you accept it.
+`judge` records its answer as a flag beside the fact; it never accepts, rejects or edits anything.
 
 Everything read back from the database is printed through printable(): it is model output, or something
 someone typed or pasted, and an escape sequence in it must not be able to rewrite what the screen says.
@@ -26,6 +27,7 @@ import sys
 
 import diya_config
 import diya_memory
+import diya_verifier
 from diya_db import Store
 from diya_memory import STATUSES, FactError, Memory, SourceUnreadable, flag_long, flag_short, normalise_fact, printable
 
@@ -153,6 +155,22 @@ def cmd_verify(memory, config, args, out):
     return EXIT_REFUSED
 
 
+def cmd_judge(memory, config, args, out):
+    """Ask the local model whether the messages a candidate came from support it. `args.client` is the model
+    client (main() passes one in tests; otherwise it is made here, so nothing else needs the openai package)."""
+    client = args.client
+    if client is None:
+        from openai import OpenAI
+
+        client = OpenAI(base_url=config.ollama_url, api_key="ollama", timeout=120)
+    asked = diya_verifier.judge(memory, client, config.model, ids=args.ids or None, again=args.again, actor="cli")
+    for fact_id, verdict in asked:
+        print(f"Fact {fact_id}: {verdict}  {printable(memory.get(fact_id)['text'], 100)}", file=out)
+    print(f"Asked about {len(asked)} fact{'' if len(asked) == 1 else 's'}. This is a second opinion from the same small model: "
+          "it can be wrong, and it never changes anything by itself.", file=out)
+    return EXIT_OK
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="diya_review.py", description="Review the facts Dreaming has staged.")
     commands = parser.add_subparsers(dest="command", metavar="command", required=True)
@@ -179,10 +197,14 @@ def build_parser():
     commands.add_parser("export", help="the accepted facts, in the old user_profile.txt format").set_defaults(run=cmd_export)
     commands.add_parser("import-profile", help="take the old user_profile.txt in; the file is never changed").set_defaults(run=cmd_import_profile)
     commands.add_parser("verify", help="check the store is consistent").set_defaults(run=cmd_verify)
+    judge = commands.add_parser("judge", help="ask the local model for a second opinion on candidates (advisory only)")
+    judge.add_argument("ids", nargs="*", type=int, help="only these candidates (default: all of them)")
+    judge.add_argument("--again", action="store_true", help="ask again about a candidate that already has an answer")
+    judge.set_defaults(run=cmd_judge)
     return parser
 
 
-def main(argv=None, config=None, out=None, err=None):
+def main(argv=None, config=None, out=None, err=None, client=None):
     out = sys.stdout if out is None else out
     err = sys.stderr if err is None else err
     try:
@@ -195,10 +217,16 @@ def main(argv=None, config=None, out=None, err=None):
         print(f"diya_review: {exc}", file=err)
         return EXIT_USAGE
     memory = Memory(Store(config.db_path))
+    args.client = client
     try:
         return args.run(memory, config, args, out)
     except SourceUnreadable as exc:
         print(f"diya_review: {printable(exc)}", file=err)
+        return EXIT_USAGE
+    except diya_verifier.ModelUnavailable as exc:
+        kept = len(exc.asked)
+        print(f"diya_review: could not reach the model ({printable(exc, 200)}). "
+              f"{kept} answer{'' if kept == 1 else 's'} obtained before that {'was' if kept == 1 else 'were'} kept; nothing else changed.", file=err)
         return EXIT_USAGE
     except FactError as exc:
         print(f"diya_review: {printable(exc)}", file=err)

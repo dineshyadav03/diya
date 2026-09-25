@@ -27,6 +27,7 @@ from typing import NamedTuple
 
 # Proposals from the design doc (D7), starting points to tune, not findings. The model is sent the
 # profile on every turn, so it is bounded: per fact, and in total as it is rendered for the model.
+VERIFIER_PREFIX = "verifier:"  # the flag the optional model check leaves: verifier:yes, verifier:no or verifier:unclear (diya_verifier.py)
 MAX_FACT_CHARS = 200
 MAX_PROFILE_CHARS = 2000
 
@@ -418,19 +419,26 @@ class Memory:
             self._event(conn, fact_id, ACTION_EVENT[action], actor, now)
 
     def edit(self, fact_id, text, actor):
-        """Reword a candidate before deciding on it. The previous wording stays in the event."""
+        """Reword a candidate before deciding on it. The previous wording stays in the event. A model's second
+        opinion (a `verifier:` flag) was about the old wording, so it is dropped, and the event says which."""
         _check_actor(actor)
         check_text(text)
         with self._write() as conn:
-            row = conn.execute("SELECT status, text FROM facts WHERE id = ?", (fact_id,)).fetchone()
+            row = conn.execute("SELECT status, text, flags FROM facts WHERE id = ?", (fact_id,)).fetchone()
             if row is None:
                 raise UnknownFact(f"there is no fact {fact_id}")
-            status, old = row
+            status, old, flags = row
             if status != "candidate":
                 raise IllegalTransition(f"fact {fact_id} is {status}; only a candidate can be edited")
+            flags = json.loads(flags)
+            stale = [flag for flag in flags if flag.startswith(VERIFIER_PREFIX)]
+            detail = {"from": old}
+            if stale:
+                detail["cleared"] = stale
             now = _now()
-            conn.execute("UPDATE facts SET text = ?, text_key = ? WHERE id = ?", (text, text_key(text), fact_id))
-            self._event(conn, fact_id, "edited", actor, now, json.dumps({"from": old}))
+            conn.execute("UPDATE facts SET text = ?, text_key = ?, flags = ? WHERE id = ?",
+                         (text, text_key(text), json.dumps([flag for flag in flags if flag not in stale]), fact_id))
+            self._event(conn, fact_id, "edited", actor, now, json.dumps(detail))
 
     # ---- the advisory checks (docs/STAGE2_DESIGN.md, D5; the methods are in diya_checks.py) ----
     def set_flags(self, fact_id, flags, actor):
@@ -457,7 +465,8 @@ class Memory:
         extracted from and at every other fact, so they are recomputed each time -- a fact that was a
         `duplicate` stops being one when the accepted copy is retired. What cleaning says about the text
         (preamble, too_long) is recomputed too, so editing a fact shorter drops its `too_long` flag; those
-        flags stay in front. Returns (candidates checked, how many changed)."""
+        flags stay in front. A model's second opinion (`verifier:`), which is asked for on request and cannot be
+        recomputed here, is kept, at the end. Returns (candidates checked, how many changed)."""
         import diya_checks
 
         every = self.facts()
@@ -477,7 +486,8 @@ class Memory:
             others = [{"id": o["id"], "text": o["text"], "status": o["status"]} for o in every if o["id"] != fact["id"]]
             cleaned = normalise_fact(fact["text"])  # what cleaning says about the text as it is NOW (it may have been edited)
             kept = list(cleaned.flags) if cleaned is not None else []
-            flags = kept + diya_checks.check_flags({"id": fact["id"], "text": fact["text"]}, messages, others)
+            opinion = [flag for flag in fact["flags"] if flag.startswith(VERIFIER_PREFIX)]
+            flags = kept + diya_checks.check_flags({"id": fact["id"], "text": fact["text"]}, messages, others) + opinion
             if self.set_flags(fact["id"], flags, actor):
                 changed += 1
         return checked, changed
@@ -667,6 +677,11 @@ def printable(text, limit=None):
     return "".join(out)
 
 
+_VERIFIER_SHORT = {
+    "yes": "model's second look: supported (unreliable)",
+    "no": "model's second look: not supported (unreliable)",
+    "unclear": "model's second look: no clear answer (unreliable)",
+}
 _FLAG_SHORT = {
     "ungrounded": "ungrounded",
     "instruction_shaped": "looks like an instruction",
@@ -687,6 +702,8 @@ def flag_short(flag):
         return f"similar to fact {printable(arg)}"
     if name == "previously_rejected":
         return f"rejected before as fact {printable(arg)}"
+    if name == "verifier" and arg in _VERIFIER_SHORT:
+        return _VERIFIER_SHORT[arg]
     return _FLAG_SHORT.get(name) or printable(flag)
 
 
@@ -704,6 +721,9 @@ def flag_long(memory, flag):
         return f"{name}: {detail[name]}"
     if name == "source_message":
         return f"source_message: the message it best matches is {printable(arg)}"
+    if name == "verifier" and arg in _VERIFIER_SHORT:
+        return (f"verifier: the same small model was asked whether the messages this came from support it, and said {arg}. "
+                "It shares the blind spots of the model that proposed the fact, so this is a hint, never evidence.")
     if name in ("duplicate", "similar", "previously_rejected"):
         verb = {"duplicate": "says the same as", "similar": "shares most of its words with",
                 "previously_rejected": "is the same as one you rejected,"}[name]

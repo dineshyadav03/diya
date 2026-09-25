@@ -32,10 +32,10 @@ class FakeClient:
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
         self.embeddings = SimpleNamespace(create=self._embed)
 
-    def _create(self, model, messages, tools=None):
+    def _create(self, model, messages, tools=None, **options):
         if self._chat_error:
             raise self._chat_error
-        self.chat_calls.append({"model": model, "messages": list(messages), "tools": tools})
+        self.chat_calls.append({"model": model, "messages": list(messages), "tools": tools, "options": options})
         return self.replies.pop(0)
 
     def _embed(self, model, input):

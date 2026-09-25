@@ -216,13 +216,14 @@ Remaining:
    questions (roughly 40-50% of past runs), which prompt and temperature changes did not fix.
 2. Trustworthy memory. The review-and-promote step for staged facts. Reference for the
    verification step: the solver/verifier separation (Apodex). Designed in
-   [`docs/STAGE2_DESIGN.md`](docs/STAGE2_DESIGN.md) as seven units. **Built (units 1 to 6):** storage
+   [`docs/STAGE2_DESIGN.md`](docs/STAGE2_DESIGN.md) as seven units. **Built (all seven units):** storage
    (`diya_memory.py`, migration 2); cleaning staged lines, ingesting the queue and importing the old
    profile; deterministic checks (`diya_checks.py`); the review command line (`diya_review.py`); and the
    switch: the model is told the accepted facts, the old `user_profile.txt` was imported once, and
    `DIYA_DREAM_PROFILE_MODE=direct` was retired. Unit 6 is built too: the same review on the UI's Memory
-   page (`diya_memory_api.py`, `frontend/app/memory`). **Remaining:** an optional, advisory model verifier
-   (unit 7).
+   page (`diya_memory_api.py`, `frontend/app/memory`); and an optional, advisory model verifier (`diya_verifier.py`,
+   `python diya_review.py judge`), measured on invented cases (`python diya_evals.py --verifier`). **Not done:**
+   comparing the verifier with your own accept/reject decisions, once there are enough of them.
 3. Connectors and permissions.
 4. Durable workflows. The competitive battleground: every comparable leads with "describe an
    outcome, it follows through". Reference: Muse-style approval gates and action trails.

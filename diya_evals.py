@@ -167,8 +167,98 @@ def run_evals(agent, cases=TEST_CASES):
     return failed == 0
 
 
-def main(client=None):
+def _labelled_cases():
+    """The hand-written, fictional cases in tests/labelled_facts.py, loaded by path (tests/ is not a package)."""
+    import importlib.util
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tests", "labelled_facts.py")
+    spec = importlib.util.spec_from_file_location("labelled_facts", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.GROUNDING, module.VERIFIER_PROBES
+
+
+def verifier_report(result, model, plain_flags):
+    """The lines that say how the advisory verifier did. `result` is diya_verifier.measure()'s answer and
+    `plain_flags` says, case by case, whether the plain-code grounding check flagged the fact."""
+    rows = result["rows"]
+    said = {(r["supported"], r["verdict"]): 0 for r in rows}
+    for r in rows:
+        said[(r["supported"], r["verdict"])] += 1
+    unsupported = [(r, f) for r, f in zip(rows, plain_flags) if not r["supported"]]
+    supported = [(r, f) for r, f in zip(rows, plain_flags) if r["supported"]]
+
+    def count(pairs, test):
+        return sum(1 for r, f in pairs if test(r, f))
+
+    lines = [
+        f"Advisory verifier ({model}) on {len(rows)} hand-written, fictional cases: {len(unsupported)} facts the messages do not "
+        f"support, {len(supported)} they do. These cases are the numbers' whole basis: they are not real conversations.",
+        f"  unsupported facts: verifier said no {said.get((False, 'no'), 0)} (caught), yes {said.get((False, 'yes'), 0)} (missed), "
+        f"unclear {said.get((False, 'unclear'), 0)}",
+        f"  supported facts:   verifier said yes {said.get((True, 'yes'), 0)}, no {said.get((True, 'no'), 0)} (false alarm), "
+        f"unclear {said.get((True, 'unclear'), 0)}",
+        f"  the plain-code check on the same cases: caught {count(unsupported, lambda r, f: f)} of {len(unsupported)}, "
+        f"false alarms {count(supported, lambda r, f: f)} of {len(supported)}",
+        f"  flagged by either (plain code, or the verifier saying no): caught "
+        f"{count(unsupported, lambda r, f: f or r['verdict'] == 'no')} of {len(unsupported)}, false alarms "
+        f"{count(supported, lambda r, f: f or r['verdict'] == 'no')} of {len(supported)}",
+    ]
+    limits = [(r, f) for r, f in zip(rows, plain_flags) if r["limit"]]
+    if limits:
+        lines.append("  the cases the plain-code check is known to get wrong (the verifier's chance to add something):")
+        for r, f in limits:
+            truth = "supported" if r["supported"] else "not supported"
+            lines.append(f"    [{r['limit']}] {r['claim']!r} is {truth}: verifier said {r['verdict']}")
+    return lines
+
+
+def probe_report(result):
+    """The lines for the harder probes (implied, steering, tricky). A verdict is right when it says yes for a
+    supported fact and no for an unsupported one; `unclear` is never right."""
+    lines = ["  harder probes (implied = true only by implication; steering = a message telling it what to say; tricky = negation, hearsay, a question):"]
+    for kind in ("implied", "steering", "tricky"):
+        rows = [r for r in result["rows"] if r["limit"] == kind]
+        wrong = [r for r in rows if r["verdict"] != ("yes" if r["supported"] else "no")]
+        lines.append(f"    {kind}: right on {len(rows) - len(wrong)} of {len(rows)}")
+        for r in wrong:
+            truth = "supported" if r["supported"] else "not supported"
+            lines.append(f"      wrong: {r['claim']!r} is {truth}, verifier said {r['verdict']}")
+    return lines
+
+
+def measure_verifier(client=None, model=None, out=None):
+    """`python diya_evals.py --verifier`: how good the advisory second opinion (diya_verifier.py) is, on the labelled
+    fictional cases. Touches no database and no real message: only the fixture cases go to the model."""
+    import diya_checks
+    import diya_verifier
+
+    out = sys.stdout if out is None else out
+    config = diya_config.load_config()
+    model = model or config.model
+    if client is None:
+        from openai import OpenAI
+
+        client = OpenAI(base_url=config.ollama_url, api_key="ollama", timeout=120)
+    cases, probes = _labelled_cases()
+    plain_flags = [
+        diya_checks.grounding(fact, list(enumerate(messages, 1)))[0] < diya_checks.GROUNDED_MIN for messages, fact, *_ in cases
+    ]
+    try:
+        result = diya_verifier.measure(client, model, cases)
+        probed = diya_verifier.measure(client, model, probes)
+    except diya_verifier.ModelUnavailable as exc:
+        print(f"Could not reach the model ({exc}). Is Ollama running, with {model} pulled?", file=out)
+        return 2
+    for line in verifier_report(result, model, plain_flags) + probe_report(probed):
+        print(line, file=out)
+    return 0
+
+
+def main(client=None, argv=None):
     diya.configure_console()
+    if "--verifier" in (sys.argv[1:] if argv is None else argv):
+        return measure_verifier(client)
     with tempfile.TemporaryDirectory(prefix="diya-evals-", ignore_cleanup_errors=True) as workdir:
         agent = make_eval_agent(workdir, client)
         diya.warm_up_or_exit(agent)
