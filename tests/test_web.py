@@ -28,10 +28,13 @@ class FakeTranscriber:
 
 @pytest.fixture
 def config(tmp_path):
+    # These tests are about the routes and startup; the access token (required by default) has its
+    # own tests in test_token.py, so it is opted out here.
     return dataclasses.replace(
         diya_config.load_config(),
         db_path=str(tmp_path / "web.db"),
         profile_path=str(tmp_path / "web_profile.txt"),
+        require_token=False,
     )
 
 
@@ -72,6 +75,7 @@ def test_building_the_default_app_touches_nothing(run_python, tmp_path):
 
 def test_the_default_app_follows_the_environment(monkeypatch, tmp_path):
     monkeypatch.setenv("DIYA_DB_PATH", str(tmp_path / "env.db"))
+    monkeypatch.setenv("DIYA_REQUIRE_TOKEN", "0")  # about following the environment, not the token
     client = TestClient(diya_web.create_app(transcriber=FakeTranscriber()), base_url=LOCAL)
     assert client.get("/api/threads").json() == {"threads": []}
     assert (tmp_path / "env.db").exists()
@@ -218,6 +222,7 @@ def test_whisper_warm_up_prints_the_legacy_progress_lines(fake_whisper, capsys):
 
 def test_the_default_transcriber_uses_the_configured_model(monkeypatch, fake_whisper):
     monkeypatch.setenv("DIYA_WHISPER_MODEL", "tiny")
+    monkeypatch.setenv("DIYA_REQUIRE_TOKEN", "0")  # about the transcriber, not the token
     app = diya_web.create_app(agent=diya.Agent(client=FakeClient()))
     TestClient(app, base_url=LOCAL).post("/api/transcribe", files={"audio": ("c.webm", b"x", "audio/webm")})
     assert fake_whisper == [("tiny", "cpu", "int8")]
@@ -279,6 +284,7 @@ def test_main_in_lan_mode_listens_on_all_interfaces_and_answers_to_the_named_hos
     write_mkcert_pair(tmp_path)
     monkeypatch.setenv("DIYA_LAN", "1")
     monkeypatch.setenv("DIYA_ALLOWED_HOSTS", "phone.local")
+    monkeypatch.setenv("DIYA_REQUIRE_TOKEN", "0")  # about which Host is answered; the token is test_token.py's
     diya_web.main()
     assert (served["host"], served["port"]) == ("0.0.0.0", 8080)
     out = capsys.readouterr().out

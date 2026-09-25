@@ -1,7 +1,9 @@
 """The per-install access token: generation, storage and verification (diya_web.py, diya_config.py).
-Stage 1 design, unit 3 (docs/STAGE1_DESIGN.md section 3 and the "Rollout plan" -> "Bearer token
-middleware, generated but not required"). A random token is shown once and only its SHA-256 is
-kept; once DIYA_REQUIRE_TOKEN is on, every request must carry it; and until then, nothing changes.
+Stage 1 design, units 3 and 5 (docs/STAGE1_DESIGN.md section 3 and the "Rollout plan" -> "Bearer
+token middleware" and "Flip DIYA_REQUIRE_TOKEN to default on"). A random token is shown once and
+only its SHA-256 is kept; every request must carry it unless DIYA_REQUIRE_TOKEN=0, the explicit
+opt-out. (Unit 3 shipped it off by default; unit 5 flipped the default once the Next.js proxy could
+hold the token for the UI.)
 """
 import asyncio
 import base64
@@ -30,9 +32,10 @@ def auth(token):
     return {"Authorization": f"Bearer {token}"}
 
 
-def client_for(tmp_path, require="1"):
-    """An app whose token file is <tmp_path>/token.hash. `require` is DIYA_REQUIRE_TOKEN's value
-    (None leaves it unset, i.e. the default)."""
+def client_for(tmp_path, require=None):
+    """An app whose token file is <tmp_path>/token.hash. `require` is DIYA_REQUIRE_TOKEN's value;
+    None leaves it unset, i.e. the real default (the token is required), so most tests here run the
+    app exactly as a fresh install gets it."""
     env = {"DIYA_TOKEN_PATH": str(tmp_path / "token.hash")}
     if require is not None:
         env["DIYA_REQUIRE_TOKEN"] = require
@@ -216,18 +219,26 @@ def test_the_hashes_are_compared_with_hmac_compare_digest_not_equality(tmp_path,
     assert calls == [(hashlib.sha256(wrong.encode()).digest(), stored)]  # a wrong one is compared the same way
 
 
-# --- 5. off by default, with a tripwire for the day that changes ----------------------------------
+# --- 5. required by default; DIYA_REQUIRE_TOKEN=0 is the explicit opt-out --------------------------
 
-def test_TRIPWIRE_the_token_is_not_required_by_default():
-    """Step 5 of docs/STAGE1_DESIGN.md's rollout plan flips this default -- deliberately, and only
-    once the Next.js proxy exists to hold the token for the browser (flip it before that and the
-    UI is locked out). This test is meant to fail loudly the moment the default changes: update it,
-    README.md, ROADMAP.md and PRODUCT_VISION.md together, and add the DIYA_REQUIRE_TOKEN=0 opt-out."""
-    assert load_config({}).require_token is False
+def test_TRIPWIRE_the_token_is_required_by_default():
+    """Step 5 of docs/STAGE1_DESIGN.md's rollout plan flipped this default (unit 3 shipped it False
+    and this test then asserted that). Flipping it back re-opens the gap the whole stage exists to
+    close -- any process on this computer, or any device that sends an allowed Host, could call the
+    API -- so this fails on purpose if it changes: update it, README.md, ROADMAP.md,
+    PRODUCT_VISION.md and docs/lan.md together, and say why."""
+    assert load_config({}).require_token is True
 
 
-@pytest.mark.parametrize("require", [None, "0", "false", "off", "no"])
-def test_when_not_required_no_route_asks_for_a_token(tmp_path, require):
+def test_a_fresh_install_requires_the_token_on_every_route(tmp_path, token):
+    client, _ = client_for(tmp_path)  # DIYA_REQUIRE_TOKEN unset: the default
+    for method, path, kwargs in ENDPOINTS:
+        assert client.request(method, path, **kwargs).status_code == 401, (method, path)
+        assert client.request(method, path, headers=auth(token), **kwargs).status_code == 200, (method, path)
+
+
+@pytest.mark.parametrize("require", ["0", "false", "off", "no"])
+def test_the_explicit_opt_out_means_no_route_asks_for_a_token(tmp_path, require):
     client, app = client_for(tmp_path, require=require)
     for method, path, kwargs in ENDPOINTS:
         assert client.request(method, path, **kwargs).status_code == 200, (method, path)
@@ -235,9 +246,9 @@ def test_when_not_required_no_route_asks_for_a_token(tmp_path, require):
     assert client.get("/api/threads", headers=auth("not-a-token")).status_code == 200
 
 
-def test_when_not_required_the_token_file_is_not_even_read(tmp_path):
+def test_an_app_that_opted_out_does_not_even_read_the_token_file(tmp_path):
     (tmp_path / "token.hash").write_text("this is not a hash")
-    client, _ = client_for(tmp_path, require=None)  # would raise if the app tried to read it
+    client, _ = client_for(tmp_path, require="0")  # would raise if the app tried to read it
     assert client.get("/api/threads").status_code == 200
 
 
@@ -307,14 +318,19 @@ def test_a_file_that_is_not_a_hash_is_an_error_and_is_left_alone(tmp_path, garba
 
 # --- configuration -------------------------------------------------------------------------------
 
-def test_token_settings_default_to_a_local_file_not_required_and_no_rotation():
+def test_token_settings_default_to_a_local_file_required_and_no_rotation():
     config = load_config({})
-    assert (config.token_path, config.require_token, config.rotate_token) == ("diya_token.hash", False, False)
+    assert (config.token_path, config.require_token, config.rotate_token) == ("diya_token.hash", True, False)
 
 
 def test_token_settings_can_be_set():
     config = load_config({"DIYA_TOKEN_PATH": "x/t.hash", "DIYA_REQUIRE_TOKEN": "yes", "DIYA_ROTATE_TOKEN": "1"})
     assert (config.token_path, config.require_token, config.rotate_token) == ("x/t.hash", True, True)
+
+
+@pytest.mark.parametrize("word", ["0", "false", "no", "off", "FALSE", " Off "])
+def test_the_opt_out_words_turn_the_requirement_off(word):
+    assert load_config({"DIYA_REQUIRE_TOKEN": word}).require_token is False
 
 
 @pytest.mark.parametrize("name", ["DIYA_REQUIRE_TOKEN", "DIYA_ROTATE_TOKEN"])
@@ -355,16 +371,18 @@ def test_main_generates_and_shows_a_token_on_first_start(served, cert, tmp_path,
     (token,) = shown_tokens(out)
     assert out.count(token) == 1  # shown once
     assert (tmp_path / "diya_token.hash").read_text() == diya_web.hash_token(token) + "\n"
-    assert "Nothing requires it yet" in out
+    assert "The API requires it" in out and "set DIYA_TOKEN to it" in out  # the UI needs it too
+    assert "shown at first start" not in out  # that reminder is for the starts after this one
 
 
-def test_main_shows_nothing_and_changes_nothing_on_a_later_start(served, cert, tmp_path, capsys):
+def test_main_shows_the_token_again_never_but_reminds_where_it_went_on_a_later_start(served, cert, tmp_path, capsys):
     diya_web.main()
     capsys.readouterr()
     before = (tmp_path / "diya_token.hash").read_bytes()
     diya_web.main()
     out = capsys.readouterr().out
-    assert shown_tokens(out) == [] and "access token" not in out
+    assert shown_tokens(out) == [] and "generated" not in out
+    assert "shown at first start" in out and "--rotate-token replaces a lost one" in out
     assert (tmp_path / "diya_token.hash").read_bytes() == before
 
 
@@ -383,11 +401,21 @@ def test_main_rotates_the_token_on_request(served, cert, tmp_path, capsys, monke
     assert (tmp_path / "diya_token.hash").read_text() == diya_web.hash_token(new) + "\n"
 
 
-def test_main_says_how_to_send_the_token_when_it_is_required(served, cert, capsys, monkeypatch):
-    monkeypatch.setenv("DIYA_REQUIRE_TOKEN", "1")
+def test_main_says_how_to_send_the_token_since_it_is_required_by_default(served, cert, capsys):
     diya_web.main()
     out = capsys.readouterr().out
-    assert "Authorization: Bearer" in out and "Nothing requires it yet" not in out
+    assert "Authorization: Bearer" in out and "nothing requires it" not in out
+
+
+def test_main_with_the_opt_out_says_nothing_requires_the_token_and_does_not_nag(served, cert, tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("DIYA_REQUIRE_TOKEN", "0")
+    diya_web.main()
+    first = capsys.readouterr().out
+    assert len(shown_tokens(first)) == 1  # a token is still minted, so turning the requirement on later needs nothing new
+    assert "DIYA_REQUIRE_TOKEN=0: nothing requires it" in first and "Authorization: Bearer" not in first
+    diya_web.main()
+    later = capsys.readouterr().out
+    assert shown_tokens(later) == [] and "access token" not in later and "shown at first start" not in later
 
 
 def test_main_does_not_mint_a_token_for_a_server_that_refuses_to_start(served, tmp_path, capsys, monkeypatch):
@@ -419,13 +447,13 @@ def test_main_refuses_to_start_when_the_token_file_cannot_be_written(served, cer
     assert "Couldn't start Diya's server" in capsys.readouterr().out and "app" not in served
 
 
-def test_the_app_main_serves_asks_for_the_token_only_when_told_to(served, cert, capsys, monkeypatch):
+def test_the_app_main_serves_asks_for_the_token_unless_opted_out(served, cert, capsys, monkeypatch):
     diya_web.main()
     (token,) = shown_tokens(capsys.readouterr().out)
-    assert TestClient(served["app"], base_url=HOST).get("/no/such/route").status_code == 404  # not required
-
-    monkeypatch.setenv("DIYA_REQUIRE_TOKEN", "1")
-    diya_web.main()
     client = TestClient(served["app"], base_url=HOST)
-    assert client.get("/no/such/route").status_code == 401
+    assert client.get("/no/such/route").status_code == 401  # required by default
     assert client.get("/no/such/route", headers=auth(token)).status_code == 404
+
+    monkeypatch.setenv("DIYA_REQUIRE_TOKEN", "0")
+    diya_web.main()
+    assert TestClient(served["app"], base_url=HOST).get("/no/such/route").status_code == 404  # opted out

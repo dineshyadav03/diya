@@ -99,8 +99,9 @@ scripts; the assistant does not read that file.
 - A per-install access token is generated on the first start and shown once; only its SHA-256 is
   kept, in `diya_token.hash`. An outermost middleware answers 401 (`WWW-Authenticate: Bearer`) to
   any request without `Authorization: Bearer <token>`, on every route, comparing hashes with
-  `hmac.compare_digest`. It is off by default (`DIYA_REQUIRE_TOKEN`); turning it on works now, with
-  `DIYA_TOKEN` set for the UI. `--rotate-token` (or `DIYA_ROTATE_TOKEN=1`) replaces it.
+  `hmac.compare_digest`. It is required by default, so another process on this computer (or a LAN
+  device that merely knows an allowed `Host`) is refused; `DIYA_REQUIRE_TOKEN=0` is the explicit
+  opt-out. The UI needs it as `DIYA_TOKEN`. `--rotate-token` (or `DIYA_ROTATE_TOKEN=1`) replaces it.
 - The browser never holds that token. It calls the UI's own `/api/*` routes; the Next.js server
   forwards each to the API at a fixed loopback address (`127.0.0.1:<DIYA_PORT>`, never derived from
   the request, so a forged `Host` cannot steer the token) and adds `Authorization: Bearer
@@ -114,12 +115,12 @@ scripts; the assistant does not read that file.
 - Personal data (`diya.db`, `user_profile.txt`, the `dream_*` and `watcher_*` files, certificates) is
   gitignored. The test suite and the evals cannot reach the live database.
 
-**Known gaps.** The access token is not required by default, so any local process can call the API (and
-in LAN mode, any device that sends an allowed `Host`). `web_search` is outside the outbound-host allowlist: its
-requests are made by the `ddgs` library (through `primp`), which this code cannot wrap, and "the open
-web on request" has no short list of hosts to allow; the options are in `docs/STAGE1_DESIGN.md`
-section 4. Models are pulled by tag, not pinned -- `ollama pull` has no way to require an exact
-digest. Requiring the token and the model pinning are Stage 0 items in `ROADMAP.md`.
+**Known gaps.** `web_search` is outside the outbound-host allowlist: its requests are made by the
+`ddgs` library (through `primp`), which this code cannot wrap, and "the open web on request" has no
+short list of hosts to allow; the options are in `docs/STAGE1_DESIGN.md` section 4. The token is a
+single long-lived secret per install: it does not expire, and only rotating it (`--rotate-token`)
+invalidates it, a deliberate choice for one user on one machine. Models are pulled by tag, not
+pinned -- `ollama pull` has no way to require an exact digest, a Stage 0 item in `ROADMAP.md`.
 
 ## Deployment today
 
@@ -148,6 +149,6 @@ to `dream_log.txt` and `watcher_log.txt`.
 
 ## Next
 
-Stage 0 (`ROADMAP.md`): requiring the per-install token by default
-(the proxy that lets the UI hold it is built), and model pinning (blocked on Ollama's own tooling). Then the review and
-promotion step for staged facts. The stage list is in the roadmap.
+Stage 0 (`ROADMAP.md`): model pinning (blocked on Ollama's own tooling); the rest of the Stage 1
+trust design is built. Then the review and promotion step for staged facts. The stage list is in
+the roadmap.

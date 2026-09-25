@@ -94,6 +94,26 @@ Done:
       hash refuses everything, and a token file that is not a hash stops startup rather than being
       overwritten. `tests/test_token.py` (65 tests, 30 of 30 mutations caught, including the
       design's five), plus a live run against a real server on a spare port over real TLS.
+- [x] The access token is required by default (Stage 1 design unit 5, the last unit; closes
+      "Deployment A" in [`docs/STAGE1_DESIGN.md`](docs/STAGE1_DESIGN.md) section 1: any other
+      process on this computer, or a LAN device that merely knows an allowed `Host`, could call the
+      API). `DIYA_REQUIRE_TOKEN` now defaults to on; `DIYA_REQUIRE_TOKEN=0` is the explicit opt-out
+      for anyone who deliberately wants the old unauthenticated API (the token is still generated,
+      so turning it back on needs nothing new). The tripwire test that unit 3 shipped
+      (`test_TRIPWIRE_the_token_is_not_required_by_default`) now asserts the opposite and fails if
+      the default flips back. Every earlier test that built an app with default config expected
+      200, so 60 of them, in the boundary, body-limit, web and fact-share tests, failed at once (and
+      7 in `test_token.py` that asserted the old default); each of the 60 now opts out explicitly
+      (`DIYA_REQUIRE_TOKEN=0`, with a comment) so it keeps testing what it is named for, and
+      `tests/test_token.py` runs the app exactly as a fresh install gets it. New:
+      a start of the API after the first prints a one-line reminder of where the token went and how
+      to replace it (`--rotate-token`), and `npm run dev` says at startup when the UI has no
+      `DIYA_TOKEN` (in its environment or a `.env` file) and the requirement isn't opted out.
+      Verified live on real processes with no `DIYA_REQUIRE_TOKEN` set anywhere: a plain request to
+      the API is refused; the real UI with `DIYA_TOKEN` works and the browser holds nothing; the UI
+      without it gets the API's 401 and says why; a later API start keeps the token; the opt-out
+      restores the old behaviour. The one thing to expect after upgrading: the next API start prints
+      a token once, and the UI needs it as `DIYA_TOKEN` (see `docs/lan.md`) or it gets 401s.
 - [x] Next.js proxy, so the browser holds no token (Stage 1 design unit 4,
       [`docs/STAGE1_DESIGN.md`](docs/STAGE1_DESIGN.md) section 3). The browser now calls the UI's
       own `/api/chat`, `/api/threads`, `/api/history/<id>` and `/api/transcribe`
@@ -155,10 +175,6 @@ Done:
 
 Remaining:
 
-- [ ] Auth, remaining increments:
-  - [ ] Require the token by default, with a `DIYA_REQUIRE_TOKEN=0` opt-out (unit 5). The proxy
-        that lets the UI hold the token is live, so this is the default flip plus its docs; a test
-        fails on purpose when the default changes
 - [ ] **Models pinned by digest: not possible with the current tooling.** `ollama pull` (CLI 0.34.2)
       rejects a `name@sha256:digest` model reference outright ("invalid model name"), tried as
       `qwen2.5:3b@sha256:...`, `qwen2.5@sha256:...` and `library/qwen2.5@sha256:...`; only a tag

@@ -15,7 +15,7 @@
 // with --use-system-ca (Node 22.15+/23.9+) unless it is already there.
 // `next start` cannot serve TLS, so only `dev` is HTTPS; `start` is plain HTTP.
 import { spawn } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -48,6 +48,24 @@ function certificate(env) {
     fail('no TLS certificate found. Put an mkcert pair in the repo root (mkcert localhost 127.0.0.1 ::1), or set DIYA_SSL_CERT and DIYA_SSL_KEY')
   }
   return pairs[0]
+}
+
+// The API requires an access token by default and the UI's server is what sends it (lib/proxy.mjs,
+// from DIYA_TOKEN). Whether it has one: in this environment, or in one of the .env files Next itself
+// loads (frontend/.env.local is the documented place). Someone running the API with
+// DIYA_REQUIRE_TOKEN=0 has opted out and needs none.
+function uiHasToken(env) {
+  if ((env.DIYA_TOKEN || '').trim()) return true
+  for (const name of ['.env.local', '.env.development.local', '.env.development', '.env']) {
+    try {
+      if (/^\s*DIYA_TOKEN\s*=\s*\S/m.test(readFileSync(join(frontendDir, name), 'utf8'))) return true
+    } catch {} // no such file
+  }
+  return false
+}
+
+function tokenOptedOut(env) {
+  return ['0', 'false', 'no', 'off'].includes((env.DIYA_REQUIRE_TOKEN || '').trim().toLowerCase())
 }
 
 // The environment the UI server must be started with so that its own HTTPS calls to the API
@@ -87,6 +105,14 @@ if (process.argv.includes('--dry-run')) {
       `LAN mode: the UI is served on every interface. Its server forwards the browser's API calls to ` +
         `the API on this computer, so the API needs neither DIYA_LAN nor DIYA_ALLOWED_HOSTS for the UI; ` +
         `those only matter for another device that calls the API directly.`,
+    )
+  }
+  if (!uiHasToken(process.env) && !tokenOptedOut(process.env)) {
+    console.warn(
+      `DIYA_TOKEN is not set for the UI. The API requires an access token by default, so every request ` +
+        `from the UI will be refused (401) until it is: put the token the API printed at its first start in ` +
+        `DIYA_TOKEN in this terminal, or in frontend/.env.local (a lost token: start the API once with ` +
+        `--rotate-token). If the API runs with DIYA_REQUIRE_TOKEN=0, set that here too. See docs/lan.md.`,
     )
   }
   if (!systemTrust && !(process.env.NODE_EXTRA_CA_CERTS || '').trim()) {

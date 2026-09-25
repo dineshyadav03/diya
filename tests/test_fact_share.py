@@ -60,6 +60,7 @@ def config(tmp_path):
         diya_config.load_config(),
         db_path=str(tmp_path / "t.db"),
         profile_path=str(tmp_path / "profile.txt"),
+        require_token=False,  # about fact-shares over the web, not the access token (see test_token.py)
     )
 
 

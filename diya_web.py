@@ -279,8 +279,8 @@ def create_app(config=None, agent=None, transcriber=None):
     # limit above) is reached by a request for the wrong Host or from the wrong Origin.
     app.add_middleware(BoundaryMiddleware, allowed_hosts=allowed_hosts, allowed_origins=allowed_origins)
     # Added after that, so it is outermost of all: a request with no token is refused before the
-    # Host/Origin check has spent any effort on it. Off unless DIYA_REQUIRE_TOKEN is set (the
-    # stored hash is only read when it is needed, so the default touches no file).
+    # Host/Origin check has spent any effort on it. On unless DIYA_REQUIRE_TOKEN=0 (the stored hash
+    # is only read when it is needed, so an app that opted out touches no file).
     app.add_middleware(
         TokenMiddleware,
         token_hash=read_token_hash(config.token_path) if config.require_token else None,
@@ -366,9 +366,10 @@ def main():
             print("The previous token no longer works.")
         print(f"    {new_token}")
         if config.require_token:
-            print("Send it as 'Authorization: Bearer <token>' on every request.")
+            print("The API requires it: send it as 'Authorization: Bearer <token>'. The UI needs it too: "
+                  "set DIYA_TOKEN to it (see docs/lan.md), then restart the UI.")
         else:
-            print("Nothing requires it yet; set DIYA_REQUIRE_TOKEN=1 to make the API demand it.")
+            print("DIYA_REQUIRE_TOKEN=0: nothing requires it.")
 
     agent = diya.Agent(config)
     diya.warm_up_or_exit(agent)
@@ -380,6 +381,10 @@ def main():
               f"answering to {', '.join(diya_config.api_allowed_hosts(config))}.")
     else:
         print(f"Diya's API is listening on {config.host}:{config.port} (this computer only).")
+    if config.require_token and new_token is None:
+        # not the first start, so the token isn't shown again: say where it went, and how to replace it
+        print("It requires the access token that was shown at first start (--rotate-token replaces a "
+              "lost one; DIYA_REQUIRE_TOKEN=0 turns the requirement off).")
     uvicorn.run(
         create_app(config, agent, transcriber),
         host=config.host,

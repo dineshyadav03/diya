@@ -40,10 +40,13 @@ The browser only ever talks to the UI, on its own origin. The UI's `/api/*` rout
 configuration, never from the browser's request, so a phone at `https://<name-or-ip>:3000`, or a
 request with a forged `Host`, changes nothing about where the forwarded request goes.
 
-- **Access token.** If the API requires one (`DIYA_REQUIRE_TOKEN=1`), the UI server attaches it, so
-  the browser never holds it. Put the token the API printed at first start in `DIYA_TOKEN` in the
-  environment of the terminal that runs `npm run dev` (PowerShell: `$env:DIYA_TOKEN = "<token>"`), or
-  in `frontend/.env.local` (gitignored). Without it the API's 401 comes straight through. Only the
+- **Access token.** The API requires one by default, so the UI server attaches it and the browser
+  never holds it. Put the token the API printed at its first start in `DIYA_TOKEN` in the
+  environment of the terminal that runs `npm run dev` (PowerShell: `$env:DIYA_TOKEN = "<token>"`;
+  POSIX: `export DIYA_TOKEN=<token>`), or on a line `DIYA_TOKEN=<token>` in `frontend/.env.local`
+  (gitignored). Only a hash is kept, so a lost token can't be shown again: start the API once with
+  `--rotate-token` (or `DIYA_ROTATE_TOKEN=1`, removed again afterwards) and use the new one. Without
+  `DIYA_TOKEN` the API's 401 comes straight through and `npm run dev` says so at startup. Only the
   content type and that token are taken from the browser's request; its cookies, `Authorization`
   and everything else are dropped. The token is only sent over https, or to this computer itself.
 - **Settings.** `DIYA_PORT` (the API's port; the UI server follows it, so a non-default port now
@@ -67,7 +70,9 @@ request with a forged `Host`, changes nothing about where the forwarded request 
 - `npm run dev` listens on 127.0.0.1 only; `npm run dev:lan` on all interfaces. Neither turns LAN
   mode on for the API: step 4 does, and the UI does not need it.
 
-**The access token is not required by default yet.** With `DIYA_REQUIRE_TOKEN=1` on the API and
-`DIYA_TOKEN` set for the UI it is enforced today; without them, any device that can reach a port
-the API is listening on, and sends an allowed `Host`, can use it. In LAN mode use it on a network you
-trust. Requiring the token by default is on the [roadmap](../ROADMAP.md).
+**The API requires its access token by default.** Anything that calls it directly (curl, a script)
+sends `Authorization: Bearer <token>`; another process on this computer, or a device on the LAN that
+merely knows an allowed `Host`, is refused with a 401, docs pages included. `DIYA_REQUIRE_TOKEN=0` is
+the explicit opt-out for anyone who deliberately wants the old unauthenticated API (the token is still
+generated, so turning the requirement back on needs nothing new); with it, use LAN mode only on a
+network you trust, and set `DIYA_REQUIRE_TOKEN=0` for the UI too if you want its startup hint gone.

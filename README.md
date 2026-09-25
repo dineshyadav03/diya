@@ -18,11 +18,17 @@ ollama pull nomic-embed-text
 pip install .                              # every version pinned in pyproject.toml
 mkcert -install                            # once per machine
 mkcert localhost 127.0.0.1 ::1             # writes localhost+2.pem and localhost+2-key.pem here
-python diya_web.py                         # Ollama must be running; first run downloads Whisper
+python diya_web.py                         # Ollama must be running; first run downloads Whisper and prints an access token once
 cd frontend                                # second terminal: the server above keeps running
 npm install
-npm run dev                                # then open https://localhost:3000
+npm run dev                                # set DIYA_TOKEN to that token first (below); then open https://localhost:3000
 ```
+
+The API requires an access token; the UI's server sends it for you. Set `DIYA_TOKEN` to the token the
+API printed at first start (PowerShell: `$env:DIYA_TOKEN = "<token>"`; POSIX: `export DIYA_TOKEN=<token>`)
+before `npm run dev`, or put `DIYA_TOKEN=<token>` in `frontend/.env.local` (gitignored). Only a hash is
+kept, so a lost token can't be shown again: start the API once with `--rotate-token`.
+`DIYA_REQUIRE_TOKEN=0` turns the requirement off. Details in [docs/lan.md](docs/lan.md).
 
 `pyproject.toml` pins every direct dependency to an exact version. `requirements.lock` pins the
 full dependency tree with hashes; `pip install --require-hashes -r requirements.lock` is the most
@@ -39,12 +45,11 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Hold-to-talk voice input through local Whisper, and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
 - Facts it extracts wait in a review queue; nothing enters your profile automatically.
-- The API listens on localhost only, checks Host and Origin, and rejects an over-size body (413); 658 tests pass on Windows (as of 2026-09-24).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 678 tests pass on Windows (as of 2026-09-25).
 
 ## Known limits
 
 - Staged facts are not reviewed or promoted yet, so they never reach the model.
-- The access token is not required yet: it is shown once at first start (only its hash is kept, in `diya_token.hash`). Until you set `DIYA_REQUIRE_TOKEN=1` for the API and `DIYA_TOKEN=<the token>` for the UI, any local process can call the API.
 - `web_search` is not covered by the outbound-host allowlist that limits `get_weather` to Open-Meteo (`DIYA_TOOL_ALLOWED_HOSTS`).
 - Models are pulled by tag, not pinned; the 3B model sometimes calls tools it should not.
 

@@ -185,7 +185,9 @@ class FakeTranscriber:
 
 
 def app_for(env=None, tmp_path=None, transcriber=None):
-    config = load_config(env or {})
+    # About body size only; the access token (required by default) is covered in test_token.py,
+    # including that an oversized body with no token is refused before it is read. Opted out here.
+    config = load_config({"DIYA_REQUIRE_TOKEN": "0", **(env or {})})
     config = dataclasses.replace(
         config, db_path=str(tmp_path / "b.db"), profile_path=str(tmp_path / "b_profile.txt")
     )

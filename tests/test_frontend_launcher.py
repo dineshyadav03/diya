@@ -201,6 +201,46 @@ def test_lan_mode_says_the_api_needs_no_lan_mode_for_the_ui(tree):
     assert "LAN mode" not in quiet.stderr
 
 
+HINT = "DIYA_TOKEN is not set for the UI"
+FAKE_TOKEN = "not-a-real-token-1234567890"
+
+
+def test_starting_the_ui_without_a_token_says_the_api_will_refuse_it(tree):
+    """The API requires the token by default, so a UI with none gets 401 on everything: say so at
+    startup, and how to get one, instead of leaving only a puzzling "didn't send" in the browser."""
+    pair(tree)
+    result, _ = real_start(tree, "dev")
+    text = " ".join(result.stderr.split())
+    assert HINT in text and "frontend/.env.local" in text and "--rotate-token" in text
+
+
+@pytest.mark.parametrize("where", ["environment", ".env.local", ".env"])
+def test_no_hint_when_the_ui_has_a_token(tree, where):
+    pair(tree)
+    env = {}
+    if where == "environment":
+        env = {"DIYA_TOKEN": FAKE_TOKEN}
+    else:
+        (tree / "frontend" / where).write_text(f"OTHER=1\nDIYA_TOKEN={FAKE_TOKEN}\n")
+    result, _ = real_start(tree, "dev", env=env)
+    assert result.returncode == 0 and HINT not in result.stderr and FAKE_TOKEN not in result.stderr
+
+
+@pytest.mark.parametrize("line", ["# DIYA_TOKEN=abc123", "DIYA_TOKEN=", "DIYA_TOKEN =   ", "NOT_DIYA_TOKEN=abc123"])
+def test_a_commented_out_or_empty_token_line_is_not_a_token(tree, line):
+    pair(tree)
+    (tree / "frontend" / ".env.local").write_text(line + "\n")
+    result, _ = real_start(tree, "dev")
+    assert HINT in " ".join(result.stderr.split())
+
+
+@pytest.mark.parametrize("word", ["0", "false", "off", "no", "OFF"])
+def test_no_hint_when_the_requirement_is_opted_out(tree, word):
+    pair(tree)
+    result, _ = real_start(tree, "dev", env={"DIYA_REQUIRE_TOKEN": word})
+    assert HINT not in result.stderr
+
+
 def test_package_json_scripts_name_no_address_or_certificate_file():
     scripts = json.loads((ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))["scripts"]
     for name, command in scripts.items():

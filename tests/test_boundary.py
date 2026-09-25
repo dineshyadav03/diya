@@ -23,7 +23,9 @@ LAN_ENV = {"DIYA_LAN": "1", "DIYA_ALLOWED_HOSTS": "phone.local,10.1.2.3"}
 
 
 def client_for(env=None, tmp_path=None, base_url="https://localhost"):
-    config = load_config(env or {})
+    # These tests are about Host and Origin; the access token (required by default) has its own
+    # tests in test_token.py, including how it layers over this boundary. Opted out here.
+    config = load_config({"DIYA_REQUIRE_TOKEN": "0", **(env or {})})
     config = dataclasses.replace(
         config,
         db_path=str(tmp_path / "b.db"),

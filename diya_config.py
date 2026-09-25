@@ -75,11 +75,12 @@ class Config:
     # sent); DIYA_TOOL_ALLOWED_HOSTS. Setting it replaces the default rather than adding to it.
     tool_allowed_hosts: tuple = DEFAULT_TOOL_ALLOWED_HOSTS
     # The per-install access token (docs/STAGE1_DESIGN.md section 3). Only its SHA-256 is stored,
-    # at `token_path`. Enforcement is OFF by default: the mechanism ships first, and it becomes the
-    # default only once the Next.js proxy exists to hold the token for the browser (step 5 of the
-    # rollout plan) -- until then, requiring it would lock the UI out.
+    # at `token_path`. It is REQUIRED by default (step 5 of the rollout plan): the Next.js proxy
+    # holds the token for the UI, so nothing needs the browser to. DIYA_REQUIRE_TOKEN=0 is the
+    # explicit opt-out, kept only for anyone who deliberately wants the old unauthenticated API --
+    # the same way DIYA_DREAM_PROFILE_MODE=direct is an explicit opt into old behaviour.
     token_path: str = "diya_token.hash"  # DIYA_TOKEN_PATH
-    require_token: bool = False  # DIYA_REQUIRE_TOKEN
+    require_token: bool = True  # DIYA_REQUIRE_TOKEN
     rotate_token: bool = False  # DIYA_ROTATE_TOKEN: replace the stored token at the next start
 
 
