@@ -52,6 +52,12 @@ const CONVO = {
   "What's the weather in London?": { answer: 'London, England, United Kingdom: 14.2°C, light rain, wind 18 km/h.\n\nTake an umbrella.', tools_called: ['get_weather', 'add_reminder'] },
 }
 
+const LOAD_FAIL_CHECKS = [
+  { name: 'the list is replaced by a "couldn\'t load" state', js: `/couldn.t load your chats/i.test(document.querySelector('.empty-state h2').textContent)` },
+  { name: 'a "Try again" link is offered', js: `!!Array.from(document.querySelectorAll('.empty-state a')).find((a) => /try again/i.test(a.textContent))` },
+  { name: 'no thread rows are shown', js: `document.querySelectorAll('.thread').length === 0` },
+]
+
 const FAIL_CHECKS = [
   { name: 'the failed message is marked as failed', js: `document.querySelectorAll('.msg.user.failed').length === 1` },
   { name: 'an alert explains it was not sent', js: `!!document.querySelector('.send-error[role="alert"]') && /didn.t send/i.test(document.querySelector('.send-error').textContent)` },
@@ -83,7 +89,14 @@ const SCENARIOS = [
   { name: 'history-list', path: '/history', stub: { threads: THREADS }, steps: [] },
   { name: 'history-empty', path: '/history', stub: { threads: [] }, steps: [] },
   { name: 'history-loading', path: '/history', stub: { threads: 'pending' }, steps: [] },
-  { name: 'history-error', path: '/history', stub: { threads: 'error' }, steps: [] },
+  { name: 'history-error', path: '/history', stub: { threads: 'error' }, steps: [], checks: [...LOAD_FAIL_CHECKS, { name: 'nothing answered: it says the server did not answer', js: `/didn.t answer/i.test(document.querySelector('.empty-state p').textContent)` }] },
+  // The API refuses the access token the UI sends: not "the server didn't answer", which is what
+  // this page used to say for every failure.
+  { name: 'history-unauthorized', path: '/history', stub: { threads: '401' }, steps: [], checks: [...LOAD_FAIL_CHECKS,
+    { name: 'it says the access token is the problem', js: `/access token/i.test(document.querySelector('.empty-state p').textContent)` },
+    { name: 'it does not claim the server did not answer', js: `!/didn.t answer/i.test(document.querySelector('.empty-state p').textContent)` }] },
+  { name: 'history-server-error', path: '/history', stub: { threads: '500' }, steps: [], checks: [...LOAD_FAIL_CHECKS,
+    { name: 'an error status is reported as an error, with its number', js: `/HTTP 500/.test(document.querySelector('.empty-state p').textContent)` }] },
 
   // ---- send failures ----
   {
@@ -144,7 +157,26 @@ const SCENARIOS = [
     checks: [
       { name: 'the mic button is usable again (not stuck disabled)', js: `!document.querySelector('button[aria-label="Hold to talk"]').disabled` },
       { name: 'the "Transcribing..." chip is gone', js: `!document.querySelector('.mic-status')` },
-      { name: 'a message says the server could not be reached', js: `Array.from(document.querySelectorAll('.msg.system')).some((m) => /server/i.test(m.textContent))` },
+      { name: 'a message says the server could not be reached', js: `Array.from(document.querySelectorAll('.msg.system')).some((m) => /couldn.t reach diya.s server/i.test(m.textContent))` },
+    ],
+  },
+  {
+    // The API refuses the access token: the microphone must not say the server couldn't be reached.
+    name: 'chat-transcribe-unauthorized', path: '/', stub: { mic: 'ok', tx: '401' },
+    steps: [`await __micDown(700); await __micUp(1500)`],
+    checks: [
+      { name: 'the mic button is usable again (not stuck disabled)', js: `!document.querySelector('button[aria-label="Hold to talk"]').disabled` },
+      { name: 'the "Transcribing..." chip is gone', js: `!document.querySelector('.mic-status')` },
+      { name: 'a message says the access token is the problem', js: `Array.from(document.querySelectorAll('.msg.system')).some((m) => /access token/i.test(m.textContent))` },
+      { name: 'no message claims the server could not be reached', js: `!Array.from(document.querySelectorAll('.msg.system')).some((m) => /couldn.t reach/i.test(m.textContent))` },
+    ],
+  },
+  {
+    name: 'chat-transcribe-server-error', path: '/', stub: { mic: 'ok', tx: '500' },
+    steps: [`await __micDown(700); await __micUp(1500)`],
+    checks: [
+      { name: 'the mic button is usable again (not stuck disabled)', js: `!document.querySelector('button[aria-label="Hold to talk"]').disabled` },
+      { name: 'an error status is reported as an error, with its number', js: `Array.from(document.querySelectorAll('.msg.system')).some((m) => /HTTP 500/.test(m.textContent))` },
     ],
   },
 ]
@@ -158,9 +190,10 @@ const stubSource = (stub) => `(() => {
   const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json' } });
   window.fetch = (url, opts) => {
     const u = String(url);
-    if (u.includes('/api/threads')) return sc.threads === 'pending' ? new Promise(() => {}) : sc.threads === 'error' ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve(json({ threads: sc.threads || [] }));
+    const refused = () => new Response('Missing or invalid access token', { status: 401, headers: { 'Content-Type': 'text/plain' } });
+    if (u.includes('/api/threads')) return sc.threads === 'pending' ? new Promise(() => {}) : sc.threads === 'error' ? Promise.reject(new TypeError('Failed to fetch')) : sc.threads === '401' ? Promise.resolve(refused()) : sc.threads === '500' ? Promise.resolve(json({ detail: 'Internal Server Error' }, 500)) : Promise.resolve(json({ threads: sc.threads || [] }));
     if (u.includes('/api/history/')) return new Promise((r) => setTimeout(() => r(json({ messages: sc.history || [] })), sc.historyDelay || 0));
-    if (u.includes('/api/transcribe')) return window.__txMode === 'down' ? Promise.reject(new TypeError('Failed to fetch')) : window.__txMode === 'ok' ? Promise.resolve(json({ text: 'what is on my list today' })) : new Promise(() => {});
+    if (u.includes('/api/transcribe')) return window.__txMode === 'down' ? Promise.reject(new TypeError('Failed to fetch')) : window.__txMode === '401' ? Promise.resolve(refused()) : window.__txMode === '500' ? Promise.resolve(json({ detail: 'Internal Server Error' }, 500)) : window.__txMode === 'ok' ? Promise.resolve(json({ text: 'what is on my list today' })) : new Promise(() => {});
     if (u.includes('/api/chat')) {
       const mode = window.__chatMode;
       if (mode === 'pending') return new Promise(() => {});

@@ -2,16 +2,26 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { describeLoadFailure } from '../../lib/api-failure.mjs'
 
 export default function HistoryPage() {
-  // null = loading, false = the server couldn't be reached, [] = no chats yet.
+  // null = loading, false = the list couldn't be loaded, [] = no chats yet.
   const [threads, setThreads] = useState(null)
+  // Why it couldn't be loaded (shown when `threads` is false): nothing answered, or the API refused
+  // the UI's access token, or it reported an error -- each says something different to do.
+  const [problem, setProblem] = useState('')
 
   useEffect(() => {
+    function couldNotLoad(status) {
+      setProblem(describeLoadFailure(status))
+      setThreads(false)
+    }
     fetch('/api/threads') // same-origin: app/api/threads forwards it, with the access token, from the server
-      .then((r) => r.json())
-      .then((data) => setThreads(data.threads))
-      .catch(() => setThreads(false))
+      .then((r) => {
+        if (!r.ok) return couldNotLoad(r.status)
+        return r.json().then((data) => (Array.isArray(data.threads) ? setThreads(data.threads) : couldNotLoad(r.status)))
+      })
+      .catch(() => couldNotLoad()) // no answer at all, or a reply that isn't JSON
   }, [])
 
   return (
@@ -41,7 +51,7 @@ export default function HistoryPage() {
             <div className="empty-state">
               <img src="/diya-flame.svg" alt="" className="empty-mark" />
               <h2>Couldn&rsquo;t load your chats</h2>
-              <p>Diya&rsquo;s server didn&rsquo;t answer. Check that it&rsquo;s running, then try again.</p>
+              <p>{problem}</p>
               <a className="cta" href="/history">
                 Try again
               </a>

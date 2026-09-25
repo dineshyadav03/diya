@@ -5,7 +5,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { ThinkingOrb } from 'thinking-orbs'
 import VoiceBar from '../components/VoiceBar'
-import { describeSendFailure } from '../lib/send-failure.mjs'
+import { describeSendFailure } from '../lib/api-failure.mjs'
 
 // Every /api/... call below is same-origin: this app's own route handlers (app/api) forward it to
 // the Python API and attach the access token on the server. The browser never holds the token.

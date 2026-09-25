@@ -403,7 +403,7 @@ def browser_files():
 
 def test_browser_code_never_mentions_the_token_the_api_port_or_the_proxy_module():
     files = browser_files()
-    assert {p.name for p in files} >= {"page.js", "VoiceBar.jsx", "layout.js", "send-failure.mjs"}
+    assert {p.name for p in files} >= {"page.js", "VoiceBar.jsx", "layout.js", "api-failure.mjs"}
     assert "proxy.mjs" not in {p.name for p in files}  # the server-side half is exactly what this must exclude
     for path in files:
         source = path.read_text(encoding="utf-8")
