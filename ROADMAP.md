@@ -228,6 +228,8 @@ Remaining:
 3. Connectors and permissions.
 4. Durable workflows. The competitive battleground: every comparable leads with "describe an
    outcome, it follows through". Reference: Muse-style approval gates and action trails.
+   The local first slice, reminders that fire (a time parser, real due times, a Reminders page, an optional
+   desktop notifier), is designed in [`docs/PROACTIVITY_DESIGN.md`](docs/PROACTIVITY_DESIGN.md) as four units.
 5. "Jev" decision benchmark. Open-source baseline: laya-mlx (MLX, so Apple silicon only).
 6. Daily-driver experience.
 
