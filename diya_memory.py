@@ -18,9 +18,12 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import unicodedata
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import NamedTuple
 
 # Proposals from the design doc (D7), starting points to tune, not findings. The model is sent the
 # profile on every turn, so it is bounded: per fact, and in total as it is rendered for the model.
@@ -86,6 +89,10 @@ class BudgetExceeded(FactError):
     """Accepting this fact would take the profile over its size limit."""
 
 
+class SourceUnreadable(FactError):
+    """The staged queue or the old profile could not be read, so nothing was taken from it."""
+
+
 # Characters that are invisible or steer how text is displayed. A fact is model output, and a person
 # reads it in a terminal or a page: an escape sequence or a bidirectional override could make the
 # screen say something the stored text does not (design doc, T3). U+200C/U+200D (joiners) are NOT
@@ -122,6 +129,53 @@ def render_profile(texts):
     return "\n".join("- " + text for text in texts)
 
 
+# ---- cleaning up a staged line (design doc D4) -----------------------------------------------------
+
+FLAG_PREAMBLE = "preamble"  # looks like the model introducing its list, not a fact
+FLAG_TOO_LONG = "too_long"  # over MAX_FACT_CHARS: it cannot be accepted until it is edited shorter
+
+# One list marker at the start of a line: a bullet character, or a number and a . or ). It must be
+# followed by whitespace or the end of the line, so "-5 degrees is cold" keeps its minus sign.
+_LIST_MARKER = re.compile(r"(?:[-*\u2022\u2023\u25e6\u2043\u2219]|\d{1,3}[.)])(?:\s+|$)")
+_PREAMBLE = re.compile(r"(?:here (?:are|is)|new facts?|the following|facts?:)\b", re.IGNORECASE)
+_NONE = re.compile(r"none\.?", re.IGNORECASE)
+
+
+class Normalised(NamedTuple):
+    text: str
+    flags: tuple
+
+
+def _unwanted(char):
+    return unicodedata.category(char) in ("Cc", "Cs", "Co") or char in _INVISIBLE
+
+
+def normalise_fact(line):
+    """Turn one line of Dreaming's reply into the fact it holds, or None if it holds none.
+
+    Every kind of whitespace (line breaks, tabs, U+2028, a non-breaking space) becomes one space; one
+    leading list marker is dropped; control characters and invisible or bidirectional ones are
+    deleted (so nothing stored can carry a terminal escape). What is left always passes check_text.
+    A blank line, a lone marker and the model's own `NONE` are None. Nothing else is dropped: a line
+    that looks like the model introducing its list, or that is over the length limit, is kept and
+    FLAGGED, because hiding a line is a decision and this stage records its decisions."""
+    if not isinstance(line, str):
+        return None
+    text = " ".join(line.split())  # whitespace first: a tab or line break is a gap, not something to delete
+    # Delete the rest BEFORE looking for the marker: a byte order mark or a zero-width character in
+    # front of the "-" would otherwise hide it, and the bullet would stay in the fact.
+    text = " ".join("".join(char for char in text if not _unwanted(char)).split())
+    text = _LIST_MARKER.sub("", text, count=1) if _LIST_MARKER.match(text) else text
+    if not text or _NONE.fullmatch(text):
+        return None
+    flags = []
+    if text.endswith(":") or _PREAMBLE.match(text):
+        flags.append(FLAG_PREAMBLE)
+    if len(text) > MAX_FACT_CHARS:
+        flags.append(FLAG_TOO_LONG)
+    return Normalised(text, tuple(flags))
+
+
 def _now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -144,6 +198,24 @@ def _fact(row):
     fact = dict(zip(keys, row))
     fact["flags"] = json.loads(fact["flags"])
     return fact
+
+
+@dataclass(frozen=True)
+class ImportResult:
+    imported: int  # lines taken in as accepted facts
+    already: int  # lines that were imported by an earlier run (whatever became of them since)
+    duplicates: int  # lines that repeat another line or an accepted fact
+    chars_used: int  # the accepted facts as rendered for the model, after this import
+    over_budget: bool  # chars_used is over MAX_PROFILE_CHARS: no NEW fact can be accepted until it is not
+
+
+@dataclass(frozen=True)
+class IngestReport:
+    records: int = 0  # well-formed records found in the staged queue
+    bad_records: int = 0  # of those, records whose `facts` is not a list
+    new: int = 0  # candidates created by this run
+    already: int = 0  # facts whose queue slot an earlier run had already recorded
+    skipped: int = 0  # lines with nothing to keep (blank, a lone marker, NONE, not text)
 
 
 class Memory:
@@ -269,6 +341,45 @@ class Memory:
             self._event(conn, cur.lastrowid, "added", actor, now)
             return cur.lastrowid
 
+    def import_legacy(self, items, actor="import"):
+        """Take the lines of the old `user_profile.txt` in as accepted facts, all or none.
+
+        `items` is (text, raw, flags) for each line, the text already cleaned by normalise_fact. These
+        facts are what the model has been told until now, so they go in as they are: exempt from the
+        per-fact and total limits (an existing profile is not thrown away because a limit is new; going
+        over only stops NEW facts being accepted, see ImportResult.over_budget). A line is skipped, not
+        an error, if it says the same as a fact that is already accepted, or if it was imported before
+        -- even if that one has since been retired, so running the import again never brings back a
+        fact someone has removed."""
+        _check_actor(actor)
+        imported = already = duplicates = 0
+        taken = set()
+        with self._write() as conn:
+            for text, raw, flags in items:
+                check_text(text)
+                key = text_key(text)
+                if key in taken:
+                    duplicates += 1
+                elif conn.execute(
+                    "SELECT 1 FROM facts WHERE source = 'legacy_profile' AND text_key = ?", (key,)
+                ).fetchone():
+                    already += 1
+                elif conn.execute("SELECT 1 FROM facts WHERE status = 'accepted' AND text_key = ?", (key,)).fetchone():
+                    duplicates += 1
+                else:
+                    now = _now()
+                    cur = conn.execute(
+                        "INSERT INTO facts (text, text_key, status, source, raw, flags, created_at)"
+                        " VALUES (?, ?, 'accepted', 'legacy_profile', ?, ?, ?)",
+                        (text, key, raw, json.dumps(list(flags)), now),
+                    )
+                    self._event(conn, cur.lastrowid, "imported", actor, now)
+                    taken.add(key)
+                    imported += 1
+            used = len(render_profile([row[0] for row in conn.execute(
+                "SELECT text FROM facts WHERE status = 'accepted' ORDER BY id")]))
+        return ImportResult(imported, already, duplicates, used, used > MAX_PROFILE_CHARS)
+
     # ---- deciding ----
     def decide(self, fact_id, action, actor):
         """Apply `action` (accept, reject, reopen, retire or restore) to a fact. Raises FactError, and
@@ -385,3 +496,68 @@ class Memory:
                 f"memory is full: {used} of {MAX_PROFILE_CHARS} characters are used and this fact needs "
                 f"{total - used} more. Retire a fact first."
             )
+
+
+# ---- getting facts in: the staged queue and the old profile -------------------------------------
+
+
+def ingest_queue(memory, config, actor="cli"):
+    """Copy what Dreaming has staged into the store as candidates. Safe to run as often as you like:
+    each fact is keyed by (the queue record's first message id, its position in that record's list),
+    so a fact already recorded is never recorded twice, whatever has happened to it since.
+
+    The queue itself is only ever READ. It stays exactly as Dreaming wrote it -- Dreaming finds a
+    record it has already staged by scanning this file, so removing or editing one would make it
+    extract the same messages again (design doc P1) -- and neither the checkpoint nor the log is
+    touched. Reading goes through Dreamer.staged_batches(), so there is one tolerant reader of that
+    file, not two. Raises SourceUnreadable, having ingested nothing, if the file cannot be read."""
+    from dreaming import Dreamer  # here, not at the top: it brings in the OpenAI client
+
+    try:
+        batches = Dreamer(config).staged_batches()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise SourceUnreadable(f"could not read the staged queue {config.dream_pending_path}: {exc}") from exc
+
+    records = bad_records = new = already = skipped = 0
+    for record in batches:
+        records += 1
+        lines = record.get("facts")
+        if not isinstance(lines, list):
+            bad_records += 1
+            continue
+        model = record.get("model") if isinstance(record.get("model"), str) else ""
+        staged_at = record.get("timestamp") if isinstance(record.get("timestamp"), str) else ""
+        for position, line in enumerate(lines):  # a skipped line still takes its position: slots never shift
+            fact = normalise_fact(line)
+            if fact is None:
+                skipped += 1
+                continue
+            created = memory.add_candidate(
+                fact.text, batch_first=record["first_message_id"], batch_last=record["last_message_id"],
+                position=position, model=model, extracted_at=staged_at, raw=line, flags=fact.flags, actor=actor,
+            )
+            if created is None:
+                already += 1
+            else:
+                new += 1
+    return IngestReport(records, bad_records, new, already, skipped)
+
+
+def import_legacy_profile(memory, config, actor="import"):
+    """Take the old `user_profile.txt` into the store as accepted facts (Memory.import_legacy says
+    how). The file is read the way Agent.with_profile reads it -- UTF-8, a bad byte replaced rather than
+    fatal, any line ending -- and is never modified. No file, or an empty one, imports nothing. Raises
+    SourceUnreadable, having imported nothing, if it exists and cannot be read."""
+    try:
+        with open(config.profile_path, encoding="utf-8", errors="replace") as f:
+            lines = f.read().split("\n")
+    except FileNotFoundError:
+        lines = []
+    except OSError as exc:
+        raise SourceUnreadable(f"could not read the profile {config.profile_path}: {exc}") from exc
+    items = []
+    for line in lines:
+        fact = normalise_fact(line)
+        if fact is not None:
+            items.append((fact.text, line, fact.flags))
+    return memory.import_legacy(items, actor=actor)

@@ -1,7 +1,8 @@
 # Stage 2: Trustworthy memory (review and promote) -- design spec
 
-> **Status (2026-09-25):** designed; being built unit by unit. **Built: U1 (storage).** The "today"
-> statements in sections 1-2 describe the code before Stage 2 (as of `8c8231a`); the `file:line`
+> **Status (2026-09-25):** designed; being built unit by unit. **Built: U1 (storage), U2 (ingest and
+> legacy import).** The "today" statements in sections 1-2 describe the code before Stage 2 (as of
+> `8c8231a`); the `file:line`
 > references into `diya_db.py` are current, the others are as of that commit. Two things the first
 > draft reported were fixed before any Stage 2 unit: the migration-runner race (`43dcb76`, see
 > "Migration impact") and a stale comment in `diya.py` that named a promotion step that does not
@@ -223,6 +224,14 @@ Applied once, when a staged line becomes a candidate. `raw` keeps the original.
 - A line that ends in `:` or begins like a preamble ("Here are...", "New facts") is **kept and
   flagged**, not dropped: hiding a line is a decision, and this stage's decisions are recorded.
 - Over-long (proposal: 200 characters) is kept and flagged; it cannot be accepted until edited to fit.
+
+*As built (U2), where it differs from the plan above:* line and paragraph separators, tabs, non-breaking
+spaces and every other kind of whitespace become a space rather than being deleted, so removing them
+cannot glue two words together; everything invisible or control is deleted **before** the list marker is
+looked for (a byte order mark in front of a `-` otherwise hid it; a test found that). The store repeats
+the check on whatever it is handed (`check_text`) and refuses, rather than repairs, so nothing that calls
+it later can bypass the sanitiser. Joiners (U+200C, U+200D) are kept, because emoji sequences and some
+scripts need them.
 
 ### D5. Verification
 
