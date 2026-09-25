@@ -396,7 +396,8 @@ class Memory:
                 raise UnknownFact(f"there is no fact {fact_id}")
             status, text = row
             if status != needs:
-                raise IllegalTransition(f"fact {fact_id} is {status}; only a {needs} fact can be {ACTION_EVENT[action]}")
+                article = "an" if needs[0] in "aeiou" else "a"
+                raise IllegalTransition(f"fact {fact_id} is {status}; only {article} {needs} fact can be {ACTION_EVENT[action]}")
             if becomes == "accepted":
                 # Restoring is not held to the per-fact length: a fact that was accepted once
                 # (or imported from the old profile) stays restorable. Everything else is.
@@ -443,8 +444,9 @@ class Memory:
         """Run the deterministic checks on every candidate and record what they say. Advisory only: no
         fact's status changes, whatever a check finds. The checks look at the user messages a fact was
         extracted from and at every other fact, so they are recomputed each time -- a fact that was a
-        `duplicate` stops being one when the accepted copy is retired. The flags cleaning gave a line
-        (preamble, too_long) are kept as they are. Returns (candidates checked, how many changed)."""
+        `duplicate` stops being one when the accepted copy is retired. What cleaning says about the text
+        (preamble, too_long) is recomputed too, so editing a fact shorter drops its `too_long` flag; those
+        flags stay in front. Returns (candidates checked, how many changed)."""
         import diya_checks
 
         every = self.facts()
@@ -462,7 +464,8 @@ class Memory:
                     if m["role"] == "user"  # the extractor only ever saw the user's own words
                 ]
             others = [{"id": o["id"], "text": o["text"], "status": o["status"]} for o in every if o["id"] != fact["id"]]
-            kept = [flag for flag in fact["flags"] if flag in diya_checks.CLEANING_FLAGS]
+            cleaned = normalise_fact(fact["text"])  # what cleaning says about the text as it is NOW (it may have been edited)
+            kept = list(cleaned.flags) if cleaned is not None else []
             flags = kept + diya_checks.check_flags({"id": fact["id"], "text": fact["text"]}, messages, others)
             if self.set_flags(fact["id"], flags, actor):
                 changed += 1

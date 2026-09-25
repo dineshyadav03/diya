@@ -30,10 +30,6 @@ FLAG_DUPLICATE = "duplicate"  # :<id> -- the same fact, in other capitals, is al
 FLAG_SIMILAR = "similar"  # :<id> -- shares most of its words with that fact
 FLAG_PREVIOUSLY_REJECTED = "previously_rejected"  # :<id> -- the same words were rejected before
 
-# The flags a person's own reading of a line produces (memory.normalise_fact); running the checks never
-# removes or recomputes these.
-CLEANING_FLAGS = frozenset({"preamble", "too_long"})
-
 # A fact is grounded when at least this share of its content words appear in the user messages it came from.
 GROUNDED_MIN = 0.6
 # Two facts are similar when they share at least this many content words and at least this share of all

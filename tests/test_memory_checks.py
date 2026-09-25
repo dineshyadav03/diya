@@ -320,12 +320,28 @@ def test_the_checks_never_change_a_status_or_touch_a_fact_that_is_not_a_candidat
     assert memory.verify_integrity() == []
 
 
-def test_the_flags_cleaning_gave_a_line_are_kept_and_stay_in_front(store, memory):
+def test_what_cleaning_says_about_the_text_stays_in_front_and_follows_an_edit(store, memory):
     user, = seed(store, ("user", "I like tea"))
-    fact_id = candidate(memory, "Here are the facts:", user, user, flags=["preamble", "too_long"])
+    text = "Here are the facts: " + "x" * 200
+    fact_id = candidate(memory, text, user, user, flags=["preamble", "too_long"])
     memory.run_checks()
     memory.run_checks()
-    assert flags_of(memory, fact_id) == ["preamble", "too_long", "ungrounded"]
+    assert flags_of(memory, fact_id) == ["preamble", "too_long", "ungrounded"]  # in front, and stable
+
+    memory.edit(fact_id, "likes tea", "cli")  # no longer an introduction, no longer too long
+    memory.run_checks()
+    assert flags_of(memory, fact_id) == [f"source_message:{user}"]
+    memory.edit(fact_id, "y" * (diya_memory.MAX_FACT_CHARS + 1), "cli")
+    memory.run_checks()
+    assert flags_of(memory, fact_id)[0] == "too_long"  # and it comes back if the text does
+
+
+def test_a_candidate_whose_text_cleans_to_nothing_is_still_checked(store, memory):
+    """"NONE" is a fact as far as the store is concerned (a clean line); cleaning would skip it as a line."""
+    user, = seed(store, ("user", "I like tea"))
+    fact_id = candidate(memory, "NONE", user, user)
+    assert memory.run_checks() == (1, 1)
+    assert flags_of(memory, fact_id) == ["ungrounded"]
 
 
 def test_the_flags_follow_the_other_facts_as_they_change(store, memory):
