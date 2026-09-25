@@ -413,10 +413,11 @@ class Agent:
         it should always reflect the latest profile, not a frozen snapshot."""
         path = self.config.profile_path
         if os.path.exists(path):
-            # The profile is UTF-8 with LF line endings (Dreaming and the promotion step write it
-            # that way). It used to be read with the platform default codec (cp1252 on Windows),
-            # so any non-ASCII fact came back as mojibake. A universal-newline read also copes
-            # with a legacy CRLF profile; 'replace' so a stray byte can't take chat down.
+            # The profile is UTF-8 with LF line endings (that is how Dreaming's `direct` mode writes
+            # it; nothing else writes it yet). It used to be read with the platform default codec
+            # (cp1252 on Windows), so any non-ASCII fact came back as mojibake. A universal-newline
+            # read also copes with a legacy CRLF profile; 'replace' so a stray byte can't take
+            # chat down.
             with open(path, encoding="utf-8", errors="replace") as f:
                 profile = f.read().strip()
             if profile:
