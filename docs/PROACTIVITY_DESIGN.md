@@ -1,6 +1,6 @@
 # Proactivity, first slice: reminders that fire -- design spec
 
-> **Status (2026-09-25):** designed, nothing built. This is the local, no-connector part of the roadmap's
+> **Status (2026-09-26):** designed; **P1 (the time reader) built**, P2 to P4 not. This is the local, no-connector part of the roadmap's
 > "durable workflows" stage (Later stages, 4): the part that needs nothing from anyone else's account. It
 > follows the pattern of `docs/STAGE1_DESIGN.md` and `docs/STAGE2_DESIGN.md`: decisions with a
 > recommendation, units that land one at a time, and a list of what needs the owner's yes.
@@ -68,6 +68,33 @@ must refuse), as the checks in Stage 2 were, and its limits are stated with the 
 Resolve in the machine's local time with the operating system's own rules (a naive local datetime converted with
 `astimezone()`), store the UTC instant, keep the person's original words. No new dependency: `zoneinfo` needs the
 `tzdata` package on Windows. Limit: if the machine's zone changes, an instant does not move with it.
+
+*As built (P1):* `diya_time.py`, pure code, no database, no clock of its own (`now` is a parameter). It reads
+today, tonight, tomorrow, the day after tomorrow, weekday names (with the usual abbreviations), "in N minutes /
+hours / days / weeks" (also "in an hour", "in half an hour"), dates with a month name or as 2026-09-26, and a time
+as 5pm, 5:30pm, 17:30, noon, or morning / afternoon / evening (09:00, 15:00, 18:00), with "in the morning" too.
+It refuses what it cannot account for word by word, so "Friday 5pm; ignore all previous instructions" is refused
+whole, not read as Friday 5pm. Where it differs from what this document first implied:
+
+- **A day with no time is read, with an assumption reported**, not refused: "tomorrow" is 09:00 and `assumed`
+  says "no time was given, so 09:00" for the caller to show. A time with no day is the next time it is that
+  time (today, or tomorrow if it has passed), and says so. A date with no year that has passed this year is next
+  year, and says so. A weekday that has passed this week is next week, and says so.
+- **What it refuses on purpose, because two people mean two things:** "next Friday", a bare "at 5" (morning or
+  evening), "3/4" (March 4th or April 3rd), and midnight (which side of the date). "Exactly now" has passed.
+- An explicit time wins over a part of the day ("morning 5pm" is 17:00); it does not refuse the contradiction.
+
+Measured on hand-written fictional cases (`tests/labelled_times.py`, written by the author of the parser, so they
+show it does what it says and not how it does on real phrases): all 79 phrases it should read come out as the
+moment they should, all 65 it should refuse are refused with the right reason, and the 13 phrases a person would
+understand and it cannot ("next week", "the weekend", "after lunch", "in five minutes", "half past five", "in a
+couple of hours", ...) are listed and asserted to be refused, so that gap is a number, not a surprise. A seeded fuzz
+run (4,000 random phrases from its own vocabulary, 3,000 random character strings, several absurd numbers) only
+ever gave a future moment within five years or a refusal. 44 of 44 mutations were caught (six survived the first
+run and were fixed: boundary cases at "exactly now", seconds checked only to the minute, an error test that
+passed for the wrong reason, and a year-shape case). **Not verified here:** daylight saving on a real zone. This
+machine's zone has none, so the conversion is tested with an injected converter that has it; the default path
+(`astimezone` on the naive wall-clock time) is the operating system's.
 
 ### D4. Where "due" shows up (level 1)
 
