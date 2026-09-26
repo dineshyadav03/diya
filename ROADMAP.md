@@ -216,7 +216,11 @@ Remaining:
 1. Hardware and model benchmark. Includes the 3B model calling `add_reminder` on plain arithmetic
    questions (roughly 40-50% of past runs), which prompt and temperature changes did not fix. Now stopped in
    code for reminders (item 4's guard; measured 0 of 57 unasked runs saving one, 6 of 38 before), but the model
-   still tries: it is the model's habit, not fixed.
+   still tries: it is the model's habit, not fixed. **The model half was measured on this Windows laptop (CPU)** in
+   [`docs/MODEL_BENCHMARK.md`](docs/MODEL_BENCHMARK.md): `qwen3:8b` passed all nine evals and the two 3B models did not
+   (8 and 7), but it was about 6 times slower (551 s against 91 s), and it did no better at reading reminder times. One run
+   per message on one machine: a first pass, not a result. **The hardware half, the Mac mini, cannot be measured until it is
+   here**; whether an 8B model is fast enough there is the open question.
 2. Trustworthy memory. The review-and-promote step for staged facts. Reference for the
    verification step: the solver/verifier separation (Apodex). Designed in
    [`docs/STAGE2_DESIGN.md`](docs/STAGE2_DESIGN.md) as seven units. **Built (all seven units):** storage
