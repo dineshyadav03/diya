@@ -1,6 +1,8 @@
 # Proactivity, first slice: reminders that fire -- design spec
 
-> **Status (2026-09-26):** designed; **P1 (the time reader) built**, P2 to P4 not. This is the local, no-connector part of the roadmap's
+> **Status (2026-09-26):** designed and built: **P1 (the time reader), P2 (real due times, the tool, two guards), P3 (the API
+> and page) and P4 (the notifier)**. Not done: registering the notifier as a scheduled task (the owner's step, see
+> `docs/reminders.md`), snooze, recurrence, and the morning brief. This is the local, no-connector part of the roadmap's
 > "durable workflows" stage (Later stages, 4): the part that needs nothing from anyone else's account. It
 > follows the pattern of `docs/STAGE1_DESIGN.md` and `docs/STAGE2_DESIGN.md`: decisions with a
 > recommendation, units that land one at a time, and a list of what needs the owner's yes.
