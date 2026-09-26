@@ -109,3 +109,29 @@ def shorten_ack(reply):
     if first and len(first.split()) <= MAX_ACK_WORDS:
         return first
     return "Got it."
+
+
+# ---- did the person ask for a reminder? (docs/PROACTIVITY_DESIGN.md, D9) ----
+#
+# A reminder that fires is louder than one that sits in a table, and a small model saves reminders nobody asked
+# for. So Agent.add_reminder saves nothing unless the latest message asks for one. The test is a short list of
+# the ways people ask; missing an unusual phrasing is the safe direction (they can say "remind me to ...").
+_REMINDER_REQUEST = re.compile(
+    r"\bremind\s+(?:me|us|myself|ourselves)\b"
+    r"|\b(?:set|add|create|make|schedule|save|put|give)\s+(?:me\s+|us\s+)?(?:a|an|another|the|this|that|new)?\s*(?:new\s+)?(?:reminder|alarm)\b"
+    r"|\b(?:a|an|another|new)\s+reminder\s+(?:to|for|about|that|at|on|in)\b"
+    r"|\b(?:don'?t|do\s+not)\s+(?:let\s+me\s+)?forget\b"
+    r"|\bnever\s+let\s+me\s+forget\b"
+    r"|\bremember\s+to\b"
+    r"|\bnote\s+to\s+self\b"
+    r"|\bmake\s+a\s+note\b",
+    re.IGNORECASE,
+)
+
+
+def is_reminder_request(text):
+    """True if the message asks for a reminder ("remind me to ...", "set a reminder", "don't let me forget ...").
+    Not a question about reminders, not a fact, not a sum: those are False, as is anything that is not text."""
+    if not isinstance(text, str):
+        return False
+    return bool(_REMINDER_REQUEST.search(text.replace(chr(0x2019), "'")))

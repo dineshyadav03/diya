@@ -104,6 +104,8 @@ def test_a_fresh_database_has_exactly_the_expected_columns():
         ("due_at", "TEXT", False, None, False),
         ("created_at", "TEXT", True, None, False),
         ("done", "INTEGER", True, "0", False),
+        ("due_ts", "TEXT", False, None, False),  # migration 3: a real due time beside the words
+        ("notified_at", "TEXT", False, None, False),
     ]
 
 
@@ -149,7 +151,7 @@ def test_an_old_databases_existing_data_survives_the_upgrade_byte_for_byte(tmp_p
     before = {
         "threads": sqlite3.connect(path).execute("SELECT * FROM threads").fetchall(),
         "messages": sqlite3.connect(path).execute("SELECT * FROM messages").fetchall(),
-        "reminders": sqlite3.connect(path).execute("SELECT * FROM reminders").fetchall(),
+        "reminders": sqlite3.connect(path).execute("SELECT id, content, due_at, created_at, done FROM reminders").fetchall(),
     }
 
     apply_migrations(sqlite3.connect(path))
@@ -157,7 +159,9 @@ def test_an_old_databases_existing_data_survives_the_upgrade_byte_for_byte(tmp_p
     after_conn = sqlite3.connect(path)
     assert before["threads"] == after_conn.execute("SELECT * FROM threads").fetchall()
     assert before["messages"] == after_conn.execute("SELECT * FROM messages").fetchall()
-    assert before["reminders"] == after_conn.execute("SELECT * FROM reminders").fetchall()
+    assert before["reminders"] == after_conn.execute("SELECT id, content, due_at, created_at, done FROM reminders").fetchall()
+    # migration 3 added two columns; a reminder from before it has no real due time and was never told
+    assert after_conn.execute("SELECT due_ts, notified_at FROM reminders").fetchall() == [(None, None)] * len(before["reminders"])
 
 
 def test_an_old_database_upgraded_through_the_real_store_still_answers_normally(tmp_path):

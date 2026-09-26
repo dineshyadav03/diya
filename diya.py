@@ -7,6 +7,7 @@ import sys
 import threading
 import urllib.parse
 import uuid
+from datetime import datetime
 
 import httpx
 from ddgs import DDGS
@@ -16,6 +17,7 @@ import diya_config
 import diya_db
 import diya_intent
 import diya_memory
+import diya_time
 
 WEATHER_CODES = {
     0: "clear sky", 1: "mainly clear", 2: "partly cloudy", 3: "overcast",
@@ -262,7 +264,10 @@ TOOLS = [
                     "content": {"type": "string", "description": "What to remind the user about."},
                     "due_at": {
                         "type": "string",
-                        "description": "Optional due date/time in plain words (e.g. 'Friday 5pm'). Omit if not given.",
+                        "description": (
+                            "Optional: when, in the user's own words, unchanged (e.g. 'Friday 5pm', 'tomorrow at 9am', "
+                            "'in 2 hours'). Omit if they gave no time. Never guess a time."
+                        ),
                     },
                 },
                 "required": ["content"],
@@ -284,6 +289,18 @@ TOOLS = [
 
 
 MAX_TOOL_ROUNDS = 8  # matches Truffle's own documented default -- a safety cap, never expected in normal use
+
+MAX_REMINDER_CHARS = 300
+# What add_reminder adds when the time the model passed is not the one the person said (see diya_time.disagreement).
+REMINDER_TIME_HINT = (
+    "Pass the time exactly as the user said it (their own words, nothing added or left out); if you are not sure what "
+    "they meant, ask them when, then try again."
+)
+# What add_reminder answers the model when the person did not ask for a reminder (docs/PROACTIVITY_DESIGN.md, D9).
+REMINDER_NOT_ASKED = (
+    "Not saved: the user did not ask for a reminder. Answer what they asked and save nothing. If they did want one, "
+    "they can say 'remind me to ...'."
+)
 
 # What the model is told when the user is just sharing a fact (see diya_intent.is_fact_share).
 # Left to itself, a small model turns "my flight is on Friday at 6" into paragraphs of advice and
@@ -330,10 +347,12 @@ class Agent:
     immediately rather than on the first question).
     """
 
-    def __init__(self, config=None, client=None, store=None):
+    def __init__(self, config=None, client=None, store=None, clock=None):
         self.config = config or diya_config.load_config()
         self.store = store or diya_db.Store(self.config.db_path)
         self._client = client
+        self._clock = clock or datetime.now  # a naive local datetime; a parameter so tests do not depend on today
+        self._turn = threading.local()  # what the current ask() is answering, per thread
         self._notes = None
         self._notes_lock = threading.Lock()
         self._profile_import_checked = False
@@ -349,6 +368,10 @@ class Agent:
             "add_reminder": self.add_reminder,
             "list_reminders": self.list_reminders,
         }
+
+    def now(self):
+        """The current local time, naive: the agent's clock (real unless a test gave it another)."""
+        return self._clock()
 
     @property
     def client(self):
@@ -396,17 +419,57 @@ class Agent:
         return result["documents"][0][0]
 
     def add_reminder(self, content, due_at=None):
-        self.store.add_reminder(content, due_at)
-        return f"Reminder saved: {content}" + (f" (due {due_at})" if due_at else "")
+        """Save a reminder. While a message is being answered (ask), only if that message asks for one
+        (docs/PROACTIVITY_DESIGN.md, D9); the time is read here, in code, from the person's own words, and
+        a time that cannot be read saves nothing and says so, so the model can ask (D2). What it returns is
+        what the model relays to the person, so it says exactly what was saved and for when."""
+        if getattr(self._turn, "active", False) and not diya_intent.is_reminder_request(self._turn.user_text):
+            return REMINDER_NOT_ASKED
+        if not isinstance(content, str) or not content.strip():
+            return "Not saved: a reminder needs something to remind the user about."
+        content = " ".join(content.split())
+        if len(content) > MAX_REMINDER_CHARS:
+            return f"Not saved: that reminder is over {MAX_REMINDER_CHARS} characters; shorten it and try again."
+        in_turn = getattr(self._turn, "active", False)
+        if due_at is None or (isinstance(due_at, str) and not due_at.strip()):
+            problem = diya_time.disagreement("", self._turn.user_text) if in_turn else None
+            if problem:
+                return f"Not saved: {problem}. {REMINDER_TIME_HINT}"
+            self.store.add_reminder(content)
+            return f"Reminder saved: {content}. It has NO time, so it will not fire: tell the user that, and ask when they want it."
+        if not isinstance(due_at, str):
+            return "Not saved: the time must be given in words, like 'Friday 5pm' or 'in 2 hours'."
+        words = due_at
+        try:
+            when = diya_time.parse_when(words, self._clock())
+        except diya_time.NotUnderstood as exc:
+            return (
+                f"Not saved: I could not tell when {words[:60]!r} is ({exc.reason}). Ask the user for a day and a "
+                "time, for example 'Friday 5pm' or 'in 2 hours', then try again."
+            )
+        # The model passes on the person's own words for when, and does not always: measured, it dropped a date, turned
+        # "morning" into "8am" and invented times. A time the person did not say would fire at a time they never chose.
+        problem = diya_time.disagreement(words, self._turn.user_text) if in_turn else None
+        if problem:
+            return f"Not saved: {problem}. {REMINDER_TIME_HINT}"
+        self.store.add_reminder(content, " ".join(words.split()), when.iso())
+        note = f" ({'; '.join(when.assumed)})" if when.assumed else ""
+        return f"Reminder saved: {content}, for {when.describe()}{note}"
 
     def list_reminders(self):
-        rows = self.store.list_reminders()
+        rows = self.store.reminders("pending")
         if not rows:
             return "No pending reminders."
-        return "\n".join(
-            f"#{rid}: {content}" + (f" (due {due_at})" if due_at else "")
-            for rid, content, due_at, done in rows
-        )
+        lines = []
+        for row in rows:
+            if row["due_ts"]:
+                when = f" (due {diya_time.describe_local(diya_time.local_from_iso(row['due_ts']))})"
+            elif row["due_at"]:
+                when = f" (no time set; asked as {row['due_at']!r})"
+            else:
+                when = ""
+            lines.append(f"#{row['id']}: {row['content']}{when}")
+        return "\n".join(lines)
 
     def ensure_profile_imported(self):
         """Give the old `user_profile.txt` a home in reviewed memory, once. Before memory was reviewed
@@ -476,6 +539,20 @@ class Agent:
 
     def ask(self, messages):
         """Returns (answer_text, tools_called) -- the tool list exists so evals can check routing.
+
+        While it runs, add_reminder knows what the person just said (see there); when it is over that is
+        forgotten, so a later direct call is not judged by an old message.
+        """
+        self._turn.user_text = _last_user_text(messages)
+        self._turn.active = True
+        try:
+            return self._ask(messages)
+        finally:
+            self._turn.active = False
+            self._turn.user_text = None
+
+    def _ask(self, messages):
+        """The tool-calling loop behind ask().
 
         A clear fact-share ("my flight is on Friday at 6") is not a request: the model is called
         without tools (so it cannot save a reminder or search the web on its own initiative) and

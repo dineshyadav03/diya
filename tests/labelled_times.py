@@ -142,3 +142,74 @@ LIMITS = [
     "next week", "next month", "the weekend", "this weekend", "after lunch", "end of the month", "in a couple of hours",
     "in five minutes", "half past five", "quarter to six", "in a few days", "first thing tomorrow", "the 3rd",
 ]
+
+
+# ---- did the model change the person's words? (diya_time.disagreement) --------------------------------------------
+# (what the person said, the time the model passed, what the reason must say -- or None when the words are theirs)
+# The first group is what the real 3B model actually did in a measurement (docs/PROACTIVITY_DESIGN.md, D2).
+CHANGED = [
+    ("Set a reminder for tomorrow morning to water the plants", "tomorrow at 8am", "includes '8am'"),  # morning became 8am
+    ("Remind me about the dentist on 3 October at 2pm", "2pm", "mentions '3 october'"),  # the date was dropped: today, wrongly
+    ("Remind me to call the vet after lunch", "in 2 hours", "includes 'in 2 hours'"),  # a time was invented
+    ("Remind me to renew my passport", "in 2 weeks", "includes 'in 2 weeks'"),  # no time was asked for
+    ("Remind me to leave for the airport at 5", "5pm", "includes '5pm'"),  # am or pm was guessed
+    # the same kinds of change, made up
+    ("Remind me on Friday at 3pm to send the report", "Friday", "mentions '3pm'"),  # the time was dropped
+    ("Remind me on Friday at 3pm to send the report", "Friday 4pm", "includes '4pm'"),
+    ("Remind me on Friday at 3pm to send the report", "Saturday 3pm", "includes 'saturday'"),
+    ("Remind me on Friday at 3pm to send the report", "Friday 3pm evening", "includes 'evening'"),
+    ("Remind me tomorrow morning to water the plants", "tomorrow at 10am", "includes '10am'"),  # 9am would be its own default; 10am is a guess
+    ("Remind me tomorrow morning to water the plants", "tomorrow at 9pm", "includes '9pm'"),
+    ("Remind me tomorrow at 5pm to call mum", "today 5pm", "includes 'today'"),
+    ("Remind me in 2 hours to check the oven", "in 3 hours", "includes 'in 3 hours'"),
+    ("Remind me in 2 hours to check the oven", "in 2 days", "includes 'in 2 days'"),
+    ("Remind me on 3 October to renew the passport", "4 October", "includes '4 october'"),
+    ("Remind me on 3 October 2026 to renew the passport", "3 October 2027", "includes '3 october 2027'"),
+    ("Remind me on 3 October to renew the passport", "", "you gave no time, but the user's message mentions '3 october'"),
+    ("Remind me to call mum tomorrow at 5pm", "", "you gave no time, but the user's message mentions"),
+    ("Remind me to call mum tomorrow at 5pm", "5pm", "mentions 'tomorrow'"),  # the day was dropped
+    ("Remind me to call mum tomorrow at 5pm", "tomorrow", "mentions '5pm'"),
+    ("Remind me to email Sam about the 3pm meeting", "", "you gave no time, but the user's message mentions '3pm'"),  # a false alarm: it asks
+    ("Remind me on 3 October to send the invoice on Friday at 4pm", "Friday at 4pm", "mentions '3 october'"),  # ...and so is this one
+]
+
+# The same words, however they are written.
+THEIRS = [
+    ("Remind me to call mum tomorrow at 5pm", "tomorrow at 5pm"),
+    ("Remind me to call mum tomorrow at 5pm", "17:00 tomorrow"),
+    ("Remind me to call mum tomorrow at 5pm", "5 pm tomorrow"),
+    ("Remind me to call mum tomorrow at 5pm", "TOMORROW, 5 P.M."),
+    ("Remind me on Friday at 3pm to send the report", "Friday 3pm"),
+    ("Remind me on Friday at 3pm to send the report", "fri 15:00"),
+    ("Don't let me forget to buy milk on Saturday at 10am", "Saturday 10am"),
+    ("remind me to take my pills at 9pm", "9pm"),
+    ("Please remind me to stretch at 6pm", "6pm"),
+    ("Remind me in 2 hours to check the oven", "in 2 hours"),
+    ("Remind me in half an hour to check the oven", "in half an hour"),
+    ("Remind me in half an hour to check the oven", "in 30 minutes"),
+    ("Remind me in an hour to check the oven", "in 1 hour"),
+    ("Remind me about the dentist on 3 October at 2pm", "3 October at 2pm"),
+    ("Remind me about the dentist on 3 October at 2pm", "3 Oct 2pm"),
+    ("Remind me about the dentist on 3 October at 2pm", "October 3rd 14:00"),
+    ("Remind me about the dentist on 3 October 2026 at 2pm", "3 October at 2pm"),  # a year they gave need not be repeated
+    ("Remind me about the dentist on 3 October at 2pm", "3 October 2026 at 2pm"),
+    ("Remind me on 2026-10-03T14:00 about the dentist", "3 October at 2pm"),
+    ("Set a reminder for tomorrow morning to water the plants", "tomorrow morning"),
+    ("Set a reminder for tomorrow morning to water the plants", "tomorrow at 9am"),  # 9am is what this reader makes of "morning"
+    ("Remind me tomorrow afternoon to call the vet", "tomorrow at 3pm"),
+    ("Remind me tomorrow evening to lock up", "tomorrow 18:00"),
+    ("Remind me tonight to lock up", "tonight at 8pm"),
+    ("Remind me tonight to lock up", "tonight"),
+    ("Remind me tonight at 9pm to lock up", "tonight at 9pm"),
+    ("Remind me to renew my passport", ""),
+    ("Remind me to renew my passport", None),
+    ("Remind me to call mum", "   "),
+    ("Remind me to call mum at noon", "noon"),
+    ("Remind me on the day after tomorrow to call mum", "day after tomorrow"),
+]
+
+# What it cannot see. A change that leaves every day and time it can read in place is not caught.
+NOT_CAUGHT = [
+    ("Remind me about my 5pm meeting at 3pm", "5pm"),  # two times in the message: the one passed is one of them, the wrong one
+    ("Remind me to call Sam at 3pm or 4pm", "3pm"),
+]

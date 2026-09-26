@@ -139,8 +139,8 @@ def test_every_other_turn_reaches_the_model_exactly_as_before(config, text):
 
 def test_a_request_can_still_use_a_tool(config):
     agent, client = agent_with(
-        config, tool_reply("add_reminder", '{"content": "call mom"}'), text_reply("Done.")
-    )
+        config, tool_reply("add_reminder", '{"content": "call mom", "due_at": "tomorrow"}'), text_reply("Done.")
+    )  # the time passed is the person's own word: leaving it out would now be refused (tests/test_reminders.py)
     answer, tools = agent.ask([{"role": "user", "content": "Remind me to call mom tomorrow."}])
     assert (answer, tools) == ("Done.", ["add_reminder"])
     assert [r[1] for r in agent.store.list_reminders()] == ["call mom"]

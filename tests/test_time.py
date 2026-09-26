@@ -232,3 +232,70 @@ def test_importing_it_reads_no_clock_and_needs_no_database_or_model(run_python):
     )
     result = run_python(code)
     assert result.returncode == 0 and result.stdout.strip() == "[]", result.stdout + result.stderr
+
+
+# --- did the model change the person's words? (disagreement) ----------------------------------------------------------
+
+@pytest.mark.parametrize("said, words, why", lt.CHANGED, ids=[f"{c[1] or 'blank'} | {c[0][:30]}" for c in lt.CHANGED])
+def test_a_time_that_adds_or_drops_something_the_person_said_is_caught_and_says_what(said, words, why):
+    reason = diya_time.disagreement(words, said)
+    assert reason is not None and why in reason, (words, said, reason)
+
+
+@pytest.mark.parametrize("said, words", lt.THEIRS, ids=[f"{str(c[1]) or 'blank'} | {c[0][:30]}" for c in lt.THEIRS])
+def test_the_persons_own_words_pass_however_they_are_written(said, words):
+    assert diya_time.disagreement(words, said) is None
+
+
+def test_what_the_check_cannot_see_is_measured_not_hidden():
+    for said, words in lt.NOT_CAUGHT:
+        assert diya_time.disagreement(words, said) is None  # a wrong time it cannot tell from a right one
+    assert (len(lt.CHANGED), len(lt.THEIRS), len(lt.NOT_CAUGHT)) == (22, 31, 2)
+
+
+def test_facets_are_the_days_and_times_a_text_mentions_in_a_canonical_form():
+    def read(text):
+        return [(f.kind, f.value) for f in diya_time.facets(text)]
+
+    assert read("3rd of October at 2pm") == [("date", (None, 10, 3)), ("clock", (14, 0))]
+    assert read("Oct 3 2027 5:30 pm") == [("date", (2027, 10, 3)), ("clock", (17, 30))]  # one clock, not two
+    assert read("2026-10-03T14:05") == [("date", (2026, 10, 3)), ("clock", (14, 5))]
+    assert read("in half an hour") == [("relative", (30, "minutes"))] and read("in an hour") == [("relative", (1, "hours"))]
+    assert read("in 2 weeks") == [("relative", (2, "weeks"))] and read("in 90 mins") == [("relative", (90, "minutes"))]
+    assert read("fri and tomorrow and tonight") == [("day", ("weekday", 4)), ("day", ("tomorrow",)), ("day", ("tonight",))]
+    assert read("noon") == [("clock", (12, 0))] and read("this evening") == [("part", ("evening",))]
+    assert read("9 sep") == [("date", (None, 9, 9))]
+
+
+def test_facets_ignore_what_they_do_not_understand_and_refuse_nothing():
+    assert diya_time.facets("call the vet after lunch, soonish") == []
+    assert diya_time.facets("2026-13-01 25pm 13:75 3/4") == []  # impossible dates and times are not facets, and not errors
+    for value in (None, 5, [], b"friday", {"a": 1}):
+        assert diya_time.facets(value) == []
+    assert diya_time.facets("x" * 5000 + " friday 5pm") == []  # only the start of a very long text is read
+
+
+def test_a_date_without_a_year_matches_the_same_date_in_any_year_and_a_different_year_does_not():
+    assert diya_time.disagreement("3 October 2026", "on 3 October") is None  # they gave no year, so any year is theirs
+    assert diya_time.disagreement("3 October", "on 3 October 2027") is None
+    assert "2027" in diya_time.disagreement("3 October 2027", "on 3 October 2026")
+
+
+def test_a_text_always_agrees_with_itself_and_nothing_ever_raises():
+    rng = random.Random(4242)
+    for _ in range(3000):
+        text = " ".join(rng.choice(VOCABULARY) for _ in range(rng.randint(0, 6)))
+        assert diya_time.disagreement(text, text) is None, text
+    alphabet = "abcdefghijklmnopqrstuvwxyz0123456789 :/-.,;'\"()!?" + chr(0) + chr(27) + chr(0x202E) + chr(0xFF15)
+    for _ in range(3000):
+        a = "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 40)))
+        b = "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 40)))
+        reason = diya_time.disagreement(a, b)
+        assert reason is None or (isinstance(reason, str) and all(ch.isprintable() for ch in reason)), (a, b, reason)
+
+
+def test_the_reasons_read_as_sentences_to_the_model():
+    both = diya_time.disagreement("Friday 4pm", "Remind me on Friday at 3pm to send the report")
+    assert both == "the time you gave includes '4pm', which the user did not say, and leaves out '3pm', which they did"
+    assert diya_time.disagreement("", "call mum tomorrow") == "you gave no time, but the user's message mentions 'tomorrow'"
+    assert diya_time.disagreement("friday", "call mum on friday at 3pm and at 4pm") is None  # two times said: not held to either

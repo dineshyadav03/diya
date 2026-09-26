@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from datetime import datetime, timezone
 
@@ -88,7 +89,19 @@ MIGRATIONS = (
         """,
         "CREATE INDEX IF NOT EXISTS fact_events_by_fact ON fact_events (fact_id)",
     )),
+    # Migration 3 (docs/PROACTIVITY_DESIGN.md, D1): a real due time beside the words. `due_at` stays what the
+    # person said ("Friday 5pm"), which nothing can act on; `due_ts` is that read as a UTC instant
+    # (2026-09-25T11:30:00Z), null for a reminder with no time and for every reminder saved before this, which
+    # therefore never become "due". `notified_at` is when the person was told, so a reminder is told once.
+    (3, (
+        "ALTER TABLE reminders ADD COLUMN due_ts TEXT",
+        "ALTER TABLE reminders ADD COLUMN notified_at TEXT",
+        "CREATE INDEX IF NOT EXISTS reminders_pending_due ON reminders (due_ts) WHERE done = 0 AND due_ts IS NOT NULL",
+    )),
 )
+
+MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored
+REMINDER_FIELDS = ("id", "content", "due_at", "due_ts", "done", "created_at", "notified_at")
 
 
 def apply_migrations(conn):
@@ -171,15 +184,73 @@ class Store:
         apply_migrations(conn)
         return conn
 
-    def add_reminder(self, content, due_at=None):
+    def add_reminder(self, content, due_at=None, due_ts=None):
+        """Save a reminder and return its id. `due_at` is the person's own words for when; `due_ts` is the
+        moment they were read as, in UTC as text like 2026-09-25T11:30:00Z (diya_time's When.iso()), or None
+        for a reminder with no time."""
+        if due_ts is not None and not (isinstance(due_ts, str) and MOMENT.fullmatch(due_ts)):
+            raise ValueError(f"due_ts must look like 2026-09-25T11:30:00Z, got {due_ts!r}")
         conn = self.connect()
         now = datetime.now(timezone.utc).isoformat()
-        conn.execute(
-            "INSERT INTO reminders (content, due_at, created_at, done) VALUES (?, ?, ?, 0)",
-            (content, due_at, now),
+        cur = conn.execute(
+            "INSERT INTO reminders (content, due_at, due_ts, created_at, done) VALUES (?, ?, ?, ?, 0)",
+            (content, due_at, due_ts, now),
         )
         conn.commit()
+        reminder_id = cur.lastrowid
         conn.close()
+        return reminder_id
+
+    def reminders(self, state="pending"):
+        """Reminders as dicts (id, content, due_at, due_ts, done, created_at, notified_at), oldest first.
+        `state` is 'pending' (not done), 'done' or 'all'."""
+        if state not in ("pending", "done", "all"):
+            raise ValueError(f"state must be pending, done or all, got {state!r}")
+        query = "SELECT id, content, due_at, due_ts, done, created_at, notified_at FROM reminders"
+        if state != "all":
+            query += f" WHERE done = {1 if state == 'done' else 0}"
+        conn = self.connect()
+        rows = conn.execute(query + " ORDER BY id").fetchall()
+        conn.close()
+        return [dict(zip(REMINDER_FIELDS, row)) for row in rows]
+
+    def get_reminder(self, reminder_id):
+        """One reminder as a dict (see `reminders`), or None."""
+        conn = self.connect()
+        row = conn.execute(
+            "SELECT id, content, due_at, due_ts, done, created_at, notified_at FROM reminders WHERE id = ?", (reminder_id,)
+        ).fetchone()
+        conn.close()
+        return dict(zip(REMINDER_FIELDS, row)) if row else None
+
+    def due_reminders(self, now_ts, unnotified_only=False):
+        """Pending reminders whose time has come, soonest first. `now_ts` is UTC text as in `add_reminder`.
+        A reminder with no real time (`due_ts` null) is never due: nothing can say when."""
+        if not (isinstance(now_ts, str) and MOMENT.fullmatch(now_ts)):
+            raise ValueError(f"now_ts must look like 2026-09-25T11:30:00Z, got {now_ts!r}")
+        query = (
+            "SELECT id, content, due_at, due_ts, done, created_at, notified_at FROM reminders "
+            "WHERE done = 0 AND due_ts IS NOT NULL AND due_ts <= ?"
+        )
+        if unnotified_only:
+            query += " AND notified_at IS NULL"
+        conn = self.connect()
+        rows = conn.execute(query + " ORDER BY due_ts, id", (now_ts,)).fetchall()
+        conn.close()
+        return [dict(zip(REMINDER_FIELDS, row)) for row in rows]
+
+    def mark_notified(self, reminder_id, at=None):
+        """Record that the person has been told about a reminder, once: returns True if this call did it,
+        False if it was already recorded, done, or does not exist."""
+        conn = self.connect()
+        cur = conn.execute(
+            "UPDATE reminders SET notified_at = ? WHERE id = ? AND done = 0 AND notified_at IS NULL",
+            (at or datetime.now(timezone.utc).isoformat(), reminder_id),
+        )
+        conn.commit()
+        changed = cur.rowcount > 0
+        conn.close()
+        return changed
 
     def list_reminders(self, include_done=False):
         conn = self.connect()
@@ -192,10 +263,13 @@ class Store:
         return rows
 
     def complete_reminder(self, reminder_id):
+        """Mark a reminder done. Returns True if this call did it, False if it was already done or is not there."""
         conn = self.connect()
-        conn.execute("UPDATE reminders SET done = 1 WHERE id = ?", (reminder_id,))
+        cur = conn.execute("UPDATE reminders SET done = 1 WHERE id = ? AND done = 0", (reminder_id,))
         conn.commit()
+        changed = cur.rowcount > 0
         conn.close()
+        return changed
 
     def create_thread(self, title=None):
         conn = self.connect()
@@ -282,8 +356,8 @@ def get_connection():
     return _default_store().connect()
 
 
-def add_reminder(content, due_at=None):
-    return _default_store().add_reminder(content, due_at)
+def add_reminder(content, due_at=None, due_ts=None):
+    return _default_store().add_reminder(content, due_at, due_ts)
 
 
 def list_reminders(include_done=False):

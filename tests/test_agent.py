@@ -1,5 +1,6 @@
 import dataclasses
 import types
+from datetime import datetime
 
 import pytest
 
@@ -32,9 +33,12 @@ def config(tmp_path, notes_dir):
     )
 
 
-def make_agent(config, *replies, **client_kwargs):
+NOW = datetime(2026, 9, 23, 10, 15)  # a Wednesday: the agent's clock in the tests that read a time
+
+
+def make_agent(config, *replies, clock=None, **client_kwargs):
     client = FakeClient(replies, **client_kwargs)
-    return Agent(config, client=client), client
+    return Agent(config, client=client, clock=clock), client
 
 
 # --- importing and constructing are free of side effects ---------------------------
@@ -146,11 +150,11 @@ def test_warm_up_or_exit_is_quiet_when_ollama_is_up(config, capsys):
 # --- the stateful tools ----------------------------------------------------------
 
 def test_reminders_go_to_the_agents_own_store(config):
-    agent, _ = make_agent(config)
+    agent, _ = make_agent(config, clock=lambda: NOW)
     assert agent.list_reminders() == "No pending reminders."
-    assert agent.add_reminder("call mom") == "Reminder saved: call mom"
-    assert agent.add_reminder("buy strings", "Friday 5pm") == "Reminder saved: buy strings (due Friday 5pm)"
-    assert agent.list_reminders() == "#1: call mom\n#2: buy strings (due Friday 5pm)"
+    assert agent.add_reminder("call mom") == "Reminder saved: call mom. It has NO time, so it will not fire: tell the user that, and ask when they want it."
+    assert agent.add_reminder("buy strings", "Friday 5pm") == "Reminder saved: buy strings, for Friday 25 Sep 2026, 17:00"
+    assert agent.list_reminders() == "#1: call mom\n#2: buy strings (due Friday 25 Sep 2026, 17:00)"
     assert [r[1] for r in Store(config.db_path).list_reminders()] == ["call mom", "buy strings"]
 
 
@@ -208,7 +212,7 @@ def test_a_tool_call_is_executed_and_its_result_fed_back(config, capsys):
     messages = [{"role": "user", "content": "remind me to call mom"}]
     answer, tools = agent.ask(messages)
     assert (answer, tools) == ("Saved.", ["add_reminder"])
-    assert messages[-1] == {"role": "tool", "tool_call_id": "c1", "content": "Reminder saved: call mom"}
+    assert messages[-1] == {"role": "tool", "tool_call_id": "c1", "content": "Reminder saved: call mom. It has NO time, so it will not fire: tell the user that, and ask when they want it."}
     assert "  [tool call] add_reminder({'content': 'call mom'})" in capsys.readouterr().out
     assert [r[1] for r in agent.store.list_reminders()] == ["call mom"]
 

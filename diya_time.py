@@ -88,8 +88,28 @@ class When:
 
     def describe(self):
         """The moment in words, for the person: 'Friday 25 Sep 2026, 17:00'."""
-        l = self.local
-        return f"{DAY_NAMES[l.weekday()]} {l.day} {MONTH_NAMES[l.month - 1]} {l.year}, {l:%H:%M}"
+        return describe_local(self.local)
+
+
+def describe_local(local):
+    """A local wall-clock time in words, the same way every time and whatever the machine's language."""
+    return f"{DAY_NAMES[local.weekday()]} {local.day} {MONTH_NAMES[local.month - 1]} {local.year}, {local:%H:%M}"
+
+
+def local_from_iso(iso, to_local=None):
+    """A stored moment (UTC text like 2026-09-25T11:30:00Z) as local wall-clock time, no time zone, by the
+    operating system's rules for that date; `to_local` replaces that conversion (tests)."""
+    moment = datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    return (to_local or _utc_to_local)(moment)
+
+
+def iso_of_local(local, to_utc=None):
+    """A local wall-clock time as stored text (UTC, the form When.iso() gives); `to_utc` as in parse_when."""
+    return (to_utc or _local_to_utc)(local).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _utc_to_local(moment):
+    return moment.astimezone().replace(tzinfo=None)
 
 
 def _local_to_utc(naive):
@@ -314,3 +334,125 @@ def _calendar_day(iso, dm, md, clock, now, assumed):
         return date(now.year + 1, month, dom)
     except ValueError:
         raise NotUnderstood("that is not a real date")
+
+
+# ---- did the model change the person's words? (docs/PROACTIVITY_DESIGN.md, D2, added after measuring the real model) ----
+#
+# The model passes on the person's own words for when, and the parser above reads them. Measured with the real 3B
+# model, it does not always pass them on: it dropped "3 October" and passed "2pm" (a reminder for today), turned
+# "morning" into "8am", replaced "after lunch" with "in 2 hours", and rewrote "at 5" as "5pm". Each of those is a
+# reminder that fires at a time the person never said. So the words are read again, permissively, out of the
+# person's own message, and the two are compared: the model may not add a day or a time the person did not say,
+# and may not leave out the one they did.
+
+@dataclass(frozen=True)
+class Facet:
+    kind: str  # date, day, relative, clock or part
+    value: tuple
+    text: str  # what it was written as
+
+
+_RELATIVE_ANY = re.compile(r"\bin (?:(?P<n>[0-9]{1,4})|(?P<word>half an|an|a)) ?(?P<unit>minutes?|mins?|hours?|hrs?|h|days?|weeks?)\b")
+_DROPPABLE = ("date", "day", "relative", "clock")  # kinds a person's message can be held to: leave the one they said in
+
+
+def facets(text):
+    """The days and times a text mentions, understood as far as they can be and nothing else ignored or refused. Not a
+    reading of the text (parse_when is that): a way to ask whether two texts talk about the same day and time."""
+    if not isinstance(text, str):
+        return []
+    s = _normalise(text[:2000])
+    found = []
+
+    def take(pattern, make):
+        nonlocal s
+        for m in pattern.finditer(s):
+            made = make(m)
+            if made:
+                found.extend(made)
+        s = pattern.sub(" ", s)
+
+    def iso(m):
+        try:
+            when = [Facet("date", (int(m["y"]), int(m["mo"]), int(m["d"])), m.group(0))]
+            date(int(m["y"]), int(m["mo"]), int(m["d"]))
+            if m["h"] is not None and int(m["h"]) < 24 and int(m["mi"]) < 60:
+                when.append(Facet("clock", (int(m["h"]), int(m["mi"])), m.group(0)))
+            return when
+        except ValueError:
+            return None
+
+    def month_date(m):
+        return [Facet("date", (int(m["y"]) if m["y"] else None, MONTHS[m["m"]], int(m["d"])), m.group(0))]
+
+    def relative(m):
+        unit = m["unit"]
+        kind = "minutes" if unit.startswith("min") else "hours" if unit in ("h", "hr", "hrs") or unit.startswith("hour") else "days" if unit.startswith("day") else "weeks"
+        n = int(m["n"]) if m["n"] else 1
+        if m["word"] == "half an":
+            n, kind = (30, "minutes") if kind == "hours" else (0, kind)
+        return [Facet("relative", (n, kind), m.group(0))]
+
+    def day(m):
+        w = m["w"]
+        return [Facet("day", ("weekday", WEEKDAYS[w]) if w in WEEKDAYS else (w,), m.group(0))]
+
+    def clock(m):
+        try:
+            return [Facet("clock", (_hour(int(m["h"]), m["ap"], int(m["mi"])), int(m["mi"])), m.group(0))]
+        except NotUnderstood:
+            return None
+
+    def hour_ap(m):
+        try:
+            return [Facet("clock", (_hour(int(m["h"]), m["ap"]), 0), m.group(0))]
+        except NotUnderstood:
+            return None
+
+    take(_ISO, iso)
+    take(_DAY_MONTH, month_date)
+    take(_MONTH_DAY, month_date)
+    take(_RELATIVE_ANY, relative)
+    take(_DAY_WORD, day)
+    take(_CLOCK, clock)
+    take(_HOUR_AP, hour_ap)
+    take(_NOON, lambda m: [Facet("clock", (12, 0), m.group(0))])
+    take(_PART, lambda m: [Facet("part", (m["p"],), m.group(0))])
+    return found
+
+
+def _same(a, b):
+    if a.kind != b.kind:
+        return False
+    if a.kind == "date":
+        (y1, m1, d1), (y2, m2, d2) = a.value, b.value
+        return (m1, d1) == (m2, d2) and (y1 is None or y2 is None or y1 == y2)
+    return a.value == b.value
+
+
+def disagreement(words, said):
+    """None if the time `words` is the person's own (as far as their message `said` goes), else a sentence that says
+    what is wrong, addressed to the model. `words` may not contain a day or time `said` does not; and if `said` gives
+    exactly one date, day, in-N-units or clock time, `words` must have it."""
+    given, heard = facets(words), facets(said)
+    # "morning" and "9am" are the same to this reader (its own default for morning), so a model that writes the
+    # hour it would have been given is not inventing one; likewise "tonight" and 20:00.
+    defaults = {(PART_OF_DAY[g.value[0]], 0) for g in heard if g.kind == "part"}
+    defaults |= {(TONIGHT_HOUR, 0) for g in heard if g.kind == "day" and g.value == ("tonight",)}
+    invented = [f for f in given if not any(_same(f, g) for g in heard) and not (f.kind == "clock" and f.value in defaults)]
+    dropped = []
+    for kind in _DROPPABLE:
+        mine = [g for g in heard if g.kind == kind]
+        if len(mine) == 1 and not any(_same(mine[0], f) for f in given):
+            dropped.append(mine[0])
+    said_text = " and ".join(repr(f.text) for f in dropped)
+    given_text = " and ".join(repr(f.text) for f in invented)
+    if invented and dropped:
+        return f"the time you gave includes {given_text}, which the user did not say, and leaves out {said_text}, which they did"
+    if invented:
+        return f"the time you gave includes {given_text}, which the user did not say"
+    if dropped:
+        if not isinstance(words, str) or not words.strip():
+            return f"you gave no time, but the user's message mentions {said_text}"
+        return f"the user's message mentions {said_text}, which the time you gave leaves out"
+    return None
