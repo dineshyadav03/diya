@@ -75,6 +75,31 @@ export default function ChatPage() {
   const [logoPaused, setLogoPaused] = useState(false)
   const threadIdRef = useRef(null)
   const logRef = useRef(null)
+  // How many reminders have come due, for the header link. Asked once a minute while the page is open. If it
+  // cannot be asked nothing is shown: a badge that says 0 when it does not know would be a lie, and nobody
+  // asked for this, so there is nothing to explain.
+  const [dueCount, setDueCount] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function check() {
+      try {
+        const response = await fetch('/api/reminders')
+        const body = response.ok ? await response.json() : null
+        if (!cancelled) setDueCount(body && body.counts && Number.isInteger(body.counts.due) ? body.counts.due : null)
+      } catch {
+        if (!cancelled) setDueCount(null)
+      }
+    }
+    check()
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') check()
+    }, 60_000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -281,6 +306,14 @@ export default function ChatPage() {
           </Link>
           <Link className="icon-btn nav-wide" href="/memory" style={{ textDecoration: 'none' }}>
             Memory
+          </Link>
+          <Link className="icon-btn nav-wide" href="/reminders" style={{ textDecoration: 'none' }}>
+            Reminders
+            {dueCount > 0 && (
+              <span className="due-badge" aria-label={`${dueCount} due`}>
+                {dueCount}
+              </span>
+            )}
           </Link>
           <button
             className="icon-btn"

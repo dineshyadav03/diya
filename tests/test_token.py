@@ -49,6 +49,7 @@ def client_for(tmp_path, require=None):
     # one candidate fact (id 1), so the routes that need a fact have one to act on
     Memory(agent.store).add_candidate("seeded candidate", batch_first=1, batch_last=1, position=0, model="m",
                                       extracted_at="2026-01-01T00:00:00+00:00", raw="- seeded candidate")
+    agent.store.add_reminder("seeded reminder")  # and one reminder (id 1), for the same reason
     app = diya_web.create_app(config, agent, transcriber=object())
     return TestClient(app, base_url=HOST), app
 
@@ -64,7 +65,7 @@ OK = (200, 201)  # adding a fact answers 201
 
 def concrete_path(path):
     """A route's path with a real id and action in place of its parameters."""
-    return path.replace("{thread_id}", "1").replace("{fact_id}", "1").replace("{action}", "accept")
+    return path.replace("{thread_id}", "1").replace("{fact_id}", "1").replace("{action}", "accept").replace("{reminder_id}", "1")
 
 
 # Every route the app has today, with a request that succeeds once it is past the token layer.
@@ -76,6 +77,9 @@ ENDPOINTS = [
     ("POST", "/api/memory/ingest", {}),
     ("POST", "/api/memory/add", {"json": {"text": "a typed fact"}}),
     ("POST", "/api/memory/1/accept", {}),
+    ("GET", "/api/reminders", {}),
+    ("POST", "/api/reminders", {"json": {"text": "call mum", "when": "in 2 hours"}}),
+    ("POST", "/api/reminders/1/done", {}),
     ("POST", "/api/chat", {"json": {"message": "hi"}}),
     ("POST", "/api/transcribe", {"files": {"audio": ("a.webm", b"x", "audio/webm")}}),
     ("GET", "/docs", {}),

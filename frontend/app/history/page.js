@@ -36,6 +36,9 @@ export default function HistoryPage() {
           <Link className="icon-btn" href="/memory">
             Memory
           </Link>
+          <Link className="icon-btn" href="/reminders">
+            Reminders
+          </Link>
           <Link className="icon-btn" href="/">
             &larr; Back to chat
           </Link>

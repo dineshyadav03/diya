@@ -418,6 +418,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
     assert sorted(targets) == sorted([
         "/api/history/${threadId}", "/api/chat", "/api/threads", "/api/transcribe",
         "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
+        "/api/reminders", "/api/reminders", "/api/reminders", "/api/reminders/${reminder.id}/done",  # the chat's due count, the page's list and add, and done
     ])
     assert not [p for p in browser_files() if re.search(r"fetch\(\s*[^`'\"\s]", p.read_text(encoding="utf-8"))]  # no computed URLs
 
@@ -440,7 +441,11 @@ def test_the_token_has_no_home_in_any_file_the_repo_tracks_for_the_frontend():
 def api_routes(tmp_path):
     config = dataclasses.replace(load_config({}), db_path=str(tmp_path / "r.db"), profile_path=str(tmp_path / "r_profile.txt"))
     app = diya_web.create_app(config, diya.Agent(config, client=FakeClient()), transcriber=object())
-    return {r.path: r.methods - {"HEAD"} for r in app.routes if r.path.startswith("/api/")}
+    found = {}
+    for r in app.routes:
+        if r.path.startswith("/api/"):
+            found.setdefault(r.path, set()).update(r.methods - {"HEAD"})  # one path can carry both a GET and a POST
+    return found
 
 
 def proxy_route_files():
@@ -457,12 +462,13 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
     assert set(routes) == {
         "/api/threads", "/api/history/{thread_id}", "/api/chat", "/api/transcribe",
         "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/{fact_id}/{action}",
+        "/api/reminders", "/api/reminders/{reminder_id}/done",
     }
     assert set(proxies) == set(routes), "an API route with no proxy route (or the reverse)"
     for path, methods in routes.items():
         exported, source = proxies[path]
         assert exported == methods, path
-        assert "lib/proxy.mjs" in source and any(name in source for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(")), path
+        assert "lib/proxy.mjs" in source and any(name in source for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardReminderDone(")), path
         assert "force-dynamic" in source, path  # never cached
 
 
@@ -560,3 +566,74 @@ def test_an_action_the_api_does_not_have_is_refused_before_anything_is_sent(acti
 def test_every_real_action_on_a_whole_number_fact_is_forwarded_to_its_own_path(action, fact_id):
     out = run_harness({"mode": "route", "env": {}, "calls": [call("memoryAction", "POST", params={"fact_id": fact_id, "action": action})]})
     assert [(c["method"], c["url"]) for c in out["captured"]] == [("POST", f"/api/memory/{fact_id}/{action}")]
+
+
+# --- the reminders page's routes (docs/PROACTIVITY_DESIGN.md, unit P3) -----------------------------
+
+REMINDER_CALLS = [
+    ("reminders", "GET", None, "/api/reminders"),
+    ("reminders", "POST", None, "/api/reminders"),
+    ("reminderDone", "POST", {"reminder_id": "12"}, "/api/reminders/12/done"),
+]
+
+
+@needs_node
+def test_the_reminder_routes_work_end_to_end_through_the_ui_server_with_no_token_in_the_browser(api):
+    store = api.agent.store
+    store.add_reminder("water plants")
+    listed, added, done = through_the_ui(
+        api,
+        [
+            call("reminders", "GET"),
+            json_call("reminders", {"text": "call mum", "when": "in 2 hours"}),
+            call("reminderDone", "POST", params={"reminder_id": "1"}),
+        ],
+    )
+    assert [a["status"] for a in (listed, added, done)] == [200, 201, 200]
+    assert [r["content"] for r in json.loads(unb64(listed["bodyB64"]))["reminders"]] == ["water plants"]
+    assert json.loads(unb64(added["bodyB64"]))["reminder"]["state"] == "upcoming"
+    assert [r["content"] for r in store.reminders()] == ["call mum"]  # the first was marked done
+
+
+@needs_node
+def test_the_api_refuses_the_reminder_routes_without_the_token_and_nothing_is_written(api):
+    store = api.agent.store
+    rid = store.add_reminder("water plants")
+    answers = through_the_ui(api, [call("reminders", "GET"), json_call("reminders", {"text": "x"}),
+                                   call("reminderDone", "POST", params={"reminder_id": str(rid)})], token=None)
+    assert [a["status"] for a in answers] == [401, 401, 401]
+    assert [r["content"] for r in store.reminders()] == ["water plants"] and store.get_reminder(rid)["done"] == 0
+
+
+@needs_node
+def test_the_reminder_routes_forward_to_their_own_path_and_method_with_the_token_and_nothing_else_of_the_browsers():
+    calls = [call(route, method, {"content-type": "application/json", "authorization": "Bearer from-the-browser", "cookie": "a=b"},
+                  "{}" if method == "POST" else None, params)
+             for route, method, params, _ in REMINDER_CALLS]
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": calls})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [(m, u) for _, m, _, u in REMINDER_CALLS]
+    for captured in out["captured"]:
+        assert captured["headers"]["authorization"] == f"Bearer {TOKEN}"
+        assert "cookie" not in captured["headers"]
+    assert "from-the-browser" not in json.dumps(out["captured"])
+
+
+@needs_node
+def test_a_reminder_route_answers_only_the_methods_the_api_route_does():
+    out = run_harness({"mode": "route", "env": {}, "calls": [call("reminderDone", "GET", params={"reminder_id": "1"})]})
+    assert out["results"] == [{"noHandler": True}] and out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("reminder_id", ["abc", "1.5", "-1", "1e3", "", " 1", "1 ", "1%2F2", "../1", "1/../2", "9" * 19, "0x10"])
+def test_a_reminder_id_that_is_not_a_whole_number_is_refused_before_anything_is_sent(reminder_id):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call("reminderDone", "POST", params={"reminder_id": reminder_id})]})
+    assert out["results"][0]["status"] == 404
+    assert out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("reminder_id", ["1", "12", "9" * 18])
+def test_a_whole_number_reminder_id_is_forwarded_to_its_own_path(reminder_id):
+    out = run_harness({"mode": "route", "env": {}, "calls": [call("reminderDone", "POST", params={"reminder_id": reminder_id})]})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [("POST", f"/api/reminders/{reminder_id}/done")]

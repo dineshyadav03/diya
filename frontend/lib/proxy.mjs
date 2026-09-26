@@ -140,3 +140,11 @@ export async function forwardFactAction(request, context, options) {
   if (!FACT_ACTIONS.has(String(action))) return errorResponse(404, 'No such action')
   return forward(request, `/api/memory/${factId}/${action}`, options)
 }
+
+// The reminders page's routes (docs/PROACTIVITY_DESIGN.md, unit P3). A reminder id is a whole number; anything else
+// is turned away here instead of being pasted into the URL of the API request.
+export async function forwardReminderDone(request, context, options) {
+  const { reminder_id: reminderId } = await context.params
+  if (!WHOLE_NUMBER.test(String(reminderId))) return errorResponse(404, 'No such reminder')
+  return forward(request, `/api/reminders/${reminderId}/done`, options)
+}

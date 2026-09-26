@@ -422,3 +422,12 @@ header input[type="checkbox"] { accent-color: var(--accent); width: 15px; height
    room; History always links to Memory. */
 header .icon-btn.nav-wide { display: none; }
 @media (min-width: 421px) { header .icon-btn.nav-wide { display: inline-flex; } }
+/* The reminders page reuses the memory page's look; a reminder that has come due is outlined like a fact
+   waiting for review, and the chat header's Reminders link carries a small count when any are due. */
+.reminder[data-state="due"] { border-color: var(--accent); }
+.reminder-when-line { margin: 2px 0 8px; }
+.reminder-when { max-width: 220px; }
+.due-badge {
+  margin-left: 6px; min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--accent); color: var(--accent-text);
+  font-size: 12px; font-weight: 600; line-height: 18px; text-align: center;
+}
