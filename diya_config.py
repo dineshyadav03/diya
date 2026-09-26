@@ -52,6 +52,10 @@ class Config:
     dream_log_path: str = "dream_log.txt"
     dream_state_path: str = "dream_state.json"
     dream_pending_path: str = "dream_pending.jsonl"
+    # The desktop notifier (diya_notify.py, docs/PROACTIVITY_DESIGN.md D5): where it logs, and whether a
+    # notification shows the reminder's own words (DIYA_NOTIFY_SHOW_TEXT=0 shows "A reminder is due" instead).
+    notify_log_path: str = "notify_log.txt"
+    notify_show_text: bool = True
     whisper_model: str = "base"
     # The API listens on this computer only. Reaching it from another device (the iPhone) is an
     # explicit choice: DIYA_LAN=1 plus DIYA_ALLOWED_HOSTS (never an accident of the default).
@@ -113,6 +117,7 @@ _STRING_SETTINGS = {
     "dream_log_path": "DIYA_DREAM_LOG_PATH",
     "dream_state_path": "DIYA_DREAM_STATE_PATH",
     "dream_pending_path": "DIYA_DREAM_PENDING_PATH",
+    "notify_log_path": "DIYA_NOTIFY_LOG_PATH",
     "whisper_model": "DIYA_WHISPER_MODEL",
     "host": "DIYA_HOST",
     "token_path": "DIYA_TOKEN_PATH",
@@ -155,7 +160,8 @@ def load_config(env=None) -> Config:
 
     if read_flag("DIYA_LAN"):
         values["lan"] = True
-    for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN")):
+    for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
+                        ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag
