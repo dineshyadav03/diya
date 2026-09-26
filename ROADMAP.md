@@ -214,7 +214,9 @@ Remaining:
 ## Later stages
 
 1. Hardware and model benchmark. Includes the 3B model calling `add_reminder` on plain arithmetic
-   questions (roughly 40-50% of past runs), which prompt and temperature changes did not fix.
+   questions (roughly 40-50% of past runs), which prompt and temperature changes did not fix. Now stopped in
+   code for reminders (item 4's guard; measured 0 of 57 unasked runs saving one, 6 of 38 before), but the model
+   still tries: it is the model's habit, not fixed.
 2. Trustworthy memory. The review-and-promote step for staged facts. Reference for the
    verification step: the solver/verifier separation (Apodex). Designed in
    [`docs/STAGE2_DESIGN.md`](docs/STAGE2_DESIGN.md) as seven units. **Built (all seven units):** storage
@@ -230,6 +232,10 @@ Remaining:
    outcome, it follows through". Reference: Muse-style approval gates and action trails.
    The local first slice, reminders that fire (a time parser, real due times, a Reminders page, an optional
    desktop notifier), is designed in [`docs/PROACTIVITY_DESIGN.md`](docs/PROACTIVITY_DESIGN.md) as four units.
+   **Built:** P1 (the time reader), P2 (real due times, the tool that reads them, the guard against unasked
+   reminders, and a check that the model did not change the person's words) and P3 (the API, the Reminders page,
+   the header count). **Remaining:** P4 (`diya_notify.py`, a Windows toast the owner registers as a scheduled
+   task); snooze and recurrence wait for the durable-workflow work.
 5. "Jev" decision benchmark. Open-source baseline: laya-mlx (MLX, so Apple silicon only).
 6. Daily-driver experience.
 

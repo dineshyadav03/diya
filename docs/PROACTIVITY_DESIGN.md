@@ -104,6 +104,20 @@ chat header ("2 due") that re-checks once a minute while the page is open. No pu
 learns nothing, which is what level 2 is for. Same token, same same-origin proxy, same `describe*Failure` wording
 as everything since Stage 1.
 
+*As built (P3):* `diya_reminders_api.py` registers `GET /api/reminders` (the pending reminders, each `due`, `upcoming`
+or `no_time`, judged against the agent's own clock at the moment of the request, with the person's words, the time in
+words, and whether they were told), `POST /api/reminders` (`{"text", "when"}`: typed by the person, the time read by the
+same reader as the model's, a time it cannot read a 422 with the reason, nothing saved) and `POST /api/reminders/{id}/done`
+(404 unknown, 409 already done). Everything sent back goes through `printable()`. The UI gets two same-origin proxy
+route files and one helper (the id must be a whole number), a Reminders page in the Memory page's style with an add form
+and a Done button, links from History, Memory and the chat header, and a count of what is due in the chat header (asked once a
+minute; if it cannot be asked, nothing is shown rather than a 0). The page looks again once a minute while it is open.
+That refresh keeps its own note ("Couldn't refresh just now, so this may be out of date"), apart from the line that
+reports what the person just did: the first real-browser run showed a background failure showing up as the result of
+an action, and a successful refresh able to wipe an action's error, so they no longer share a line. 30 of 31 mutations of
+the API and its proxy caught; the survivor (`printable()` on the refusal reason) is equivalent, since the reason already
+quotes with `repr()`, and has an invariant test anyway.
+
 ### D5. Telling the person outside the app (level 2)
 
 **Recommendation: a second scheduled job, `diya_notify.py`, every 5 minutes, that shows a Windows toast for
@@ -113,6 +127,20 @@ PowerShell's built-in Windows.UI.Notifications; nothing new is installed. **It i
 creating a scheduled task on the owner's machine is the owner's step, documented, like Dreaming's. The text
 shown is the person's own reminder on their own machine, so it is shown by default; `DIYA_NOTIFY_SHOW_TEXT=0`
 shows "A reminder is due" instead, for a screen other people can see.
+
+*As built (P4):* `diya_notify.py`, standard library only, `python diya_notify.py [--dry-run | --test]`, documented in
+`docs/reminders.md` with the PowerShell that registers the scheduled task. **Nothing registers it, and it is not
+registered.** One pass over the reminders that have come due and have not been told: for each, a Windows
+notification, and only then `notified_at`, so a crash in between can tell one twice and never zero times. A failure
+is not recorded and is tried again on the next pass. The reminder's words travel to PowerShell in environment
+variables; the script itself is a constant, so a reminder that says `$(...)` or holds a quote is only text (a test
+runs a hostile string through and checks it appears nowhere in the command). The words go through `printable()`
+and are cut to fit. More than five due at once (a computer that was off) is four notifications and one that stands
+for the rest. The log, `notify_log.txt` (git-ignored), holds counts and ids, never a reminder's words. Two settings:
+`DIYA_NOTIFY_SHOW_TEXT`, `DIYA_NOTIFY_LOG_PATH`. 27 mutations, all caught (one after correcting a mutation that was
+equivalent). Verified for real on this Windows machine: `--test` showed a notification and it reached the Action
+Center with the text it was given (read back through `ToastNotificationManager.History`, then cleared). Not verified:
+a scheduled run (nothing is scheduled), or a screen with Focus Assist on. Off Windows it says so and exits 2.
 
 ### D6. A reminder that came due while the machine was off
 
@@ -145,6 +173,56 @@ own notes and reminders is any good. Recommendation: do not design it until leve
    for when, and the Reminders page can mark it done. A wrong reminder is then a click, not a mystery.
 
 Guard 1 changes an existing tool's behaviour, which is why it is a decision and not a detail.
+
+*As built (P2):* migration 3 adds `due_ts` (the moment, as UTC text like `2026-09-25T11:30:00Z`) and `notified_at`
+to `reminders`, with a partial index over pending timed ones. Every reminder saved before it keeps its words, has a
+null `due_ts`, and can never be due. (The scheduled Dreaming task runs the working-tree code, so it applied the
+migration to the live `diya.db` within the half hour, as with migration 2; checked on a copy first: the six existing
+reminders unchanged, integrity `ok`.) `Store` gained `reminders(state)`, `get_reminder`, `due_reminders(now_ts,
+unnotified_only)` and `mark_notified` (once, and never for a finished reminder); `add_reminder` returns the id and
+refuses a moment that is not UTC text; `complete_reminder` says whether it did anything. The tool,
+`Agent.add_reminder`, reads the person's words with `diya_time` against the agent's own clock (a parameter, so tests do
+not depend on today), stores the words and the moment, and answers the model with what it understood ("Reminder
+saved: call mum, for Friday 25 Sep 2026, 17:00 (no time was given, so 09:00)"). A time it cannot read saves nothing
+and says why, so the model can ask. No time at all saves a reminder that says it has none and will not fire. The
+tool's schema now asks for the person's own words unchanged and "never guess a time".
+
+The guard is `diya_intent.is_reminder_request`: a short list of the ways people ask ("remind me", "set a reminder",
+"don't let me forget", "note to self", ...). While `Agent.ask` is answering, `add_reminder` saves nothing unless the
+latest user message matches, and says so to the model. The state is per thread, cleared when the turn ends (also on
+an error), and a direct call outside a turn is not guarded. On hand-written fictional messages all 30 requests are
+allowed and all 31 non-requests are refused (including "What reminders do I have?" and "Send a reminder email to the
+team"); the failures are kept on purpose: 4 non-requests it still allows ("How do I set a reminder on my phone?") and 6
+real requests it refuses ("Ping me at 5", "Wake me up at 7"). Those cases were written alongside the patterns.
+
+*Measured with the real model, and what it added.* `qwen2.5:3b` at Ollama's default sampling, on invented messages
+(12 requests with times, 19 that ask for nothing), 2 to 3 runs each, so the counts are small and noisy:
+
+- **Unasked reminders.** With no guard, the model called `add_reminder` and a reminder was saved in 6 of 38 runs on
+  messages that ask for none ("What's 9 times 7?", "What is 15% of 80?", "I need to buy milk tomorrow", "Tomorrow I
+  have a meeting at 3pm with Priya"). With the guard: 0 of 57. The model still tried in 9 of the 57; the tool
+  refused.
+- **Wrong times.** With the time read in code but the model's words trusted, 4 of 24 request runs saved a time the
+  person never said: the model dropped "3 October" and passed "2pm" (a reminder for today), turned "morning" into
+  "8am", replaced "after lunch" with "in 2 hours", and rewrote "at 5" as "5pm". So the words are now checked against the
+  person's own message (`diya_time.disagreement`): the model may not add a day or time they did not say, and may not
+  leave out the one they did ("morning" and "9am" count as the same, that being this reader's own default). With
+  that check: 0 wrong times in 36 request runs, 22 of the 27 runs that should save did so at the right time, all 9
+  that should be refused ("next Friday", "at 5", "after lunch") were, and the other 4 were refused and the model
+  asked again. A refusal is the safe direction, and the model's reply to one asked the person to clarify without
+  claiming it had saved anything.
+- **What the check cannot see.** It looks for days and times it can read. A message with two times ("my 5pm
+  meeting at 3pm") gives it nothing to hold the model to, so a wrong pick between them passes; and a date that is
+  part of what is being reminded of ("send the invoice for 3 October on Friday at 4pm") makes it refuse a good
+  reminder. Both are in `tests/labelled_times.py`.
+- **The model does not always relay what the tool says.** Once it told the person a reminder with no time "will go off"
+  though the tool had said it would not, so that answer is now blunt ("It has NO time, so it will not fire: tell the
+  user that, and ask when they want it."). Not re-measured.
+
+46 mutations of the store, the tool and the guard were run: 45 caught, and the one that survived (the 300-character
+limit) was pinned by a test; 21 more on the words check, 20 caught first time and the last fixed. **Deviations:** the
+guard changes an existing tool's behaviour, as D9 said it would; the words check is not in the design above (the
+measurement showed it was needed); existing tests that pinned the old return text were updated.
 
 ## 4. Units
 

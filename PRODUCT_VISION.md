@@ -24,11 +24,11 @@ describes a commercial local-first assistant. Diya is a one-person project; the 
 | Area | Status |
 |---|---|
 | Local inference | Done. Ollama, `qwen2.5:3b` for chat, `nomic-embed-text` for embeddings, via the OpenAI-compatible API. |
-| Tools | Six, in `diya.py`: `search_notes`, `web_search`, `get_weather`, `add_reminder`, `list_reminders`, `list_files`. Loop capped at 8 rounds; network tools time out after 5 s. `list_files` only lists inside `DIYA_FILES_ROOTS` (default `Documents/Diya`); `get_weather` only reaches the hosts in `DIYA_TOOL_ALLOWED_HOSTS` (default: the two Open-Meteo hosts). No MCP app store. |
+| Tools | Six, in `diya.py`: `search_notes`, `web_search`, `get_weather`, `add_reminder`, `list_reminders`, `list_files`. `add_reminder` saves nothing unless the message asked for a reminder, reads the time itself and refuses one the model changed. Loop capped at 8 rounds; network tools time out after 5 s. `list_files` only lists inside `DIYA_FILES_ROOTS` (default `Documents/Diya`); `get_weather` only reaches the hosts in `DIYA_TOOL_ALLOWED_HOSTS` (default: the two Open-Meteo hosts). No MCP app store. |
 | Conversations | Done. Threads and messages in SQLite, a history page, reopening a thread. Not built: renaming, search. |
 | Notes memory | Partial. `search_notes` searches `sample_notes/` (or `DIYA_NOTES_DIR`) through an in-memory Chroma index rebuilt at each start. No ingestion beyond that folder. |
 | Long-term memory | Done for the loop, at small scale: Dreaming stages candidate facts, `diya_review.py` reviews them, and the model is told the accepted ones (see below). Reviewed on the command line or on the UI's Memory page, with an optional second opinion from the model (`judge`, advisory only). Not built: finding facts by relevance. |
-| Proactivity | Dreaming runs on a schedule. The notes watcher is a Phase 1 script and is not connected to the assistant. |
+| Proactivity | Reminders have real due times, and the UI's Reminders page shows what is due, refreshing once a minute while it is open. Nothing tells you outside the app yet (the desktop notifier, unit P4 of `docs/PROACTIVITY_DESIGN.md`, is not built), so a closed tab learns nothing. Dreaming runs on a schedule. The notes watcher is a Phase 1 script and is not connected to the assistant. |
 | Client | Done for the web. A Next.js UI with chat, history, hold-to-talk voice input and optional spoken replies. No native apps. |
 | Self-authored tools | Not built. |
 | Dedicated always-on hardware | Not started. Diya runs on the owner's Windows machine. |
@@ -145,7 +145,11 @@ to `dream_log.txt` and `watcher_log.txt`.
 
 - **Tool over-use.** The 3B model sometimes calls `add_reminder` on plain arithmetic (roughly 40-50%
   of past runs). Tightening the tool description and lowering the temperature did not fix it; it is a
-  model-size limit, to be revisited with a larger model.
+  model-size limit, to be revisited with a larger model. Since reminders can now fire, the tool itself refuses
+  unless the message asks for one: on invented messages the model still tried in 9 of 57 runs and none saved a
+  reminder (before the guard, 6 of 38 did). It also changes the times people give ("morning" to "8am", a dropped
+  date), so the tool checks them against the person's own words and refuses what was changed; the model then asks
+  again (`docs/PROACTIVITY_DESIGN.md`, measured).
 - **Speech.** Whisper `base` can mishear the assistant's name.
 - **Renamed cities.** The geocoder can match an old city name only to the wrong place, so
   `CITY_ALIASES` maps a few well-known cases to their current names; it is not exhaustive.
