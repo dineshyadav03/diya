@@ -117,6 +117,38 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
 - **Why it matters for Diya:** it bears on how much context a local model can carry.
 - **Action:** Not actionable; track.
 
+### 10. supermemory (company-brain open-sourced; Jev in the memory pipeline)
+
+- **Source:** two posts by supermemory's founder (Dhravya Shah) on X, shared with Diya 2026-09-27; the
+  harness itself: https://github.com/supermemoryai/company-brain (checked live: Apache-2.0, 617 stars, a
+  Slack bot on Cloudflare Workers/the Agents SDK, discontinued as a paid product and now open source).
+- **Noted:** 2026-09-27
+- **What it is:** (a) supermemory open-sourced their team-memory Slack bot after shutting it down as a
+  product. (b) A companion post argues a class of small, fast "decision" models (their name for the
+  category is Jev, already entry 8) can improve several stages of a generic memory pipeline: reranking
+  search results, chunking documents, filtering what reaches the extractor, and deciding in the harness
+  itself -- not the main model, not a hook -- whether a tool or a memory lookup applies at all.
+- **Skeptic note:** vendor content about the vendor's own paid product; every section closes by
+  recommending it. The reranking, chunking and cost figures are the vendor's own internal benchmarks,
+  not independently reproduced here.
+- **Why it matters for Diya:** the generic pipeline it describes (batch raw messages, extract off-loop
+  on a schedule, store, inject into the harness) is, step for step, what Dreaming and Stage 2 already
+  do (`dreaming.py`'s checkpoint batches, the scheduled cycle, `facts`, one system message of accepted
+  facts) -- this validates the existing design rather than adding to it. Its harness-level
+  decision-gating idea (a fast model deciding whether memory or a tool applies, instead of a hook or
+  the main model) is the same shape of problem `diya_intent.py` already solves (fact-share detection,
+  and the reminder-request guard added this session) -- in code, not a second model, because Diya has
+  no cheap second model available and has repeatedly chosen determinism and measurement over a model's
+  say-so on control flow (docs/STAGE2_DESIGN.md D5, docs/PROACTIVITY_DESIGN.md D9). The reranking and
+  chunking findings solve a scale problem (many documents, a vector index) that Diya's 2,000-character
+  profile and single-file `search_notes` lookup does not have.
+- **Action:** no new build. `diya_intent.py`'s checks are the existing, already-measured answer to the
+  decision-gating idea; keep them as the reference rather than adding a second model. Do not adopt
+  Cloudflare Workers, a vector database or a reranker: wrong stack (Diya is Python/SQLite/local;
+  `company-brain` is TypeScript/Cloudflare/multi-tenant) and wrong scale, and it would break
+  cross-cutting note 4. Revisit only once Diya's memory outgrows a single embedding lookup and a
+  2,000-character profile.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,

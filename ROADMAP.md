@@ -236,11 +236,15 @@ Remaining:
    outcome, it follows through". Reference: Muse-style approval gates and action trails.
    The local first slice, reminders that fire (a time parser, real due times, a Reminders page, an optional
    desktop notifier), is designed in [`docs/PROACTIVITY_DESIGN.md`](docs/PROACTIVITY_DESIGN.md) as four units.
-   **Built:** P1 (the time reader), P2 (real due times, the tool that reads them, the guard against unasked
-   reminders, and a check that the model did not change the person's words) and P3 (the API, the Reminders page,
-   the header count). **Remaining:** P4 (`diya_notify.py`, a Windows toast the owner registers as a scheduled
-   task); snooze and recurrence wait for the durable-workflow work.
+   **Built, all four:** P1 (the time reader), P2 (real due times, the tool that reads them, the guard against
+   unasked reminders, and a check that the model did not change the person's words), P3 (the API, the Reminders
+   page, the header count) and P4 (`diya_notify.py`, a Windows toast, verified for real on this machine).
+   **Not registered:** the owner schedules P4's task themselves (`docs/reminders.md` has the commands) --
+   nothing here does it for them. Snooze and recurrence wait for the rest of the durable-workflow work below.
 5. "Jev" decision benchmark. Open-source baseline: laya-mlx (MLX, so Apple silicon only).
+   `RESEARCH.md` entry 10 (supermemory, 2026-09-27) argues a fast decision model should gate harness
+   choices (search or not, which tool). Diya already does this, in code: `diya_intent.py`'s
+   `is_fact_share` and `is_reminder_request`. That stays the reference; no second model was added.
 6. Daily-driver experience.
 
 ## Future items
