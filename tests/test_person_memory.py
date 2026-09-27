@@ -13,8 +13,10 @@ import sqlite3
 
 import pytest
 
+import diya_memory
 from diya_db import Store
 from diya_memory import (
+    BudgetExceeded,
     InvalidFact,
     Memory,
     UnknownFact,
@@ -22,6 +24,8 @@ from diya_memory import (
     check_person_name,
     extract_person_tag,
     person_key,
+    render_grouped,
+    render_profile,
 )
 
 STAGED_AT = "2026-01-01T00:00:00+00:00"
@@ -432,3 +436,111 @@ def test_a_fresh_database_migrates_and_a_copy_of_an_existing_one_keeps_its_facts
     again = Memory(Store(path))
     assert again.get(fact_id)["person"] is None
     assert again.verify_integrity() == []
+
+
+# --- render_grouped: what the model is actually told (docs/PERSON_MEMORY_DESIGN.md, D4/M4) ---------------
+
+def test_render_grouped_with_nobody_tagged_is_byte_identical_to_the_old_flat_render():
+    """The whole point of this being additive: a database with no one tagged must produce exactly what
+    it always has, not a new label on every existing conversation."""
+    texts = ["likes green tea", "works in the evenings"]
+    facts = [(t, None) for t in texts]
+    assert render_grouped(facts) == render_profile(texts)
+
+
+def test_render_grouped_is_empty_for_no_facts():
+    assert render_grouped([]) == ""
+
+
+def test_render_grouped_puts_a_named_persons_facts_in_their_own_labelled_block():
+    facts = [("likes green tea", None), ("sister Maya is visiting in May", "Maya")]
+    assert render_grouped(facts) == "- likes green tea\n\nAbout Maya:\n- sister Maya is visiting in May"
+
+
+def test_render_grouped_with_only_named_people_has_no_leading_self_block():
+    facts = [("sister Maya is visiting in May", "Maya")]
+    assert render_grouped(facts) == "About Maya:\n- sister Maya is visiting in May"
+
+
+def test_render_grouped_orders_named_people_alphabetically_case_insensitively_you_first():
+    facts = [("x", "Zed"), ("y", None), ("z", "maya")]
+    assert render_grouped(facts) == "- y\n\nAbout maya:\n- z\n\nAbout Zed:\n- x"
+
+
+def test_render_grouped_keeps_a_persons_own_facts_in_the_order_given():
+    facts = [("first about maya", "Maya"), ("second about maya", "Maya")]
+    assert render_grouped(facts) == "About Maya:\n- first about maya\n- second about maya"
+
+
+def test_render_grouped_groups_the_same_person_regardless_of_spelling_given_to_it():
+    """render_grouped trusts its caller for the exact spelling (Memory.render_for_model always passes
+    the one canonical name people() stores); this only proves it groups by exact string equality."""
+    facts = [("a", "Maya"), ("b", "Maya")]
+    assert render_grouped(facts).count("About Maya:") == 1
+
+
+# --- Memory.render_for_model: the real thing, from the store ---------------------------------------------
+
+def test_render_for_model_is_empty_when_nothing_is_accepted(memory):
+    assert memory.render_for_model() == ""
+
+
+def test_render_for_model_matches_render_when_nobody_is_tagged(memory):
+    memory.add_manual("likes green tea", "cli")
+    memory.add_manual("works in the evenings", "cli")
+    assert memory.render_for_model() == memory.render()
+
+
+def test_render_for_model_groups_by_person_while_render_and_export_stay_flat(memory):
+    """The regression this whole unit must not cause: render()/accepted_texts() (export, import-profile)
+    keep every accepted fact in one flat list regardless of who it is about."""
+    memory.add_manual("likes green tea", "cli")
+    fact_id = memory.add_manual("sister Maya is visiting in May", "cli")
+    memory.set_person(fact_id, "Maya", "cli")
+
+    assert memory.render_for_model() == "- likes green tea\n\nAbout Maya:\n- sister Maya is visiting in May"
+    assert memory.render() == "- likes green tea\n- sister Maya is visiting in May"  # unchanged: still flat
+    assert memory.accepted_texts() == ["likes green tea", "sister Maya is visiting in May"]
+
+
+def test_render_for_model_ignores_anything_not_accepted(memory):
+    memory.add_manual("likes green tea", "cli")
+    fact_id = candidate(memory, "sister Maya is visiting in May")
+    memory.set_person(fact_id, "Maya", "cli")  # tagged, but still a candidate
+    assert memory.render_for_model() == "- likes green tea"
+
+
+# --- the character budget is measured on the grouped form, not the flat one (M4) --------------------------
+
+def test_accepting_the_first_fact_for_a_new_person_counts_the_new_headers_overhead(memory, monkeypatch):
+    """A fact that would fit the flat budget can still be refused once its own "About Name:" header is
+    counted -- that header is real content sent to the model, so it must count."""
+    fact_id = candidate(memory, "x")
+    memory.set_person(fact_id, "Maya", "cli")
+    flat_len = len(render_profile(["x"]))
+    grouped_len = len(render_grouped([("x", "Maya")]))
+    assert grouped_len > flat_len  # the premise: the header adds real length
+    monkeypatch.setattr(diya_memory, "MAX_PROFILE_CHARS", grouped_len - 1)  # fits flat, not grouped
+    with pytest.raises(BudgetExceeded):
+        memory.decide(fact_id, "accept", "cli")
+    assert memory.get(fact_id)["status"] == "candidate"  # refused, not partially applied
+
+
+def test_add_manual_is_held_to_the_grouped_budget_too(memory, monkeypatch):
+    fact_id = candidate(memory, "sister Maya is visiting in May")
+    memory.set_person(fact_id, "Maya", "cli")
+    memory.decide(fact_id, "accept", "cli")
+    used = len(memory.render_for_model())
+    monkeypatch.setattr(diya_memory, "MAX_PROFILE_CHARS", used)  # no room left at all
+    with pytest.raises(BudgetExceeded):
+        memory.add_manual("likes green tea", "cli")
+
+
+def test_import_legacys_over_budget_check_accounts_for_already_tagged_facts(memory, monkeypatch):
+    fact_id = memory.add_manual("sister Maya is visiting in May", "cli")
+    memory.set_person(fact_id, "Maya", "cli")
+    grouped_used = len(memory.render_for_model())
+    monkeypatch.setattr(diya_memory, "MAX_PROFILE_CHARS", grouped_used)  # already exactly full, grouped
+    result = memory.import_legacy([("a new fact", "- a new fact", [])], actor="import")
+    assert result.imported == 1 and result.over_budget is True
+    assert result.chars_used == len(memory.render_for_model())  # measured on the grouped form, not the flat one

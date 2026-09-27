@@ -6,6 +6,7 @@ import pytest
 
 import diya
 import diya_config
+import diya_memory
 from diya import Agent, OllamaUnavailable
 from diya_db import Store
 from fakes import FakeClient, text_reply, tool_reply
@@ -192,6 +193,23 @@ def test_with_profile_prepends_a_system_message_without_mutating_history(config,
         {"role": "user", "content": "hi"},
     ]
     assert history == [{"role": "user", "content": "hi"}]
+
+
+def test_with_profile_groups_a_named_persons_facts_in_their_own_block(config):
+    """docs/PERSON_MEMORY_DESIGN.md, M4: a fact tagged to someone other than the user gets its own
+    labelled block in the same system message, not a second message and not mixed into the flat list."""
+    agent, _ = make_agent(config)
+    memory = diya_memory.Memory(agent.store)
+    memory.add_manual("likes green tea", "cli")
+    fact_id = memory.add_manual("sister Maya is visiting in May", "cli")
+    memory.set_person(fact_id, "Maya", "cli")
+
+    result = agent.with_profile([{"role": "user", "content": "hi"}])
+
+    assert result[0] == {
+        "role": "system",
+        "content": "What you know about the user so far:\n- likes green tea\n\nAbout Maya:\n- sister Maya is visiting in May",
+    }
 
 
 # --- the tool-calling loop (behaviour carried over verbatim) ----------------------

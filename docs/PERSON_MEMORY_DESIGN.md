@@ -1,7 +1,8 @@
 # Person-tagged memory -- design spec
 
-> **Status (2026-09-27):** designed; **M1, M2 and M3 built.** All three units of the design are done. An
-> extension of Stage 2 (`docs/STAGE2_DESIGN.md`), not a
+> **Status (2026-09-27):** designed; **M1, M2, M3 and M4 built.** All four units are done, including the
+> model itself grouping accepted facts by person (D4, revisited). An extension of Stage 2
+> (`docs/STAGE2_DESIGN.md`), not a
 > new stage: it adds one property to a fact that already exists, reviewed the same way. Prompted by
 > `RESEARCH.md` entry 10's companion research (a person-level-memory post, 2026-09-27): person-scoped files
 > instead of a flat pile of facts.
@@ -118,11 +119,54 @@ looks at both directions.
 
 ### D4. What the model is told
 
-**No change.** The system message stays one list of accepted facts, exactly as `docs/STAGE2_DESIGN.md`'s
-switch built it. Person tags are for review and, later, for finding facts by person; they are not (yet) a
-change to what reaches the model, so this stays additive and low-risk on top of a part of Diya that already
-works. Grouping the *prompt itself* by person (a `wife.md`-style separate block per person) is a real future
-option once there are enough people tagged for it to matter, not part of this.
+**No change (original decision, M1-M3).** The system message stays one list of accepted facts, exactly as
+`docs/STAGE2_DESIGN.md`'s switch built it. Person tags are for review and, later, for finding facts by
+person; they are not (yet) a change to what reaches the model, so this stays additive and low-risk on top
+of a part of Diya that already works. Grouping the *prompt itself* by person (a `wife.md`-style separate
+block per person) is a real future option once there are enough people tagged for it to matter, not part
+of this.
+
+**Revisited (2026-09-27), unit M4: grouping the prompt itself, at the owner's explicit request.**
+**Recommendation: `Agent.with_profile`'s one system message groups the user's own facts as a plain list
+(unchanged), then a labelled block per named person, alphabetically** -- exactly the `wife.md`-style split
+this section originally deferred, now built because there is a real reason to (M2/M3 already produce
+tagged facts to group). Still one system message, not one per person: Stage 2's fact-share finding --
+"sending instructions on every turn halved normal answers" for this size of model -- is a standing reason
+not to multiply system messages without a measured need, and a labelled block within the same message gets
+the same separation without that risk. Self facts stay unlabelled (no "About you:" header): the outer "What
+you know about the user so far:" line already establishes that, and a database with no one tagged yet must
+produce byte-identical output to today, not a redundant label on every existing conversation.
+
+This changes what MAX_PROFILE_CHARS actually bounds. The budget is measured on "the total budget is
+measured on this string, so what is counted is what is sent" (`render_profile`'s own docstring) -- once
+grouping is real, "what is sent" is the grouped form (slightly longer than the flat one: each named
+person's block adds an "About Name:" header), so the budget check must measure that, not the flat one, or
+a heavily person-tagged profile could quietly exceed what the model receives while the counter still says
+there is room. `export`/`import-profile` are unaffected on purpose: they are a portable backup format
+(plain "- fact" lines, re-importable), not a description of what the model sees, and changing that format
+would break round-tripping through a saved profile file for no benefit.
+
+*As built (M4):* `diya_memory.render_grouped(facts)` takes `(text, person)` pairs and produces exactly
+this: `render_profile` unchanged for self facts, then `About Name:\n...` blocks, blank-line separated,
+alphabetical by casefold. `Memory.render_for_model()` is the new method `Agent.with_profile` actually
+calls; `Memory.render()` (and therefore `accepted_texts()`, `export`, `import-profile`) is untouched and
+stays flat, as decided above. `_check_room` (the budget/duplicate gate shared by `add_manual`, `decide`
+and `edit`) now takes the fact's own person alongside its text, so accepting the *first* fact ever tagged
+to a new person is correctly refused if the new "About Name:" header itself would push the grouped render
+over budget -- even though the same text alone would still fit the old flat count. `import_legacy`'s own
+over-budget calculation was switched to the grouped form too, for the same reason: it already re-reads
+every currently-accepted fact, which may include ones tagged by M1-M3.
+
+Measured against the real model (`qwen2.5:3b`): asked "Who is visiting in May?" against a system message
+with a self fact and a Maya-tagged fact, it correctly answered "Maya is visiting in May" (not the user);
+asked "What do you know about Maya?" it summarized only Maya's own facts, without leaking the unrelated
+self fact. Incidental, unrelated finding, reproduced 2 of 2 times **on the unchanged, pre-M4 flat format
+too** (so not something this unit caused): asked "Am I allergic to anything?" with only "is allergic to
+peanuts" in a plain, untagged system message, the model said it had no record of any allergy at all.
+Recorded here because it surfaced during this measurement, not because M4 owns it -- a pre-existing
+small-model context-use gap, unrelated to grouping, and out of scope for this unit.
+
+16/16 mutations caught (scratch `mutate_m4.py`, against `diya_memory.py` and `diya.py`).
 
 ### D5. The review page
 
@@ -188,6 +232,11 @@ it to `add_candidate`. Nothing changes for a queue record with no person field (
 still ingest). | `dreaming.py`, `diya_memory.py` |
 | M3 | **Review surface.** The command line and the Memory page group by person; a `merge` command/route. |
 `diya_review.py`, `diya_memory_api.py`, `frontend/app/memory`, `frontend/lib/memory-groups.mjs` |
+| M4 | **What the model is told (D4, revisited).** `Agent.with_profile`'s system message groups accepted
+facts the same way: self as a plain list, then a labelled block per named person. The character budget
+measures the grouped form, not the flat one. `export`/`import-profile` stay flat, on purpose. |
+`diya_memory.py`, `diya.py` |
 
 Each unit lands as its own commit, tested and mutation-checked on its own, in that order: M1 first because
-M2 and M3 both need somewhere to put a person before they can show or extract one. All three are built.
+M2 and M3 both need somewhere to put a person before they can show or extract one; M4 last because it
+needs real tagged facts to have anything to group. All four are built.

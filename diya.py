@@ -491,14 +491,15 @@ class Agent:
         candidate, a rejected or a retired one -- as a system message, if there are any. Shared by every
         entry point (terminal, web) so this can't silently be missing from one of them. Injected fresh
         each call, never saved into a thread's own persisted history: it should always reflect the
-        current memory, not a frozen snapshot.
+        current memory, not a frozen snapshot. Self facts are one plain list; a fact tagged to a named
+        person sits in its own labelled block instead (docs/PERSON_MEMORY_DESIGN.md, M4).
 
         The first call also makes sure the old profile file has been imported (ensure_profile_imported),
         so no entry point can start without the facts the model used to be given."""
         if not self._profile_import_checked:
             self.ensure_profile_imported()
             self._profile_import_checked = True
-        profile = diya_memory.Memory(self.store).render()
+        profile = diya_memory.Memory(self.store).render_for_model()
         if profile:
             return [{"role": "system", "content": f"What you know about the user so far:\n{profile}"}] + history
         return history

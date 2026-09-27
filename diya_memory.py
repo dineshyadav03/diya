@@ -146,9 +146,31 @@ def text_key(text):
 
 
 def render_profile(texts):
-    """The facts as the model is given them (after the header diya.Agent.with_profile adds). The
-    total budget is measured on this string, so what is counted is what is sent."""
+    """A flat list of facts, one bullet per line -- the `export`/`import-profile` format, and every
+    accepted fact regardless of who it is about. NOT what the model is actually told once a person is
+    tagged (see render_grouped, docs/PERSON_MEMORY_DESIGN.md, M4): kept flat on purpose, since this is
+    a portable backup format that must round-trip through import-profile, not a description of what
+    reaches the model."""
     return "\n".join("- " + text for text in texts)
+
+
+def render_grouped(facts):
+    """The accepted facts as the model is actually told them (docs/PERSON_MEMORY_DESIGN.md, D4/M4):
+    the user's own facts as a plain list -- exactly render_profile, unchanged -- then a blank-line-
+    separated, labelled block per named person, alphabetically (case-insensitively). `facts` is
+    (text, person) pairs, oldest first; `person` is None for the user, matching `Memory.facts()`'s own
+    "person" field. A database with no one tagged produces byte-identical output to render_profile:
+    this is what MAX_PROFILE_CHARS is measured against, since it is what is actually sent, and it is
+    never shorter than the flat form."""
+    you = [text for text, person in facts if person is None]
+    parts = [render_profile(you)] if you else []
+    by_person = {}
+    for text, person in facts:
+        if person is not None:
+            by_person.setdefault(person, []).append(text)
+    for name in sorted(by_person, key=str.casefold):
+        parts.append(f"About {name}:\n{render_profile(by_person[name])}")
+    return "\n\n".join(parts)
 
 
 # ---- cleaning up a staged line (design doc D4) -----------------------------------------------------
@@ -405,14 +427,35 @@ class Memory:
             return len(moved)
 
     def accepted_texts(self):
-        """What the model may be told, oldest first. Nothing that is not accepted is ever returned."""
+        """Every accepted fact's text, oldest first, regardless of who it is about. Nothing that is
+        not accepted is ever returned."""
         with self._read() as conn:
             rows = conn.execute("SELECT text FROM facts WHERE status = 'accepted' ORDER BY id").fetchall()
         return [row[0] for row in rows]
 
     def render(self):
-        """The accepted facts as the model is given them; '' when there are none."""
+        """The accepted facts as one flat list, oldest first; '' when there are none. This is the
+        `export`/`import-profile` format -- a portable backup, not what the model is actually told
+        once someone is tagged (render_for_model, docs/PERSON_MEMORY_DESIGN.md, M4)."""
         return render_profile(self.accepted_texts())
+
+    @staticmethod
+    def _accepted_with_person(conn, exclude_id=None):
+        """Every accepted fact as (text, person), oldest first, excluding one fact id if given (so a
+        caller can ask "what would the others plus this new text add up to")."""
+        query = "SELECT f.text, p.name FROM facts f LEFT JOIN people p ON p.id = f.person_id WHERE f.status = 'accepted'"
+        args = ()
+        if exclude_id is not None:
+            query += " AND f.id != ?"
+            args = (exclude_id,)
+        return conn.execute(query + " ORDER BY f.id", args).fetchall()
+
+    def render_for_model(self):
+        """The accepted facts as the model is actually given them (docs/PERSON_MEMORY_DESIGN.md, M4):
+        self facts as a plain list, then a labelled block per named person. '' when there are none."""
+        with self._read() as conn:
+            rows = self._accepted_with_person(conn)
+        return render_grouped(rows)
 
     def has_legacy_import(self):
         """Has the old profile ever been taken in? True whatever became of those facts since, so a fact
@@ -471,7 +514,7 @@ class Memory:
         _check_actor(actor)
         check_text(text)
         with self._write() as conn:
-            self._check_room(conn, None, text, enforce_fact_length=True)
+            self._check_room(conn, None, text, None, enforce_fact_length=True)
             now = _now()
             cur = conn.execute(
                 "INSERT INTO facts (text, text_key, status, source, flags, created_at)"
@@ -516,8 +559,7 @@ class Memory:
                     self._event(conn, cur.lastrowid, "imported", actor, now)
                     taken.add(key)
                     imported += 1
-            used = len(render_profile([row[0] for row in conn.execute(
-                "SELECT text FROM facts WHERE status = 'accepted' ORDER BY id")]))
+            used = len(render_grouped(self._accepted_with_person(conn)))
         return ImportResult(imported, already, duplicates, used, used > MAX_PROFILE_CHARS)
 
     # ---- deciding ----
@@ -530,17 +572,20 @@ class Memory:
             raise ValueError(f"action must be one of {', '.join(ACTIONS)}, got {action!r}")
         needs, becomes = ACTIONS[action]
         with self._write() as conn:
-            row = conn.execute("SELECT status, text FROM facts WHERE id = ?", (fact_id,)).fetchone()
+            row = conn.execute(
+                "SELECT f.status, f.text, p.name FROM facts f LEFT JOIN people p ON p.id = f.person_id WHERE f.id = ?",
+                (fact_id,),
+            ).fetchone()
             if row is None:
                 raise UnknownFact(f"there is no fact {fact_id}")
-            status, text = row
+            status, text, person = row
             if status != needs:
                 article = "an" if needs[0] in "aeiou" else "a"
                 raise IllegalTransition(f"fact {fact_id} is {status}; only {article} {needs} fact can be {ACTION_EVENT[action]}")
             if becomes == "accepted":
                 # Restoring is not held to the per-fact length: a fact that was accepted once
                 # (or imported from the old profile) stays restorable. Everything else is.
-                self._check_room(conn, fact_id, text, enforce_fact_length=(action == "accept"))
+                self._check_room(conn, fact_id, text, person, enforce_fact_length=(action == "accept"))
             now = _now()
             conn.execute("UPDATE facts SET status = ? WHERE id = ?", (becomes, fact_id))
             self._event(conn, fact_id, ACTION_EVENT[action], actor, now)
@@ -672,9 +717,11 @@ class Memory:
         )
 
     @staticmethod
-    def _check_room(conn, fact_id, text, enforce_fact_length):
-        """Inside the write transaction: would accepting `text` (as fact `fact_id`, or a new one when
-        None) repeat an accepted fact or take the profile over its limit?"""
+    def _check_room(conn, fact_id, text, person, enforce_fact_length):
+        """Inside the write transaction: would accepting `text` (about `person`, as fact `fact_id`, or
+        a new one when None) repeat an accepted fact or take the profile over its limit? The limit is
+        measured on the grouped, model-facing render (docs/PERSON_MEMORY_DESIGN.md, M4), since that is
+        what is actually sent -- not the flat export form, which is never longer."""
         if enforce_fact_length and len(text) > MAX_FACT_CHARS:
             raise InvalidFact(
                 f"this fact is {len(text)} characters and the limit is {MAX_FACT_CHARS}; edit it shorter first"
@@ -685,12 +732,9 @@ class Memory:
         ).fetchone()
         if twin:
             raise DuplicateFact(f"fact {twin[0]} says the same thing and is already accepted")
-        others = [
-            row[0]
-            for row in conn.execute("SELECT text FROM facts WHERE status = 'accepted' AND id != ? ORDER BY id", (own,))
-        ]
-        used = len(render_profile(others))
-        total = len(render_profile(others + [text]))
+        others = Memory._accepted_with_person(conn, exclude_id=own)
+        used = len(render_grouped(others))
+        total = len(render_grouped(others + [(text, person)]))
         if total > MAX_PROFILE_CHARS:
             raise BudgetExceeded(
                 f"memory is full: {used} of {MAX_PROFILE_CHARS} characters are used and this fact needs "
