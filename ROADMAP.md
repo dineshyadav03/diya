@@ -4,6 +4,13 @@ Current work is Stage 0 (safety and reproducibility); the later stages are at th
 learning roadmap is archived in [`archive/phase1-learning-roadmap.md`](archive/phase1-learning-roadmap.md).
 Market and technical context for these choices is in [RESEARCH.md](RESEARCH.md).
 
+**Platform note (2026-09-27):** the Mac mini purchase from `CLAUDE.md` (a historical record, not
+rewritten here) is deferred indefinitely, not imminent. Windows + Ollama is the real, primary
+development platform for as long as that holds -- not a stopgap being tolerated until the Mac
+shows up. Every unit built so far (Stage 2, Proactivity, the gate benchmark, person-tagged memory)
+was designed, built and measured against the real local model on this machine, and that is the
+standard going forward too, Mac or no Mac.
+
 ## Stage 0 checklist
 
 Done:
