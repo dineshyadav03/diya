@@ -142,12 +142,15 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
   say-so on control flow (docs/STAGE2_DESIGN.md D5, docs/PROACTIVITY_DESIGN.md D9). The reranking and
   chunking findings solve a scale problem (many documents, a vector index) that Diya's 2,000-character
   profile and single-file `search_notes` lookup does not have.
-- **Action:** no new build. `diya_intent.py`'s checks are the existing, already-measured answer to the
-  decision-gating idea; keep them as the reference rather than adding a second model. Do not adopt
-  Cloudflare Workers, a vector database or a reranker: wrong stack (Diya is Python/SQLite/local;
-  `company-brain` is TypeScript/Cloudflare/multi-tenant) and wrong scale, and it would break
-  cross-cutting note 4. Revisit only once Diya's memory outgrows a single embedding lookup and a
-  2,000-character profile.
+- **Action:** measured, not assumed -- `python diya_gate_bench.py` runs `diya_intent.py`'s checks and the
+  local model on the same labelled cases (`docs/GATE_BENCHMARK.md`, 2026-09-27). The model was worse at
+  both: it said no to every one of 12 genuine fact-shares (0 of 12; the code check gets 47 of 47), and
+  was net worse at reminder requests too (57 of 71 against the code's 61), though it did recover 5 of 6
+  of the code check's own documented blind spots there. No new build: keep `diya_intent.py`'s checks as
+  the reference. Do not adopt Cloudflare Workers, a vector database or a reranker: wrong stack (Diya is
+  Python/SQLite/local; `company-brain` is TypeScript/Cloudflare/multi-tenant) and wrong scale, and it
+  would break cross-cutting note 4. Revisit only once Diya's memory outgrows a single embedding lookup
+  and a 2,000-character profile, or a faster/better model changes the gate-benchmark numbers.
 
 ## Cross-cutting
 

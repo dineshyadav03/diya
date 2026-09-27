@@ -242,9 +242,11 @@ Remaining:
    **Not registered:** the owner schedules P4's task themselves (`docs/reminders.md` has the commands) --
    nothing here does it for them. Snooze and recurrence wait for the rest of the durable-workflow work below.
 5. "Jev" decision benchmark. Open-source baseline: laya-mlx (MLX, so Apple silicon only).
-   `RESEARCH.md` entry 10 (supermemory, 2026-09-27) argues a fast decision model should gate harness
-   choices (search or not, which tool). Diya already does this, in code: `diya_intent.py`'s
-   `is_fact_share` and `is_reminder_request`. That stays the reference; no second model was added.
+   `RESEARCH.md` entry 10 (supermemory, 2026-09-27) argued a fast decision model should gate harness
+   choices instead of code. Measured, not assumed: [`docs/GATE_BENCHMARK.md`](docs/GATE_BENCHMARK.md)
+   ran `diya_intent.py`'s checks against `qwen2.5:3b` on the same labelled cases. The model did worse at
+   both (0 of 12 genuine fact-shares recognised; 57 of 71 reminder requests against the code's 61). Code
+   stays the reference; no second model was added.
 6. Daily-driver experience.
 
 ## Future items
