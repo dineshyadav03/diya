@@ -107,6 +107,12 @@ def test_a_fresh_database_has_exactly_the_expected_columns():
         ("due_ts", "TEXT", False, None, False),  # migration 3: a real due time beside the words
         ("notified_at", "TEXT", False, None, False),
     ]
+    assert columns(conn, "people") == [  # migration 4: who a fact is about
+        ("id", "INTEGER", False, None, True),
+        ("name", "TEXT", True, None, False),
+        ("name_key", "TEXT", True, None, False),
+        ("created_at", "TEXT", True, None, False),
+    ]
 
 
 def test_a_fresh_store_used_through_its_normal_methods_also_gets_the_migrations_table(tmp_path):
@@ -493,6 +499,7 @@ def test_migration_2_creates_the_fact_tables_with_exactly_the_expected_columns()
         ("raw", "TEXT", False, None, False),
         ("flags", "TEXT", True, "'[]'", False),
         ("created_at", "TEXT", True, None, False),
+        ("person_id", "INTEGER", False, None, False),  # migration 4: who the fact is about
     ]
     assert columns(conn, "fact_events") == [
         ("id", "INTEGER", False, None, True),

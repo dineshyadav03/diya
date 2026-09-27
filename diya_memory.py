@@ -64,7 +64,11 @@ EVENT_STATUS = {
     "restored": "accepted",
     "edited": None,
     "flagged": None,  # the advisory checks changed what they say about a fact; never its status
+    "retagged": None,  # who the fact is about changed (docs/PERSON_MEMORY_DESIGN.md); never its status
 }
+
+MAX_PERSON_CHARS = 60
+SELF = "self"  # the reserved name for "no person tag": the user, not a row in `people`
 
 
 class FactError(Exception):
@@ -85,6 +89,10 @@ class IllegalTransition(FactError):
 
 class DuplicateFact(FactError):
     """An accepted fact already says the same thing."""
+
+
+class UnknownPerson(FactError):
+    """There is no person by that name (not "self", which is not a row at all)."""
 
 
 class BudgetExceeded(FactError):
@@ -191,15 +199,32 @@ def _is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)  # True == 1 in Python, but is no id
 
 
-_FACT_COLUMNS = "id, text, status, source, batch_first, batch_last, position, model, extracted_at, raw, flags, created_at"
+_FACT_SELECT = (
+    "SELECT f.id, f.text, f.status, f.source, f.batch_first, f.batch_last, f.position, f.model,"
+    " f.extracted_at, f.raw, f.flags, f.created_at, p.name"
+    " FROM facts f LEFT JOIN people p ON p.id = f.person_id"
+)
+_FACT_KEYS = ("id", "text", "status", "source", "batch_first", "batch_last", "position", "model",
+              "extracted_at", "raw", "flags", "created_at", "person")
 
 
 def _fact(row):
-    keys = ("id", "text", "status", "source", "batch_first", "batch_last", "position", "model",
-            "extracted_at", "raw", "flags", "created_at")
-    fact = dict(zip(keys, row))
+    fact = dict(zip(_FACT_KEYS, row))
     fact["flags"] = json.loads(fact["flags"])
     return fact
+
+
+def person_key(name):
+    """A person's identity: the same name in any capitalisation is the same person (like text_key)."""
+    return name.casefold()
+
+
+def check_person_name(name):
+    """Raise InvalidFact unless `name` is a person's name in canonical form (check_text's rules, a
+    shorter limit: a name is a few words, not a sentence) or the reserved word "self"."""
+    check_text(name)
+    if len(name) > MAX_PERSON_CHARS:
+        raise InvalidFact(f"a person's name is at most {MAX_PERSON_CHARS} characters")
 
 
 @dataclass(frozen=True)
@@ -255,22 +280,23 @@ class Memory:
     # ---- reading ----
     def get(self, fact_id):
         with self._read() as conn:
-            row = conn.execute(f"SELECT {_FACT_COLUMNS} FROM facts WHERE id = ?", (fact_id,)).fetchone()
+            row = conn.execute(_FACT_SELECT + " WHERE f.id = ?", (fact_id,)).fetchone()
         if row is None:
             raise UnknownFact(f"there is no fact {fact_id}")
         return _fact(row)
 
     def facts(self, status=None):
-        """Every fact (or every fact with `status`), oldest first."""
+        """Every fact (or every fact with `status`), oldest first. Each dict's "person" is who it is about
+        (a name), or None for "self" (the user, the default, and not a row in `people` at all)."""
         if status is not None and status not in STATUSES:
             raise ValueError(f"status must be one of {', '.join(STATUSES)}, got {status!r}")
-        query = f"SELECT {_FACT_COLUMNS} FROM facts"
+        query = _FACT_SELECT
         args = ()
         if status is not None:
-            query += " WHERE status = ?"
+            query += " WHERE f.status = ?"
             args = (status,)
         with self._read() as conn:
-            rows = conn.execute(query + " ORDER BY id", args).fetchall()
+            rows = conn.execute(query + " ORDER BY f.id", args).fetchall()
         return [_fact(row) for row in rows]
 
     def events(self, fact_id):
@@ -284,6 +310,87 @@ class Memory:
         with self._read() as conn:
             found = dict(conn.execute("SELECT status, COUNT(*) FROM facts GROUP BY status"))
         return {status: found.get(status, 0) for status in STATUSES}
+
+    # ---- who a fact is about (docs/PERSON_MEMORY_DESIGN.md) ----
+    def people(self):
+        """Every named person who has ever been tagged, with how many facts (of any status) are
+        currently theirs, alphabetically. "self" is not included: it is not a row."""
+        with self._read() as conn:
+            rows = conn.execute(
+                "SELECT p.name, COUNT(f.id) FROM people p LEFT JOIN facts f ON f.person_id = p.id"
+                " GROUP BY p.id ORDER BY p.name_key"
+            ).fetchall()
+        return [{"name": name, "facts": count} for name, count in rows]
+
+    def _person_id(self, conn, name):
+        """The id for `name`, raising UnknownPerson if there is none. Not for "self" (there is no id
+        for that; callers check for it first)."""
+        row = conn.execute("SELECT id FROM people WHERE name_key = ?", (person_key(name),)).fetchone()
+        if row is None:
+            raise UnknownPerson(f"there is no person named {name!r}")
+        return row[0]
+
+    def _person_id_for(self, conn, name, now):
+        """The id for `name`, creating the row if this is the first time it has been named."""
+        try:
+            return self._person_id(conn, name)
+        except UnknownPerson:
+            cur = conn.execute(
+                "INSERT INTO people (name, name_key, created_at) VALUES (?, ?, ?)", (name, person_key(name), now)
+            )
+            return cur.lastrowid
+
+    def set_person(self, fact_id, name, actor):
+        """Tag one fact as being about `name` (created if new), or untag it back to "self" (the user) by
+        passing None or the word "self" in any capitalisation -- both mean the same thing, the way
+        `due_at=None` means "no time" elsewhere in this project. Never touches the fact's status or text.
+        Records a `retagged` event with the old and new name (None for self) only if it actually changed."""
+        _check_actor(actor)
+        if name is not None and isinstance(name, str) and name.strip().casefold() == SELF:
+            name = None
+        if name is not None:
+            check_person_name(name)
+        with self._write() as conn:
+            row = conn.execute("SELECT person_id FROM facts WHERE id = ?", (fact_id,)).fetchone()
+            if row is None:
+                raise UnknownFact(f"there is no fact {fact_id}")
+            now = _now()
+            old_id = row[0]
+            old_name = conn.execute("SELECT name FROM people WHERE id = ?", (old_id,)).fetchone() if old_id is not None else None
+            old_name = old_name[0] if old_name else None
+            new_id = self._person_id_for(conn, name, now) if name is not None else None
+            if new_id == old_id:
+                return False
+            conn.execute("UPDATE facts SET person_id = ? WHERE id = ?", (new_id, fact_id))
+            self._event(conn, fact_id, "retagged", actor, now, json.dumps({"from": old_name, "to": name}))
+            return True
+
+    def merge_people(self, from_name, into_name, actor):
+        """Re-tag every fact currently about `from_name` to `into_name` (created if new), or to "self"
+        (any capitalisation) to say they are not about a distinct person after all. Never deletes the
+        `from_name` row: a person with no facts left is the record that a merge happened, not an error.
+        Raises UnknownPerson if `from_name` has never been tagged; merging from "self" (or None) is
+        refused, since that would silently move every untagged fact, not merge two named people. `into_name`
+        takes None the same way `set_person` does. Returns how many facts moved."""
+        _check_actor(actor)
+        from_self = from_name is None or (isinstance(from_name, str) and from_name.strip().casefold() == SELF)
+        if from_self:
+            raise InvalidFact("cannot merge from self: that would move every fact with no person tag")
+        into_self = into_name is None or (isinstance(into_name, str) and into_name.strip().casefold() == SELF)
+        if not into_self:
+            check_person_name(into_name)
+        with self._write() as conn:
+            from_id = self._person_id(conn, from_name)  # raises UnknownPerson
+            now = _now()
+            into_id = None if into_self else self._person_id_for(conn, into_name, now)
+            if into_id == from_id:
+                return 0
+            moved = conn.execute("SELECT id FROM facts WHERE person_id = ?", (from_id,)).fetchall()
+            for (fact_id,) in moved:
+                conn.execute("UPDATE facts SET person_id = ? WHERE id = ?", (into_id, fact_id))
+                detail = json.dumps({"from": from_name, "to": None if into_self else into_name, "via": "merge"})
+                self._event(conn, fact_id, "retagged", actor, now, detail)
+            return len(moved)
 
     def accepted_texts(self):
         """What the model may be told, oldest first. Nothing that is not accepted is ever returned."""

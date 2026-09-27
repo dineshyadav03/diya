@@ -54,7 +54,7 @@ def test_migration_3_adds_two_nullable_columns_and_a_partial_index_for_pending_r
     assert columns["due_ts"] == ("TEXT", False) and columns["notified_at"] == ("TEXT", False)
     (sql,) = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'reminders_pending_due'").fetchone()
     assert "WHERE done = 0 AND due_ts IS NOT NULL" in sql
-    assert [v for v, _ in diya_db.MIGRATIONS] == [1, 2, 3]
+    assert [1, 2, 3] == [v for v, _ in diya_db.MIGRATIONS][:3]  # migration 3's own versions, whatever comes after
 
 
 def test_a_reminder_saved_before_migration_3_keeps_its_words_and_is_never_due(tmp_path):

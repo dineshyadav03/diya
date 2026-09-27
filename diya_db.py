@@ -98,6 +98,24 @@ MIGRATIONS = (
         "ALTER TABLE reminders ADD COLUMN notified_at TEXT",
         "CREATE INDEX IF NOT EXISTS reminders_pending_due ON reminders (due_ts) WHERE done = 0 AND due_ts IS NOT NULL",
     )),
+    # Migration 4 (docs/PERSON_MEMORY_DESIGN.md, D1): who a fact is about. `people.name_key` is the case-folded
+    # identity (like `facts.text_key`); a fact's `person_id` is null for "self" (the user), which is not a row
+    # here at all -- most facts are about the user, so the common case needs no join target. A merge
+    # (docs/PERSON_MEMORY_DESIGN.md, D3) re-tags facts; it never deletes a `people` row, so a person with no
+    # facts left after one is a record that a merge happened, not an error.
+    (4, (
+        """
+        CREATE TABLE IF NOT EXISTS people (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            name_key TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """,
+        "CREATE UNIQUE INDEX IF NOT EXISTS people_one_per_key ON people (name_key)",
+        "ALTER TABLE facts ADD COLUMN person_id INTEGER REFERENCES people(id)",
+        "CREATE INDEX IF NOT EXISTS facts_by_person ON facts (person_id)",
+    )),
 )
 
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored
