@@ -47,8 +47,10 @@ def client_for(tmp_path, require=None):
     )
     agent = diya.Agent(config, client=FakeClient([text_reply("ok")] * 20))
     # one candidate fact (id 1), so the routes that need a fact have one to act on
-    Memory(agent.store).add_candidate("seeded candidate", batch_first=1, batch_last=1, position=0, model="m",
-                                      extracted_at="2026-01-01T00:00:00+00:00", raw="- seeded candidate")
+    memory = Memory(agent.store)
+    memory.add_candidate("seeded candidate", batch_first=1, batch_last=1, position=0, model="m",
+                         extracted_at="2026-01-01T00:00:00+00:00", raw="- seeded candidate")
+    memory.set_person(1, "Maya", "cli")  # so /api/memory/merge has an existing person to merge from
     agent.store.add_reminder("seeded reminder")  # and one reminder (id 1), for the same reason
     app = diya_web.create_app(config, agent, transcriber=object())
     return TestClient(app, base_url=HOST), app
@@ -77,6 +79,7 @@ ENDPOINTS = [
     ("POST", "/api/memory/ingest", {}),
     ("POST", "/api/memory/add", {"json": {"text": "a typed fact"}}),
     ("POST", "/api/memory/1/accept", {}),
+    ("POST", "/api/memory/merge", {"json": {"from_name": "Maya", "into_name": "Mayah"}}),
     ("GET", "/api/reminders", {}),
     ("POST", "/api/reminders", {"json": {"text": "call mum", "when": "in 2 hours"}}),
     ("POST", "/api/reminders/1/done", {}),

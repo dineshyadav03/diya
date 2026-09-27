@@ -1,16 +1,20 @@
 """Reviewing staged facts over HTTP (docs/STAGE2_DESIGN.md, D6 and unit 6): the routes behind the UI's
 memory page. The rules are diya_memory's, the same ones the command line applies -- this only carries them.
 
-    GET  /api/memory                  every fact, with its status, flags and the memory's size
+    GET  /api/memory                  every fact, with its status, flags, who it is about and the memory's size
     GET  /api/memory/{id}             one fact: its flags in words, the messages it came from, its history
     POST /api/memory/ingest           copy newly staged facts in as candidates and check them
     POST /api/memory/add              {"text": ...}  a fact typed by the person; it goes in already accepted
     POST /api/memory/{id}/{action}    accept | reject | reopen | retire | restore, or edit with {"text": ...}
+    POST /api/memory/merge            {"from_name": ..., "into_name": ...|null}  move a person's facts onto
+                                       another name, or back to no one in particular (null); never automatic,
+                                       never deletes from_name's own row (docs/PERSON_MEMORY_DESIGN.md, D3)
 
 GET and POST only: the API's CORS allows nothing else, and the browser only ever talks to the UI's own
 routes anyway. Every route is behind the access token like the rest of the API (the middleware wraps the
-whole app). A refusal is an HTTP error with the reason in `detail`: 404 for a fact that isn't there, 409
-for a change that doesn't apply (wrong status, a repeat, no room), 422 for text that may not be stored.
+whole app). A refusal is an HTTP error with the reason in `detail`: 404 for a fact or person that isn't
+there, 409 for a change that doesn't apply (wrong status, a repeat, no room), 422 for text that may not be
+stored or a name that may not be used.
 
 Everything read back from the database that a person is shown goes through diya_memory.printable(): it is
 model output or something someone pasted, and a control or direction-changing character in it is sent as
@@ -33,6 +37,7 @@ from diya_memory import (
     Memory,
     SourceUnreadable,
     UnknownFact,
+    UnknownPerson,
     normalise_fact,
     printable,
 )
@@ -42,11 +47,17 @@ STAGED_CHARS = 300
 DETAIL_CHARS = 200
 MAX_ID = 2**63 - 1  # SQLite's largest integer: anything above it cannot be a fact's id
 
-_STATUS = ((UnknownFact, 404), (IllegalTransition, 409), (DuplicateFact, 409), (BudgetExceeded, 409), (InvalidFact, 422))
+_STATUS = ((UnknownFact, 404), (UnknownPerson, 404), (IllegalTransition, 409), (DuplicateFact, 409),
+          (BudgetExceeded, 409), (InvalidFact, 422))
 
 
 class TextBody(BaseModel):
     text: str
+
+
+class MergeBody(BaseModel):
+    from_name: str
+    into_name: str | None = None
 
 
 def _refusal(exc):
@@ -78,6 +89,7 @@ def register(app, config, agent):
             "text": printable(fact["text"]),
             "status": fact["status"],
             "source": fact["source"],
+            "person": printable(fact["person"]) if fact["person"] is not None else None,
             "flags": [{"code": printable(flag), "label": diya_memory.flag_short(flag)} for flag in fact["flags"]],
             "created_at": printable(fact["created_at"]),
         }
@@ -143,6 +155,15 @@ def register(app, config, agent):
             raise _refusal(exc)
         memory.run_checks("api")
         return {"fact": public(memory.get(fact_id)), "summary": summary(memory)}
+
+    @app.post("/api/memory/merge")
+    def merge(body: MergeBody):
+        memory = Memory(agent.store)
+        try:
+            moved = memory.merge_people(body.from_name, body.into_name, "api")
+        except FactError as exc:
+            raise _refusal(exc)
+        return {"moved": moved, "people": memory.people()}
 
     @app.post("/api/memory/{fact_id}/{action}")
     def decide(fact_id: int, action: str, body: TextBody | None = None):

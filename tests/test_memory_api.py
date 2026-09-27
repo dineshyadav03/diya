@@ -117,7 +117,56 @@ def test_the_list_carries_status_flags_in_words_and_the_size_used(client, memory
 def test_the_list_sends_only_what_a_list_needs(client, memory):
     add_candidate(memory, "likes tea")
     (fact,) = client.get("/api/memory").json()["facts"]
-    assert set(fact) == {"id", "text", "status", "source", "flags", "created_at"}  # not the staged line, the model or the history
+    assert set(fact) == {"id", "text", "status", "source", "person", "flags", "created_at"}  # not the staged line, the model or the history
+
+
+def test_a_fact_named_by_dreaming_carries_its_person_a_self_fact_carries_none(client, memory):
+    add_candidate(memory, "sister Maya is visiting in May", person="Maya")
+    add_candidate(memory, "likes tea", position=1)
+    named, self_fact = client.get("/api/memory").json()["facts"]
+    assert (named["person"], self_fact["person"]) == ("Maya", None)
+
+
+# --- who a fact is about: merging two names (docs/PERSON_MEMORY_DESIGN.md, D3, unit M3) -----------------
+
+def test_merging_moves_every_fact_and_never_deletes_the_losing_name(client, memory):
+    add_candidate(memory, "sister Maya is visiting in May", person="Maya")
+    add_candidate(memory, "Maya's birthday is in March", position=1, person="Maya")
+
+    response = client.post("/api/memory/merge", json={"from_name": "Maya", "into_name": "Mayah"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["moved"] == 2
+    assert body["people"] == [{"name": "Maya", "facts": 0}, {"name": "Mayah", "facts": 2}]
+    assert [f["person"] for f in client.get("/api/memory").json()["facts"]] == ["Mayah", "Mayah"]
+
+
+def test_merging_with_no_into_name_moves_facts_back_to_self(client, memory):
+    add_candidate(memory, "sister Maya is visiting in May", person="Maya")
+    response = client.post("/api/memory/merge", json={"from_name": "Maya"})
+    assert response.status_code == 200 and response.json()["moved"] == 1
+    assert client.get("/api/memory/1").json()["fact"]["person"] is None
+
+
+def test_merging_from_self_is_a_422_and_moves_nothing(client, memory):
+    add_candidate(memory, "likes tea")
+    response = client.post("/api/memory/merge", json={"from_name": "self", "into_name": "Maya"})
+    assert response.status_code == 422 and "cannot merge from self" in response.json()["detail"]
+    assert client.get("/api/memory/1").json()["fact"]["person"] is None
+
+
+def test_merging_a_person_who_was_never_tagged_is_a_404(client, memory):
+    response = client.post("/api/memory/merge", json={"from_name": "Nobody", "into_name": "Somebody"})
+    assert response.status_code == 404 and "there is no person named" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("payload, status_code", [({}, 422), ({"into_name": "Maya"}, 422), ({"from_name": 5}, 422)])
+def test_a_bad_merge_body_is_a_422_and_changes_nothing(client, memory, payload, status_code):
+    add_candidate(memory, "sister Maya is visiting in May", person="Maya")
+    response = client.post("/api/memory/merge", json=payload)
+    assert response.status_code == status_code
+    assert client.get("/api/memory/1").json()["fact"]["person"] == "Maya"
 
 
 # --- one fact ---------------------------------------------------------------------------------------
@@ -405,7 +454,7 @@ def test_a_fact_whose_stored_text_was_tampered_with_is_still_shown_escaped(clien
 # --- only GET and POST -------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("method", ["PUT", "DELETE", "PATCH"])
-@pytest.mark.parametrize("path", ["/api/memory", "/api/memory/1", "/api/memory/1/accept", "/api/memory/add", "/api/memory/ingest"])
+@pytest.mark.parametrize("path", ["/api/memory", "/api/memory/1", "/api/memory/1/accept", "/api/memory/add", "/api/memory/ingest", "/api/memory/merge"])
 def test_no_other_method_exists(client, memory, method, path):
     add_candidate(memory, "likes tea")
     assert client.request(method, path).status_code == 405
@@ -414,7 +463,7 @@ def test_no_other_method_exists(client, memory, method, path):
 
 def test_a_get_cannot_change_anything(client, memory):
     add_candidate(memory, "likes tea")
-    for path in ("/api/memory/1/accept", "/api/memory/add", "/api/memory/ingest"):
+    for path in ("/api/memory/1/accept", "/api/memory/add", "/api/memory/ingest", "/api/memory/merge"):
         assert client.get(path).status_code in (404, 405, 422)
     assert memory.get(1)["status"] == "candidate"
 
@@ -440,7 +489,8 @@ def test_without_the_token_nothing_is_read_and_nothing_is_written(tmp_path, conf
 
     for method, path, kwargs in [("GET", "/api/memory", {}), ("GET", f"/api/memory/{fact_id}", {}), ("POST", "/api/memory/ingest", {}),
                                  ("POST", "/api/memory/add", {"json": {"text": "x"}}), ("POST", f"/api/memory/{fact_id}/accept", {}),
-                                 ("POST", f"/api/memory/{fact_id}/edit", {"json": {"text": "y"}})]:
+                                 ("POST", f"/api/memory/{fact_id}/edit", {"json": {"text": "y"}}),
+                                 ("POST", "/api/memory/merge", {"json": {"from_name": "Maya", "into_name": "Mayah"}})]:
         assert client.request(method, path, **kwargs).status_code == 401, path
         assert client.request(method, path, headers={"Authorization": "Bearer " + "0" * 43}, **kwargs).status_code == 401, path
     assert (memory.get(fact_id)["status"], memory.get(fact_id)["text"], len(memory.facts())) == ("candidate", "likes tea", 1)

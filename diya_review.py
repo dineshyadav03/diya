@@ -12,10 +12,15 @@
     python diya_review.py import-profile    take the old user_profile.txt in (the file is never changed)
     python diya_review.py verify            check the store is consistent
     python diya_review.py judge [ID...]     ask the local model for a second opinion on candidates (advisory)
+    python diya_review.py merge FROM [INTO] move every fact about FROM onto INTO (default: you)
 
 Commands, not prompts, so it can be scripted and tested. Only `judge` uses the model, and only when you run
 it: everything else is plain code and touches no network. The model is told a fact only once you accept it.
 `judge` records its answer as a flag beside the fact; it never accepts, rejects or edits anything.
+
+Accepted facts are listed grouped by who they are about (docs/PERSON_MEMORY_DESIGN.md, unit M3): "You" first,
+then each named person alphabetically. Every other listing stays one flat list in id order, with a fact's
+person shown in brackets when it has one, since a reviewer deciding a candidate needs to see who it names.
 
 Everything read back from the database is printed through printable(): it is model output, or something
 someone typed or pasted, and an escape sequence in it must not be able to rewrite what the screen says.
@@ -60,22 +65,55 @@ def cmd_ingest(memory, config, args, out):
     return EXIT_OK
 
 
+def _fact_line(fact, *, show_person, indent=""):
+    line = f"{indent}{fact['id']:>4}  {fact['status']:<9}  {printable(fact['text'])}"
+    if show_person and fact["person"] is not None:
+        line += f"  [{printable(fact['person'])}]"
+    return line
+
+
+def _print_fact(fact, out, *, show_person, indent=""):
+    print(_fact_line(fact, show_person=show_person, indent=indent), file=out)
+    if fact["flags"]:
+        print(f"{indent}      flags: {', '.join(flag_short(f) for f in fact['flags'])}", file=out)
+
+
+def _print_grouped_by_person(facts, out):
+    """Accepted facts only (docs/PERSON_MEMORY_DESIGN.md, D5): "You" first, then each named person
+    Dreaming or a reviewer has tagged, alphabetically. The heading already says who, so the bracket
+    tag `_print_fact` would otherwise add is left off here -- it would just repeat the heading."""
+    by_person = {}
+    for fact in facts:
+        by_person.setdefault(fact["person"], []).append(fact)
+    for name in [None] + sorted((n for n in by_person if n is not None), key=str.casefold):
+        group = by_person.get(name)
+        if not group:
+            continue
+        label = "You" if name is None else printable(name)
+        print(f"{label} ({len(group)}):", file=out)
+        for fact in group:
+            _print_fact(fact, out, show_person=False, indent="  ")
+
+
 def cmd_list(memory, config, args, out):
     facts = memory.facts(None if args.status == "all" else args.status)
     print(_usage_line(memory), file=out)
     if not facts:
         print(f"No {args.status} facts." if args.status != "all" else "No facts yet.", file=out)
         return EXIT_OK
-    for fact in facts:
-        print(f"{fact['id']:>4}  {fact['status']:<9}  {printable(fact['text'])}", file=out)
-        if fact["flags"]:
-            print(f"      flags: {', '.join(flag_short(f) for f in fact['flags'])}", file=out)
+    if args.status == "accepted":
+        _print_grouped_by_person(facts, out)
+    else:
+        for fact in facts:
+            _print_fact(fact, out, show_person=True)
     return EXIT_OK
 
 
 def cmd_show(memory, config, args, out):
     fact = memory.get(args.id)
     print(f"Fact {fact['id']}: {fact['status']} ({fact['source'].replace('_', ' ')})", file=out)
+    if fact["person"] is not None:
+        print(f"  about:   {printable(fact['person'])}", file=out)
     print(f"  text:    {printable(fact['text'])}", file=out)
     if fact["raw"] is not None:
         print(f"  staged:  {printable(fact['raw'], 300)}", file=out)
@@ -145,6 +183,16 @@ def cmd_import_profile(memory, config, args, out):
     return EXIT_OK
 
 
+def cmd_merge(memory, config, args, out):
+    """Move every fact currently about FROM onto INTO (docs/PERSON_MEMORY_DESIGN.md, D3): a person-level
+    action, not automatic, and FROM's own row is never deleted -- a name left with 0 facts is the record
+    that a merge happened. INTO left off means "you": the same as passing "self"."""
+    moved = memory.merge_people(args.from_name, args.into_name, "cli")
+    target = "you" if args.into_name is None else printable(args.into_name)
+    print(f"Moved {moved} fact{'' if moved == 1 else 's'} from {printable(args.from_name)} to {target}.", file=out)
+    return EXIT_OK
+
+
 def cmd_verify(memory, config, args, out):
     problems = memory.verify_integrity()
     if not problems:
@@ -201,6 +249,10 @@ def build_parser():
     judge.add_argument("ids", nargs="*", type=int, help="only these candidates (default: all of them)")
     judge.add_argument("--again", action="store_true", help="ask again about a candidate that already has an answer")
     judge.set_defaults(run=cmd_judge)
+    merge = commands.add_parser("merge", help="move every fact about one name onto another (or onto you)")
+    merge.add_argument("from_name", metavar="FROM")
+    merge.add_argument("into_name", metavar="INTO", nargs="?", default=None)
+    merge.set_defaults(run=cmd_merge)
     return parser
 
 

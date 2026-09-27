@@ -1,7 +1,7 @@
 # Person-tagged memory -- design spec
 
-> **Status (2026-09-27):** designed; **M1 (storage) and M2 (Dreaming tags a person at extraction) built.** M3
-> (the review surface groups by person) is not. An extension of Stage 2 (`docs/STAGE2_DESIGN.md`), not a
+> **Status (2026-09-27):** designed; **M1, M2 and M3 built.** All three units of the design are done. An
+> extension of Stage 2 (`docs/STAGE2_DESIGN.md`), not a
 > new stage: it adds one property to a fact that already exists, reviewed the same way. Prompted by
 > `RESEARCH.md` entry 10's companion research (a person-level-memory post, 2026-09-27): person-scoped files
 > instead of a flat pile of facts.
@@ -132,6 +132,41 @@ into `<details>`. A candidate still shows in one waiting list regardless of who 
 only changes how *accepted* facts are organised, since that is where a flat pile is actually a problem
 (nothing to browse until something is accepted).
 
+*As built (M3):* the CLI (`diya_review.py list accepted`) and the Memory page both group accepted facts
+"You" first, then each named person alphabetically (case-insensitively); a group with nothing in it is
+left out rather than shown empty, so today's real database -- nobody tagged yet -- shows only "You". One
+deliberate difference from the recommendation above: a person's group is a plain visible heading, not a
+collapsed `<details>` -- these are the facts someone actively uses today, unlike retired/rejected ones,
+and hiding them by default seemed like the wrong default once it was actually on screen. Every other
+listing (candidates, rejected, retired, `list all`) stays one flat list in id order, with a fact's person
+shown inline in brackets (`sister Maya is visiting in May  [Maya]`) since a reviewer deciding a candidate
+needs to see who it names before accepting it -- the grouped view leaves this off, since the heading
+already says who. `diya_review.py show ID` gains an `about:` line, shown only when the fact is not self.
+
+Merging (D3) is `python diya_review.py merge FROM [INTO]` (INTO omitted means "you") and
+`POST /api/memory/merge` (`{"from_name": ..., "into_name": ...|null}`), both wrapping the existing
+`Memory.merge_people` unchanged from M1 -- no new store logic. The API's `public()` fact shape gained a
+`"person"` field (a name, or `null` for self); `UnknownPerson` was added to the API's status-code table
+(404, alongside `UnknownFact`) since merging from a name that was never tagged is exactly that.
+
+Adding `/api/memory/merge` without a same-origin proxy counterpart, or without updating `test_token.py`'s
+`ENDPOINTS` tripwire list, is exactly the mistake those two tests exist to catch -- both failed the first
+time the route was added, correctly. Fixed with `frontend/app/api/memory/merge/route.js` (a thin
+`forward()`, matching every other memory route) and a `client_for()` fixture change: the seeded fact is
+now also tagged to a person ("Maya"), so the endpoint has something real to merge. No page control calls
+this route yet -- a merge UI is a real follow-up, not part of this unit, the same way M1 left the review
+page itself for M3.
+
+The Memory page's grouping logic was pulled out into `frontend/lib/memory-groups.mjs` (a pure function)
+rather than left inline in `page.js`, matching how `api-failure.mjs` was split out in Stage 1: the page
+itself has no rig scenarios today, so a pure function tested directly under Node (`tests/test_memory_groups.py`,
+8 cases, including a person literally named "you" not colliding with the self group's own heading) is the
+only automated coverage this logic gets. 10/10 mutations caught (`diya_review.py`/`diya_memory_api.py`,
+scratch `mutate_m3.py`). Live-checked end to end: a scratch API and a real `next build` + `next start` (HTTP,
+to sidestep the sandboxed browser pane not trusting the dev certificate's mkcert root) with six seeded facts
+across three people -- the grouped headings, alphabetical order, the candidate's "About Priya" tag, and
+accepting a new candidate creating its own group all matched exactly what the tests predicted.
+
 ## 4. What needs the owner's yes
 
 - Whether Dreaming's extractor should be asked for a person field at all, given it is one more thing a
@@ -152,7 +187,7 @@ person's name. | `diya_db.py`, `diya_memory.py` |
 it to `add_candidate`. Nothing changes for a queue record with no person field (existing staged records
 still ingest). | `dreaming.py`, `diya_memory.py` |
 | M3 | **Review surface.** The command line and the Memory page group by person; a `merge` command/route. |
-`diya_review.py`, `diya_memory_api.py`, `frontend/app/memory` |
+`diya_review.py`, `diya_memory_api.py`, `frontend/app/memory`, `frontend/lib/memory-groups.mjs` |
 
 Each unit lands as its own commit, tested and mutation-checked on its own, in that order: M1 first because
-M2 and M3 both need somewhere to put a person before they can show or extract one.
+M2 and M3 both need somewhere to put a person before they can show or extract one. All three are built.

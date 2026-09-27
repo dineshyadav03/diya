@@ -78,12 +78,12 @@ def test_help_lists_every_command_and_is_a_success(config, capsys):
     text = capsys.readouterr().out
     assert code == 0
     for command in ("ingest", "list", "show", "accept", "reject", "reopen", "retire", "restore", "edit", "add",
-                    "export", "import-profile", "verify"):
+                    "export", "import-profile", "verify", "merge"):
         assert command in text
 
 
 @pytest.mark.parametrize("argv", [[], ["nonsense"], ["accept"], ["accept", "abc"], ["show", "1.5"], ["edit", "1"], ["add"],
-                                  ["list", "pending"], ["accept", "1", "2"]])
+                                  ["list", "pending"], ["accept", "1", "2"], ["merge"], ["merge", "a", "b", "c"]])
 def test_a_command_that_makes_no_sense_is_a_usage_error_and_changes_nothing(config, memory, argv, capsys):
     assert diya_review.main(argv, config=config) == 2
     assert capsys.readouterr().out == ""  # the explanation is on stderr
@@ -170,6 +170,77 @@ def test_show_explains_a_flag_that_points_at_another_fact(config):
     out = review(config, "show", "2")[1]
     assert "flag:    duplicate: says the same as fact 1 (accepted): likes green tea" in out
     assert "flag:    source_message: the message it best matches is 2" in out
+
+
+# --- who a fact is about: the review surface groups by person (docs/PERSON_MEMORY_DESIGN.md, unit M3) --
+
+def test_a_candidate_or_rejected_or_retired_listing_shows_the_person_tag_inline(config):
+    stage(config, ("x", "- sister Maya is visiting in May [Maya]\n- likes green tea"))
+    review(config, "ingest")
+    out = review(config, "list")[1]
+    assert "sister Maya is visiting in May  [Maya]" in out
+    assert "likes green tea" in out and "likes green tea  [" not in out  # no tag at all for self
+
+
+def test_show_names_who_the_fact_is_about_only_when_it_is_not_self(config):
+    stage(config, ("x", "- sister Maya is visiting in May [Maya]\n- likes green tea"))
+    review(config, "ingest")
+    assert "about:   Maya" in review(config, "show", "1")[1]
+    assert "about:" not in review(config, "show", "2")[1]
+
+
+def test_accepted_facts_are_grouped_you_first_then_alphabetically_by_person(config):
+    stage(config, ("x", "- has a meeting with Sam [Sam]\n- sister Maya is visiting in May [Maya]\n- likes green tea"))
+    review(config, "ingest")
+    for fact_id in ("1", "2", "3"):
+        review(config, "accept", fact_id)
+    out = review(config, "list", "accepted")[1]
+    you_at, maya_at, sam_at = out.index("You (1):"), out.index("Maya (1):"), out.index("Sam (1):")
+    assert you_at < maya_at < sam_at  # You first, then alphabetical
+    assert "likes green tea" in out.split("Maya (1):")[0]
+    assert "sister Maya is visiting in May" in out[maya_at:sam_at]
+    assert "has a meeting with Sam" in out[sam_at:]
+    assert "[Maya]" not in out and "[Sam]" not in out  # the heading already says who; no repeat tag
+
+
+def test_an_accepted_listing_with_no_named_person_yet_has_only_the_you_group(config, memory):
+    memory.add_manual("likes tea", "cli")
+    out = review(config, "list", "accepted")[1]
+    assert "You (1):" in out and "likes tea" in out
+
+
+# --- merging two names (docs/PERSON_MEMORY_DESIGN.md, D3) ------------------------------------------------
+
+def test_merge_moves_every_fact_and_reports_how_many(config, memory):
+    stage(config, ("x", "- sister Maya is visiting in May [Maya]\n- Maya's birthday is in March [Maya]"))
+    review(config, "ingest")
+    code, out, _ = review(config, "merge", "Maya", "Mayah")
+    assert code == 0 and out == "Moved 2 facts from Maya to Mayah.\n"
+    assert [f["person"] for f in memory.facts()] == ["Mayah", "Mayah"]
+    assert memory.people() == [{"name": "Maya", "facts": 0}, {"name": "Mayah", "facts": 2}]  # Maya's row stays
+
+
+def test_merge_with_no_into_name_moves_facts_back_to_you(config, memory):
+    stage(config, ("x", "- sister Maya is visiting in May [Maya]"))
+    review(config, "ingest")
+    code, out, _ = review(config, "merge", "Maya")
+    assert (code, out) == (0, "Moved 1 fact from Maya to you.\n")
+    assert memory.facts()[0]["person"] is None
+
+
+def test_merging_from_self_is_refused(config, memory):
+    memory.add_manual("likes tea", "cli")
+    code, out, err = review(config, "merge", "self")
+    assert (code, out) == (1, "")
+    assert "cannot merge from self" in err
+    assert memory.facts()[0]["person"] is None
+
+
+def test_merging_a_person_who_was_never_tagged_is_refused(config, memory):
+    code, out, err = review(config, "merge", "Nobody", "Somebody")
+    assert (code, out) == (1, "")
+    assert "there is no person named" in err
+    assert memory.people() == []
 
 
 # --- refusals ---------------------------------------------------------------------------------------

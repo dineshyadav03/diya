@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { describeActionFailure, describeLoadFailure } from '../../lib/api-failure.mjs'
+import { groupByPerson } from '../../lib/memory-groups.mjs'
 
 // What Diya knows about you, and what it has found that is waiting for you to decide (docs/STAGE2_DESIGN.md,
 // unit 6). Everything shown here comes from the API already made safe to show (control and direction-changing
@@ -225,7 +226,7 @@ export default function MemoryPage() {
 
   // A plain function that returns the row, NOT a component: a component defined here would be a new type on
   // every render and would remount the edit box (and drop its focus) at every keystroke.
-  function factRow(fact, actions) {
+  function factRow(fact, actions, hidePerson) {
     const isBusy = busy === String(fact.id)
     const isEditing = editing && editing.id === fact.id
     return (
@@ -252,6 +253,7 @@ export default function MemoryPage() {
         ) : (
           <p className="memory-text">{fact.text}</p>
         )}
+        {fact.person && !hidePerson && <p className="memory-person-tag">About {fact.person}</p>}
         <Flags flags={fact.flags} />
         {!isEditing && (
           <div className="memory-actions">
@@ -366,13 +368,23 @@ export default function MemoryPage() {
                 {accepted.length === 0 ? (
                   <p className="memory-dim">Nothing yet.</p>
                 ) : (
-                  <ul className="memory-list">
-                    {accepted.map((fact) =>
-                      factRow(fact, ({ isBusy }) =>
-                        button('Forget', 'memory-btn--danger', () => decide(fact, 'retire', 'Forgotten: Diya will not use it from the next message.'), isBusy, fact),
-                      ),
-                    )}
-                  </ul>
+                  groupByPerson(accepted).map((group) => (
+                    <div key={group.key}>
+                      <h3>
+                        {group.label} ({group.facts.length})
+                      </h3>
+                      <ul className="memory-list">
+                        {group.facts.map((fact) =>
+                          factRow(
+                            fact,
+                            ({ isBusy }) =>
+                              button('Forget', 'memory-btn--danger', () => decide(fact, 'retire', 'Forgotten: Diya will not use it from the next message.'), isBusy, fact),
+                            true, // the heading already says who: repeating it on every fact would be noise
+                          ),
+                        )}
+                      </ul>
+                    </div>
+                  ))
                 )}
                 <form className="memory-add" onSubmit={addFact}>
                   <label className="memory-sr" htmlFor="new-fact">

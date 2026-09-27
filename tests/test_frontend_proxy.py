@@ -461,7 +461,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
     routes, proxies = api_routes(tmp_path), proxy_route_files()
     assert set(routes) == {
         "/api/threads", "/api/history/{thread_id}", "/api/chat", "/api/transcribe",
-        "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/{fact_id}/{action}",
+        "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/merge", "/api/memory/{fact_id}/{action}",
         "/api/reminders", "/api/reminders/{reminder_id}/done",
     }
     assert set(proxies) == set(routes), "an API route with no proxy route (or the reverse)"
