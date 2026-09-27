@@ -208,6 +208,68 @@ def test_what_the_real_producer_staged_arrives_as_candidates_with_where_it_came_
     assert memory.verify_integrity() == []
 
 
+# --- a person Dreaming named at extraction (docs/PERSON_MEMORY_DESIGN.md, unit M2) -----------------------
+
+def test_a_trailing_bracket_tag_from_the_real_producer_becomes_the_facts_person(config, memory):
+    stage_with_dreaming(config, memory, "- sister Maya is visiting in May [Maya]\n- likes tea")
+    ingest_queue(memory, config)
+    named, untagged = memory.facts()
+    assert (named["text"], named["person"]) == ("sister Maya is visiting in May", "Maya")
+    assert (untagged["text"], untagged["person"]) == ("likes tea", None)
+    assert named["raw"] == "- sister Maya is visiting in May [Maya]"  # raw keeps the tag, exactly as staged
+    assert memory.people() == [{"name": "Maya", "facts": 1}]
+
+
+def test_two_facts_naming_the_same_person_share_one_person_case_insensitively(config, memory):
+    stage_with_dreaming(config, memory, "- sister Maya is visiting in May [Maya]\n- Maya's birthday is in March [MAYA]")
+    ingest_queue(memory, config)
+    first, second = memory.facts()
+    assert first["person"] == second["person"] == "Maya"
+    assert memory.people() == [{"name": "Maya", "facts": 2}]
+
+
+def test_a_tag_too_long_to_be_a_name_is_dropped_but_the_fact_is_kept(config, memory):
+    stage_with_dreaming(config, memory, "- something happened [" + "n" * 61 + "]")
+    report = ingest_queue(memory, config)
+    assert report == IngestReport(records=1, bad_records=0, new=1, already=0, skipped=0)
+    (fact,) = memory.facts()
+    assert fact["text"] == "something happened" and fact["person"] is None
+    assert memory.people() == []
+
+
+def test_a_tag_with_a_control_character_is_dropped_but_the_fact_is_kept(config, memory):
+    tab = chr(9)
+    stage_with_dreaming(config, memory, f"- something happened [not{tab}a name]")
+    ingest_queue(memory, config)
+    (fact,) = memory.facts()
+    assert fact["person"] is None and fact["text"] == "something happened"
+
+
+def test_ingesting_a_tagged_fact_twice_is_still_idempotent(config, memory):
+    stage_with_dreaming(config, memory, "- sister Maya is visiting in May [Maya]")
+    ingest_queue(memory, config)
+    before = memory.facts()
+    again = ingest_queue(memory, config)
+    assert again == IngestReport(records=1, bad_records=0, new=0, already=1, skipped=0)
+    assert memory.facts() == before and memory.people() == [{"name": "Maya", "facts": 1}]
+
+
+def test_a_literal_user_tag_is_treated_as_self_not_a_real_person(config, memory):
+    """Measured 2026-09-27: the real model sometimes writes [User] for a fact about the user, misreading
+    its own instruction's word for "leave the brackets off" as something to name instead."""
+    stage_with_dreaming(config, memory, "- I have a dentist appointment on Tuesday [User]")
+    ingest_queue(memory, config)
+    (fact,) = memory.facts()
+    assert fact["person"] is None and memory.people() == []
+
+
+def test_a_fact_with_no_tag_from_the_real_producer_is_unaffected_by_any_of_this(config, memory):
+    stage_with_dreaming(config, memory, "- likes tea")
+    ingest_queue(memory, config)
+    (fact,) = memory.facts()
+    assert fact["person"] is None and fact["raw"] == "- likes tea"
+
+
 def test_a_staged_fact_is_not_something_the_model_is_told(config, memory):
     stage_with_dreaming(config, memory, "- has a cat named Pixel")
     ingest_queue(memory, config)

@@ -1,7 +1,7 @@
 # Person-tagged memory -- design spec
 
-> **Status (2026-09-27):** designed; **M1 (storage) built.** M2 (Dreaming tags a person at extraction) and M3
-> (the review surface groups by person) are not. An extension of Stage 2 (`docs/STAGE2_DESIGN.md`), not a
+> **Status (2026-09-27):** designed; **M1 (storage) and M2 (Dreaming tags a person at extraction) built.** M3
+> (the review surface groups by person) is not. An extension of Stage 2 (`docs/STAGE2_DESIGN.md`), not a
 > new stage: it adds one property to a fact that already exists, reviewed the same way. Prompted by
 > `RESEARCH.md` entry 10's companion research (a person-level-memory post, 2026-09-27): person-scoped files
 > instead of a flat pile of facts.
@@ -79,6 +79,32 @@ so a mutation that forced "retagged" to imply "accepted" was invisible until a c
 The scheduled Dreaming task runs the working-tree files, so it applied migration 4 to the live `diya.db`
 before this even landed (`people` table present, `person_id` on `facts`, integrity `ok`, the database's other
 13 columns and rows byte-identical, checked on a copy). The running API needs a restart to use any of this.
+
+*As built (M2):* Dreaming's extraction prompt asks for one more thing per fact, in the same bullet list it
+already produces: if a fact names a specific person (not the user), end that line with their name in square
+brackets ("- sister Maya is visiting in May [Maya]"); leave the brackets off a fact about the user or no one
+in particular. Nothing about the extraction call changes beyond the prompt text -- one call, same as before.
+`diya_memory.extract_person_tag` reads a trailing `[Name]` off a staged line at ingest time (not inside
+Dreaming, which stays a producer of plain text lines, matching how it always has); `ingest_queue` strips it
+before cleaning the fact's text, and passes the name to the now person-aware `add_candidate`. A name that
+fails `check_person_name` (too long, a control character) is dropped -- the fact is kept as self, never lost
+over an unusable tag, the same tolerance Dreaming's output has always been given.
+
+Measured with the real model against 12 hand-written, fictional single- and multi-message batches (2 runs
+each, `qwen2.5:3b`): of the messages naming a specific person, every one was tagged (Maya, Sam, Alex, James,
+Priya, Kush, "mum" -- all 2 of 2). Of the messages about the user alone, most correctly got no tag, but on
+two of them ("I have a dentist appointment on Tuesday", both runs; "I'm allergic to penicillin", one of two
+runs) the model wrote the literal tag `[User]` -- reading its own instruction's word for "leave the brackets
+off" as something to name instead, rather than actually leaving them off. Caught: `add_candidate` (and
+`set_person`, `merge_people`) now treat "user" the same as "self" -- both mean no person, added specifically
+because this was observed, not guessed at -- so a `[User]` tag ends up exactly where no tag would have:
+`person` is `None`, and no bogus "User" row is ever created. Raw compliance with the instruction, before that
+correction, was 19 of 24 fictional cases; after it, every case landed on the right outcome except one kind:
+a fact naming a pet ("I adopted a cat named Pixel") was tagged as if the pet were a person (`[Pixel]`), both
+runs. Left as it is: `people` has no notion of "human", and a person's own page for a named pet is not
+obviously wrong for what this is for -- grouping facts by who or what they are about -- so this is recorded
+as an observed, deliberate-for-now choice, not a bug, and the owner can say otherwise. 12 of 12 mutations
+caught.
 
 ### D3. Merging two names
 

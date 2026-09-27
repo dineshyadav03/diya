@@ -147,8 +147,12 @@ class Dreamer:
             "real life -- preferences, ongoing situations, people/pets/things mentioned, tasks. "
             "IGNORE casual greetings, small talk, test messages, and anything with no real "
             "personal content ('hey', 'quick check', trivia questions, etc.). Return ONLY the "
-            "new facts as short bullet points, one per line, nothing else. If there are no "
-            "genuine new facts, return exactly: NONE\n\n"
+            "new facts as short bullet points, one per line, nothing else. If a fact is about a "
+            "specific person the user named -- not the user themselves -- end that line with the "
+            "person's name in square brackets, exactly as the user wrote it, for example "
+            "'- sister Maya is visiting in May [Maya]'. Leave the brackets off a fact that is "
+            "about the user, or names no particular person. If there are no genuine new facts, "
+            "return exactly: NONE\n\n"
             f"{conversation_text}"
         )
 

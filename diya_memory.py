@@ -69,6 +69,18 @@ EVENT_STATUS = {
 
 MAX_PERSON_CHARS = 60
 SELF = "self"  # the reserved name for "no person tag": the user, not a row in `people`
+# Measured 2026-09-27 (docs/PERSON_MEMORY_DESIGN.md, unit M2): the real model, asked to tag a fact with a
+# named person and leave the brackets off a fact "about the user", sometimes writes the literal tag
+# [User] for exactly that case -- reading its own instruction's word for "self" as something to name.
+# Treated the same as "self" everywhere a name is taken, not just in Dreaming's own ingest path, so a
+# caller that passes it directly gets the same, consistent answer.
+_SELF_WORDS = (SELF, "user")
+
+
+def _is_self(name):
+    """True for None, or the reserved word "self" or "user" in any capitalisation -- everything that
+    means "no person", never a name."""
+    return name is None or (isinstance(name, str) and name.strip().casefold() in _SELF_WORDS)
 
 
 class FactError(Exception):
@@ -149,6 +161,7 @@ FLAG_TOO_LONG = "too_long"  # over MAX_FACT_CHARS: it cannot be accepted until i
 _LIST_MARKER = re.compile(r"(?:[-*\u2022\u2023\u25e6\u2043\u2219]|\d{1,3}[.)])(?:\s+|$)")
 _PREAMBLE = re.compile(r"(?:here (?:are|is)|new facts?|the following|facts?:)\b", re.IGNORECASE)
 _NONE = re.compile(r"none\.?", re.IGNORECASE)
+_PERSON_TAG = re.compile(r"\s*\[([^\[\]]{1,80})\]\s*$")  # a trailing [Name] Dreaming's prompt asks for
 
 
 class Normalised(NamedTuple):
@@ -346,7 +359,7 @@ class Memory:
         `due_at=None` means "no time" elsewhere in this project. Never touches the fact's status or text.
         Records a `retagged` event with the old and new name (None for self) only if it actually changed."""
         _check_actor(actor)
-        if name is not None and isinstance(name, str) and name.strip().casefold() == SELF:
+        if _is_self(name):
             name = None
         if name is not None:
             check_person_name(name)
@@ -373,10 +386,9 @@ class Memory:
         refused, since that would silently move every untagged fact, not merge two named people. `into_name`
         takes None the same way `set_person` does. Returns how many facts moved."""
         _check_actor(actor)
-        from_self = from_name is None or (isinstance(from_name, str) and from_name.strip().casefold() == SELF)
-        if from_self:
+        if _is_self(from_name):
             raise InvalidFact("cannot merge from self: that would move every fact with no person tag")
-        into_self = into_name is None or (isinstance(into_name, str) and into_name.strip().casefold() == SELF)
+        into_self = _is_self(into_name)
         if not into_self:
             check_person_name(into_name)
         with self._write() as conn:
@@ -415,10 +427,13 @@ class Memory:
 
     # ---- adding ----
     def add_candidate(self, text, *, batch_first, batch_last, position, model, extracted_at, raw,
-                      flags=(), actor="system"):
+                      flags=(), actor="system", person=None):
         """Record one staged fact as a candidate. Returns its id, or None if this slot -- this
         position in the queue record that starts at `batch_first` -- was already recorded, which is
-        what makes ingesting the same queue twice harmless."""
+        what makes ingesting the same queue twice harmless. `person` is who the fact is about (a
+        name, created if new) or None for self -- validated the same way set_person validates it;
+        a candidate is never created with a bad tag silently dropped, unlike ingest_queue's own,
+        more forgiving handling of what Dreaming actually wrote."""
         _check_actor(actor)
         check_text(text)
         if not (_is_int(batch_first) and _is_int(batch_last) and _is_int(position)):
@@ -429,6 +444,10 @@ class Memory:
             raise InvalidFact("a candidate needs the raw line, the model and the time it was extracted")
         if not all(isinstance(flag, str) for flag in flags):
             raise InvalidFact("flags are text")
+        if _is_self(person):
+            person = None
+        if person is not None:
+            check_person_name(person)
         with self._write() as conn:
             if conn.execute(
                 "SELECT 1 FROM facts WHERE source = 'dreaming' AND batch_first = ? AND position = ?",
@@ -436,11 +455,12 @@ class Memory:
             ).fetchone():
                 return None
             now = _now()
+            person_id = self._person_id_for(conn, person, now) if person is not None else None
             cur = conn.execute(
                 "INSERT INTO facts (text, text_key, status, source, batch_first, batch_last, position, model,"
-                " extracted_at, raw, flags, created_at) VALUES (?, ?, 'candidate', 'dreaming', ?, ?, ?, ?, ?, ?, ?, ?)",
+                " extracted_at, raw, flags, created_at, person_id) VALUES (?, ?, 'candidate', 'dreaming', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (text, text_key(text), batch_first, batch_last, position, model, extracted_at, raw,
-                 json.dumps(list(flags)), now),
+                 json.dumps(list(flags)), now, person_id),
             )
             self._event(conn, cur.lastrowid, "ingested", actor, now)
             return cur.lastrowid
@@ -681,6 +701,20 @@ class Memory:
 # ---- getting facts in: the staged queue and the old profile -------------------------------------
 
 
+def extract_person_tag(line):
+    """Dreaming's prompt may end a staged line with a person's name in brackets ("- sister Maya is
+    visiting in May [Maya]"), meaning the fact is about them, not the user. Returns (the line with the
+    tag and any space before it removed, the name inside the brackets, or None if there was no tag).
+    The name is returned exactly as written, not validated: ingest_queue decides what to do with one
+    that turns out unusable, the same way it already decides what to do with unusable fact text."""
+    if not isinstance(line, str):
+        return line, None
+    match = _PERSON_TAG.search(line)
+    if not match:
+        return line, None
+    return line[: match.start()], match.group(1).strip()
+
+
 def ingest_queue(memory, config, actor="cli"):
     """Copy what Dreaming has staged into the store as candidates. Safe to run as often as you like:
     each fact is keyed by (the queue record's first message id, its position in that record's list),
@@ -708,13 +742,20 @@ def ingest_queue(memory, config, actor="cli"):
         model = record.get("model") if isinstance(record.get("model"), str) else ""
         staged_at = record.get("timestamp") if isinstance(record.get("timestamp"), str) else ""
         for position, line in enumerate(lines):  # a skipped line still takes its position: slots never shift
-            fact = normalise_fact(line)
+            stripped, person = extract_person_tag(line)
+            fact = normalise_fact(stripped)
             if fact is None:
                 skipped += 1
                 continue
+            if person is not None:
+                try:
+                    check_person_name(person)
+                except InvalidFact:
+                    person = None  # an unusable tag is dropped; the fact itself is not lost over it
             created = memory.add_candidate(
                 fact.text, batch_first=record["first_message_id"], batch_last=record["last_message_id"],
                 position=position, model=model, extracted_at=staged_at, raw=line, flags=fact.flags, actor=actor,
+                person=person,
             )
             if created is None:
                 already += 1

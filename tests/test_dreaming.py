@@ -211,6 +211,16 @@ def test_the_prompt_uses_user_messages_only_and_the_configured_model(config):
     assert "- I adopted a cat named Pixel" in prompt and "Congrats" not in prompt
 
 
+def test_the_prompt_asks_for_a_named_persons_tag_in_brackets(config):
+    """docs/PERSON_MEMORY_DESIGN.md, unit M2: the prompt, not a second call, asks for who a fact is about."""
+    seed(config, ("user", "my sister Maya is visiting in May"))
+    d, client = dreamer(config, text_reply("- sister Maya is visiting in May [Maya]"))
+    d.dream_cycle()
+    prompt = client.chat_calls[0]["messages"][0]["content"]
+    assert "[Maya]" in prompt.split("my sister Maya")[0]  # the example is in the instructions, not copied from the message
+    assert "square brackets" in prompt and "about the user" in prompt
+
+
 def test_configured_paths_are_used_and_the_defaults_are_left_alone(config, tmp_path):
     seed(config, ("user", "I adopted a cat named Pixel"))
     d, _ = dreamer(config, text_reply("- cat: Pixel"))

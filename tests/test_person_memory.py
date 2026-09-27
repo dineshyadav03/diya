@@ -20,6 +20,7 @@ from diya_memory import (
     UnknownFact,
     UnknownPerson,
     check_person_name,
+    extract_person_tag,
     person_key,
 )
 
@@ -79,7 +80,7 @@ def test_tagging_the_same_person_again_changes_nothing_and_says_so(memory):
     assert memory.events(fact_id) == events_before  # no event for a no-op
 
 
-@pytest.mark.parametrize("word", ["self", "Self", "SELF", " self "])
+@pytest.mark.parametrize("word", ["self", "Self", "SELF", " self ", "user", "User", "USER", " user "])
 def test_setting_it_to_self_in_any_spelling_untags_it(memory, word):
     fact_id = memory.add_manual("x", "cli")
     memory.set_person(fact_id, "Maya", "cli")
@@ -258,7 +259,7 @@ def test_merging_into_self_moves_facts_back_to_untagged(memory):
     assert memory.people() == [{"name": "Maya", "facts": 0}]
 
 
-@pytest.mark.parametrize("self_spelling", ["self", "Self", "SELF", None])
+@pytest.mark.parametrize("self_spelling", ["self", "Self", "SELF", "user", "User", None])
 def test_merging_from_self_is_refused_and_moves_nothing(memory, self_spelling):
     a, b = (memory.add_manual(x, "cli") for x in ("a", "b"))  # both untagged: about self
     with pytest.raises(InvalidFact):
@@ -334,6 +335,90 @@ def test_get_and_facts_both_include_the_person_key_for_every_status(memory):
     assert only["person"] == "Maya"
     (accepted_only,) = memory.facts("accepted")
     assert accepted_only["person"] == "Maya"
+
+
+# --- extract_person_tag: reading Dreaming's optional [Name] suffix (unit M2) ------------------------------
+
+@pytest.mark.parametrize("line, text, name", [
+    ("- sister Maya is visiting in May [Maya]", "- sister Maya is visiting in May", "Maya"),
+    ("- likes green tea", "- likes green tea", None),
+    ("- likes green tea ", "- likes green tea ", None),  # trailing space alone is not a tag
+    ("- has a cat [Pixel]", "- has a cat", "Pixel"),
+    ("- has a cat [Pixel] ", "- has a cat", "Pixel"),  # trailing space after the tag
+    ("- has a cat [ Pixel ]", "- has a cat", "Pixel"),  # space just inside the brackets is not part of the name
+    ("weird [a][b]", "weird [a]", "b"),  # only the trailing bracket is the tag; an earlier one is the fact's own
+    ("- has a cat named Pixel []", "- has a cat named Pixel []", None),  # empty brackets: nothing to tag with
+    ("- x [" + "n" * 80 + "]", "- x", "n" * 80),  # right at the pattern's own limit
+    ("- x [" + "n" * 81 + "]", "- x [" + "n" * 81 + "]", None),  # one over: not read as a tag at all
+    ("", "", None),
+])
+def test_extract_person_tag_reads_a_trailing_bracket_and_nothing_else(line, text, name):
+    assert extract_person_tag(line) == (text, name)
+
+
+def test_extract_person_tag_is_never_given_anything_but_text_from_a_real_queue_but_does_not_crash_on_other_types():
+    for value in (None, 5, ["x"], {"a": 1}):
+        assert extract_person_tag(value) == (value, None)
+
+
+def test_extract_person_tag_does_not_validate_the_name_that_is_the_callers_job():
+    assert extract_person_tag("- x [not\ta name]") == ("- x", "not\ta name")  # a tab: check_person_name would refuse it
+
+
+# --- add_candidate with a person (unit M2) -----------------------------------------------------------------
+
+def test_add_candidate_with_a_person_tags_it_and_creates_the_person(memory):
+    fact_id = memory.add_candidate(
+        "sister Maya is visiting in May", batch_first=2, batch_last=2, position=0, model="m",
+        extracted_at=STAGED_AT, raw="- sister Maya is visiting in May [Maya]", person="Maya",
+    )
+    assert memory.get(fact_id)["person"] == "Maya"
+    assert memory.people() == [{"name": "Maya", "facts": 1}]
+
+
+@pytest.mark.parametrize("word", ["self", "Self", "user", "User", "USER", None])
+def test_add_candidate_treats_self_and_user_as_no_person_not_a_real_name(memory, word):
+    """Measured 2026-09-27: the real model, told to leave the brackets off a fact about the user, sometimes
+    writes the literal tag [User] for exactly that case instead. Treated as self everywhere a name is taken,
+    not only in ingest_queue's own forgiving handling, so a direct caller gets the same answer."""
+    fact_id = memory.add_candidate(
+        "x", batch_first=1, batch_last=1, position=0, model="m", extracted_at=STAGED_AT, raw="- x", person=word,
+    )
+    assert memory.get(fact_id)["person"] is None
+    assert memory.people() == []
+
+
+def test_add_candidate_with_no_person_is_unchanged_from_before_this_existed(memory):
+    fact_id = candidate(memory, "likes green tea")
+    assert memory.get(fact_id)["person"] is None
+    assert memory.people() == []
+
+
+def test_add_candidate_reuses_an_existing_person_case_insensitively(memory):
+    memory.add_manual("x", "cli")
+    memory.set_person(1, "Maya", "cli")
+    fact_id = memory.add_candidate(
+        "y", batch_first=1, batch_last=1, position=0, model="m", extracted_at=STAGED_AT, raw="- y [MAYA]", person="MAYA",
+    )
+    assert memory.get(fact_id)["person"] == "Maya"  # the first spelling, like everywhere else
+    assert memory.people() == [{"name": "Maya", "facts": 2}]
+
+
+def test_add_candidate_refuses_a_bad_person_name_and_creates_nothing(memory):
+    with pytest.raises(InvalidFact):
+        memory.add_candidate(
+            "x", batch_first=1, batch_last=1, position=0, model="m", extracted_at=STAGED_AT, raw="- x", person="a\tb",
+        )
+    assert memory.facts() == [] and memory.people() == []
+
+
+def test_add_candidate_no_event_beyond_ingested_for_the_persons_tag_at_creation(memory):
+    """Unlike set_person, tagging at creation is not a change from something -- it is what the fact
+    always was -- so there is no separate retagged event, just the one ingested event everything gets."""
+    fact_id = memory.add_candidate(
+        "x", batch_first=1, batch_last=1, position=0, model="m", extracted_at=STAGED_AT, raw="- x [Maya]", person="Maya",
+    )
+    assert [event for event, _actor, _at, _detail in memory.events(fact_id)] == ["ingested"]
 
 
 def test_a_fresh_database_migrates_and_a_copy_of_an_existing_one_keeps_its_facts_untagged(tmp_path):
