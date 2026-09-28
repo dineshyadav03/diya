@@ -230,14 +230,19 @@ Remaining:
    here**; whether an 8B model is fast enough there is the open question.
 2. Trustworthy memory. The review-and-promote step for staged facts. Reference for the
    verification step: the solver/verifier separation (Apodex). Designed in
-   [`docs/STAGE2_DESIGN.md`](docs/STAGE2_DESIGN.md) as seven units. **Built (all seven units):** storage
-   (`diya_memory.py`, migration 2); cleaning staged lines, ingesting the queue and importing the old
-   profile; deterministic checks (`diya_checks.py`); the review command line (`diya_review.py`); and the
-   switch: the model is told the accepted facts, the old `user_profile.txt` was imported once, and
-   `DIYA_DREAM_PROFILE_MODE=direct` was retired. Unit 6 is built too: the same review on the UI's Memory
-   page (`diya_memory_api.py`, `frontend/app/memory`); and an optional, advisory model verifier (`diya_verifier.py`,
-   `python diya_review.py judge`), measured on invented cases (`python diya_evals.py --verifier`). **Not done:**
-   comparing the verifier with your own accept/reject decisions, once there are enough of them.
+   [`docs/STAGE2_DESIGN.md`](docs/STAGE2_DESIGN.md) as seven units, all built, including person-tagged
+   memory (`docs/PERSON_MEMORY_DESIGN.md`, M1-M4: who a fact is about, groups the review surface and the
+   model's own system message). Storage (`diya_memory.py`, migrations 2 and 4); cleaning staged lines,
+   ingesting the queue and importing the old profile; deterministic checks (`diya_checks.py`); the review
+   command line (`diya_review.py`); the switch (the model is told the accepted facts, `DIYA_DREAM_PROFILE_MODE=direct`
+   retired); the Memory page (`diya_memory_api.py`, `frontend/app/memory`); and an optional, advisory
+   model verifier (`diya_verifier.py`, `python diya_review.py judge`), measured on invented cases
+   (`python diya_evals.py --verifier`). **Not done, and not buildable further:** comparing the verifier
+   against your own accept/reject decisions. Checked against the live database (2026-09-28, read-only,
+   `docs/STAGE2_DESIGN.md`'s U7 section has the detail): zero facts qualify, because the review pipeline
+   has never actually been used on the live system yet -- `facts` is empty, the old `user_profile.txt` was
+   never imported there (unlike in every test), and 2 records Dreaming staged on 2026-09-21 are still
+   sitting unreviewed. This needs you to start the API and use Memory review for a while, not more code.
 3. Connectors and permissions.
 4. Durable workflows. The competitive battleground: every comparable leads with "describe an
    outcome, it follows through". Reference: Muse-style approval gates and action trails.

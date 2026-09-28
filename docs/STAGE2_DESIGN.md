@@ -310,8 +310,22 @@ does not ask for one.
 *Deviation from the gate.* The rollout table has U7 wait until U1-U6 had produced human decisions to
 measure against. It was built without them, because the owner asked for the work to continue through the
 roadmap, so it is measured on fictional cases only. It stays as inert as D5 says: it runs only when a person
-runs `judge`, it adds a flag, and nothing reads the flag but that person. Comparing it with the human
-decisions in `fact_events` is still to do, and until then D10 stands: no sorting and no pre-selecting by it.
+runs `judge`, it adds a flag, and nothing reads the flag but that person. D10 stands: no sorting and no
+pre-selecting by it.
+
+*Attempted against the live database (2026-09-28):* a read-only comparison (fact ids and verdict/decision
+labels only -- never a fact's text, the standing rule for live data) found **zero facts with both a current
+verifier verdict and a final accept/reject decision**. Not a negative result -- there is nothing to compare
+yet, and the reason is structural, not a flaw in the verifier or the method: the live database's `facts`
+table is entirely empty (`people` too). The old `user_profile.txt` was never imported
+(`has_legacy_import()` is `False`), and Dreaming's queue has 2 records staged on 2026-09-21 that were never
+carried into `facts` at all (`ingest` was never run against the live system). The live API process was not
+running at the time of this check. In short: everything from U1 onward has been built, tested and
+mutation-checked, but the review-and-promote pipeline has not yet been exercised on a single real
+conversation. This item cannot be closed by more building -- it is genuinely blocked on the owner starting
+the API and using Memory review for a while, exactly the "once there are enough of them" condition this
+section always named. Re-run `python diya_review.py list all` (or re-run the comparison this paragraph
+describes) once that has happened.
 
 *Measured* (`python diya_evals.py --verifier`; `qwen2.5:3b`; the 44-case part came out identical in two
 runs). On the 44 cases the plain-code checks are measured on, of the 20 unsupported facts it said no to all
