@@ -315,6 +315,9 @@ export default function ChatPage() {
               </span>
             )}
           </Link>
+          <Link className="icon-btn nav-wide" href="/connections" style={{ textDecoration: 'none' }}>
+            Connections
+          </Link>
           <button
             className="icon-btn"
             onClick={() => speak('This is a test of the voice output.', { force: true })}

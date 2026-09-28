@@ -23,8 +23,14 @@ import diya
 import diya_config
 import diya_web
 from diya_config import ConfigError, load_config
+from diya_connectors import Connector
 from diya_memory import Memory
 from fakes import FakeClient, text_reply
+
+SEEDED_CONNECTORS = (
+    Connector(name="demo", label="Demo", description="A seeded connector for tests.",
+             auth_kind="token", implemented=True, validate=lambda token: None),
+)
 
 HOST = "https://localhost"
 
@@ -52,7 +58,8 @@ def client_for(tmp_path, require=None):
                          extracted_at="2026-01-01T00:00:00+00:00", raw="- seeded candidate")
     memory.set_person(1, "Maya", "cli")  # so /api/memory/merge has an existing person to merge from
     agent.store.add_reminder("seeded reminder")  # and one reminder (id 1), for the same reason
-    app = diya_web.create_app(config, agent, transcriber=object())
+    # and one connector, so /api/connections/demo/connect has something real to act on
+    app = diya_web.create_app(config, agent, transcriber=object(), connectors=SEEDED_CONNECTORS)
     return TestClient(app, base_url=HOST), app
 
 
@@ -67,7 +74,8 @@ OK = (200, 201)  # adding a fact answers 201
 
 def concrete_path(path):
     """A route's path with a real id and action in place of its parameters."""
-    return path.replace("{thread_id}", "1").replace("{fact_id}", "1").replace("{action}", "accept").replace("{reminder_id}", "1")
+    return (path.replace("{thread_id}", "1").replace("{fact_id}", "1").replace("{action}", "accept")
+           .replace("{reminder_id}", "1").replace("{name}", "demo"))
 
 
 # Every route the app has today, with a request that succeeds once it is past the token layer.
@@ -80,6 +88,9 @@ ENDPOINTS = [
     ("POST", "/api/memory/add", {"json": {"text": "a typed fact"}}),
     ("POST", "/api/memory/1/accept", {}),
     ("POST", "/api/memory/merge", {"json": {"from_name": "Maya", "into_name": "Mayah"}}),
+    ("GET", "/api/connections", {}),
+    ("POST", "/api/connections/demo/connect", {"json": {"token": "a-token"}}),
+    ("POST", "/api/connections/demo/disconnect", {}),
     ("GET", "/api/reminders", {}),
     ("POST", "/api/reminders", {"json": {"text": "call mum", "when": "in 2 hours"}}),
     ("POST", "/api/reminders/1/done", {}),

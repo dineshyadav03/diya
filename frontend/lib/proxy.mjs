@@ -148,3 +148,16 @@ export async function forwardReminderDone(request, context, options) {
   if (!WHOLE_NUMBER.test(String(reminderId))) return errorResponse(404, 'No such reminder')
   return forward(request, `/api/reminders/${reminderId}/done`, options)
 }
+
+// The connections page's routes (docs/CONNECTORS_DESIGN.md, unit C1): connect and disconnect are two
+// separate API routes (a connect body carries a token, a disconnect needs none), not one shared
+// {action} route. `action` is a literal the caller passes, never read from the URL. A connector name
+// is lowercase letters, digits and underscores (diya_connectors.Connector's own rule); anything else
+// is turned away here instead of being pasted into the URL of the API request.
+const CONNECTOR_NAME = /^[a-z][a-z0-9_]{0,39}$/
+
+export async function forwardConnection(request, context, action, options) {
+  const { name } = await context.params
+  if (!CONNECTOR_NAME.test(String(name))) return errorResponse(404, 'No such connector')
+  return forward(request, `/api/connections/${name}/${action}`, options)
+}

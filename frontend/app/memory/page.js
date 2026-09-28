@@ -293,6 +293,9 @@ export default function MemoryPage() {
           <Link className="icon-btn" href="/reminders">
             Reminders
           </Link>
+          <Link className="icon-btn" href="/connections">
+            Connections
+          </Link>
           <Link className="icon-btn" href="/">
             &larr; Back to chat
           </Link>

@@ -13,6 +13,8 @@ from pydantic import BaseModel
 
 import diya
 import diya_config
+import diya_connections_api
+import diya_connectors
 import diya_memory_api
 import diya_reminders_api
 
@@ -246,16 +248,19 @@ class WhisperTranscriber:
         return " ".join(s.text for s in segments).strip()
 
 
-def create_app(config=None, agent=None, transcriber=None):
+def create_app(config=None, agent=None, transcriber=None, connectors=None):
     """Build the JSON API around an Agent and a transcriber.
 
     Nothing is loaded here -- the agent and transcriber are lazy, so building an app is free
     and tests can hand in their own (a fake model, a temp database). Defaults come from the
-    environment, so `create_app()` with no arguments is the real thing.
+    environment, so `create_app()` with no arguments is the real thing. `connectors` defaults to
+    the real (empty, as of unit C1) registry; tests hand in fakes the same way they hand in a fake
+    model client.
     """
     config = config or diya_config.load_config()
     agent = agent or diya.Agent(config)
     transcriber = transcriber or WhisperTranscriber(config.whisper_model)
+    connectors = diya_connectors.CONNECTORS if connectors is None else connectors
 
     app = FastAPI()
     # The UI lives in frontend/ (Next.js, on its own port) and calls this JSON API from the
@@ -333,6 +338,7 @@ def create_app(config=None, agent=None, transcriber=None):
     # Reviewing what Dreaming staged (docs/STAGE2_DESIGN.md, unit 6): the same rules as diya_review.py.
     diya_memory_api.register(app, config, agent)
     diya_reminders_api.register(app, config, agent)
+    diya_connections_api.register(app, config, agent, connectors=connectors)
 
     return app
 

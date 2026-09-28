@@ -19,6 +19,8 @@ watcher_state.json
 watcher_log.txt
 notify_log.txt
 proactive_context.txt
+connector_tokens/
+connectors_log.txt
 
 # --- Dependencies and build output ---
 node_modules/

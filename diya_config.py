@@ -87,6 +87,11 @@ class Config:
     token_path: str = "diya_token.hash"  # DIYA_TOKEN_PATH
     require_token: bool = True  # DIYA_REQUIRE_TOKEN
     rotate_token: bool = False  # DIYA_ROTATE_TOKEN: replace the stored token at the next start
+    # Connectors (docs/CONNECTORS_DESIGN.md, D1/D3): each connector's own credential is a file under
+    # this directory (<name>.token), never the database and never git. One plain log of every
+    # connect/disconnect/call, the same shape dream_log.txt already has for Dreaming.
+    connector_tokens_dir: str = "connector_tokens"  # DIYA_CONNECTOR_TOKENS_DIR
+    connectors_log_path: str = "connectors_log.txt"  # DIYA_CONNECTORS_LOG_PATH
 
 
 def _parse_host_list(setting: str, raw: str) -> tuple:
@@ -121,6 +126,8 @@ _STRING_SETTINGS = {
     "whisper_model": "DIYA_WHISPER_MODEL",
     "host": "DIYA_HOST",
     "token_path": "DIYA_TOKEN_PATH",
+    "connector_tokens_dir": "DIYA_CONNECTOR_TOKENS_DIR",
+    "connectors_log_path": "DIYA_CONNECTORS_LOG_PATH",
 }
 
 
