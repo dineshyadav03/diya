@@ -243,9 +243,20 @@ Remaining:
    has never actually been used on the live system yet -- `facts` is empty, the old `user_profile.txt` was
    never imported there (unlike in every test), and 2 records Dreaming staged on 2026-09-21 are still
    sitting unreviewed. This needs you to start the API and use Memory review for a while, not more code.
-3. Connectors and permissions.
+3. Connectors and permissions. Designed in [`docs/CONNECTORS_DESIGN.md`](docs/CONNECTORS_DESIGN.md)
+   (2026-09-28); landscape survey in `RESEARCH.md` entry 11 (Google Calendar, Gmail, Microsoft Graph,
+   Home Assistant, Notion, Todoist, Spotify, WhatsApp, iMessage -- cost, auth model and fit for a
+   single-owner local app). Every connector is a menu item any owner of a Diya install can turn on,
+   not one wired to a specific person's accounts (D5). **Built: C1**, the shared plumbing and the
+   Connections page -- a registry, per-connector token storage, a plain call log, and
+   connect/disconnect routes, all proven with fake connectors since the real registry is deliberately
+   still empty. **Not built: C2** (Home Assistant, Notion, Todoist -- the three connectors that need
+   no OAuth at all) **and C3** (the first real OAuth connector, Google Calendar).
 4. Durable workflows. The competitive battleground: every comparable leads with "describe an
-   outcome, it follows through". Reference: Muse-style approval gates and action trails.
+   outcome, it follows through". Reference: Muse-style approval gates and action trails. **By the
+   owner's decision (2026-09-28): this waits for Stage 3** -- there is nothing to take real,
+   consequential action on until a connector exists to prove the approval-gate/action-trail design
+   against, so it is not designed in the abstract first.
    The local first slice, reminders that fire (a time parser, real due times, a Reminders page, an optional
    desktop notifier), is designed in [`docs/PROACTIVITY_DESIGN.md`](docs/PROACTIVITY_DESIGN.md) as four units.
    **Built, all four:** P1 (the time reader), P2 (real due times, the tool that reads them, the guard against

@@ -152,6 +152,61 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
   would break cross-cutting note 4. Revisit only once Diya's memory outgrows a single embedding lookup
   and a 2,000-character profile, or a faster/better model changes the gate-benchmark numbers.
 
+### 11. Personal connector landscape (calendar, email, tasks, local smart-home, messaging)
+
+- **Source:** current vendor documentation, checked live 2026-09-28 (Google, Microsoft Learn, Meta for
+  Developers, Home Assistant developer docs, Notion, Todoist, Spotify for Developers) -- see individual
+  claims below; this is Diya's own survey, not a single third-party report.
+- **Noted:** 2026-09-28, ahead of Stage 3 (connectors and permissions).
+- **What it is:** what a single-user, no-company, local-first app can actually reach without creating
+  a new account or a business identity, and what each path costs in complexity, money or risk:
+  - **Google Calendar API:** free at Diya's scale (10,000 req/min per project). A personal OAuth app
+    kept in "Testing" publishing status never needs Google's verification (that only triggers at
+    scale, for external users this app will never have) -- but a Testing-mode refresh token expires
+    every 7 days, so the owner re-authenticates in a browser about weekly unless the app is later
+    published. Calendar's own scopes are not in Google's "restricted" tier, so publishing likely needs
+    only the free standard review, not the paid assessment below -- not itself checked.
+  - **Gmail API:** the same free Testing-mode path works for read/send too, with the same 7-day
+    refresh-token limit. The real cost only appears at *publishing*: a restricted scope (full mail
+    access, `https://mail.google.com/`) requires an annual third-party CASA Tier 2 security assessment
+    ($540-$1,000/year per one source) to go live for real users. For a single owner who never
+    publishes, this is avoidable -- at the price of that weekly re-auth.
+  - **Microsoft Graph (Outlook mail/calendar):** a free Azure app registration, OAuth against a personal
+    Microsoft account via the `/common` endpoint. No CASA-equivalent found for this path. A real
+    alternative if the owner uses Outlook/Hotmail instead of, or alongside, Google.
+  - **Home Assistant:** fully local. A long-lived Bearer token from the instance's own profile page,
+    no cloud, no OAuth, no company review of any kind -- the single closest fit to Diya's own
+    "inspectable, local-only" claim (cross-cutting note 1), conditional on the owner actually running
+    a Home Assistant instance.
+  - **Notion:** an "internal integration" token (`secret_...`), not real OAuth -- created once, scoped
+    to whichever pages/databases it is explicitly connected to. Simplest of everything here, if notes
+    actually live there rather than locally.
+  - **Todoist:** a personal API token from account settings, plain Bearer auth, no OAuth flow at all.
+  - **Spotify Web API:** viable for exactly one real user (Development Mode allows 5 allowlisted users
+    and needs the app owner to have Premium); the widely-reported 2026 lockout is about *scaling past
+    that*, not about a single person controlling their own playback.
+  - **WhatsApp:** the official Cloud API is built for a *new* business-verified number and phone-based
+    tiers -- it does not fit "send messages from the number I already have" without business
+    verification. Unofficial session-based libraries (automating the WhatsApp Web session) exist and
+    are commonly used for exactly this personal case, but they are outside Meta's terms and carry a
+    real account-ban risk that the plain vendor APIs above do not.
+  - **iMessage:** a dead end on Windows. Apple ships no Windows client, no web inbox and no
+    general-purpose message API; Messages developer products are for approved business workflows only.
+- **Why it matters for Diya:** it turns "connectors" from one undifferentiated roadmap line into a
+  real, priced menu. The lowest-friction, lowest-risk starting points (Home Assistant, Notion, Todoist)
+  need no OAuth and no ongoing cost at all; the two most requested ones historically for this category
+  of product (calendar, email) are genuinely free and low-risk too, provided Diya stays a personal,
+  never-published app and the owner accepts a weekly re-auth click -- exactly the kind of "auditable,
+  local, one owner" story cross-cutting note 1 already claims. WhatsApp and iMessage are the two paths
+  every comparable (Instinct, Muse) leans on that Diya specifically cannot reach cleanly on this stack.
+- **Skeptic note:** none of this was tested end to end against a real Google/Microsoft/Home Assistant
+  account -- it is current documentation and third-party guides, not a working integration. Testing-mode
+  behavior in particular (the 7-day figure, exactly when CASA applies) should be confirmed against the
+  real Google Cloud console before it drives a design decision.
+- **Action:** design Stage 3 (`docs/CONNECTORS_DESIGN.md`) around whichever of these the owner actually
+  uses day to day -- building a connector for a service nobody opens is wasted work regardless of how
+  cheap the API is.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,
