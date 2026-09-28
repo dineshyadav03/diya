@@ -48,12 +48,14 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Reminders: say "remind me to call mum tomorrow at 5pm". The time is read in code, a reminder is saved only if you asked for one, and the
   **Reminders** page (or the count in the chat header) shows what is due. Nothing notifies you outside the app yet.
   File listing is limited to `Documents/Diya` under your home folder, or the folders in `DIYA_FILES_ROOTS`.
+- Optional connectors on the **Connections** page: Home Assistant, Notion and Todoist, each off until you paste a token there.
+  Read-only for now; nothing is sent anywhere until you connect it, and disconnecting is instant.
 - Hold-to-talk voice input through local Whisper, and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
 - Facts it extracts wait in a review queue; nothing reaches the model unless you accept it.
   Review them on the **Memory** page of the UI, or with `python diya_review.py list`, `accept`, `reject` and `edit` (see [Dreaming](docs/dreaming.md)); `judge` asks the local model for an optional second opinion.
   The model is told the accepted facts, in every chat; your old `user_profile.txt` was imported once.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 2026 tests pass on Windows (as of 2026-09-28).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 2058 tests pass on Windows (as of 2026-09-28).
 
 ## Known limits
 
@@ -69,7 +71,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - [LAN mode and certificates](docs/lan.md): use Diya from a phone, and the mkcert details.
 - [Dreaming](docs/dreaming.md): how staged memory works, and how to run and schedule it.
 - [Roadmap](ROADMAP.md): the Stage 0 checklist and later stages. [Product vision](PRODUCT_VISION.md): the current state.
-- [Research](RESEARCH.md): a dated index of market and technical signals. [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built, including an optional, measured model verifier). [Model benchmark](docs/MODEL_BENCHMARK.md): three installed models on this laptop, first pass. [Proactivity design](docs/PROACTIVITY_DESIGN.md): reminders that fire, the first step from an assistant that answers to one that tells you (built except the desktop notifier).
+- [Research](RESEARCH.md): a dated index of market and technical signals. [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built, including an optional, measured model verifier). [Person-tagged memory](docs/PERSON_MEMORY_DESIGN.md): who a fact is about, built into review, the model's own system message, and the CLI/UI (built). [Model benchmark](docs/MODEL_BENCHMARK.md): three installed models on this laptop, first pass. [Proactivity design](docs/PROACTIVITY_DESIGN.md): reminders that fire, the first step from an assistant that answers to one that tells you (built except the desktop notifier). [Connectors design](docs/CONNECTORS_DESIGN.md): outside accounts as a menu any owner picks from (Home Assistant, Notion and Todoist built; an OAuth connector next).
 
 ## Architecture
 

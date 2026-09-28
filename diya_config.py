@@ -92,6 +92,10 @@ class Config:
     # connect/disconnect/call, the same shape dream_log.txt already has for Dreaming.
     connector_tokens_dir: str = "connector_tokens"  # DIYA_CONNECTOR_TOKENS_DIR
     connectors_log_path: str = "connectors_log.txt"  # DIYA_CONNECTORS_LOG_PATH
+    # Home Assistant is self-hosted, unlike Notion/Todoist's fixed API address, so its own address
+    # is a plain setting (not a secret -- the long-lived token from the Connections page is the
+    # secret) the owner sets once, the same way DIYA_OLLAMA_URL already works.
+    home_assistant_url: str = ""  # DIYA_HOME_ASSISTANT_URL, e.g. http://homeassistant.local:8123
 
 
 def _parse_host_list(setting: str, raw: str) -> tuple:
@@ -128,6 +132,7 @@ _STRING_SETTINGS = {
     "token_path": "DIYA_TOKEN_PATH",
     "connector_tokens_dir": "DIYA_CONNECTOR_TOKENS_DIR",
     "connectors_log_path": "DIYA_CONNECTORS_LOG_PATH",
+    "home_assistant_url": "DIYA_HOME_ASSISTANT_URL",
 }
 
 

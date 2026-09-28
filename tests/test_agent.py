@@ -6,6 +6,8 @@ import pytest
 
 import diya
 import diya_config
+import diya_connector_tools
+import diya_connectors
 import diya_memory
 from diya import Agent, OllamaUnavailable
 from diya_db import Store
@@ -218,7 +220,9 @@ def test_a_direct_answer_returns_with_no_tools(config):
     agent, client = make_agent(config, text_reply("Four."))
     assert agent.ask([{"role": "user", "content": "2+2?"}]) == ("Four.", [])
     assert client.chat_calls[0]["model"] == "qwen2.5:3b"
-    assert client.chat_calls[0]["tools"] is diya.TOOLS
+    # agent.tools is built fresh each call (docs/CONNECTORS_DESIGN.md, D4), not the same list object
+    # as diya.TOOLS, but with nothing connected the content is exactly it.
+    assert client.chat_calls[0]["tools"] == diya.TOOLS
 
 
 def test_a_tool_call_is_executed_and_its_result_fed_back(config, capsys):
@@ -272,9 +276,25 @@ def test_the_tool_loop_gives_up_after_the_round_cap(config):
 
 
 def test_every_advertised_tool_has_an_implementation(config):
+    """Every tool the model could ever be offered -- the fixed ones, always, plus a connector's tool
+    once it exists (docs/CONNECTORS_DESIGN.md, unit C2) -- has a real function behind it, whether or
+    not that connector happens to be connected right now (agent.tools filters that separately)."""
     agent, _ = make_agent(config)
     advertised = {t["function"]["name"] for t in diya.TOOLS}
-    assert advertised == set(agent._functions)
+    connector_tools = {spec["function"]["name"] for _name, spec, _func in diya_connector_tools.tool_specs(config)}
+    assert advertised | connector_tools == set(agent._functions)
+
+
+def test_a_connectors_tool_is_offered_only_once_it_is_connected(config):
+    agent, _ = make_agent(config)
+    assert "search_home_assistant" not in {t["function"]["name"] for t in agent.tools}
+
+    connector = diya_connectors.by_name(diya_connector_tools.real_connectors(config), "home_assistant")
+    diya_connectors.connect(config, dataclasses.replace(connector, validate=lambda token: None), "a-token")
+
+    assert "search_home_assistant" in {t["function"]["name"] for t in agent.tools}
+    diya_connectors.disconnect(config, "home_assistant")
+    assert "search_home_assistant" not in {t["function"]["name"] for t in agent.tools}
 
 
 # --- entry points -----------------------------------------------------------------

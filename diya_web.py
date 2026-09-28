@@ -14,7 +14,7 @@ from pydantic import BaseModel
 import diya
 import diya_config
 import diya_connections_api
-import diya_connectors
+import diya_connector_tools
 import diya_memory_api
 import diya_reminders_api
 
@@ -254,13 +254,13 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     Nothing is loaded here -- the agent and transcriber are lazy, so building an app is free
     and tests can hand in their own (a fake model, a temp database). Defaults come from the
     environment, so `create_app()` with no arguments is the real thing. `connectors` defaults to
-    the real (empty, as of unit C1) registry; tests hand in fakes the same way they hand in a fake
-    model client.
+    the real registry (Home Assistant, Notion, Todoist as of unit C2); tests hand in fakes the same
+    way they hand in a fake model client.
     """
     config = config or diya_config.load_config()
     agent = agent or diya.Agent(config)
     transcriber = transcriber or WhisperTranscriber(config.whisper_model)
-    connectors = diya_connectors.CONNECTORS if connectors is None else connectors
+    connectors = diya_connector_tools.real_connectors(config) if connectors is None else connectors
 
     app = FastAPI()
     # The UI lives in frontend/ (Next.js, on its own port) and calls this JSON API from the

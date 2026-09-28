@@ -14,6 +14,8 @@ from ddgs import DDGS
 from openai import OpenAI
 
 import diya_config
+import diya_connector_tools
+import diya_connectors
 import diya_db
 import diya_intent
 import diya_memory
@@ -368,6 +370,22 @@ class Agent:
             "add_reminder": self.add_reminder,
             "list_reminders": self.list_reminders,
         }
+        # Connector tools (docs/CONNECTORS_DESIGN.md, unit C2) are always registered here -- each
+        # checks its own connection fresh on every call -- but only offered to the model (self.tools)
+        # when actually connected, so a disconnect takes effect on the very next turn.
+        for _name, spec, func in diya_connector_tools.tool_specs(self.config):
+            self._functions[spec["function"]["name"]] = func
+
+    @property
+    def tools(self):
+        """What the model is offered this turn: the fixed tools, plus a connector's tool only while
+        it is actually connected (docs/CONNECTORS_DESIGN.md, D4) -- computed fresh, not cached, so
+        connecting or disconnecting takes effect on the next message, not at the next restart."""
+        result = list(TOOLS)
+        for name, spec, _func in diya_connector_tools.tool_specs(self.config):
+            if diya_connectors.is_connected(self.config, name):
+                result.append(spec)
+        return result
 
     def now(self):
         """The current local time, naive: the agent's clock (real unless a test gave it another)."""
@@ -561,7 +579,7 @@ class Agent:
         the full toolkit and a normal answer."""
         tools_called = []
         fact_share = diya_intent.is_fact_share(_last_user_text(messages))
-        tools = None if fact_share else TOOLS
+        tools = None if fact_share else self.tools
         for _ in range(MAX_TOOL_ROUNDS):
             response = self._complete(messages, fact_share, tools)
             message = response.choices[0].message

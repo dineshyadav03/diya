@@ -97,7 +97,9 @@ def test_every_other_turn_reaches_the_model_exactly_as_before(config, text):
     agent.ask(list(history))
     call = client.chat_calls[0]
     assert call["messages"] == history
-    assert call["tools"] is diya.TOOLS
+    # agent.tools is built fresh each call (docs/CONNECTORS_DESIGN.md, D4); with nothing connected
+    # its content is exactly diya.TOOLS, which is what "all tools offered" means here.
+    assert call["tools"] == diya.TOOLS
 
 
 def test_a_request_can_still_use_a_tool(config):

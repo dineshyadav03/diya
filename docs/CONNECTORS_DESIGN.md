@@ -1,8 +1,7 @@
 # Connectors and permissions -- design spec
 
-> **Status (2026-09-28):** designed; **C1 (the shared plumbing and Connections page) built.** C2
-> (Home Assistant, Notion, Todoist) and C3 (the first OAuth connector) are not. Stage 3 of
-> `ROADMAP.md`'s later stages --
+> **Status (2026-09-28):** designed; **C1 (shared plumbing) and C2 (Home Assistant, Notion, Todoist)
+> built.** C3 (the first OAuth connector) is not. Stage 3 of `ROADMAP.md`'s later stages --
 > the first stage that reaches outside this one machine's own files and the model. Landscape research
 > is `RESEARCH.md` entry 11. Stage 4 (Muse/Instinct-style approval gates, action trails, a
 > prompt-injection boundary) is a separate, later document by the owner's own decision (2026-09-28):
@@ -126,6 +125,32 @@ candidates from RESEARCH.md entry 11): a wrong token shows the connector's own r
 right token connects and the card updates immediately, and disconnecting returns it to "not
 connected" -- all without a page reload.
 
+*As built (C2):* `diya_connector_tools.py` -- one validator and one read-only tool per connector, all
+through `httpx` with a 5-second timeout, `get_weather`'s own pattern. Home Assistant needed a config
+field of its own (`DIYA_HOME_ASSISTANT_URL`): unlike Notion and Todoist, which have one fixed API
+address, a self-hosted instance's address isn't a secret, so it is a plain setting the owner sets once
+(the same way `DIYA_OLLAMA_URL` already works), not something typed into the Connect form alongside
+the token. Each tool reads its connector's *current* token from storage on every call rather than once
+at Agent construction, so a disconnect (or reconnect) takes effect on the very next message, never a
+restart. `Agent.tools` became a property, computed fresh each call, that adds a connector's tool spec
+only while it is actually connected (D4); the three tool functions are always registered in
+`Agent._functions` (each checks its own connection and answers "not connected" if asked to run
+anyway), so nothing needs rebuilding when a connection changes, only the list the model is shown.
+
+Measured against the real model (`qwen2.5:3b`, tokens faked so no real account was needed): asked
+about Todoist, Notion and Home Assistant with all three "connected", it called the right tool every
+time (`list_todoist_tasks`, `search_notion`, `search_home_assistant`) and correctly called none of
+them for an unrelated weather question. Each underlying call was refused for real by the real service
+(a fake token got a genuine 401 from Notion and Todoist's live API; Home Assistant's address pointed
+nowhere) -- every failure was reported back in one plain sentence, never a crash. One quirk, not a
+safety problem: on Todoist's 401 the model told the person "Todoist's API is no longer supported",
+which is its own guess at *why*, not something the tool said -- recorded, not fixed, the same
+disclosure standard as M2's `[User]` tag finding.
+
+15/15 mutations caught (`diya_connector_tools.py`, `diya.py`, scratch `mutate_c2.py`); one real gap on
+the first run (a match-count cap with no test case ever producing more matches than the cap allowed)
+fixed with a new test.
+
 ## 4. The candidates, ranked by cost (detail and sources: RESEARCH.md entry 11)
 
 | Connector | Auth | Ongoing cost | Write access | Fit |
@@ -152,7 +177,8 @@ waiting. Built. | `diya_connectors.py` (new), `diya_connections_api.py` (new), `
 | C2 | **The three no-OAuth connectors.** Home Assistant, Notion, Todoist: each a paste-a-token Connect
 form (C1's static-token path), one read-only tool each (`diya.py`'s `TOOLS`), tested against fakes the
 way `get_weather` is (`tests/fakes.py`-style, never a real account in a test). Buildable and fully
-testable without any OAuth registration. | `diya_connectors.py`, `diya.py` |
+testable without any OAuth registration. Built. | `diya_connector_tools.py` (new), `diya.py`,
+`diya_web.py` |
 | C3 | **An OAuth connector.** Google Calendar first (cheapest of the OAuth options, RESEARCH.md entry
 11): the browser-redirect half of C1's Connect flow, a refresh-token store, one read-only tool. Needs
 an OAuth client id/secret registered once against a real Google Cloud project -- the owner's own

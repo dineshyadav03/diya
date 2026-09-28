@@ -247,11 +247,12 @@ Remaining:
    (2026-09-28); landscape survey in `RESEARCH.md` entry 11 (Google Calendar, Gmail, Microsoft Graph,
    Home Assistant, Notion, Todoist, Spotify, WhatsApp, iMessage -- cost, auth model and fit for a
    single-owner local app). Every connector is a menu item any owner of a Diya install can turn on,
-   not one wired to a specific person's accounts (D5). **Built: C1**, the shared plumbing and the
-   Connections page -- a registry, per-connector token storage, a plain call log, and
-   connect/disconnect routes, all proven with fake connectors since the real registry is deliberately
-   still empty. **Not built: C2** (Home Assistant, Notion, Todoist -- the three connectors that need
-   no OAuth at all) **and C3** (the first real OAuth connector, Google Calendar).
+   not one wired to a specific person's accounts (D5). **Built: C1** (the shared plumbing and
+   Connections page) **and C2** (Home Assistant, Notion, Todoist -- one read-only tool each, real
+   validators, measured against the real model: it called the right connector tool every time and
+   none for an unrelated question). **Not built: C3**, the first real OAuth connector (Google
+   Calendar) -- blocked on the owner registering a real OAuth client under their own Google account,
+   since Diya cannot create one.
 4. Durable workflows. The competitive battleground: every comparable leads with "describe an
    outcome, it follows through". Reference: Muse-style approval gates and action trails. **By the
    owner's decision (2026-09-28): this waits for Stage 3** -- there is nothing to take real,
