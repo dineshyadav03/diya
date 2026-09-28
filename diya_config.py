@@ -96,6 +96,12 @@ class Config:
     # is a plain setting (not a secret -- the long-lived token from the Connections page is the
     # secret) the owner sets once, the same way DIYA_OLLAMA_URL already works.
     home_assistant_url: str = ""  # DIYA_HOME_ASSISTANT_URL, e.g. http://homeassistant.local:8123
+    # Google Calendar (docs/CONNECTORS_DESIGN.md, unit C3): an OAuth client the owner registers
+    # themselves (Google Cloud Console, "Desktop app" type) -- Diya cannot create one. Not a per-
+    # connector credential from the Connections page (that's the refresh token, stored the usual
+    # way); this identifies the Diya application itself to Google, the same for every connection.
+    google_client_id: str = ""  # DIYA_GOOGLE_CLIENT_ID
+    google_client_secret: str = ""  # DIYA_GOOGLE_CLIENT_SECRET
 
 
 def _parse_host_list(setting: str, raw: str) -> tuple:
@@ -133,6 +139,8 @@ _STRING_SETTINGS = {
     "connector_tokens_dir": "DIYA_CONNECTOR_TOKENS_DIR",
     "connectors_log_path": "DIYA_CONNECTORS_LOG_PATH",
     "home_assistant_url": "DIYA_HOME_ASSISTANT_URL",
+    "google_client_id": "DIYA_GOOGLE_CLIENT_ID",
+    "google_client_secret": "DIYA_GOOGLE_CLIENT_SECRET",
 }
 
 

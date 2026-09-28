@@ -7,12 +7,17 @@ model, never an exception it has to make sense of.
 Each tool function takes `config` bound at Agent-construction time (functools.partial, the same way
 get_weather binds its allowed hosts) but reads the CURRENT token from storage on every call, not once
 -- so a disconnect takes effect on the next call without restarting anything.
+
+`real_connectors()`/`tool_specs()` are the registry Agent and diya_web actually use, so they also
+include Google Calendar (unit C3, diya_google_calendar.py) -- the shared plumbing for "every real
+connector" lives here, even though its own OAuth mechanics are a separate module.
 """
 from __future__ import annotations
 
 import httpx
 
 import diya_connectors
+import diya_google_calendar
 from diya_connectors import Connector, ConnectorError
 
 NETWORK_TIMEOUT = 5.0
@@ -177,7 +182,7 @@ def todoist_tasks(config):
 # ---- wiring: the registry and the tool specs -----------------------------------------------------
 
 def real_connectors(config):
-    """The three connectors this unit builds, ready to hand to diya_web.create_app()."""
+    """Every connector Diya actually has, ready to hand to diya_web.create_app()."""
     return (
         Connector(name="home_assistant", label="Home Assistant", description="Search entity states from a local instance.",
                  auth_kind="token", implemented=True, validate=home_assistant_validate(config)),
@@ -185,12 +190,14 @@ def real_connectors(config):
                  auth_kind="token", implemented=True, validate=notion_validate),
         Connector(name="todoist", label="Todoist", description="List your open tasks.",
                  auth_kind="token", implemented=True, validate=todoist_validate),
+        Connector(name="google_calendar", label="Google Calendar", description="Read your upcoming events.",
+                 auth_kind="oauth", implemented=True, oauth_connect=diya_google_calendar.connect),
     )
 
 
 def tool_specs(config):
-    """(connector name, tool spec, bound function) for the three connectors -- Agent filters this by
-    which are actually connected (D4: invisible to the model otherwise) and registers the functions."""
+    """(connector name, tool spec, bound function) for every connector -- Agent filters this by which
+    are actually connected (D4: invisible to the model otherwise) and registers the functions."""
     return (
         ("home_assistant", {
             "type": "function",
@@ -228,4 +235,12 @@ def tool_specs(config):
                 },
             },
         }, todoist_tasks(config)),
+        ("google_calendar", {
+            "type": "function",
+            "function": {
+                "name": "list_calendar_events",
+                "description": "List the user's next upcoming Google Calendar events.",
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
+        }, diya_google_calendar.list_events(config)),
     )

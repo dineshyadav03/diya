@@ -1,7 +1,9 @@
 # Connectors and permissions -- design spec
 
-> **Status (2026-09-28):** designed; **C1 (shared plumbing) and C2 (Home Assistant, Notion, Todoist)
-> built.** C3 (the first OAuth connector) is not. Stage 3 of `ROADMAP.md`'s later stages --
+> **Status (2026-09-28):** designed; **C1, C2 (Home Assistant, Notion, Todoist) and C3 (Google
+> Calendar) all built and mutation-tested.** C3 is code-complete but **not verified against the real
+> Google endpoints** -- it needs an OAuth client id/secret the owner registers themselves (Diya cannot
+> create one). Stage 3 of `ROADMAP.md`'s later stages --
 > the first stage that reaches outside this one machine's own files and the model. Landscape research
 > is `RESEARCH.md` entry 11. Stage 4 (Muse/Instinct-style approval gates, action trails, a
 > prompt-injection boundary) is a separate, later document by the owner's own decision (2026-09-28):
@@ -85,12 +87,22 @@ tokens): this is not multi-tenancy, it is not hardcoding one owner's specific se
 **Recommendation: a new page (`frontend/app/connections`, `/api/connections`) lists every connector
 type D1-D4 support, each as a card: name, one line of what it does, and its current state (not
 connected, or connected since &lt;date&gt;) with a Connect/Disconnect action.** A static-token connector's
-"Connect" is a form (paste the token, Diya checks it works before saving); an OAuth connector's is a
-real browser redirect through that provider's own login, ending back on this page. Disconnecting deletes
+"Connect" is a form (paste the token, Diya checks it works before saving). Disconnecting deletes
 the local token file (D1) and nothing else -- no data the connector ever fetched is retroactively
 undone, matching how retiring a fact never deletes its history. This is the same page-per-feature
 pattern the UI already has (Memory review, Reminders); a connector with no owner-provided credentials
 shows as "not connected" and offers nothing to the model (D4), exactly like today.
+
+**Revised for unit C3.** The original wording above described an OAuth connector's Connect as "a real
+browser redirect through that provider's own login, ending back on this page" -- language borrowed
+from how a *web app*'s OAuth flow works, where the server and the browser are different machines and
+the provider has to hand control back to a page. Diya is not that: the browser and the server are the
+same machine, so there is no separate page to return to. What C3 actually builds instead (RFC 8252,
+"OAuth 2.0 for Native Apps" -- the pattern every major identity provider, including Google, recommends
+for exactly this shape of app): clicking Connect makes one request that opens the owner's own browser
+to the provider's consent screen and blocks -- the button just waits, the way it already does for a
+token-kind Connect, only longer -- while a temporary local server on an OS-assigned loopback port
+catches the redirect back. Nothing here needed the page itself to change shape.
 
 *As built (C1):* `diya_connectors.Connector` (name, label, description, `auth_kind`, `implemented`,
 an optional `validate` callable) is a frozen dataclass that refuses a malformed name or a token-kind
@@ -151,6 +163,33 @@ disclosure standard as M2's `[User]` tag finding.
 the first run (a match-count cap with no test case ever producing more matches than the cap allowed)
 fixed with a new test.
 
+*As built (C3):* `diya_google_calendar.py`. `connect(config)` is the whole RFC 8252 flow in one call:
+start a loopback `http.server` on an OS-assigned port, open the owner's browser to Google's consent
+screen (`access_type=offline`, `prompt=consent` -- without it a *returning* owner is not reliably
+issued a refresh token at all, only an access token), block until the redirect lands, check its
+`state` against the one this call generated (refusing a mismatched or missing one, not just a missing
+code), exchange the code at Google's token endpoint, and store the refresh token through
+`diya_connectors.store_token` -- a new, small addition to `diya_connectors.py` (D1's storage, without
+D6's "validate a pasted token" step, since a successful exchange already proves it). `Connector` gained
+an `oauth_connect` field alongside `validate`, checked the same way at construction time (an
+implemented oauth-kind connector needs one, exactly as a token-kind one needs a validator).
+`diya_connections_api.py`'s single `connect` route now dispatches on `auth_kind` rather than assuming
+a pasted token; sending a token body to an oauth-kind connector is simply unused, not refused --
+harmless, since the real UI never does it, and enforcing that shape strictly bought nothing.
+
+`list_calendar_events` re-exchanges the stored refresh token for a fresh access token on every call
+(access tokens last one hour; nothing here ever caches one) and treats a refresh failure the same as
+"not connected", since there is nothing a mid-conversation tool answer can do about a revoked
+connection beyond saying so.
+
+Tested without a browser or a real Google account anywhere: `_wait_for_redirect`'s loopback server is
+real (a genuine socket on 127.0.0.1), driven by a test-side HTTP client standing in for "the owner
+clicking through consent" the moment `connect()` hands it the URL it built; every Google network call
+(`httpx.post`/`.get`) is faked. 16/16 mutations caught. **Not verified against the real Google
+endpoints**, because that needs a real OAuth client -- see "what needs the owner's yes" below; this is
+the one part of Stage 3 still resting on RFC 8252's documented behavior and Google's own docs rather
+than a live measurement, disclosed rather than quietly assumed solid.
+
 ## 4. The candidates, ranked by cost (detail and sources: RESEARCH.md entry 11)
 
 | Connector | Auth | Ongoing cost | Write access | Fit |
@@ -179,11 +218,13 @@ form (C1's static-token path), one read-only tool each (`diya.py`'s `TOOLS`), te
 way `get_weather` is (`tests/fakes.py`-style, never a real account in a test). Buildable and fully
 testable without any OAuth registration. Built. | `diya_connector_tools.py` (new), `diya.py`,
 `diya_web.py` |
-| C3 | **An OAuth connector.** Google Calendar first (cheapest of the OAuth options, RESEARCH.md entry
-11): the browser-redirect half of C1's Connect flow, a refresh-token store, one read-only tool. Needs
-an OAuth client id/secret registered once against a real Google Cloud project -- the owner's own
-account, since Diya cannot create one -- committed nowhere (D1), read from config like everything else.
-Gmail and Microsoft Graph follow the same shape once this one is proven. | `diya_connectors.py`, `diya.py` |
+| C3 | **An OAuth connector.** Google Calendar (RFC 8252's loopback-redirect flow, D6 revised), a
+refresh-token store, one read-only tool. Needs an OAuth client id/secret registered once against a
+real Google Cloud project -- the owner's own account, since Diya cannot create one -- committed
+nowhere (D1), read from config like everything else. Code built and mutation-tested; **not verified
+against the real Google endpoints**, since that needs the owner's own client id/secret. Gmail and
+Microsoft Graph follow the same shape once this one is proven for real.
+| `diya_google_calendar.py` (new), `diya_connectors.py`, `diya_connections_api.py`, `diya_connector_tools.py` |
 | C4+ | Further connectors (Spotify; WhatsApp only with the owner's explicit yes, D2/RESEARCH.md entry
 11's ban-risk caveat) as wanted, each a small addition to C1's registry, not a new design. |
 
@@ -200,5 +241,9 @@ first.
   starting point).
 - For WhatsApp specifically: whether an unofficial, session-based library is acceptable at all, given
   the real account-ban risk against Meta's terms (RESEARCH.md entry 11) -- this is not a default yes.
-- C3's OAuth client registration needs a real Google Cloud project under an account the owner controls
-  (Diya cannot create one) -- a concrete, disclosed dependency once C3 is actually reached, not before.
+- C3's OAuth client registration needs a real Google Cloud project under an account the owner
+  controls (Diya cannot create one): a Google Cloud project, the Calendar API enabled, an OAuth
+  consent screen (External, the owner added as a test user -- keeps it in free "Testing" mode), and
+  an OAuth client of type "Desktop app" (the only type Google gives RFC 8252's arbitrary-loopback-port
+  exception to). `DIYA_GOOGLE_CLIENT_ID` and `DIYA_GOOGLE_CLIENT_SECRET` are the two values that come
+  out of that -- until they're set, Connect just says so.

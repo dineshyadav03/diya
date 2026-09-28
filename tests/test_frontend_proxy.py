@@ -419,7 +419,8 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/history/${threadId}", "/api/chat", "/api/threads", "/api/transcribe",
         "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
         "/api/reminders", "/api/reminders", "/api/reminders", "/api/reminders/${reminder.id}/done",  # the chat's due count, the page's list and add, and done
-        "/api/connections", "/api/connections/${connector.name}/connect", "/api/connections/${connector.name}/disconnect",
+        "/api/connections", "/api/connections/${connector.name}/connect", "/api/connections/${connector.name}/connect",
+        "/api/connections/${connector.name}/disconnect",  # the token-kind form and the oauth-kind button both post here
     ])
     assert not [p for p in browser_files() if re.search(r"fetch\(\s*[^`'\"\s]", p.read_text(encoding="utf-8"))]  # no computed URLs
 

@@ -32,9 +32,10 @@ def token_connector(name="demo", implemented=True, validate=lambda token: None):
                      auth_kind="token", implemented=implemented, validate=validate)
 
 
-def oauth_connector(name="demo_oauth", implemented=False):
+def oauth_connector(name="demo_oauth", implemented=False, oauth_connect=lambda config: None):
     return Connector(name=name, label="Demo OAuth", description="A fake oauth connector.",
-                     auth_kind="oauth", implemented=implemented)
+                     auth_kind="oauth", implemented=implemented,
+                     oauth_connect=oauth_connect if implemented else None)
 
 
 # --- the type itself ---------------------------------------------------------------------------
@@ -64,11 +65,36 @@ def test_an_unimplemented_token_connector_needs_no_validator():
     token_connector(implemented=False, validate=None)  # does not raise
 
 
+def test_an_implemented_oauth_connector_needs_an_oauth_connect_function():
+    with pytest.raises(ValueError):
+        Connector(name="demo", label="x", description="x", auth_kind="oauth", implemented=True)
+
+
+def test_an_unimplemented_oauth_connector_needs_no_oauth_connect_function():
+    Connector(name="demo", label="x", description="x", auth_kind="oauth", implemented=False)  # does not raise
+
+
 def test_by_name_finds_and_misses():
     demo = token_connector()
     assert diya_connectors.by_name((demo,), "demo") is demo
     assert diya_connectors.by_name((demo,), "nope") is None
     assert diya_connectors.by_name((), "demo") is None
+
+
+# --- store_token: the part connect() shares with an oauth flow's own exchange (unit C3) ------------
+
+def test_store_token_writes_and_logs_without_any_validation(config):
+    """store_token is what an oauth-kind connector's own oauth_connect calls once its exchange with
+    the real provider has already succeeded -- there is no separate token to validate here."""
+    diya_connectors.store_token(config, "demo_oauth", "a-refresh-token")
+    assert diya_connectors.read_token(config, "demo_oauth") == "a-refresh-token"
+    assert "demo_oauth  connected  ok" in open(config.connectors_log_path, encoding="utf-8").read()
+
+
+def test_store_token_overwrites_a_previous_one(config):
+    diya_connectors.store_token(config, "demo_oauth", "first")
+    diya_connectors.store_token(config, "demo_oauth", "second")
+    assert diya_connectors.read_token(config, "demo_oauth") == "second"
 
 
 # --- connecting ----------------------------------------------------------------------------------

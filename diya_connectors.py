@@ -27,8 +27,9 @@ class ConnectorError(Exception):
 class Connector:
     """One connector TYPE (docs/CONNECTORS_DESIGN.md, D6): what the Connections page offers, not a
     live connection. `auth_kind` is "token" (a form: paste a token, checked by `validate` before
-    saving) or "oauth" (a browser redirect, built in a later unit). `implemented` is False for every
-    connector C1 lists: the type is real and documented, but there is nothing yet to connect to."""
+    saving) or "oauth" (`oauth_connect(config)` runs the whole browser flow and stores the result
+    itself -- see docs/CONNECTORS_DESIGN.md, D6 revised for unit C3). `implemented` is False for a
+    connector type that is documented but has nothing real behind it yet."""
 
     name: str
     label: str
@@ -36,6 +37,7 @@ class Connector:
     auth_kind: str
     implemented: bool = False
     validate: object = None  # token-kind only: callable(token) -> None, raises ConnectorError
+    oauth_connect: object = None  # oauth-kind only: callable(config) -> None, raises ConnectorError
 
     def __post_init__(self):
         if not _NAME.fullmatch(self.name):
@@ -44,6 +46,8 @@ class Connector:
             raise ValueError(f"auth_kind must be one of {AUTH_KINDS}, got {self.auth_kind!r}")
         if self.implemented and self.auth_kind == "token" and self.validate is None:
             raise ValueError(f"{self.name}: an implemented token connector needs a validate function")
+        if self.implemented and self.auth_kind == "oauth" and self.oauth_connect is None:
+            raise ValueError(f"{self.name}: an implemented oauth connector needs an oauth_connect function")
 
 
 CONNECTORS: tuple = ()  # a later unit adds the real ones; empty is C1's own correct state
@@ -75,10 +79,25 @@ def read_token(config, name):
         return None
 
 
+def store_token(config, name, token):
+    """Write `name`'s credential to its own file, atomically -- the part of connecting that is the
+    same whether the credential was pasted (a token-kind connector) or came out of an OAuth exchange
+    (an oauth-kind one, docs/CONNECTORS_DESIGN.md, D6): validation differs by connector, storage does
+    not. Logs the same "connected" line either way."""
+    os.makedirs(config.connector_tokens_dir, exist_ok=True)
+    path = _token_path(config, name)
+    temporary = path + ".tmp"
+    with open(temporary, "w", encoding="utf-8", newline="\n") as f:
+        f.write(token + "\n")
+    os.replace(temporary, path)  # never leaves a half-written file where a real token was
+    log_call(config, name, "connected", True)
+
+
 def connect(config, connector, token):
-    """Validate `token` (docs/CONNECTORS_DESIGN.md, D6: checked before saving) and store it. Raises
-    ConnectorError, and writes nothing, for a connector that is not implemented yet, an empty token,
-    or one `connector.validate` refuses."""
+    """The token-kind path (docs/CONNECTORS_DESIGN.md, D6): validate a pasted `token` and store it.
+    Raises ConnectorError, and writes nothing, for a connector that is not implemented yet, an empty
+    token, or one `connector.validate` refuses. An oauth-kind connector's own `oauth_connect(config)`
+    calls `store_token` directly instead -- there is no pasted token to validate here."""
     if not connector.implemented:
         raise ConnectorError(f"{connector.label} is not available yet")
     token = token.strip()
@@ -86,13 +105,7 @@ def connect(config, connector, token):
         raise ConnectorError("a token cannot be empty")
     if connector.validate is not None:
         connector.validate(token)  # raises ConnectorError for one that doesn't work; nothing written yet
-    os.makedirs(config.connector_tokens_dir, exist_ok=True)
-    path = _token_path(config, connector.name)
-    temporary = path + ".tmp"
-    with open(temporary, "w", encoding="utf-8", newline="\n") as f:
-        f.write(token + "\n")
-    os.replace(temporary, path)  # never leaves a half-written file where a real token was
-    log_call(config, connector.name, "connected", True)
+    store_token(config, connector.name, token)
 
 
 def disconnect(config, name):

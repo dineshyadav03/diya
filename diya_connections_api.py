@@ -1,13 +1,15 @@
 """Connectors over HTTP (docs/CONNECTORS_DESIGN.md, D6): the routes behind the UI's Connections page.
 
     GET  /api/connections                     every known connector type and its state
-    POST /api/connections/{name}/connect      {"token": ...}  a token-kind connector's Connect form
+    POST /api/connections/{name}/connect      a token-kind connector: {"token": ...}. An oauth-kind
+                                               one (unit C3): no body -- this call runs the whole
+                                               browser flow itself and blocks until it finishes.
     POST /api/connections/{name}/disconnect   remove a connector's stored credential (idempotent)
 
 GET and POST only, like every other route; every route is behind the access token like the rest of
 the API. A refusal is an HTTP error with the reason in `detail`: 404 for a connector name that does
-not exist, 409 for one that is not ready to connect this way yet (unimplemented, or oauth-kind --
-`connect` is the pasted-token form only), 422 for a token its own connector refuses.
+not exist, 409 for one that is not implemented yet, 422 for a token (or an OAuth step) its own
+connector refuses.
 
 Nothing here ever reads back or echoes a stored token: `status()` reports only whether one exists.
 """
@@ -40,14 +42,17 @@ def register(app, config, agent, connectors=diya_connectors.CONNECTORS):
         return {"connectors": diya_connectors.status(config, connectors)}
 
     @app.post("/api/connections/{name}/connect")
-    def connect(name: str, body: ConnectBody):
+    def connect(name: str, body: ConnectBody | None = None):
         connector = find(name)
-        if connector.auth_kind != "token":
-            raise HTTPException(status_code=409, detail=f"{connector.label} connects through your browser, not a pasted token")
         if not connector.implemented:
             raise HTTPException(status_code=409, detail=f"{connector.label} is not available yet")
         try:
-            diya_connectors.connect(config, connector, body.token)
+            if connector.auth_kind == "token":
+                if body is None:
+                    raise HTTPException(status_code=422, detail="connecting needs a token")
+                diya_connectors.connect(config, connector, body.token)
+            else:
+                connector.oauth_connect(config)
         except ConnectorError as exc:
             raise HTTPException(status_code=422, detail=printable(str(exc)))
         return {"connectors": diya_connectors.status(config, connectors)}

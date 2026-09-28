@@ -94,6 +94,16 @@ export default function ConnectionsPage() {
     ).then(() => setTokenInputs((current) => ({ ...current, [connector.name]: '' })))
   }
 
+  function connectOAuth(connector) {
+    // No body: this opens the owner's own browser server-side and blocks until they finish there
+    // (docs/CONNECTORS_DESIGN.md, D6) -- the button just waits longer than a token-kind Connect does.
+    settle(
+      () => fetch(`/api/connections/${connector.name}/connect`, { method: 'POST' }),
+      connector.name,
+      () => `Connected to ${connector.label}.`,
+    )
+  }
+
   function disconnect(connector) {
     settle(
       () => fetch(`/api/connections/${connector.name}/disconnect`, { method: 'POST' }),
@@ -206,7 +216,16 @@ export default function ConnectionsPage() {
                             </button>
                           </form>
                         ) : (
-                          <p className="memory-dim">Connects through your browser (not built yet).</p>
+                          <div className="memory-actions">
+                            <button
+                              type="button"
+                              className="memory-btn memory-btn--primary"
+                              onClick={() => connectOAuth(connector)}
+                              disabled={isBusy}
+                            >
+                              {isBusy ? 'Waiting for your browser…' : 'Connect'}
+                            </button>
+                          </div>
                         )}
                       </li>
                     )

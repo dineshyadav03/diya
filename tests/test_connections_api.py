@@ -4,10 +4,11 @@ through register()'s own `connectors=` parameter -- proving the routes work gene
 the module itself is proven (tests/test_connectors.py), before any real connector exists.
 
 What this proves: the routes carry diya_connectors's rules and no others; a connector name that does
-not exist is a 404 before anything runs; an unimplemented or oauth-kind connector refuses the pasted-
-token form with a 409, not a crash or a silent success; a bad token is a 422 with the connector's own
-reason and nothing is stored; disconnecting is idempotent; nothing here ever returns a stored token;
-only GET and POST exist; and nothing is reachable without the access token.
+not exist is a 404 before anything runs; an unimplemented connector refuses with a 409, not a crash or
+a silent success; a token-kind connector's bad token, or an oauth-kind connector's own refusal, is a
+422 with the connector's own reason and nothing is stored; disconnecting is idempotent; nothing here
+ever returns a stored token; only GET and POST exist; and nothing is reachable without the access
+token.
 """
 import dataclasses
 
@@ -29,9 +30,9 @@ def token_connector(name="demo", implemented=True, validate=lambda token: None):
                      auth_kind="token", implemented=implemented, validate=validate)
 
 
-def oauth_connector(name="demo_oauth", implemented=False):
+def oauth_connector(name="demo_oauth", implemented=False, oauth_connect=None):
     return Connector(name=name, label="Demo OAuth", description="A fake oauth connector.",
-                     auth_kind="oauth", implemented=implemented)
+                     auth_kind="oauth", implemented=implemented, oauth_connect=oauth_connect)
 
 
 @pytest.fixture
@@ -113,11 +114,25 @@ def test_an_unimplemented_connector_is_a_409_not_a_crash(config):
     assert response.status_code == 409 and "not available yet" in response.json()["detail"]
 
 
-def test_an_oauth_connector_refuses_the_pasted_token_form(config):
-    connector = oauth_connector(implemented=True)
+def test_an_oauth_connector_runs_its_own_flow_not_the_pasted_token_path(config):
+    """docs/CONNECTORS_DESIGN.md, D6 revised for unit C3: an oauth-kind connector's own
+    oauth_connect(config) runs the whole flow and stores the result itself -- connect() here is a
+    thin dispatch, not a form handler, so a token in the body (if one is even sent) is unused."""
+    calls = []
+    connector = oauth_connector(implemented=True, oauth_connect=calls.append)
     client = client_with(config, (connector,))
-    response = client.post("/api/connections/demo_oauth/connect", json={"token": "x"})
-    assert response.status_code == 409 and "browser" in response.json()["detail"]
+    response = client.post("/api/connections/demo_oauth/connect")
+    assert response.status_code == 200 and calls == [config]
+
+
+def test_an_oauth_connectors_own_refusal_is_a_422(config):
+    def refuse(cfg):
+        raise ConnectorError("the (fake) browser flow was cancelled")
+
+    connector = oauth_connector(implemented=True, oauth_connect=refuse)
+    client = client_with(config, (connector,))
+    response = client.post("/api/connections/demo_oauth/connect")
+    assert response.status_code == 422 and "cancelled" in response.json()["detail"]
 
 
 def test_an_unknown_connector_is_a_404(config):
