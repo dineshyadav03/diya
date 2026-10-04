@@ -163,12 +163,16 @@ disclosure standard as M2's `[User]` tag finding.
 the first run (a match-count cap with no test case ever producing more matches than the cap allowed)
 fixed with a new test.
 
-**Found later (2026-10-04, `docs/ACTIONS_DESIGN.md` D11):** the Todoist half of C2 calls the legacy
-REST v2 (`/rest/v2/...`). Todoist's current API is v1 (`/api/v1/...`), which its docs describe as
-unifying Sync v9 and REST v2, with v2's documentation kept "for reference". It worked when measured
-(a real 401 came back from the real service), so nothing is broken today, but it is the older line;
-it moves to v1 as the first step of the first write unit (A4), where the paginated list shape is a
-real change rather than a URL swap.
+**Found later, and fixed (2026-10-04, `docs/ACTIONS_DESIGN.md` D11):** the Todoist half of C2 was built on
+Todoist's REST v2 (`/rest/v2/...`). When measured on 2026-09-28 the real service still answered it (a real 401
+for a fake token); by 2026-10-04 it answered **410 Gone** ("This endpoint is deprecated... rely on the new API
+endpoints, available under /api/v1/ prefixes"), so the connector could not connect to a real account at all --
+its validator saw a 410 for every token, which is not a 401 and was reported as "Todoist answered with HTTP
+410". Nothing caught it because every test fakes the network and the 2026-09-28 measurement was a real call
+that had not yet started failing: **a connector measured once is not a connector that keeps working**. It now
+uses API v1 (`/api/v1/projects` to validate, `/api/v1/tasks` and `/api/v1/tasks/filter?query=` to list, both
+paginated as `{"results": [...], "next_cursor"}`), checked against the real service the same way: a fake token
+is refused as a rejected token, and every path it uses answers 401 where a made-up one answers 404.
 
 *As built (C3):* `diya_google_calendar.py`. `connect(config)` is the whole RFC 8252 flow in one call:
 start a loopback `http.server` on an OS-assigned port, open the owner's browser to Google's consent

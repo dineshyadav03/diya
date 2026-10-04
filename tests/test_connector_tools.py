@@ -219,14 +219,31 @@ def test_todoist_validate_accepts_a_working_token(monkeypatch):
     calls = fake_call(monkeypatch, fake_response(200))
     todoist_validate("a-token")
     (url, kwargs) = calls[0]
-    assert url == "https://api.todoist.com/rest/v2/projects"
+    assert url == "https://api.todoist.com/api/v1/projects"  # the current API: the old /rest/v2 answers 410 Gone
+    assert kwargs["params"] == {"limit": 1}
     assert kwargs["headers"]["Authorization"] == "Bearer a-token"
 
 
-def test_todoist_validate_refuses_a_401(monkeypatch):
-    fake_call(monkeypatch, fake_response(401))
-    with pytest.raises(ConnectorError, match="rejected"):
+@pytest.mark.parametrize("status", [401, 403])
+def test_todoist_validate_refuses_a_token_it_rejects(monkeypatch, status):
+    fake_call(monkeypatch, fake_response(status))
+    with pytest.raises(ConnectorError, match="Todoist rejected that token"):
         todoist_validate("bad-token")
+
+
+@pytest.mark.parametrize("status", [400, 404, 410, 429, 500])
+def test_todoist_validate_says_what_status_it_got_otherwise(monkeypatch, status):
+    fake_call(monkeypatch, fake_response(status))
+    with pytest.raises(ConnectorError, match=f"Todoist answered with HTTP {status}"):
+        todoist_validate("a-token")
+
+
+def test_todoist_validate_reports_a_network_failure_without_crashing(monkeypatch):
+    import httpx
+
+    fake_call(monkeypatch, raises=httpx.ConnectError("down"))
+    with pytest.raises(ConnectorError, match="couldn't reach Todoist: down"):
+        todoist_validate("a-token")
 
 
 def test_todoist_tasks_says_so_when_not_connected(config):
@@ -235,31 +252,63 @@ def test_todoist_tasks_says_so_when_not_connected(config):
 
 def test_todoist_tasks_formats_content_and_due_dates(config, monkeypatch):
     diya_connectors.connect(config, dataclasses.replace(real_connectors(config)[2], validate=lambda t: None), "a-token")
-    fake_call(monkeypatch, fake_response(200, [
+    fake_response_body = {"results": [
         {"content": "Buy milk", "due": {"string": "today"}},
         {"content": "Call the dentist", "due": None},
-    ]))
-    assert todoist_tasks(config)() == "Buy milk (due today)\nCall the dentist"
+        {"content": "Water plants", "due": {"string": ""}},
+    ], "next_cursor": None}
+    fake_call(monkeypatch, fake_response(200, fake_response_body))
+    assert todoist_tasks(config)() == "Buy milk (due today)\nCall the dentist\nWater plants"
 
 
 def test_todoist_tasks_says_so_when_there_are_none(config, monkeypatch):
     diya_connectors.connect(config, dataclasses.replace(real_connectors(config)[2], validate=lambda t: None), "a-token")
-    fake_call(monkeypatch, fake_response(200, []))
+    fake_call(monkeypatch, fake_response(200, {"results": [], "next_cursor": None}))
     assert todoist_tasks(config)() == "No matching tasks."
 
 
-def test_todoist_tasks_passes_a_filter_through_when_given(config, monkeypatch):
+def test_todoist_tasks_uses_the_filter_endpoint_when_a_filter_is_given(config, monkeypatch):
     diya_connectors.connect(config, dataclasses.replace(real_connectors(config)[2], validate=lambda t: None), "a-token")
-    calls = fake_call(monkeypatch, fake_response(200, []))
+    calls = fake_call(monkeypatch, fake_response(200, {"results": []}))
     todoist_tasks(config)("today")
-    assert calls[0][1]["params"] == {"filter": "today"}
+    assert calls[0][0] == "https://api.todoist.com/api/v1/tasks/filter"
+    assert calls[0][1]["params"] == {"query": "today", "limit": 10}
+    assert calls[0][1]["headers"]["Authorization"] == "Bearer a-token"
 
 
-def test_todoist_tasks_sends_no_filter_param_when_none_is_given(config, monkeypatch):
+@pytest.mark.parametrize("empty", [None, ""])
+def test_todoist_tasks_lists_everything_open_when_no_filter_is_given(config, monkeypatch, empty):
     diya_connectors.connect(config, dataclasses.replace(real_connectors(config)[2], validate=lambda t: None), "a-token")
-    calls = fake_call(monkeypatch, fake_response(200, []))
-    todoist_tasks(config)()
-    assert calls[0][1]["params"] == {}
+    calls = fake_call(monkeypatch, fake_response(200, {"results": []}))
+    todoist_tasks(config)(empty)
+    assert calls[0][0] == "https://api.todoist.com/api/v1/tasks"
+    assert calls[0][1]["params"] == {"limit": 10}
+
+
+def test_todoist_tasks_shows_at_most_ten_even_if_the_server_sends_more(config, monkeypatch):
+    diya_connectors.connect(config, dataclasses.replace(real_connectors(config)[2], validate=lambda t: None), "a-token")
+    fake_call(monkeypatch, fake_response(200, {"results": [{"content": f"task {n}"} for n in range(12)]}))
+    lines = todoist_tasks(config)().splitlines()
+    assert lines == [f"task {n}" for n in range(10)]
+
+
+@pytest.mark.parametrize("status", [401, 403, 410, 500])
+def test_todoist_tasks_says_what_status_it_got_when_it_was_not_a_200(config, monkeypatch, status):
+    diya_connectors.connect(config, dataclasses.replace(real_connectors(config)[2], validate=lambda t: None), "a-token")
+    fake_call(monkeypatch, fake_response(status))
+    assert todoist_tasks(config)() == f"Todoist answered with HTTP {status}."
+
+
+def test_todoist_tasks_copes_with_an_answer_it_cannot_read(config, monkeypatch):
+    diya_connectors.connect(config, dataclasses.replace(real_connectors(config)[2], validate=lambda t: None), "a-token")
+
+    def not_json():
+        raise ValueError("no JSON here")
+
+    for body in (types.SimpleNamespace(status_code=200, json=not_json), fake_response(200, ["a", "list"]),
+                 fake_response(200, {"results": "oops"}), fake_response(200, {"other": []})):
+        fake_call(monkeypatch, body)
+        assert todoist_tasks(config)() == "Todoist sent back something this couldn't read."
 
 
 def test_todoist_tasks_reports_a_network_failure_without_crashing(config, monkeypatch):

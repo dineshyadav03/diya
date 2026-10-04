@@ -140,12 +140,22 @@ def notion_search(config):
 
 # ---- Todoist --------------------------------------------------------------------------------------
 
+# Todoist's current API (v1). The older REST v2 this connector was first built on now answers "410 Gone", so a token
+# could not even be connected (docs/ACTIONS_DESIGN.md, D11). v1 lists are paginated: {"results": [...], "next_cursor"}.
+TODOIST_API = "https://api.todoist.com/api/v1"
+TODOIST_LIST_LIMIT = 10  # how many tasks one answer shows
+
+
+def _todoist_headers(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
 def todoist_validate(token):
     try:
-        response = httpx.get("https://api.todoist.com/rest/v2/projects", headers={"Authorization": f"Bearer {token}"}, timeout=NETWORK_TIMEOUT)
+        response = httpx.get(f"{TODOIST_API}/projects", headers=_todoist_headers(token), params={"limit": 1}, timeout=NETWORK_TIMEOUT)
     except httpx.HTTPError as exc:
         raise ConnectorError(f"couldn't reach Todoist: {_friendly(exc)}")
-    if response.status_code == 401:
+    if response.status_code in (401, 403):
         raise ConnectorError("Todoist rejected that token")
     if response.status_code != 200:
         raise ConnectorError(f"Todoist answered with HTTP {response.status_code}")
@@ -156,21 +166,27 @@ def todoist_tasks(config):
         token = diya_connectors.read_token(config, "todoist")
         if token is None:
             return "Todoist is not connected."
-        params = {"filter": filter} if filter else {}
+        if filter:
+            url, params = f"{TODOIST_API}/tasks/filter", {"query": filter, "limit": TODOIST_LIST_LIMIT}
+        else:
+            url, params = f"{TODOIST_API}/tasks", {"limit": TODOIST_LIST_LIMIT}
         try:
-            response = httpx.get(
-                "https://api.todoist.com/rest/v2/tasks", headers={"Authorization": f"Bearer {token}"},
-                params=params, timeout=NETWORK_TIMEOUT,
-            )
+            response = httpx.get(url, headers=_todoist_headers(token), params=params, timeout=NETWORK_TIMEOUT)
         except httpx.HTTPError as exc:
             return f"Couldn't reach Todoist: {_friendly(exc)}"
         if response.status_code != 200:
             return f"Todoist answered with HTTP {response.status_code}."
-        tasks = response.json()
+        try:
+            body = response.json()
+        except ValueError:
+            body = None
+        tasks = body.get("results") if isinstance(body, dict) else None
+        if not isinstance(tasks, list):
+            return "Todoist sent back something this couldn't read."
         if not tasks:
             return "No matching tasks."
         lines = []
-        for task in tasks[:10]:
+        for task in tasks[:TODOIST_LIST_LIMIT]:
             due = task.get("due")
             when = f" (due {due['string']})" if due and due.get("string") else ""
             lines.append(f"{task['content']}{when}")
