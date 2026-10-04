@@ -116,6 +116,53 @@ MIGRATIONS = (
         "ALTER TABLE facts ADD COLUMN person_id INTEGER REFERENCES people(id)",
         "CREATE INDEX IF NOT EXISTS facts_by_person ON facts (person_id)",
     )),
+    # Migration 5 (docs/ACTIONS_DESIGN.md, D3): the approval gate and its trail. `actions` is one row per thing
+    # the model proposed to do outside this database; `action_events` is the append-only record of everything
+    # that happened to it and who did it (the model proposed, the owner decided, the system ran it) -- the same
+    # row-plus-events shape as `facts`/`fact_events`. `args` is canonical JSON and `args_hash` its digest, so an
+    # approval can be bound to exactly what was shown. Times are UTC text like 2026-10-04T10:15:00Z, so comparing
+    # them as text compares them in time. Nothing reads these tables until diya_actions.py does.
+    (5, (
+        """
+        CREATE TABLE IF NOT EXISTS actions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            args TEXT NOT NULL,
+            args_hash TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN
+                ('pending', 'approved', 'executing', 'succeeded', 'failed', 'rejected', 'expired', 'unknown')),
+            thread_id INTEGER,
+            message_id INTEGER,
+            tainted INTEGER NOT NULL DEFAULT 0 CHECK (tainted IN (0, 1)),
+            taint_sources TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            decided_at TEXT,
+            executed_at TEXT,
+            result TEXT
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS actions_by_status ON actions (status)",
+        "CREATE INDEX IF NOT EXISTS actions_by_message ON actions (message_id)",
+        # the same thing cannot be waiting twice, whatever the code above it does
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS actions_one_pending_per_hash
+            ON actions (kind, args_hash) WHERE status = 'pending'
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS action_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action_id INTEGER NOT NULL,
+            event TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            at TEXT NOT NULL,
+            detail TEXT,
+            FOREIGN KEY (action_id) REFERENCES actions(id)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS action_events_by_action ON action_events (action_id)",
+    )),
 )
 
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored

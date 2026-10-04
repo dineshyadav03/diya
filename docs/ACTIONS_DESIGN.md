@@ -1,6 +1,8 @@
 # Actions and approvals -- design spec
 
-> **Status (2026-10-04):** designed, nothing built. Stage 4 of `ROADMAP.md`'s later stages ("durable
+> **Status (2026-10-04):** designed; **A1 (the trail and the state machine) built and
+> mutation-tested, A2-A4 not started.** Nothing here can write anywhere yet: the real registry of
+> write actions is empty. Stage 4 of `ROADMAP.md`'s later stages ("durable
 > workflows"), first slice only: the approval gate and the action trail. Stage 3 (connectors) is
 > built, which was the owner's own precondition for starting this (2026-09-28): there is now a real
 > connector to design the gate against. Everything a connector can do today is a *read*
@@ -211,3 +213,50 @@ so they can be built and reviewed without anyone deciding whether Diya may write
 - **The caps and the expiry** (10 pending, 3 per turn, 24 hours) are recommendations, not decisions
   anyone should have to make; change them freely.
 - **Standing grants** are not asked for here (D7). If wanted, say so, and it becomes its own design.
+
+## 6. As built
+
+*Unit A1 (`diya_actions.py`, migration 5 in `diya_db.py`, `tests/test_actions.py`).* The trail and the
+state machine, with no network and no model in it; every kind in the tests is a fake. `Actions(store,
+config, kinds, clock)` is the whole surface: `propose` (the only thing a model-callable tool may do),
+`approve(id, shown_hash, via)` and `reject(id, via)` (the owner), `run(id)` (the only path to
+`ActionKind.execute`), `resolve(id, happened, via, note)` (the owner, for an `unknown` action),
+`expire`, `reconcile`, reads, and `verify_integrity`. The real registry, `diya_actions.KINDS`, is
+empty, and a test pins that it stays so until a unit adds the first real kind.
+
+Where it went beyond or past what the sections above say, disclosed rather than quietly absorbed:
+
+- **Who may record what is enforced, not just recorded.** Each event has exactly one legal actor
+  (`EVENT_ACTOR`): only the model proposes; only the owner approves, rejects or resolves; the rest is the
+  system. `approve` takes no actor argument at all, so there is no call that approves "as the model", and
+  `verify_integrity` flags an event written by the wrong one.
+- **`approve` and `run` are two methods, not one.** `approve` only records the owner's decision; `run`
+  performs it. The approve route will call both in turn (A3). A crash between them leaves `approved`,
+  which is safe to leave (nothing was attempted) and which expires with the proposal.
+- **Expiry covers `approved` as well as `pending`** (D6 said pending): an approval does not outlive its
+  proposal, so an approval that was never run cannot fire a day later. One `now` is taken per call and
+  shared with the expiry, so there is no second, racing check.
+- **`run` re-checks more than D10 asked.** Beyond re-validating and re-checking the connector, it
+  recomputes the hash from the stored arguments, and re-renders the description and compares it with the
+  one the owner was shown -- so changing the stored arguments *and* their hash directly in the database is
+  still caught, because the description no longer matches. A kind whose wording changes in a later
+  release will therefore refuse to run an action approved before the upgrade (a 24-hour window): it fails
+  closed, with "Not run: ..." as the result, not open.
+- **Arguments are a flat set of named plain values** (text, numbers, true/false, empty), text held to
+  `diya_memory.check_text`'s rules (one trimmed line, no control or invisible characters), whole at most
+  4,000 characters. D3 said "canonical JSON"; this is what makes it canonical.
+- **`resolve` and `via`** are in the code because D4 and D8 implied them: the owner's way out of
+  `unknown`, and a record of whether a decision came from the page or the command line.
+- **Cut-off detection is by age, not by "next start".** `reconcile` moves only an `executing` action older
+  than two minutes (the network timeout is five seconds), so a run still in flight in another process is
+  left alone.
+
+Measured, not assumed: 156 tests, then 170 mutations of `diya_actions.py` and migration 5 -- each a
+deliberate break that a test must catch -- all caught in the end. The first pass left one alive (a
+taint-sources test used `"web_search"`, whose underscore made it fail for the wrong reason, so a string
+passed as a list was never really tested) and 21 patterns that matched nothing because the new files had
+been written with CRLF line endings; the survivor got a new test case, the files were converted to the
+repo's LF, and the 22 were re-run. Not mutated because behaviour cannot differ: the three indexes (speed
+only), the kind filter in the duplicate query (the hash already includes the kind), the `message_id is
+not None` guard in the per-message count (`= NULL` matches nothing anyway), and passing one `now` into
+`expire` rather than letting it read the clock again (the same instant in every test).
