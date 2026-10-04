@@ -1,8 +1,8 @@
 # Actions and approvals -- design spec
 
-> **Status (2026-10-04):** designed; **A1 (the trail and the state machine) and A2 (the model's
-> side) built and mutation-tested, A3-A4 not started.** Nothing here can write anywhere yet: the real
-> registry of write actions is empty. Stage 4 of `ROADMAP.md`'s later stages ("durable
+> **Status (2026-10-04):** designed; **A1 (the trail and the state machine), A2 (the model's side)
+> and A3 (the API, the Actions page and the command line) built and mutation-tested, A4 not started.**
+> Nothing here can write anywhere yet: the real registry of write actions is empty. Stage 4 of `ROADMAP.md`'s later stages ("durable
 > workflows"), first slice only: the approval gate and the action trail. Stage 3 (connectors) is
 > built, which was the owner's own precondition for starting this (2026-09-28): there is now a real
 > connector to design the gate against. Everything a connector can do today is a *read*
@@ -148,8 +148,8 @@ and, even then, should be per kind and revocable on the same page, never a globa
 /api/actions/{id}/reject`. A new `frontend/app/actions` page: **Pending** cards (the rendered summary,
 the taint banner and its sources, the chat it came from, time left, Approve and Reject), then
 **History** (status, who and when, the service's own reply, the events). The pending count joins the
-reminders count in the chat header. A `python diya_actions.py list / show / approve / reject`
-command mirrors `diya_review.py`: same trust as the UI (the owner running a command on their own
+reminders count in the chat header. A `python diya_actions_cli.py list / show / approve / reject`
+command (its own module, as `diya_review.py` is beside `diya_memory.py`) mirrors `diya_review.py`: same trust as the UI (the owner running a command on their own
 machine), and it is what the tests drive first. Every new route needs adding to the two tripwire
 lists (`tests/test_frontend_proxy.py`, `tests/test_token.py`) -- a known cost from M3 and C3.
 
@@ -195,7 +195,7 @@ endpoint is paginated, which v2's was not, so that is a real change, not a URL s
 |---|---|---|
 | A1 | **The trail and the state machine.** Migration 5 (`actions`, `action_events`); `diya_actions.py`: the kind registry (empty, like `CONNECTORS` was at C1), `propose` / `approve` / `reject` / `expire` / `reconcile`, `IllegalTransition`, the hash, the caps and the duplicate check. No network and no model; tested with fake kinds, mutation-tested. | `diya_db.py`, `diya_actions.py` (new) |
 | A2 | **The model's side and the taint record.** A kind's tool spec only proposes (D1); `Agent._ask` records which tools ran before a proposal in the same turn; `Agent.tools` offers a kind only while its connector is connected (D2). Fake kinds only. | `diya.py`, `diya_actions.py` |
-| A3 | **API, page and command line** (D8): the routes, the proxy routes and tripwire-list updates, `frontend/app/actions`, the header count, `diya_actions.py`'s CLI. Live-checked in a real browser. | `diya_actions_api.py` (new), `diya_web.py`, `frontend/...` |
+| A3 | **API, page and command line** (D8): the routes, the proxy routes and tripwire-list updates, `frontend/app/actions`, the header count, the command line. Live-checked in a real browser. | `diya_actions_api.py` (new), `diya_actions_cli.py` (new), `diya_web.py`, `frontend/...` |
 | A4 | **The first real kind** (D11). Todoist connector moved to API v1; `todoist_add_task`; measured with the real model (fake token): is it proposed when asked, and **how often when not**; the number decides whether the first kind needs a `diya_intent`-style guard like reminders have. **Needs the owner's yes** (section 5). | `diya_connector_tools.py`, `diya_actions.py` |
 | later | Standing grants (D7), multi-step workflows with an approval node, more kinds (Notion, Calendar, Home Assistant), snooze and recurrence for reminders (carried over from `docs/PROACTIVITY_DESIGN.md`). Each is its own design. | -- |
 
@@ -290,3 +290,36 @@ alive (the per-turn record is cleared when a turn ends, but nothing checked that
 actually read something -- the next turn's own reset hid it) and two patterns that matched `add_reminder`'s
 identical line as well; the survivor got an assertion and the patterns got context. Not mutated because
 behaviour cannot differ: falling back to the real registry when no kinds are passed (it is empty).
+
+*Unit A3 (`diya_actions_api.py`, `diya_actions_cli.py`, `frontend/app/actions`, `frontend/app/api/actions`,
+`frontend/lib/actions-format.mjs`, the proxy helpers and tripwire lists).* The surface the owner decides on.
+`GET /api/actions` (what is waiting, the 50 most recent decided or finished, the counts, and which kinds exist
+and are available), `GET /api/actions/{id}` (the action, the message it answered, its events) and `POST
+.../approve`, `.../reject`, `.../resolve`. The approve route is the one place an effect can start from the
+web: it records the owner's approval of the hash the page sent, then runs the action, in one request, and
+answers with how it ended -- a failed effect is still a 200 with the failure in it, because the request did what
+was asked. Everything shown goes through `printable`; the arguments go out as named fields beside the one
+sentence the code built. A page for it, a pending count in the chat header (waiting plus unknown, and nothing
+when it cannot be told), an Actions link on every page, and a command line, `python diya_actions_cli.py`, that
+asks before approving and holds the approval to the version it just displayed.
+
+Where it went beyond or past D8, disclosed: a **`resolve` route and page control**, because an `unknown` action
+needs a way out in the browser as much as in the terminal; the **command line is its own module** (as
+`diya_review.py` is beside `diya_memory.py`), not `diya_actions.py`; **listing is not a pure read** -- it
+closes what has expired and moves a run cut off more than two minutes ago to `unknown`, so the page never
+shows either as live; and the page says plainly, when no kind is registered, that Diya has no way to propose
+any change at all, rather than showing an empty list that looks like "nothing yet". Reading the pending list
+is by id order and the history newest first, capped at 50: enough for one person's day, and a number to
+revisit when it stops being true.
+
+Measured, not assumed: 47 API tests, 72 command-line tests, 47 formatting tests (Node), 56 proxy tests for the new
+routes, and the two route-exhaustiveness tripwires extended; 139 mutations of the new code all caught in the end
+(three survived the first pass: two were `sorted()` calls on arguments that are already stored in sorted order, so
+they were removed as dead code rather than tested, and one was a test that passed because proposing a new
+action had already expired the old one, so it now waits for the listing to do it). **Live-checked** in a real
+browser, against a scratch API with a fake kind and a scratch database on other ports: Approve ran the effect exactly
+once; Turn down never ran it; "It happened" with a note recorded the note and ran nothing; a title written to
+look like an instruction was shown as plain text; the caution listed what had been read; the header badge counted
+what was waiting. **Not covered by an automated test:** the page component's own behaviour (the repo has no
+component tests for any page); the live check above is what stands in for it, and the pure helpers and the proxy
+routes under it are tested.

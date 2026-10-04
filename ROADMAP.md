@@ -265,8 +265,11 @@ Remaining:
    write capability at all and A4 (the first real write, Todoist add-task) needs the owner's yes.
    **Built: A1** (`diya_actions.py` and migration 5: the action table, its append-only events, the state
    machine, the caps, expiry, the hash an approval binds to, and "run at most once, ever"; 170 mutations
-   all caught). The real registry of write actions is empty, so nothing can write anywhere yet. A2 (the
-   model's side), A3 (API, Actions page, command line) and A4 are not started.
+   all caught), **A2** (the model's side: a kind's tool only ever proposes, is offered only while its
+   connector is connected, and records the chat, the message and which tools ran before it; 60 mutations
+   all caught) and **A3** (the routes, the Actions page, the header count, and `python diya_actions_cli.py`;
+   live-checked in a real browser). The real registry of write actions is still empty, so nothing can
+   write anywhere yet. **A4** (the first real write, Todoist add-task) is not started and needs the owner's yes.
    The local first slice, reminders that fire (a time parser, real due times, a Reminders page, an optional
    desktop notifier), is designed in [`docs/PROACTIVITY_DESIGN.md`](docs/PROACTIVITY_DESIGN.md) as four units.
    **Built, all four:** P1 (the time reader), P2 (real due times, the tool that reads them, the guard against

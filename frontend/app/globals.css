@@ -432,3 +432,12 @@ header .icon-btn.nav-wide { display: none; }
   margin-left: 6px; min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--accent); color: var(--accent-text);
   font-size: 12px; font-weight: 600; line-height: 18px; text-align: center;
 }
+/* The Actions page (docs/ACTIONS_DESIGN.md, unit A3) reuses the memory page's cards. What an action would do is
+   shown as plain labelled fields; one that Diya proposed after reading outside text carries a dashed caution; one
+   whose outcome is unknown is outlined like an error until the owner has recorded what happened. */
+.action-fields { margin: 8px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; font-size: 13.5px; }
+.action-field { display: contents; }
+.action-fields dt { color: var(--text-dim); }
+.action-fields dd { margin: 0; overflow-wrap: anywhere; }
+.action-caution { margin: 10px 0 0; padding: 8px 10px; border: 1.5px dashed var(--danger); border-radius: 10px; color: var(--danger-text); font-size: 13.5px; line-height: 1.4; }
+.memory-fact[data-status="unknown"], .memory-fact[data-status="failed"] { border-color: var(--danger); }

@@ -79,6 +79,32 @@ export default function ChatPage() {
   // cannot be asked nothing is shown: a badge that says 0 when it does not know would be a lie, and nobody
   // asked for this, so there is nothing to explain.
   const [dueCount, setDueCount] = useState(null)
+  // How many actions are waiting for the owner's decision or need their word on an unknown outcome, for the header
+  // link (docs/ACTIONS_DESIGN.md, unit A3). Asked the same way, and for the same reason it shows nothing when unknown.
+  const [actionCount, setActionCount] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function check() {
+      try {
+        const response = await fetch('/api/actions')
+        const body = response.ok ? await response.json() : null
+        const counts = body && body.counts
+        const waiting = counts && Number.isInteger(counts.pending) && Number.isInteger(counts.unknown) ? counts.pending + counts.unknown : null
+        if (!cancelled) setActionCount(waiting)
+      } catch {
+        if (!cancelled) setActionCount(null)
+      }
+    }
+    check()
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') check()
+    }, 60_000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -317,6 +343,14 @@ export default function ChatPage() {
           </Link>
           <Link className="icon-btn nav-wide" href="/connections" style={{ textDecoration: 'none' }}>
             Connections
+          </Link>
+          <Link className="icon-btn nav-wide" href="/actions" style={{ textDecoration: 'none' }}>
+            Actions
+            {actionCount > 0 && (
+              <span className="due-badge" aria-label={`${actionCount} waiting for you`}>
+                {actionCount}
+              </span>
+            )}
           </Link>
           <button
             className="icon-btn"

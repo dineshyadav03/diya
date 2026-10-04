@@ -32,6 +32,11 @@ const ROUTES = {
   memoryAction: join(root, 'frontend', 'app', 'api', 'memory', '[fact_id]', '[action]', 'route.js'),
   reminders: join(root, 'frontend', 'app', 'api', 'reminders', 'route.js'),
   reminderDone: join(root, 'frontend', 'app', 'api', 'reminders', '[reminder_id]', 'done', 'route.js'),
+  actions: join(root, 'frontend', 'app', 'api', 'actions', 'route.js'),
+  action: join(root, 'frontend', 'app', 'api', 'actions', '[action_id]', 'route.js'),
+  actionApprove: join(root, 'frontend', 'app', 'api', 'actions', '[action_id]', 'approve', 'route.js'),
+  actionReject: join(root, 'frontend', 'app', 'api', 'actions', '[action_id]', 'reject', 'route.js'),
+  actionResolve: join(root, 'frontend', 'app', 'api', 'actions', '[action_id]', 'resolve', 'route.js'),
 }
 
 async function loadRoute(name) {

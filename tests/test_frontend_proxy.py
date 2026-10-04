@@ -19,6 +19,7 @@ import subprocess
 import threading
 import time
 import types
+from datetime import timedelta
 
 import pytest
 import uvicorn
@@ -26,7 +27,7 @@ import uvicorn
 import diya
 import diya_web
 from diya_config import load_config
-from fakes import FakeClient, text_reply
+from fakes import FakeClient, task_kind, text_reply
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
@@ -93,8 +94,7 @@ def closed_port():
 
 # --- a real API, with the token required, for the end-to-end tests ---------------------------------
 
-@pytest.fixture
-def api(tmp_path):
+def serve_api(tmp_path, action_kinds=(), executed=None):
     path = tmp_path / "token.hash"
     diya_web.ensure_token(str(path))
     path.write_text(diya_web.hash_token(TOKEN) + "\n")  # a token we know, stored the way the API stores it
@@ -103,7 +103,7 @@ def api(tmp_path):
         db_path=str(tmp_path / "api.db"),
         profile_path=str(tmp_path / "api_profile.txt"),
     )
-    agent = diya.Agent(config, client=FakeClient([text_reply("hello from the model")] * 20))
+    agent = diya.Agent(config, client=FakeClient([text_reply("hello from the model")] * 20), action_kinds=action_kinds)
     heard = []
 
     def transcribe(audio_path):
@@ -121,9 +121,21 @@ def api(tmp_path):
     assert server.started
     thread_id = agent.store.create_thread()
     agent.store.add_message(thread_id, "user", "an earlier message")
-    yield types.SimpleNamespace(url=f"http://127.0.0.1:{port}", agent=agent, thread_id=thread_id, heard=heard)
+    yield types.SimpleNamespace(url=f"http://127.0.0.1:{port}", agent=agent, thread_id=thread_id, heard=heard, executed=executed)
     server.should_exit = True
     thread.join(10)
+
+
+@pytest.fixture
+def api(tmp_path):
+    yield from serve_api(tmp_path)
+
+
+@pytest.fixture
+def api_with_actions(tmp_path):
+    """The same real API, whose agent also has a fake kind of action; `executed` lists every time its effect ran."""
+    executed = []
+    yield from serve_api(tmp_path, (task_kind(executed=executed),), executed)
 
 
 def through_the_ui(api, calls, token=TOKEN):
@@ -421,6 +433,8 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/reminders", "/api/reminders", "/api/reminders", "/api/reminders/${reminder.id}/done",  # the chat's due count, the page's list and add, and done
         "/api/connections", "/api/connections/${connector.name}/connect", "/api/connections/${connector.name}/connect",
         "/api/connections/${connector.name}/disconnect",  # the token-kind form and the oauth-kind button both post here
+        "/api/actions", "/api/actions",  # the chat header's waiting count, and the Actions page's list
+        "/api/actions/${action.id}/approve", "/api/actions/${action.id}/reject", "/api/actions/${action.id}/resolve",
     ])
     assert not [p for p in browser_files() if re.search(r"fetch\(\s*[^`'\"\s]", p.read_text(encoding="utf-8"))]  # no computed URLs
 
@@ -466,6 +480,8 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/merge", "/api/memory/{fact_id}/{action}",
         "/api/reminders", "/api/reminders/{reminder_id}/done",
         "/api/connections", "/api/connections/{name}/connect", "/api/connections/{name}/disconnect",
+        "/api/actions", "/api/actions/{action_id}", "/api/actions/{action_id}/approve",
+        "/api/actions/{action_id}/reject", "/api/actions/{action_id}/resolve",
     }
     assert set(proxies) == set(routes), "an API route with no proxy route (or the reverse)"
     for path, methods in routes.items():
@@ -473,7 +489,8 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         assert exported == methods, path
         assert "lib/proxy.mjs" in source and any(
             name in source
-            for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardReminderDone(", "forwardConnection(")
+            for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardReminderDone(", "forwardConnection(",
+                         "forwardAction(", "forwardActionDecision(")
         ), path
         assert "force-dynamic" in source, path  # never cached
 
@@ -643,3 +660,127 @@ def test_a_reminder_id_that_is_not_a_whole_number_is_refused_before_anything_is_
 def test_a_whole_number_reminder_id_is_forwarded_to_its_own_path(reminder_id):
     out = run_harness({"mode": "route", "env": {}, "calls": [call("reminderDone", "POST", params={"reminder_id": reminder_id})]})
     assert [(c["method"], c["url"]) for c in out["captured"]] == [("POST", f"/api/reminders/{reminder_id}/done")]
+
+
+# --- the actions page's routes (docs/ACTIONS_DESIGN.md, unit A3) ---------------------------------------
+
+ACTION_CALLS = [
+    ("actions", "GET", None, "/api/actions"),
+    ("action", "GET", {"action_id": "12"}, "/api/actions/12"),
+    ("actionApprove", "POST", {"action_id": "12"}, "/api/actions/12/approve"),
+    ("actionReject", "POST", {"action_id": "12"}, "/api/actions/12/reject"),
+    ("actionResolve", "POST", {"action_id": "12"}, "/api/actions/12/resolve"),
+]
+
+
+def json_call_with(route, payload, params):
+    entry = json_call(route, payload)
+    entry["params"] = params
+    return entry
+
+
+def waiting(api, *titles):
+    return [api.agent.actions.propose("add_task", {"title": title}) for title in titles]
+
+
+@needs_node
+def test_the_action_routes_work_end_to_end_through_the_ui_server_with_no_token_in_the_browser(api_with_actions):
+    api = api_with_actions
+    approve_me, reject_me = waiting(api, "buy milk", "walk the dog")
+    listed, one, approved, rejected = through_the_ui(
+        api,
+        [
+            call("actions", "GET"),
+            call("action", "GET", params={"action_id": str(approve_me["id"])}),
+            json_call_with("actionApprove", {"args_hash": approve_me["args_hash"]}, {"action_id": str(approve_me["id"])}),
+            call("actionReject", "POST", params={"action_id": str(reject_me["id"])}),
+        ],
+    )
+    assert [a["status"] for a in (listed, one, approved, rejected)] == [200, 200, 200, 200]
+    assert [a["summary"] for a in json.loads(unb64(listed["bodyB64"]))["pending"]] == [approve_me["summary"], reject_me["summary"]]
+    assert json.loads(unb64(approved["bodyB64"]))["action"]["status"] == "succeeded"
+    assert json.loads(unb64(rejected["bodyB64"]))["action"]["status"] == "rejected"
+    assert api.executed == [{"title": "buy milk"}]  # the approved one, once; the rejected one never
+
+
+@needs_node
+def test_the_api_refuses_the_action_routes_without_the_token_and_nothing_is_done(api_with_actions):
+    api = api_with_actions
+    (action,) = waiting(api, "buy milk")
+    answers = through_the_ui(
+        api,
+        [call("actions", "GET"), call("action", "GET", params={"action_id": str(action["id"])}),
+         json_call_with("actionApprove", {"args_hash": action["args_hash"]}, {"action_id": str(action["id"])}),
+         call("actionReject", "POST", params={"action_id": str(action["id"])}),
+         json_call_with("actionResolve", {"happened": True}, {"action_id": str(action["id"])})],
+        token=None,
+    )
+    assert [a["status"] for a in answers] == [401] * 5
+    assert api.executed == [] and api.agent.actions.get(action["id"])["status"] == "pending"
+
+
+@needs_node
+def test_an_action_cut_off_mid_run_is_resolved_through_the_ui_server(api_with_actions):
+    api = api_with_actions
+    (action,) = waiting(api, "buy milk")
+    api.agent.actions.approve(action["id"], action["args_hash"], "cli")
+    real_kinds = api.agent.actions.kinds
+    api.agent.actions.kinds = (task_kind(raises=KeyboardInterrupt()),)
+    with pytest.raises(KeyboardInterrupt):
+        api.agent.actions.run(action["id"])
+    api.agent.actions.kinds = real_kinds
+    (listed,) = through_the_ui(api, [call("actions", "GET")])  # reading the list moves a run cut off long ago to unknown
+    assert listed["status"] == 200
+    assert api.agent.actions.get(action["id"])["status"] == "executing"  # (it was only just cut off: left alone)
+    api.agent.actions.reconcile(older_than=timedelta(0))
+    (resolved,) = through_the_ui(api, [json_call_with("actionResolve", {"happened": False, "note": "not in my list"},
+                                                      {"action_id": str(action["id"])})])
+    assert resolved["status"] == 200
+    done = json.loads(unb64(resolved["bodyB64"]))["action"]
+    assert done["status"] == "failed" and "not in my list" in done["result"]
+    assert api.executed == []  # finding out never ran it
+
+
+@needs_node
+def test_the_action_routes_forward_to_their_own_path_and_method_with_the_token_and_nothing_else_of_the_browsers():
+    calls = [call(route, method, {"content-type": "application/json", "authorization": "Bearer from-the-browser", "cookie": "a=b"},
+                  "{}" if method == "POST" else None, params)
+             for route, method, params, _ in ACTION_CALLS]
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": calls})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [(m, u) for _, m, _, u in ACTION_CALLS]
+    for captured in out["captured"]:
+        assert captured["headers"]["authorization"] == f"Bearer {TOKEN}"
+        assert "cookie" not in captured["headers"]
+    assert "from-the-browser" not in json.dumps(out["captured"])
+
+
+@needs_node
+def test_an_action_route_answers_only_the_method_the_api_route_does():
+    wrong = {"actions": "POST", "action": "POST", "actionApprove": "GET", "actionReject": "GET", "actionResolve": "GET"}
+    calls = [call(route, wrong[route], params={"action_id": "1"}) for route in wrong]
+    out = run_harness({"mode": "route", "env": {}, "calls": calls})
+    assert out["results"] == [{"noHandler": True}] * len(wrong) and out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("action_id", ["abc", "1.5", "-1", "1e3", "", " 1", "1 ", "1%2F2", "../1", "1/../2", "9" * 19, "0x10"])
+def test_an_action_id_that_is_not_a_whole_number_is_refused_before_anything_is_sent(action_id):
+    methods = {"action": "GET", "actionApprove": "POST", "actionReject": "POST", "actionResolve": "POST"}
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN},
+                       "calls": [call(route, method, params={"action_id": action_id}) for route, method in methods.items()]})
+    assert [r["status"] for r in out["results"]] == [404] * len(methods)
+    assert out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("action_id", ["1", "12", "9" * 18])
+@pytest.mark.parametrize("route, decision", [("actionApprove", "approve"), ("actionReject", "reject"), ("actionResolve", "resolve")])
+def test_a_whole_number_action_id_is_forwarded_to_its_own_decision_path(route, decision, action_id):
+    out = run_harness({"mode": "route", "env": {}, "calls": [call(route, "POST", params={"action_id": action_id})]})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [("POST", f"/api/actions/{action_id}/{decision}")]
+
+
+@needs_node
+def test_a_whole_number_action_id_is_forwarded_to_its_own_path_for_the_read():
+    out = run_harness({"mode": "route", "env": {}, "calls": [call("action", "GET", params={"action_id": "7"})]})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [("GET", "/api/actions/7")]

@@ -149,6 +149,21 @@ export async function forwardReminderDone(request, context, options) {
   return forward(request, `/api/reminders/${reminderId}/done`, options)
 }
 
+// The actions page's routes (docs/ACTIONS_DESIGN.md, unit A3). An action id is a whole number, and what is done to it
+// is one of three literals the caller passes (approve, reject, resolve), never read from the URL; anything else is
+// turned away here instead of being pasted into the URL of the API request.
+export async function forwardAction(request, context, options) {
+  const { action_id: actionId } = await context.params
+  if (!WHOLE_NUMBER.test(String(actionId))) return errorResponse(404, 'No such action')
+  return forward(request, `/api/actions/${actionId}`, options)
+}
+
+export async function forwardActionDecision(request, context, decision, options) {
+  const { action_id: actionId } = await context.params
+  if (!WHOLE_NUMBER.test(String(actionId))) return errorResponse(404, 'No such action')
+  return forward(request, `/api/actions/${actionId}/${decision}`, options)
+}
+
 // The connections page's routes (docs/CONNECTORS_DESIGN.md, unit C1): connect and disconnect are two
 // separate API routes (a connect body carries a token, a disconnect needs none), not one shared
 // {action} route. `action` is a literal the caller passes, never read from the URL. A connector name

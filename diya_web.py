@@ -12,6 +12,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 import diya
+import diya_actions_api
 import diya_config
 import diya_connections_api
 import diya_connector_tools
@@ -339,6 +340,8 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     diya_memory_api.register(app, config, agent)
     diya_reminders_api.register(app, config, agent)
     diya_connections_api.register(app, config, agent, connectors=connectors)
+    # Deciding what Diya proposed (docs/ACTIONS_DESIGN.md, unit A3): the agent carries the action store and its kinds.
+    diya_actions_api.register(app, config, agent)
 
     return app
 

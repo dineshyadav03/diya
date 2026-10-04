@@ -42,6 +42,9 @@ export default function HistoryPage() {
           <Link className="icon-btn" href="/connections">
             Connections
           </Link>
+          <Link className="icon-btn" href="/actions">
+            Actions
+          </Link>
           <Link className="icon-btn" href="/">
             &larr; Back to chat
           </Link>

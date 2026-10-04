@@ -131,6 +131,9 @@ export default function ConnectionsPage() {
           <Link className="icon-btn" href="/reminders">
             Reminders
           </Link>
+          <Link className="icon-btn" href="/actions">
+            Actions
+          </Link>
           <Link className="icon-btn" href="/">
             &larr; Back to chat
           </Link>

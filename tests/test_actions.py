@@ -155,7 +155,7 @@ def test_arguments_may_be_plain_text_numbers_booleans_and_none():
     {"Title": "bad key"}, {"": "empty key"}, {"a b": "space in key"}, {1: "int key"},
     {"title": ""}, {"title": " leading"}, {"title": "trailing "}, {"title": "two  spaces"},
     {"title": "line\nbreak"}, {"title": "tab\there"}, {"title": "escape\x1b[31m"},
-    {"title": "bidi‮override"}, {"title": "zero​width"},
+    {"title": "bidi\u202eoverride"}, {"title": "zero\u200bwidth"},
     {"title": float("nan")}, {"title": float("inf")}, {"title": float("-inf")},
     {"title": "x" * (diya_actions.MAX_ARGS_CHARS + 1)},
 ])

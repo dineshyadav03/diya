@@ -15,22 +15,26 @@ import re
 import secrets
 import sys
 import types
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 
 import diya
+import diya_actions
 import diya_config
 import diya_web
 from diya_config import ConfigError, load_config
 from diya_connectors import Connector
 from diya_memory import Memory
-from fakes import FakeClient, text_reply
+from fakes import FakeClient, task_kind, text_reply
 
 SEEDED_CONNECTORS = (
     Connector(name="demo", label="Demo", description="A seeded connector for tests.",
              auth_kind="token", implemented=True, validate=lambda token: None),
 )
+SEEDED_KINDS = (task_kind(),)  # a fake kind of action, so the /api/actions routes have real actions to decide
+APPROVE_ME = diya_actions.args_hash("add_task", {"title": "approve me"})
 
 HOST = "https://localhost"
 
@@ -51,7 +55,16 @@ def client_for(tmp_path, require=None):
         db_path=str(tmp_path / "t.db"),
         profile_path=str(tmp_path / "t_profile.txt"),
     )
-    agent = diya.Agent(config, client=FakeClient([text_reply("ok")] * 20))
+    agent = diya.Agent(config, client=FakeClient([text_reply("ok")] * 20), action_kinds=SEEDED_KINDS)
+    # three actions: 1 is waiting to be approved, 2 to be turned down, and 3 was cut off mid-run (its outcome is
+    # unknown), so each of the three decisions has a real action to act on
+    for title in ("approve me", "reject me", "resolve me"):
+        agent.actions.propose("add_task", {"title": title})
+    cut_off = diya_actions.Actions(agent.store, config, (task_kind(raises=KeyboardInterrupt()),))
+    cut_off.approve(3, diya_actions.args_hash("add_task", {"title": "resolve me"}), "cli")
+    with pytest.raises(KeyboardInterrupt):
+        cut_off.run(3)
+    cut_off.reconcile(older_than=timedelta(0))
     # one candidate fact (id 1), so the routes that need a fact have one to act on
     memory = Memory(agent.store)
     memory.add_candidate("seeded candidate", batch_first=1, batch_last=1, position=0, model="m",
@@ -75,7 +88,10 @@ OK = (200, 201)  # adding a fact answers 201
 def concrete_path(path):
     """A route's path with a real id and action in place of its parameters."""
     return (path.replace("{thread_id}", "1").replace("{fact_id}", "1").replace("{action}", "accept")
-           .replace("{reminder_id}", "1").replace("{name}", "demo"))
+           .replace("{reminder_id}", "1").replace("{name}", "demo")
+           .replace("/api/actions/{action_id}/reject", "/api/actions/2/reject")  # each decision has its own seeded action
+           .replace("/api/actions/{action_id}/resolve", "/api/actions/3/resolve")
+           .replace("{action_id}", "1"))
 
 
 # Every route the app has today, with a request that succeeds once it is past the token layer.
@@ -94,6 +110,11 @@ ENDPOINTS = [
     ("GET", "/api/reminders", {}),
     ("POST", "/api/reminders", {"json": {"text": "call mum", "when": "in 2 hours"}}),
     ("POST", "/api/reminders/1/done", {}),
+    ("GET", "/api/actions", {}),
+    ("GET", "/api/actions/1", {}),
+    ("POST", "/api/actions/1/approve", {"json": {"args_hash": APPROVE_ME}}),
+    ("POST", "/api/actions/2/reject", {}),
+    ("POST", "/api/actions/3/resolve", {"json": {"happened": True}}),
     ("POST", "/api/chat", {"json": {"message": "hi"}}),
     ("POST", "/api/transcribe", {"files": {"audio": ("a.webm", b"x", "audio/webm")}}),
     ("GET", "/docs", {}),
