@@ -7,8 +7,8 @@
 > the first stage that reaches outside this one machine's own files and the model. Landscape research
 > is `RESEARCH.md` entry 11. Stage 4 (Muse/Instinct-style approval gates, action trails, a
 > prompt-injection boundary) is a separate, later document by the owner's own decision (2026-09-28):
-> it waits until a connector exists to prove itself against, rather than being designed in the
-> abstract first.
+> it waited until a connector existed to prove itself against, rather than being designed in the
+> abstract first. That document now exists: `docs/ACTIONS_DESIGN.md` (2026-10-04).
 
 ## 1. What is true today
 
@@ -162,6 +162,13 @@ disclosure standard as M2's `[User]` tag finding.
 15/15 mutations caught (`diya_connector_tools.py`, `diya.py`, scratch `mutate_c2.py`); one real gap on
 the first run (a match-count cap with no test case ever producing more matches than the cap allowed)
 fixed with a new test.
+
+**Found later (2026-10-04, `docs/ACTIONS_DESIGN.md` D11):** the Todoist half of C2 calls the legacy
+REST v2 (`/rest/v2/...`). Todoist's current API is v1 (`/api/v1/...`), which its docs describe as
+unifying Sync v9 and REST v2, with v2's documentation kept "for reference". It worked when measured
+(a real 401 came back from the real service), so nothing is broken today, but it is the older line;
+it moves to v1 as the first step of the first write unit (A4), where the paginated list shape is a
+real change rather than a URL swap.
 
 *As built (C3):* `diya_google_calendar.py`. `connect(config)` is the whole RFC 8252 flow in one call:
 start a loopback `http.server` on an OS-assigned port, open the owner's browser to Google's consent

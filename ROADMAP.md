@@ -256,9 +256,13 @@ Remaining:
    registers under their own Google account, since Diya cannot create one.
 4. Durable workflows. The competitive battleground: every comparable leads with "describe an
    outcome, it follows through". Reference: Muse-style approval gates and action trails. **By the
-   owner's decision (2026-09-28): this waits for Stage 3** -- there is nothing to take real,
-   consequential action on until a connector exists to prove the approval-gate/action-trail design
-   against, so it is not designed in the abstract first.
+   owner's decision (2026-09-28) this waited for Stage 3** -- there was nothing to take real,
+   consequential action on until a connector existed to prove the approval-gate/action-trail design
+   against. Stage 3 is built, so the first slice is **designed (2026-10-04, nothing built yet)** in
+   [`docs/ACTIONS_DESIGN.md`](docs/ACTIONS_DESIGN.md): the model proposes, code executes, only the owner
+   approves (a button, not a chat reply); every action is a row with an append-only trail; an action
+   that was interrupted is flagged, never silently retried; four units (A1-A4), of which A1-A3 add no
+   write capability at all and A4 (the first real write, Todoist add-task) needs the owner's yes.
    The local first slice, reminders that fire (a time parser, real due times, a Reminders page, an optional
    desktop notifier), is designed in [`docs/PROACTIVITY_DESIGN.md`](docs/PROACTIVITY_DESIGN.md) as four units.
    **Built, all four:** P1 (the time reader), P2 (real due times, the tool that reads them, the guard against
