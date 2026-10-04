@@ -23,7 +23,7 @@ def tool_calls_reply(*calls):
 
 
 def task_kind(*, connector=None, executed=None, reply="created task 1", raises=None, tool=True, name="add_task",
-              tool_name="propose_add_task"):
+              tool_name="propose_add_task", asked=None, prepare=None):
     """A fake kind of action (docs/ACTIONS_DESIGN.md): "add a task", with a title and an optional due phrase. Its
     effect is only to append what it was given to `executed` (when a list is passed), so a test can say whether
     anything was ever performed. `tool=False` makes one the model cannot propose at all."""
@@ -62,7 +62,7 @@ def task_kind(*, connector=None, executed=None, reply="created task 1", raises=N
             },
         },
     } if tool else None
-    return ActionKind(name, "Add a task", connector, validate, render, execute, spec)
+    return ActionKind(name, "Add a task", connector, validate, render, execute, spec, asked, prepare)
 
 
 def keyword_embedding(text):

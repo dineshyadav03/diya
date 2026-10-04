@@ -129,6 +129,41 @@ _REMINDER_REQUEST = re.compile(
 )
 
 
+# ---- did the person ask for a task to be added? (docs/ACTIONS_DESIGN.md, D6 and unit A4) ----
+#
+# A proposal is only recorded, never performed, but a small model proposes tasks nobody asked for (measured: docs/
+# ACTIONS_DESIGN.md, section 6), and a page of cards to turn down teaches clicking without reading. So Agent._propose
+# refuses a task proposal unless the latest message asks for one. Like the reminder test it is a short list of the ways
+# people ask; missing an unusual phrasing is the safe direction (they can say "add a task to ...").
+_TASK_NOUN = r"(?:task|to-?do)"
+_TASK_REQUEST = re.compile(
+    # "add a task", "create a Todoist task", "make a new to-do", "log one more task", "add task call mum"
+    r"\b(?:add|create|make|log|put|save|enter|record|jot\s+down)\s+(?:me\s+|us\s+)?(?:a|another|one\s+more|the|this|that)?"
+    r"\s*(?:new\s+)?(?:todoist\s+)?" + _TASK_NOUN + r"\b"
+    # "add 'x' to my Todoist", "put it on my to-do list", "add to my task list: x"
+    r"|\b(?:add|put|save|log|enter|record)\b.{1,120}?\b(?:to|on|in|into|onto)\s+(?:my\s+|the\s+|your\s+)?"
+    r"(?:todoist|to-?dos?(?:\s+list)?|task\s*list|tasks)\b"
+    # a line that says it is one: "new task: pay the bill", "todoist: add stamps", "todo: call the bank"
+    r"|^\s*(?:todoist|new\s+task|task|to-?do)\s*[:\-]",
+    re.IGNORECASE,
+)
+# A question about the app or about tasks in general is not a request to add one ("how do I add a task in Todoist?").
+_TASK_QUESTION = re.compile(r"^\s*(?:how|what|why|where|when|who|which|is|are|does|did|do)\b|^\s*(?:can|could)\s+i\b", re.IGNORECASE)
+# ...and neither is telling Diya NOT to ("don't add a task for that"): a negation anywhere refuses it, which also refuses
+# the odd real request that contains one -- the safe direction, since the person can say it again without.
+_TASK_NEGATED = re.compile(r"\b(?:don'?t|do\s+not|never|stop|without|no\s+need\s+to|not\s+to)\b", re.IGNORECASE)
+
+
+def is_task_request(text):
+    """True if the message asks for a task to be added to the to-do list ("add a task to ...", "put x on my to-do list",
+    "new task: ..."). Not a question about Todoist, not a look at the list, not a need or a reminder, not an instruction
+    NOT to add one: those are False, as is anything that is not text."""
+    if not isinstance(text, str):
+        return False
+    text = text.replace(chr(0x2019), "'")
+    return bool(_TASK_REQUEST.search(text)) and not _TASK_QUESTION.match(text) and not _TASK_NEGATED.search(text)
+
+
 def is_reminder_request(text):
     """True if the message asks for a reminder ("remind me to ...", "set a reminder", "don't let me forget ...").
     Not a question about reminders, not a fact, not a sum: those are False, as is anything that is not text."""

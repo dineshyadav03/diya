@@ -277,12 +277,15 @@ def test_the_tool_loop_gives_up_after_the_round_cap(config):
 
 def test_every_advertised_tool_has_an_implementation(config):
     """Every tool the model could ever be offered -- the fixed ones, always, plus a connector's tool
-    once it exists (docs/CONNECTORS_DESIGN.md, unit C2) -- has a real function behind it, whether or
-    not that connector happens to be connected right now (agent.tools filters that separately)."""
+    once it exists (docs/CONNECTORS_DESIGN.md, unit C2), plus the proposal tool of each kind of action
+    (docs/ACTIONS_DESIGN.md, unit A4) -- has a real function behind it, whether or not that connector
+    happens to be connected right now (agent.tools filters that separately), and nothing else does."""
     agent, _ = make_agent(config)
     advertised = {t["function"]["name"] for t in diya.TOOLS}
     connector_tools = {spec["function"]["name"] for _name, spec, _func in diya_connector_tools.tool_specs(config)}
-    assert advertised | connector_tools == set(agent._functions)
+    proposal_tools = {kind.tool_name for kind in agent.actions.kinds if kind.tool is not None}
+    assert proposal_tools == {"propose_todoist_task"}  # the one kind of action Diya has
+    assert advertised | connector_tools | proposal_tools == set(agent._functions)
 
 
 def test_a_connectors_tool_is_offered_only_once_it_is_connected(config):

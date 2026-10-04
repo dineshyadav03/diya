@@ -19,6 +19,7 @@ import diya_db
 from diya_actions import (
     ActionFailed,
     ActionKind,
+    ActionUncertain,
     Actions,
     DuplicatePending,
     HashMismatch,
@@ -113,8 +114,8 @@ def events(world, action):
 
 # ---- the registry and the kinds ----------------------------------------------------------------
 
-def test_the_real_registry_is_empty_because_this_unit_adds_no_write_capability():
-    assert diya_actions.KINDS == ()
+def test_this_module_declares_no_kinds_of_its_own():
+    assert not hasattr(diya_actions, "KINDS")  # a kind needs its connector: the real ones are declared beside the connectors
 
 
 @pytest.mark.parametrize("change", [
@@ -511,6 +512,55 @@ def test_a_failure_the_effect_describes_is_recorded_and_not_retried(world):
     with pytest.raises(IllegalTransition):
         world.actions.run(action["id"])
     assert len(world.calls) == 1
+
+
+def test_an_effect_that_cannot_tell_whether_it_happened_leaves_the_action_unknown_and_is_never_retried(world):
+    world.raises = ActionUncertain("The request was sent but no answer came back")
+    action = world.approved()
+    done = world.actions.run(action["id"])
+    assert done["status"] == "unknown"
+    assert done["result"] == "The request was sent but no answer came back"
+    assert events(world, done)[-2:] == [("executing", "system"), ("unknown", "system")]
+    assert world.actions.events(action["id"])[-1][3] == '{"reason": "The request was sent but no answer came back"}'
+    with pytest.raises(IllegalTransition):
+        world.actions.run(action["id"])  # the whole point: it is not tried a second time
+    assert len(world.calls) == 1
+    assert world.actions.verify_integrity() == []
+
+
+def test_only_an_unknown_outcome_records_a_reason_with_its_event(world):
+    ok = world.actions.run(world.approved("ok")["id"])
+    assert [d for _e, _a, _t, d in world.actions.events(ok["id"])] == [None, '{"via": "ui"}', None, None]
+    world.raises = ActionFailed("no")
+    failed = world.actions.run(world.approved("failed")["id"])
+    assert [d for _e, _a, _t, d in world.actions.events(failed["id"])][-1] is None
+    world.raises = ActionUncertain("maybe")
+    unknown = world.actions.run(world.approved("unknown")["id"])
+    assert [d for _e, _a, _t, d in world.actions.events(unknown["id"])][-1] == '{"reason": "maybe"}'
+
+
+def test_an_uncertain_outcome_with_no_words_still_says_something(world):
+    world.raises = ActionUncertain()
+    assert world.actions.run(world.approved()["id"])["result"] == "the outcome is not known"
+
+
+def test_an_uncertain_outcome_is_resolved_by_the_owner_like_a_cut_off_one(world):
+    world.raises = ActionUncertain("maybe it did")
+    action = world.approved()
+    world.actions.run(action["id"])
+    done = world.actions.resolve(action["id"], True, "ui", note="it is in my list")
+    assert done["status"] == "succeeded" and done["result"] == "Recorded by the owner: it happened. it is in my list"
+    assert world.actions.verify_integrity() == []
+    assert len(world.calls) == 1
+
+
+def test_a_plain_failure_and_an_uncertain_one_are_not_confused(world):
+    world.raises = ActionFailed("no")
+    assert world.actions.run(world.approved("a")["id"])["status"] == "failed"
+    world.raises = ActionUncertain("maybe")
+    assert world.actions.run(world.approved("b")["id"])["status"] == "unknown"
+    world.raises = ValueError("a bug in the effect")
+    assert world.actions.run(world.approved("c")["id"])["status"] == "failed"  # an unexpected error is a failure, as before
 
 
 def test_a_failure_with_no_message_still_says_something(world):

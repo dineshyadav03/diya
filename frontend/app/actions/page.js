@@ -114,7 +114,9 @@ export default function ActionsPage() {
       (done) =>
         done.status === 'succeeded'
           ? { ok: true, text: `Done: ${done.summary}.${done.result ? ` ${done.result}` : ''}` }
-          : { ok: false, text: `Not done: ${done.summary}. ${done.result || statusWords(done.status)}` },
+          : done.status === 'unknown'
+            ? { ok: false, text: `Not sure it was done: ${done.summary}. ${done.result || 'What happened is not known.'}` }
+            : { ok: false, text: `Not done: ${done.summary}. ${done.result || statusWords(done.status)}` },
     )
   }
 
@@ -275,8 +277,9 @@ export default function ActionsPage() {
                         <li key={action.id} className="memory-fact" data-status="unknown">
                           <p className="memory-text">{action.summary}</p>
                           <p className="memory-dim">
-                            Diya was interrupted while doing this, so what happened is not known. It will not be done
-                            again. Check the service yourself, then tell Diya what you found.
+                            {action.result
+                              ? `${action.result} It will not be done again.`
+                              : 'Diya was interrupted while doing this, so what happened is not known. It will not be done again. Check the service yourself, then tell Diya what you found.'}
                           </p>
                           <Fields fields={action.fields} />
                           <form className="memory-edit" onSubmit={(e) => e.preventDefault()}>

@@ -4,7 +4,7 @@ The model PROPOSES an action; this module records it; only the owner APPROVES it
 actually performs it (`ActionKind.execute`) is reachable from exactly one place, `Actions.run`, which
 refuses anything not approved. There is no model in here and no tool that calls `run`.
 
-    pending --approve--> approved --run--> executing --> succeeded | failed
+    pending --approve--> approved --run--> executing --> succeeded | failed | unknown (an effect that cannot tell)
     pending --reject--> rejected          executing --reconcile--> unknown --resolve--> succeeded | failed
     pending | approved --expire--> expired
 
@@ -17,9 +17,9 @@ that they don't), and every decision begins with BEGIN IMMEDIATE so that "is it 
 `executing`, which reconcile() turns into `unknown` -- never into a second attempt. An action is run
 at most once, ever.
 
-`KINDS`, the real registry, is empty on purpose: this unit adds no write capability. A kind is
-registered only by the unit that adds the first real one, after the page the owner approves it on
-exists (docs/ACTIONS_DESIGN.md, section 4).
+This module has no kinds of its own: a kind needs the connector it writes to, so the real ones are
+declared beside the connectors (diya_connector_tools.real_action_kinds()) and handed in. Every
+kind there is a write the owner approves one at a time (docs/ACTIONS_DESIGN.md).
 
 Importing this module has no side effects; an Actions touches the database only when it is used.
 """
@@ -125,7 +125,13 @@ class HashMismatch(ActionError):
 
 class ActionFailed(Exception):
     """Raised by an ActionKind.execute for a refusal or failure it can describe in one plain sentence;
-    the sentence becomes the action's `result`."""
+    the sentence becomes the action's `result`. Only for a failure it KNOWS happened before anything took effect."""
+
+
+class ActionUncertain(Exception):
+    """Raised by an ActionKind.execute when the effect may or may not have happened: the request was sent and no answer
+    came back, or the service failed part way. The action becomes `unknown` -- not `failed`, which would invite a second
+    attempt that does it twice -- with the sentence as its `result`, for the owner to check and record (D4)."""
 
 
 @dataclass(frozen=True)
@@ -138,7 +144,13 @@ class ActionKind:
     `execute(config, args)` performs the effect and returns the service's own reply, or raises
     ActionFailed. `tool` is the function spec (OpenAI's tool format, like diya.TOOLS' entries) the model is
     shown so it can PROPOSE this kind of action (docs/ACTIONS_DESIGN.md, D1); None means the model cannot
-    propose it at all. Calling that tool only ever records a pending action -- nothing is performed."""
+    propose it at all. Calling that tool only ever records a pending action -- nothing is performed.
+
+    Two optional checks against what the OWNER wrote, applied by Agent only while a message is being answered (the
+    model's arguments are untrusted, and a small model proposes things nobody asked for -- measured, section 6):
+    `asked(text)` says whether the message asks for this kind of action at all, and a proposal is refused if not;
+    `prepare(args, text)` returns the arguments with whatever the message does not support taken out, and notes (plain
+    sentences) saying what was, which the model is told. Either is None for a kind that needs neither."""
 
     name: str
     label: str
@@ -147,6 +159,8 @@ class ActionKind:
     render: object
     execute: object
     tool: dict | None = None
+    asked: object = None
+    prepare: object = None
 
     @property
     def tool_name(self):
@@ -174,9 +188,9 @@ class ActionKind:
         for field in ("validate", "render", "execute"):
             if not callable(getattr(self, field)):
                 raise ValueError(f"{self.name}: {field} must be a function")
-
-
-KINDS: tuple = ()  # the unit that adds the first real write adds it here; empty is A1's own correct state
+        for field in ("asked", "prepare"):
+            if getattr(self, field) is not None and not callable(getattr(self, field)):
+                raise ValueError(f"{self.name}: {field} must be a function or None")
 
 
 def by_name(kinds, name):
@@ -235,23 +249,32 @@ def args_hash(kind_name, args):
 
 
 def normalise_args(args):
-    """The model's arguments with the whitespace in its text values tidied (runs of spaces, tabs, line breaks and
-    non-breaking spaces become one space, the ends are trimmed) and nothing else touched. The store refuses
-    text that is not one trimmed line (`clean_args`) rather than repair it; this is the one repair the model's
-    side makes, so "buy  milk" is proposed as "buy milk" instead of bouncing, and the owner sees, and the hash
-    binds, the tidied text. Anything else wrong -- a control or invisible character, the wrong type -- is
+    """The model's arguments with two repairs, and nothing else touched. Whitespace in text is tidied (runs of spaces,
+    tabs, line breaks and non-breaking spaces become one space, the ends are trimmed), so "buy  milk" is proposed as
+    "buy milk" instead of bouncing. And an argument that is empty or null is dropped: a small model fills an optional
+    argument it has nothing for with "" (measured: 6 of 75 asked proposals, which then bounced and left the owner told
+    the model "could not" do something it could), and an empty optional argument is no argument. The owner sees, and the
+    hash binds, the repaired arguments. Anything else wrong -- a control or invisible character, the wrong type -- is
     still refused by `clean_args`. Not a dict: returned unchanged, for `clean_args` to refuse."""
     if not isinstance(args, dict):
         return args
-    return {key: " ".join(value.split()) if isinstance(value, str) else value for key, value in args.items()}
+    tidied = {key: " ".join(value.split()) if isinstance(value, str) else value for key, value in args.items()}
+    return {key: value for key, value in tidied.items() if value is not None and value != ""}
 
 
-def proposed_text(action):
-    """What the model is told after it proposed an action (D1): that it is only a proposal, and what to say."""
+def proposed_text(action, notes=()):
+    """What the model is told after it proposed an action (D1): that it is only a proposal, what was proposed, anything
+    that was left out of it and why (`notes`, from ActionKind.prepare), and what to say."""
+    said = "".join(f" {note}" for note in notes)
     return (
-        f"Proposed as action #{action['id']}: {action['summary'].rstrip('.')}. Nothing has happened yet: the owner has "
+        f"Proposed as action #{action['id']}: {action['summary'].rstrip('.')}.{said} Nothing has happened yet: the owner has "
         "to approve it on the Actions page. Tell the owner it is waiting for them, and do not say it is done."
     )
+
+
+NOT_ASKED_TEXT = (
+    "Not proposed: the user did not ask for that. Answer what they said instead, and do not propose it unless they ask."
+)
 
 
 def refused_text(exc):
@@ -520,6 +543,8 @@ class Actions:
             outcome, event, result = "succeeded", "succeeded", kind.execute(self.config, args)
         except ActionFailed as exc:
             outcome, event, result = "failed", "failed", str(exc) or "the action failed"
+        except ActionUncertain as exc:
+            outcome, event, result = "unknown", "unknown", str(exc) or "the outcome is not known"
         except Exception as exc:  # anything else the effect raised: it failed, and the owner is told what
             outcome, event, result = "failed", "failed", f"the action stopped with an error: {type(exc).__name__}: {exc}"
         result = _clip("" if result is None else result, MAX_RESULT_CHARS)
@@ -530,7 +555,8 @@ class Actions:
             ).rowcount
             if not changed:
                 raise IllegalTransition(f"action {action_id} was no longer executing when it finished")
-            self._event(conn, action_id, event, _stamp(self._clock()))
+            self._event(conn, action_id, event, _stamp(self._clock()),
+                        json.dumps({"reason": result}) if outcome == "unknown" else None)
         return self.get(action_id)
 
     def expire(self, moment=None):

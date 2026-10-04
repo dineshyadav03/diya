@@ -309,6 +309,18 @@ def test_an_action_whose_effect_fails_is_reported_and_is_a_failure(world):
     assert code == 1 and out.endswith("Action 1: failed. Todoist said no\n")
 
 
+def test_an_action_whose_effect_cannot_tell_whether_it_happened_is_reported_as_unknown_and_is_a_failure(world):
+    world.kind = task_kind(executed=world.executed, raises=diya_actions.ActionUncertain("Sent, but no answer came back"))
+    world.actions = Actions(Store(world.config.db_path), world.config, (world.kind,))
+    action = propose(world)
+    code, out, _, _ = cli(world, "approve", str(action["id"]), "--yes")
+    assert code == 1 and out.endswith("Action 1: unknown. Sent, but no answer came back\n")
+    assert cli(world, "list")[1].startswith("Actions: 0 waiting for you, 1 with an unknown outcome, 1 in all.\n")
+    assert world.executed == [{"title": "buy milk"}]
+    code, out, err, _ = cli(world, "approve", str(action["id"]), "--yes")
+    assert code == 1 and "only a pending action can be approved" in err and world.executed == [{"title": "buy milk"}]
+
+
 def test_an_action_whose_connector_was_disconnected_is_not_run(world):
     world.kind = task_kind(connector="todoist", executed=world.executed)
     world.actions = Actions(Store(world.config.db_path), world.config, (world.kind,))
@@ -461,8 +473,8 @@ def test_a_bad_setting_is_a_usage_error(monkeypatch, capsys):
 
 
 def run_for_real(world, *argv, stdin=""):
-    env = {"PATH": os.environ.get("PATH", ""), "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
-           "PYTHONPATH": str(ROOT), "DIYA_DB_PATH": world.config.db_path}
+    env = {k: v for k, v in os.environ.items() if not k.startswith("DIYA_")}  # as the repo's own run_python fixture does
+    env.update({"PYTHONPATH": str(ROOT), "DIYA_DB_PATH": world.config.db_path})
     return subprocess.run([sys.executable, str(ROOT / "diya_actions_cli.py"), *argv], input=stdin.encode(), capture_output=True,
                           cwd=pathlib.Path(world.config.db_path).parent, env=env, timeout=60)
 
@@ -470,8 +482,8 @@ def run_for_real(world, *argv, stdin=""):
 def test_run_for_real_with_no_model_and_no_network_it_works_and_speaks_utf8(world):
     result = run_for_real(world, "kinds")
     assert result.returncode == 0, result.stderr
-    # the real registry is empty, so the real command line can propose and approve nothing
-    assert result.stdout.decode("utf-8") == "No kind of action is registered: Diya cannot propose any change to anything yet.\n"
+    # the one real kind, and Todoist is not connected in this empty folder, so Diya could not propose it yet
+    assert result.stdout.decode("utf-8") == f"{'todoist_add_task':<24} Add a Todoist task: needs todoist connected\n"
     assert run_for_real(world, "list").stdout.decode("utf-8") == "Actions: 0 waiting for you, 0 in all.\nNothing waiting for you.\n"
 
 

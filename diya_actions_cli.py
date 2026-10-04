@@ -24,6 +24,7 @@ import sys
 
 import diya_actions
 import diya_config
+import diya_connector_tools
 import diya_connectors
 from diya_actions import STATUSES, ActionError, Actions
 from diya_db import Store
@@ -208,7 +209,7 @@ def main(argv=None, config=None, out=None, err=None, kinds=None, input_fn=input)
     except diya_config.ConfigError as exc:
         print(f"diya_actions_cli: {exc}", file=err)
         return EXIT_USAGE
-    actions = Actions(Store(config.db_path), config, diya_actions.KINDS if kinds is None else tuple(kinds))
+    actions = Actions(Store(config.db_path), config, diya_connector_tools.real_action_kinds() if kinds is None else tuple(kinds))
     try:
         return args.run(actions, config, args, out, err, input_fn)
     except ActionError as exc:

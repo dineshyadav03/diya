@@ -313,6 +313,22 @@ def test_an_action_whose_effect_fails_is_still_a_200_with_the_failure_in_it(monk
     assert executed == [{"title": "x"}]
 
 
+def test_an_action_whose_effect_cannot_tell_whether_it_happened_is_a_200_that_says_unknown(monkeypatch):
+    executed = []
+    built = build(monkeypatch, task_kind(executed=executed, raises=diya_actions.ActionUncertain("Sent, but no answer came back")))
+    action = built.agent.actions.propose("add_task", {"title": "x"})
+    answer = built.client.post(f"/api/actions/{action['id']}/approve", json=approve_body(action))
+    assert answer.status_code == 200
+    assert answer.json()["action"]["status"] == "unknown" and answer.json()["action"]["result"] == "Sent, but no answer came back"
+    listing = built.client.get("/api/actions").json()
+    assert [a["status"] for a in listing["history"]] == ["unknown"] and listing["counts"]["unknown"] == 1
+    again = built.client.post(f"/api/actions/{action['id']}/approve", json=approve_body(action))
+    assert again.status_code == 409 and executed == [{"title": "x"}]  # never tried a second time
+    resolved = built.client.post(f"/api/actions/{action['id']}/resolve", json={"happened": True, "note": "it is there"})
+    assert resolved.status_code == 200 and resolved.json()["action"]["status"] == "succeeded"
+    assert executed == [{"title": "x"}]
+
+
 def test_an_action_whose_connector_was_disconnected_after_it_was_proposed_is_not_run(monkeypatch):
     executed = []
     built = build(monkeypatch, task_kind(connector="todoist", executed=executed))

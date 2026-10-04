@@ -353,10 +353,12 @@ class Agent:
     def __init__(self, config=None, client=None, store=None, clock=None, action_kinds=None):
         self.config = config or diya_config.load_config()
         self.store = store or diya_db.Store(self.config.db_path)
-        # The approval gate (docs/ACTIONS_DESIGN.md): the kinds of write Diya may PROPOSE. The real registry
-        # is empty until a unit adds one; tests hand in fakes, the way they hand in a fake model client.
+        # The approval gate (docs/ACTIONS_DESIGN.md): the kinds of write Diya may PROPOSE (each only while its connector
+        # is connected, and each only ever run after the owner approves it). Tests hand in fakes, the way they hand in
+        # a fake model client.
         self.actions = diya_actions.Actions(
-            self.store, self.config, diya_actions.KINDS if action_kinds is None else tuple(action_kinds)
+            self.store, self.config,
+            diya_connector_tools.real_action_kinds() if action_kinds is None else tuple(action_kinds),
         )
         self._client = client
         self._clock = clock or datetime.now  # a naive local datetime; a parameter so tests do not depend on today
@@ -504,17 +506,27 @@ class Agent:
         Actions page shows. What comes back is a fixed sentence for the model (diya_actions.proposed_text or
         refused_text). `kind` is positional-only, so an argument the model names "kind" cannot collide with it."""
         in_turn = getattr(self._turn, "active", False)
+        said = self._turn.user_text if in_turn else None
+        # While a message is being answered, a kind that says how to tell can refuse a proposal the message did not ask
+        # for, and take out of one what the message does not support (ActionKind.asked and .prepare; measured in
+        # docs/ACTIONS_DESIGN.md, section 6). A call made outside a turn is not judged by an old message.
+        if in_turn and kind.asked is not None and not kind.asked(said):
+            return diya_actions.NOT_ASKED_TEXT
+        args = diya_actions.normalise_args(args)
+        notes = []
+        if in_turn and kind.prepare is not None:
+            args, notes = kind.prepare(args, said)
         try:
             action = self.actions.propose(
                 kind.name,
-                diya_actions.normalise_args(args),
+                args,
                 thread_id=self._turn.thread_id if in_turn else None,
                 message_id=self._turn.message_id if in_turn else None,
                 taint_sources=list(self._turn.reads) if in_turn else (),
             )
         except diya_actions.ActionError as exc:
             return diya_actions.refused_text(exc)
-        return diya_actions.proposed_text(action)
+        return diya_actions.proposed_text(action, notes)
 
     def list_reminders(self):
         rows = self.store.reminders("pending")

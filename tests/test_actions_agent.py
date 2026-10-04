@@ -47,8 +47,20 @@ def tool_text(agent):
 def test_with_no_kinds_the_model_is_offered_exactly_the_tools_it_always_had():
     agent = agent_with()
     assert agent.tools == diya.TOOLS
-    assert diya_actions.KINDS == () and agent.actions.kinds == ()
+    assert agent.actions.kinds == ()
     assert agent._proposal_tools == set()
+
+
+def test_by_default_the_agent_has_the_real_kind_and_offers_it_only_once_todoist_is_connected():
+    agent = diya.Agent(diya_config.load_config(), client=FakeClient())
+    assert [kind.name for kind in agent.actions.kinds] == ["todoist_add_task"]
+    assert agent._proposal_tools == {"propose_todoist_task"}
+    assert agent.tools == diya.TOOLS  # not connected: the model is not even shown it
+    diya_connectors.store_token(agent.config, "todoist", "a-token")
+    names = [tool["function"]["name"] for tool in agent.tools]
+    assert names[-2:] == ["list_todoist_tasks", "propose_todoist_task"]
+    diya_connectors.disconnect(agent.config, "todoist")
+    assert agent.tools == diya.TOOLS
 
 
 def test_a_kind_that_needs_no_connector_is_offered(tmp_path):
@@ -153,12 +165,24 @@ def test_text_arguments_are_tidied_and_the_owner_sees_the_tidied_text():
     assert action["summary"] == "Add the task 'buy milk today', due tomorrow"
 
 
-def test_normalise_args_changes_whitespace_in_text_and_nothing_else():
-    assert diya_actions.normalise_args({"a": " x  y\n", "b": 3, "c": None, "d": True, "e": 1.5}) == {
-        "a": "x y", "b": 3, "c": None, "d": True, "e": 1.5}
-    assert diya_actions.normalise_args({"a": "   "}) == {"a": ""}
+def test_normalise_args_tidies_text_and_drops_what_is_empty_and_changes_nothing_else():
+    nbsp = chr(0xA0)
+    assert diya_actions.normalise_args({"a": " x" + nbsp + " y\n", "b": 3, "d": True, "e": 1.5}) == {"a": "x y", "b": 3, "d": True, "e": 1.5}
+    assert diya_actions.normalise_args({"a": "x", "b": None, "c": "", "d": "   ", "e": " \n\t "}) == {"a": "x"}  # empty is no argument
+    assert diya_actions.normalise_args({"zero": 0, "no": False, "float": 0.0, "text": "0"}) == {"zero": 0, "no": False, "float": 0.0, "text": "0"}
+    assert diya_actions.normalise_args({}) == {}
     assert diya_actions.normalise_args("not a dict") == "not a dict"
     assert diya_actions.normalise_args(None) is None
+
+
+def test_an_optional_argument_the_model_leaves_empty_does_not_bounce_the_proposal():
+    agent = agent_with(task_kind(), replies=[tool_reply(PROPOSE, json.dumps({"title": "buy milk", "due": ""})), text_reply("ok")])
+    ask(agent)
+    (action,) = agent.actions.actions()
+    assert action["args"] == {"title": "buy milk"} and tool_text(agent).startswith("Proposed as action #1")
+    agent = agent_with(task_kind(), replies=[tool_reply(PROPOSE, json.dumps({"title": "walk the dog", "due": None})), text_reply("ok")])
+    ask(agent)
+    assert agent.actions.actions()[-1]["args"] == {"title": "walk the dog"}
 
 
 def test_a_control_character_is_still_refused_after_tidying():
@@ -174,7 +198,7 @@ def test_a_control_character_is_still_refused_after_tidying():
     ('{"title": "x", "when": "now"}', "a task has no when"),
     ('{"title": "x", "kind": "something_else"}', "a task has no kind"),
     ('{"title": "' + "x" * 101 + '"}', "a title is at most 100 characters"),
-    ('{"title": "   "}', "argument 'title' is not plain single-line text"),
+    ('{"title": "   "}', "a task needs a title"),  # nothing left once the whitespace is tidied: it is no title at all
 ])
 def test_a_proposal_that_is_refused_is_refused_in_one_plain_sentence_and_nothing_is_recorded(arguments, reason):
     agent = agent_with(task_kind(), replies=[tool_reply(PROPOSE, arguments), text_reply("ok")])
@@ -224,6 +248,118 @@ def test_a_fact_share_turn_has_no_tools_so_nothing_can_be_proposed():
     ask(agent, "my flight is on Friday at 6")
     assert agent.client.chat_calls[0]["tools"] is None
     assert agent.actions.actions() == []
+
+
+# ---- checks against what the owner actually wrote (ActionKind.asked and .prepare) ---------------------------
+
+def asks_for_a_task(text):
+    return "task" in text.lower()
+
+
+def drop_the_due_phrase(args, text):
+    if "due" in args and args["due"] not in text:
+        return {key: value for key, value in args.items() if key != "due"}, [f"It has no due date: {args['due']!r} was left out."]
+    return args, []
+
+
+def test_a_proposal_the_message_did_not_ask_for_is_refused_in_one_fixed_sentence_and_nothing_is_recorded():
+    seen = []
+    agent = agent_with(task_kind(asked=lambda text: seen.append(text) or asks_for_a_task(text)),
+                       replies=[tool_reply(PROPOSE, '{"title": "buy milk"}'), text_reply("ok")])
+    ask(agent, "I need to buy milk")
+    assert agent.actions.actions() == []
+    assert tool_text(agent) == diya_actions.NOT_ASKED_TEXT == (
+        "Not proposed: the user did not ask for that. Answer what they said instead, and do not propose it unless they ask.")
+    assert seen == ["I need to buy milk"]  # judged by the owner's own message, exactly
+
+
+def test_a_message_that_does_ask_gets_its_proposal_recorded():
+    agent = agent_with(task_kind(asked=asks_for_a_task), replies=[tool_reply(PROPOSE, '{"title": "buy milk"}'), text_reply("ok")])
+    ask(agent, "Please add a task to buy milk")
+    assert [a["args"] for a in agent.actions.actions()] == [{"title": "buy milk"}]
+
+
+def test_only_the_latest_message_is_judged_not_an_earlier_one():
+    agent = agent_with(task_kind(asked=asks_for_a_task), replies=[tool_reply(PROPOSE, '{"title": "x"}'), text_reply("ok")])
+    agent.ask([{"role": "user", "content": "add a task to buy milk"}, {"role": "assistant", "content": "Waiting for you."},
+               {"role": "user", "content": "thanks, and what's the weather?"}])
+    assert agent.actions.actions() == []
+
+
+def test_a_call_made_outside_a_turn_is_not_judged_by_an_old_message():
+    seen = []
+    agent = agent_with(task_kind(asked=lambda text: seen.append(text) or False))
+    assert agent._functions[PROPOSE](title="buy milk").startswith("Proposed as action #1")
+    assert seen == [] and len(agent.actions.actions()) == 1
+
+
+def test_a_kind_with_no_asked_check_is_never_refused_for_not_being_asked():
+    agent = agent_with(task_kind(), replies=[tool_reply(PROPOSE, '{"title": "x"}'), text_reply("ok")])
+    ask(agent, "hello there")
+    assert len(agent.actions.actions()) == 1
+
+
+def test_what_the_message_does_not_support_is_taken_out_and_the_model_is_told():
+    agent = agent_with(task_kind(prepare=drop_the_due_phrase),
+                       replies=[tool_reply(PROPOSE, json.dumps({"title": "call mum", "due": "tomorrow at 5pm"})), text_reply("ok")])
+    ask(agent, "add task call mum")
+    (action,) = agent.actions.actions()
+    assert action["args"] == {"title": "call mum"} and action["summary"] == "Add the task 'call mum'"
+    assert tool_text(agent) == (
+        "Proposed as action #1: Add the task 'call mum'. It has no due date: 'tomorrow at 5pm' was left out. Nothing has "
+        "happened yet: the owner has to approve it on the Actions page. Tell the owner it is waiting for them, and do not say it is done.")
+
+
+def test_what_the_message_does_support_is_kept_and_nothing_extra_is_said():
+    agent = agent_with(task_kind(prepare=drop_the_due_phrase),
+                       replies=[tool_reply(PROPOSE, json.dumps({"title": "call mum", "due": "tomorrow"})), text_reply("ok")])
+    ask(agent, "add a task to call mum tomorrow")
+    assert agent.actions.actions()[0]["args"] == {"title": "call mum", "due": "tomorrow"}
+    assert "left out" not in tool_text(agent)
+
+
+def test_prepare_sees_the_arguments_after_tidying_and_the_owners_message():
+    seen = []
+    agent = agent_with(task_kind(prepare=lambda args, text: seen.append((dict(args), text)) or (args, [])),
+                       replies=[tool_reply(PROPOSE, json.dumps({"title": "  buy   milk ", "due": ""})), text_reply("ok")])
+    ask(agent, "add a task")
+    assert seen == [({"title": "buy milk"}, "add a task")]
+
+
+def test_prepare_is_not_asked_when_the_proposal_was_already_refused_or_outside_a_turn():
+    seen = []
+
+    def prepare(args, text):
+        seen.append(text)
+        return args, []
+
+    refused = agent_with(task_kind(asked=lambda text: False, prepare=prepare), replies=[tool_reply(PROPOSE, '{"title": "x"}'), text_reply("ok")])
+    ask(refused)
+    agent = agent_with(task_kind(prepare=prepare))
+    agent._functions[PROPOSE](title="x")
+    assert seen == []
+
+
+def test_a_kind_s_asked_and_prepare_must_be_functions_or_none():
+    from diya_actions import ActionKind
+
+    def make(**extra):
+        return ActionKind("add_task", "Add", None, lambda a: None, lambda a: "x", lambda c, a: "x", task_kind().tool, **extra)
+
+    assert make().asked is None and make().prepare is None
+    assert make(asked=asks_for_a_task, prepare=drop_the_due_phrase).asked is asks_for_a_task
+    for field in ("asked", "prepare"):
+        for bad in ("not callable", 5, ["x"], True):
+            with pytest.raises(ValueError, match=f"{field} must be a function or None"):
+                make(**{field: bad})
+
+
+def test_the_notes_come_before_the_warning_that_nothing_has_happened():
+    action = {"id": 7, "summary": "Add the task 'x'."}
+    assert diya_actions.proposed_text(action, ["One thing.", "Another."]).startswith(
+        "Proposed as action #7: Add the task 'x'. One thing. Another. Nothing has happened yet:")
+    assert diya_actions.proposed_text(action) == diya_actions.proposed_text(action, [])
+    assert diya_actions.proposed_text(action).startswith("Proposed as action #7: Add the task 'x'. Nothing has happened yet:")
 
 
 # ---- the taint record: which tools ran before the proposal, in this turn only --------------------------

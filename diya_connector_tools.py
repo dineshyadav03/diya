@@ -14,10 +14,14 @@ connector" lives here, even though its own OAuth mechanics are a separate module
 """
 from __future__ import annotations
 
+import re
+
 import httpx
 
 import diya_connectors
 import diya_google_calendar
+import diya_intent
+from diya_actions import ActionFailed, ActionKind, ActionUncertain, InvalidArgs
 from diya_connectors import Connector, ConnectorError
 
 NETWORK_TIMEOUT = 5.0
@@ -195,6 +199,134 @@ def todoist_tasks(config):
     return list_tasks
 
 
+# ---- Todoist: the first write (docs/ACTIONS_DESIGN.md, D11 and unit A4) ---------------------------------------
+
+TODOIST_CONTENT_MAX = 200
+TODOIST_DUE_MAX = 60
+# What cannot have reached Todoist: the request was never sent. Anything else that goes wrong on the way is treated as
+# "may have been sent" -- so the task may exist -- because calling that a failure would invite a second attempt.
+_NEVER_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout, httpx.UnsupportedProtocol)
+
+
+def todoist_add_task_validate(args):
+    extra = sorted(set(args) - {"content", "due_string"})
+    if extra:
+        raise InvalidArgs(f"a Todoist task has no {', '.join(extra)}")
+    content = args.get("content")
+    if not isinstance(content, str) or not content:
+        raise InvalidArgs("a Todoist task needs its content, in words")
+    if len(content) > TODOIST_CONTENT_MAX:
+        raise InvalidArgs(f"a task's content is at most {TODOIST_CONTENT_MAX} characters")
+    if "due_string" in args:
+        due = args["due_string"]
+        if not isinstance(due, str) or not due:
+            raise InvalidArgs("when it is due must be words, like 'tomorrow at 5pm' (or left out)")
+        if len(due) > TODOIST_DUE_MAX:
+            raise InvalidArgs(f"when it is due is at most {TODOIST_DUE_MAX} characters")
+
+
+def todoist_add_task_render(args):
+    due = f" (due {args['due_string']})" if args.get("due_string") else ""
+    return f"Add to your Todoist Inbox: {args['content']}{due}"
+
+
+def _said(phrase, text):
+    """Is `phrase` (a due date, say) among the person's own words? Whole words, any capitals, spaces and the full stop or
+    comma after it ignored -- "tomorrow" in "add it for Tomorrow." yes, "day" in "Monday" no."""
+    phrase = " ".join(str(phrase).lower().split()).strip(" .,;:!?")
+    words = " ".join(str(text).lower().split())
+    return bool(phrase) and re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", words) is not None
+
+
+def todoist_add_task_prepare(args, text):
+    """A due date the person did not say is left out (docs/ACTIONS_DESIGN.md, section 6: measured, the model made one up in
+    over half the cases where it gave one, e.g. "tomorrow at 5pm" for "add task call mum"), and the model is told."""
+    due = args.get("due_string")
+    if due is None or _said(due, text):
+        return args, []
+    return ({key: value for key, value in args.items() if key != "due_string"},
+            [f"It has no due date: {due!r} was left out, because the user did not say when."])
+
+
+def todoist_add_task_execute(config, args):
+    """Create the task through Todoist's API, in the Inbox (no project is chosen). Called only by Actions.run, after the
+    owner approved exactly these arguments. Never retried: a failure it knows happened before anything took effect is
+    ActionFailed; a request that may have reached Todoist (no answer, or a failure on its side) is ActionUncertain."""
+    token = diya_connectors.read_token(config, "todoist")
+    if token is None:  # disconnected between the check that precedes this and now
+        raise ActionFailed("Todoist is not connected, so nothing was added.")
+    body = {"content": args["content"]}
+    if args.get("due_string"):
+        body["due_string"] = args["due_string"]
+    try:
+        response = httpx.post(f"{TODOIST_API}/tasks", headers=_todoist_headers(token), json=body, timeout=NETWORK_TIMEOUT)
+    except httpx.HTTPError as exc:
+        if isinstance(exc, _NEVER_SENT):
+            raise ActionFailed(f"Couldn't reach Todoist ({_friendly(exc)}), so nothing was added.")
+        raise ActionUncertain(
+            f"The request was sent to Todoist but no answer came back ({_friendly(exc)}), so the task may or may not have "
+            "been added. Look in Todoist, then record what you found."
+        )
+    status = response.status_code
+    if status in (200, 201):
+        try:
+            task_id = response.json().get("id")
+        except (ValueError, AttributeError):
+            task_id = None
+        return f"Added to your Todoist Inbox (task {task_id})." if task_id else "Added to your Todoist Inbox."
+    if status in (401, 403):
+        raise ActionFailed("Todoist refused the token, so nothing was added. Reconnect Todoist on the Connections page.")
+    if status == 429:
+        raise ActionFailed("Todoist is limiting requests right now, so nothing was added. Propose it again in a minute.")
+    if 500 <= status <= 599:
+        raise ActionUncertain(
+            f"Todoist answered with an error (HTTP {status}) part way through, so the task may or may not have been added. "
+            "Look in Todoist, then record what you found."
+        )
+    raise ActionFailed(f"Todoist answered with HTTP {status}, so nothing was added.")
+
+
+def todoist_add_task_kind():
+    return ActionKind(
+        name="todoist_add_task",
+        label="Add a Todoist task",
+        connector="todoist",
+        validate=todoist_add_task_validate,
+        render=todoist_add_task_render,
+        execute=todoist_add_task_execute,
+        asked=diya_intent.is_task_request,
+        prepare=todoist_add_task_prepare,
+        tool={
+            "type": "function",
+            "function": {
+                "name": "propose_todoist_task",
+                "description": (
+                    "Propose adding a task to the user's Todoist Inbox. This only PROPOSES it: nothing is added until the "
+                    "user approves it on the Actions page. Use it only when the user asks you to add, create or put "
+                    "something on their Todoist or to-do list."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string", "description": "What the task is, in a few words, e.g. 'Buy oat milk'."},
+                        "due_string": {
+                            "type": "string",
+                            "description": "Optional. When it is due, in the user's own words, e.g. 'tomorrow at 5pm'. Leave it out unless they said when.",
+                        },
+                    },
+                    "required": ["content"],
+                },
+            },
+        },
+    )
+
+
+def real_action_kinds():
+    """Every kind of action Diya actually has, ready to hand to Agent (action_kinds=): each a write the owner approves
+    one at a time on the Actions page. Lives here, beside the connectors, because a kind needs its connector."""
+    return (todoist_add_task_kind(),)
+
+
 # ---- wiring: the registry and the tool specs -----------------------------------------------------
 
 def real_connectors(config):
@@ -204,7 +336,7 @@ def real_connectors(config):
                  auth_kind="token", implemented=True, validate=home_assistant_validate(config)),
         Connector(name="notion", label="Notion", description="Search pages and databases you connect.",
                  auth_kind="token", implemented=True, validate=notion_validate),
-        Connector(name="todoist", label="Todoist", description="List your open tasks.",
+        Connector(name="todoist", label="Todoist", description="List your open tasks, and add one when you approve it.",
                  auth_kind="token", implemented=True, validate=todoist_validate),
         Connector(name="google_calendar", label="Google Calendar", description="Read your upcoming events.",
                  auth_kind="oauth", implemented=True, oauth_connect=diya_google_calendar.connect),
