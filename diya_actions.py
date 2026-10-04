@@ -136,7 +136,9 @@ class ActionKind:
     a kind that needs none). `validate(args)` raises InvalidArgs; `render(args)` is the one sentence the
     owner approves, built here in code from the arguments and never from anything the model said;
     `execute(config, args)` performs the effect and returns the service's own reply, or raises
-    ActionFailed."""
+    ActionFailed. `tool` is the function spec (OpenAI's tool format, like diya.TOOLS' entries) the model is
+    shown so it can PROPOSE this kind of action (docs/ACTIONS_DESIGN.md, D1); None means the model cannot
+    propose it at all. Calling that tool only ever records a pending action -- nothing is performed."""
 
     name: str
     label: str
@@ -144,8 +146,25 @@ class ActionKind:
     validate: object
     render: object
     execute: object
+    tool: dict | None = None
+
+    @property
+    def tool_name(self):
+        return self.tool["function"]["name"] if self.tool is not None else None
 
     def __post_init__(self):
+        if self.tool is not None:
+            function = self.tool.get("function") if isinstance(self.tool, dict) else None
+            if not (
+                isinstance(function, dict)
+                and self.tool.get("type") == "function"
+                and isinstance(function.get("name"), str)
+                and _TOOL_NAME.fullmatch(function["name"])
+                and isinstance(function.get("description"), str)
+                and function["description"].strip()
+                and isinstance(function.get("parameters"), dict)
+            ):
+                raise ValueError(f"{self.name}: tool must be a function spec with a lowercase name, a description and parameters")
         if not _NAME.fullmatch(self.name):
             raise ValueError(f"an action kind's name must be lowercase letters, digits and underscores: {self.name!r}")
         if not isinstance(self.label, str) or not self.label.strip():
@@ -213,6 +232,32 @@ def args_hash(kind_name, args):
     """What an approval is bound to (D5): the kind and the arguments, exactly. A hash of the kind too, so
     the same arguments proposed under another kind are not the same action."""
     return hashlib.sha256(f"{kind_name}\n{canonical(args)}".encode("utf-8")).hexdigest()
+
+
+def normalise_args(args):
+    """The model's arguments with the whitespace in its text values tidied (runs of spaces, tabs, line breaks and
+    non-breaking spaces become one space, the ends are trimmed) and nothing else touched. The store refuses
+    text that is not one trimmed line (`clean_args`) rather than repair it; this is the one repair the model's
+    side makes, so "buy  milk" is proposed as "buy milk" instead of bouncing, and the owner sees, and the hash
+    binds, the tidied text. Anything else wrong -- a control or invisible character, the wrong type -- is
+    still refused by `clean_args`. Not a dict: returned unchanged, for `clean_args` to refuse."""
+    if not isinstance(args, dict):
+        return args
+    return {key: " ".join(value.split()) if isinstance(value, str) else value for key, value in args.items()}
+
+
+def proposed_text(action):
+    """What the model is told after it proposed an action (D1): that it is only a proposal, and what to say."""
+    return (
+        f"Proposed as action #{action['id']}: {action['summary'].rstrip('.')}. Nothing has happened yet: the owner has "
+        "to approve it on the Actions page. Tell the owner it is waiting for them, and do not say it is done."
+    )
+
+
+def refused_text(exc):
+    """What the model is told when a proposal was refused (an unknown kind, arguments that were not allowed, a
+    connector not connected, too many waiting): one plain sentence, and that nothing was recorded."""
+    return f"Not proposed: {str(exc).rstrip('.')}. Nothing was recorded; tell the owner so, plainly."
 
 
 def _clean_summary(summary):

@@ -324,10 +324,10 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     def chat(req: ChatRequest):
         thread_id = req.thread_id or agent.store.create_thread()
         history = agent.with_profile(agent.store.get_history(thread_id))
-        agent.store.add_message(thread_id, "user", req.message)
+        message_id = agent.store.add_message(thread_id, "user", req.message)
         history.append({"role": "user", "content": req.message})
         try:
-            answer, tools_called = agent.ask(history)
+            answer, tools_called = agent.ask(history, thread_id=thread_id, message_id=message_id)
         except Exception as exc:
             answer = f"Couldn't reach the model ({exc}). Try again in a moment."
             tools_called = []
@@ -385,7 +385,7 @@ def main():
 
     agent = diya.Agent(config)
     diya.warm_up_or_exit(agent)
-    for line in diya.memory_startup_lines(agent):
+    for line in diya.memory_startup_lines(agent) + diya.actions_startup_lines(agent):
         print(line)
     transcriber = WhisperTranscriber(config.whisper_model)
     transcriber.warm_up()

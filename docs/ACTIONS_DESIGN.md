@@ -1,8 +1,8 @@
 # Actions and approvals -- design spec
 
-> **Status (2026-10-04):** designed; **A1 (the trail and the state machine) built and
-> mutation-tested, A2-A4 not started.** Nothing here can write anywhere yet: the real registry of
-> write actions is empty. Stage 4 of `ROADMAP.md`'s later stages ("durable
+> **Status (2026-10-04):** designed; **A1 (the trail and the state machine) and A2 (the model's
+> side) built and mutation-tested, A3-A4 not started.** Nothing here can write anywhere yet: the real
+> registry of write actions is empty. Stage 4 of `ROADMAP.md`'s later stages ("durable
 > workflows"), first slice only: the approval gate and the action trail. Stage 3 (connectors) is
 > built, which was the owner's own precondition for starting this (2026-09-28): there is now a real
 > connector to design the gate against. Everything a connector can do today is a *read*
@@ -260,3 +260,33 @@ repo's LF, and the 22 were re-run. Not mutated because behaviour cannot differ: 
 only), the kind filter in the duplicate query (the hash already includes the kind), the `message_id is
 not None` guard in the per-message count (`= NULL` matches nothing anyway), and passing one `now` into
 `expire` rather than letting it read the clock again (the same instant in every test).
+
+*Unit A2 (`diya.py`, `diya_actions.py`, `diya_db.py`, `diya_web.py`, `tests/test_actions_agent.py`).* The model's
+side, with fake kinds only. A kind of action gained an optional `tool` (the function spec the model is shown);
+`Agent(..., action_kinds=...)` builds an `Actions` from the kinds it is given (the real registry, still empty, by
+default), registers each tool as a function that only **proposes**, and offers it in `Agent.tools` only while its
+connector is connected -- re-read every turn, like a connector's own tool, so connecting or disconnecting takes
+effect on the next message. A tool name another tool already has refuses to start rather than shadow it.
+`Agent.ask` takes `thread_id` and `message_id`, and the chat route, the terminal chat and the one-message
+run now pass them (`Store.add_message` returns the new id for that); a proposal records them as its own, never
+as anything the model said. Which tools ran earlier in the *same turn* is recorded, in order and once each, as
+the taint (D6): every tool except `list_reminders` (the owner's own list), not another proposal, and written
+down before the tool runs so one that fails is still listed. The turn's state is per thread of control, and
+is cleared when the turn ends, so it cannot leak into the next turn.
+
+Where it went beyond or past the sections above: the one repair the model's side makes is **whitespace** in
+its text arguments (`normalise_args`: runs of spaces, tabs, line breaks and non-breaking spaces become one
+space), so "buy  milk" is proposed as "buy milk" instead of bouncing; the owner sees, and the hash binds, the
+tidied text. A control or invisible character is still refused, not repaired. The model is told one fixed
+sentence either way (`proposed_text`, `refused_text`): that it is only a proposal and not to say it is done,
+or that nothing was recorded. `kind` is a positional-only parameter of the proposing function, so an argument
+the model happens to name `kind` is refused by the kind's own check instead of crashing the tool loop. Startup
+(`actions_startup_lines`, printed by the API and the terminal chat) first moves any run cut off long ago to
+`unknown`, then says how many are waiting or still need the owner's word -- and says nothing when there is
+nothing to say.
+
+Measured, not assumed: 51 tests; 60 mutations of the new code, all caught in the end. The first pass left one
+alive (the per-turn record is cleared when a turn ends, but nothing checked that after a turn that had
+actually read something -- the next turn's own reset hid it) and two patterns that matched `add_reminder`'s
+identical line as well; the survivor got an assertion and the patterns got context. Not mutated because
+behaviour cannot differ: falling back to the real registry when no kinds are passed (it is empty).

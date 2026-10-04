@@ -299,6 +299,7 @@ def test_the_api_prints_the_memory_lines_before_it_starts_listening(config, tmp_
     monkeypatch.setattr("uvicorn.run", lambda app, **kw: None)
     monkeypatch.setattr(diya, "Agent", lambda config=None: types.SimpleNamespace(config=config, warm_up=lambda: None))
     monkeypatch.setattr(diya, "memory_startup_lines", lambda agent: ["Memory: a line about memory"])
+    monkeypatch.setattr(diya, "actions_startup_lines", lambda agent: [])  # the fake agent has no action store
     monkeypatch.setattr(diya_web, "WhisperTranscriber", lambda name: types.SimpleNamespace(name=name, warm_up=lambda: None))
     diya_web.main()
     out = capsys.readouterr().out

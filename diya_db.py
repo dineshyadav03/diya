@@ -348,12 +348,14 @@ class Store:
     def add_message(self, thread_id, role, content):
         conn = self.connect()
         now = datetime.now(timezone.utc).isoformat()
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO messages (thread_id, role, content, created_at) VALUES (?, ?, ?, ?)",
             (thread_id, role, content, now),
         )
         conn.commit()
+        message_id = cur.lastrowid
         conn.close()
+        return message_id
 
     def get_history(self, thread_id):
         conn = self.connect()

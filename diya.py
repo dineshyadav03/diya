@@ -13,6 +13,7 @@ import httpx
 from ddgs import DDGS
 from openai import OpenAI
 
+import diya_actions
 import diya_config
 import diya_connector_tools
 import diya_connectors
@@ -349,9 +350,14 @@ class Agent:
     immediately rather than on the first question).
     """
 
-    def __init__(self, config=None, client=None, store=None, clock=None):
+    def __init__(self, config=None, client=None, store=None, clock=None, action_kinds=None):
         self.config = config or diya_config.load_config()
         self.store = store or diya_db.Store(self.config.db_path)
+        # The approval gate (docs/ACTIONS_DESIGN.md): the kinds of write Diya may PROPOSE. The real registry
+        # is empty until a unit adds one; tests hand in fakes, the way they hand in a fake model client.
+        self.actions = diya_actions.Actions(
+            self.store, self.config, diya_actions.KINDS if action_kinds is None else tuple(action_kinds)
+        )
         self._client = client
         self._clock = clock or datetime.now  # a naive local datetime; a parameter so tests do not depend on today
         self._turn = threading.local()  # what the current ask() is answering, per thread
@@ -375,16 +381,33 @@ class Agent:
         # when actually connected, so a disconnect takes effect on the very next turn.
         for _name, spec, func in diya_connector_tools.tool_specs(self.config):
             self._functions[spec["function"]["name"]] = func
+        # A kind of action's tool (docs/ACTIONS_DESIGN.md, D1) only ever PROPOSES: the function registered for
+        # it records a pending action and returns, and nothing is performed. A name that another tool already
+        # has would let one shadow the other, so that refuses to start rather than guess.
+        self._proposal_tools = set()
+        taken = set(self._functions)
+        for kind in self.actions.kinds:
+            if kind.tool is None:
+                continue
+            if kind.tool_name in taken:
+                raise ValueError(f"the tool name {kind.tool_name!r} (action kind {kind.name}) is already another tool's")
+            taken.add(kind.tool_name)
+            self._proposal_tools.add(kind.tool_name)
+            self._functions[kind.tool_name] = functools.partial(self._propose, kind)
 
     @property
     def tools(self):
         """What the model is offered this turn: the fixed tools, plus a connector's tool only while
-        it is actually connected (docs/CONNECTORS_DESIGN.md, D4) -- computed fresh, not cached, so
+        it is actually connected (docs/CONNECTORS_DESIGN.md, D4), plus the proposal tool of each kind of
+        action whose connector is connected (docs/ACTIONS_DESIGN.md, D2) -- computed fresh, not cached, so
         connecting or disconnecting takes effect on the next message, not at the next restart."""
         result = list(TOOLS)
         for name, spec, _func in diya_connector_tools.tool_specs(self.config):
             if diya_connectors.is_connected(self.config, name):
                 result.append(spec)
+        for kind in self.actions.kinds:
+            if kind.tool is not None and (kind.connector is None or diya_connectors.is_connected(self.config, kind.connector)):
+                result.append(kind.tool)
         return result
 
     def now(self):
@@ -474,6 +497,25 @@ class Agent:
         note = f" ({'; '.join(when.assumed)})" if when.assumed else ""
         return f"Reminder saved: {content}, for {when.describe()}{note}"
 
+    def _propose(self, kind, /, **args):
+        """The tool behind a kind of action (docs/ACTIONS_DESIGN.md, D1): it PROPOSES and does nothing else. The
+        arguments are the model's, whitespace tidied; what is recorded beside them is the turn's own, never the
+        model's: the owner's message it answers and the tools that ran earlier in the same turn (D6), which the
+        Actions page shows. What comes back is a fixed sentence for the model (diya_actions.proposed_text or
+        refused_text). `kind` is positional-only, so an argument the model names "kind" cannot collide with it."""
+        in_turn = getattr(self._turn, "active", False)
+        try:
+            action = self.actions.propose(
+                kind.name,
+                diya_actions.normalise_args(args),
+                thread_id=self._turn.thread_id if in_turn else None,
+                message_id=self._turn.message_id if in_turn else None,
+                taint_sources=list(self._turn.reads) if in_turn else (),
+            )
+        except diya_actions.ActionError as exc:
+            return diya_actions.refused_text(exc)
+        return diya_actions.proposed_text(action)
+
     def list_reminders(self):
         rows = self.store.reminders("pending")
         if not rows:
@@ -556,19 +598,27 @@ class Agent:
         sentence; this is the backstop if the model elaborates anyway."""
         return diya_intent.shorten_ack(content) if fact_share else content
 
-    def ask(self, messages):
+    def ask(self, messages, *, thread_id=None, message_id=None):
         """Returns (answer_text, tools_called) -- the tool list exists so evals can check routing.
 
-        While it runs, add_reminder knows what the person just said (see there); when it is over that is
+        While it runs, add_reminder knows what the person just said (see there), and a proposed action
+        (docs/ACTIONS_DESIGN.md) knows which chat and which of the owner's messages it came from and which tools
+        ran before it (`thread_id`, `message_id`, the tools run so far); when it is over all of that is
         forgotten, so a later direct call is not judged by an old message.
         """
         self._turn.user_text = _last_user_text(messages)
+        self._turn.thread_id = thread_id
+        self._turn.message_id = message_id
+        self._turn.reads = []
         self._turn.active = True
         try:
             return self._ask(messages)
         finally:
             self._turn.active = False
             self._turn.user_text = None
+            self._turn.thread_id = None
+            self._turn.message_id = None
+            self._turn.reads = []
 
     def _ask(self, messages):
         """The tool-calling loop behind ask().
@@ -600,6 +650,11 @@ class Agent:
             messages.append(message)
             for call in message.tool_calls:
                 tools_called.append(call.function.name)
+                if call.function.name not in self._proposal_tools and call.function.name != "list_reminders":
+                    # What a proposal later in this turn will say it came after (docs/ACTIONS_DESIGN.md, D6): every
+                    # tool that ran, whatever it returned -- but not another proposal, and not the owner's own list
+                    # of reminders. Recorded before it runs, so a tool that fails is still listed.
+                    self._turn.reads.append(call.function.name)
                 func = self._functions[call.function.name]
                 args = json.loads(call.function.arguments)
                 print(f"  [tool call] {call.function.name}({args})")
@@ -663,6 +718,30 @@ def memory_startup_lines(agent):
     return lines
 
 
+def actions_startup_lines(agent):
+    """What to tell the person about the approval gate when Diya starts (the terminal chat and the web server
+    both print these, docs/ACTIONS_DESIGN.md): any action that was still running when Diya last stopped is moved
+    to `unknown` first (it is never run again, D4), then how many are waiting for the owner or need a look.
+    Nothing is said when there is nothing to say, which is the usual case."""
+    cut_off = agent.actions.reconcile()
+    counts = agent.actions.counts()
+    lines = []
+    if cut_off:
+        lines.append(
+            f"Actions: {cut_off} action{' was' if cut_off == 1 else 's were'} still running when Diya last stopped, so "
+            "what happened is not known. It will not be run again: check the service, then record what you found "
+            "(Actions page, or `python diya_actions_cli.py`)."
+        )
+    if counts["pending"]:
+        lines.append(f"Actions: {counts['pending']} waiting for your approval (Actions page, or `python diya_actions_cli.py list`).")
+    if counts["unknown"] and not cut_off:
+        lines.append(
+            f"Actions: {counts['unknown']} with an unknown outcome still {'needs' if counts['unknown'] == 1 else 'need'} "
+            "you to record what happened."
+        )
+    return lines
+
+
 def chat_loop(agent, thread_id, history):
     print(f"[Diya -- thread {thread_id}. Type 'exit' (or Ctrl+C) to stop.]")
     for m in history:
@@ -678,11 +757,11 @@ def chat_loop(agent, thread_id, history):
         if user_input.lower() in ("exit", "quit"):
             break
 
-        agent.store.add_message(thread_id, "user", user_input)
+        message_id = agent.store.add_message(thread_id, "user", user_input)
         history.append({"role": "user", "content": user_input})
 
         try:
-            answer, _ = agent.ask(history)
+            answer, _ = agent.ask(history, thread_id=thread_id, message_id=message_id)
         except Exception as exc:
             # Your message is already saved -- Ollama just isn't reachable right now.
             print(f"assistant> Couldn't reach the model ({exc}). Try again in a moment.")
@@ -717,14 +796,14 @@ def main():
 
     if message is not None:
         # one-off mode: useful for scripts/scheduled tasks, not for talking to it yourself
-        agent.store.add_message(thread_id, "user", message)
+        message_id = agent.store.add_message(thread_id, "user", message)
         history.append({"role": "user", "content": message})
-        answer, _ = agent.ask(history)
+        answer, _ = agent.ask(history, thread_id=thread_id, message_id=message_id)
         agent.store.add_message(thread_id, "assistant", answer)
         print(f"assistant> {answer}")
         return
 
-    for line in memory_startup_lines(agent):  # only in the live chat: a one-off run's output is for scripts
+    for line in memory_startup_lines(agent) + actions_startup_lines(agent):  # only in the live chat: a one-off run's output is for scripts
         print(f"[{line}]")
     chat_loop(agent, thread_id, history)
 
