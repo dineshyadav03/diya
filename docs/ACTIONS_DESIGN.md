@@ -1,8 +1,9 @@
 # Actions and approvals -- design spec
 
-> **Status (2026-10-04):** designed; **A1 (the trail and the state machine), A2 (the model's side)
-> and A3 (the API, the Actions page and the command line) built and mutation-tested, A4 not started.**
-> Nothing here can write anywhere yet: the real registry of write actions is empty. Stage 4 of `ROADMAP.md`'s later stages ("durable
+> **Status (2026-10-04):** designed and **built: A1 (the trail and the state machine), A2 (the model's
+> side), A3 (the API, the Actions page and the command line) and A4 (the first real write: adding a task
+> in Todoist, on the owner's yes).** Todoist is the only account Diya can write to, one approved task at
+> a time; every other connector is still read-only. Stage 4 of `ROADMAP.md`'s later stages ("durable
 > workflows"), first slice only: the approval gate and the action trail. Stage 3 (connectors) is
 > built, which was the owner's own precondition for starting this (2026-09-28): there is now a real
 > connector to design the gate against. Everything a connector can do today is a *read*
@@ -181,13 +182,15 @@ kinds, each its own decision: Notion create-page, Google Calendar create-event o
 Home Assistant service calls last and only behind a per-entity allowlist, because that one moves
 physical things.
 
-**Finding, checked live 2026-10-04:** C2's Todoist tool and validator call the legacy REST v2
+**Finding, checked live 2026-10-04:** C2's Todoist tool and validator called the legacy REST v2
 (`/rest/v2/...`). Todoist's current API is v1 (`/api/v1/...`), described in its own docs as "a new
-API that unifies the Sync API v9 and the REST API v2", with v2's documentation still available "for
-reference". v1 has a plain *Create Task* (`content` required, project optional and defaulting to
-the Inbox). Unit A4 therefore moves the Todoist connector to v1 first -- a read-path change with its
-own tests -- before adding a write on top of an API line that is on its way out. The v1 list
-endpoint is paginated, which v2's was not, so that is a real change, not a URL swap.
+API that unifies the Sync API v9 and the REST API v2". v1 has a plain *Create Task* (`content`
+required, project optional and defaulting to the Inbox). When this section was first written the
+expectation was that v2 was merely "on its way out"; checking it against the real service for A4
+showed it was already gone: **`/rest/v2/...` answers 410 Gone**, so the connector could not connect to
+a real account at all. A4 therefore moved the Todoist connector to v1 first, as its own commit
+(`docs/CONNECTORS_DESIGN.md`, "Found later, and fixed"), before building a write on it. The v1 list
+endpoints are paginated (`{"results": [...], "next_cursor"}`), which v2's were not.
 
 ## 4. Units
 
@@ -196,7 +199,7 @@ endpoint is paginated, which v2's was not, so that is a real change, not a URL s
 | A1 | **The trail and the state machine.** Migration 5 (`actions`, `action_events`); `diya_actions.py`: the kind registry (empty, like `CONNECTORS` was at C1), `propose` / `approve` / `reject` / `expire` / `reconcile`, `IllegalTransition`, the hash, the caps and the duplicate check. No network and no model; tested with fake kinds, mutation-tested. | `diya_db.py`, `diya_actions.py` (new) |
 | A2 | **The model's side and the taint record.** A kind's tool spec only proposes (D1); `Agent._ask` records which tools ran before a proposal in the same turn; `Agent.tools` offers a kind only while its connector is connected (D2). Fake kinds only. | `diya.py`, `diya_actions.py` |
 | A3 | **API, page and command line** (D8): the routes, the proxy routes and tripwire-list updates, `frontend/app/actions`, the header count, the command line. Live-checked in a real browser. | `diya_actions_api.py` (new), `diya_actions_cli.py` (new), `diya_web.py`, `frontend/...` |
-| A4 | **The first real kind** (D11). Todoist connector moved to API v1; `todoist_add_task`; measured with the real model (fake token): is it proposed when asked, and **how often when not**; the number decides whether the first kind needs a `diya_intent`-style guard like reminders have. **Needs the owner's yes** (section 5). | `diya_connector_tools.py`, `diya_actions.py` |
+| A4 | **The first real kind** (D11). Todoist connector moved to API v1; `todoist_add_task`; measured with the real model (fake token): is it proposed when asked, and **how often when not**; the number decides whether the first kind needs a `diya_intent`-style guard like reminders have. The owner said yes to Todoist (2026-10-04). **Built** (section 6): the number did call for guards, and they are in. | `diya_connector_tools.py`, `diya_actions.py`, `diya.py`, `diya_intent.py`, `diya_actions_bench.py` |
 | later | Standing grants (D7), multi-step workflows with an approval node, more kinds (Notion, Calendar, Home Assistant), snooze and recurrence for reminders (carried over from `docs/PROACTIVITY_DESIGN.md`). Each is its own design. | -- |
 
 Order: A1 before anything (nowhere to put a proposal without it), A2 before A3 (the page needs
@@ -206,10 +209,10 @@ so they can be built and reviewed without anyone deciding whether Diya may write
 
 ## 5. What needs the owner's yes
 
-- **Whether Diya may write to any account yet (A4).** `docs/CONNECTORS_DESIGN.md` section 6 left this
-  open on purpose. The recommendation is Todoist add-task, one at a time, approved on a page,
-  and nothing else; "no, stay read-only for now" is a fine answer and costs nothing -- A1-A3 stand on
-  their own.
+- **Whether Diya may write to any account yet (A4).** *Answered, 2026-10-04: yes, to Todoist, adding a
+  task.* `docs/CONNECTORS_DESIGN.md` section 6 left this open on purpose; the recommendation was Todoist
+  add-task, one at a time, approved on a page, and nothing else, and that is exactly what was built. No
+  other connector and no other kind of write is covered by that yes: each is its own decision.
 - **The caps and the expiry** (10 pending, 3 per turn, 24 hours) are recommendations, not decisions
   anyone should have to make; change them freely.
 - **Standing grants** are not asked for here (D7). If wanted, say so, and it becomes its own design.
@@ -323,3 +326,85 @@ look like an instruction was shown as plain text; the caution listed what had be
 what was waiting. **Not covered by an automated test:** the page component's own behaviour (the repo has no
 component tests for any page); the live check above is what stands in for it, and the pure helpers and the proxy
 routes under it are tested.
+
+*Unit A4 (`diya_connector_tools.py`, `diya_actions.py`, `diya.py`, `diya_intent.py`, `diya_actions_bench.py`,
+`tests/labelled_task_requests.py`).* The first real write, on the owner's yes (2026-10-04): **adding a task to
+Todoist**. The kind is `todoist_add_task` (`content`, an optional `due_string`; no project, so Todoist files it
+in the Inbox); the sentence the owner approves is `Add to your Todoist Inbox: <content> (due <when>)`; the
+effect is one `POST /api/v1/tasks`, made only by `Actions.run` after the owner approved exactly those
+arguments, and what is sent is a short list of its own (the content, and the due phrase if there is one),
+whatever else the arguments held. It is offered to the model only while Todoist is connected, like the
+connector's own tool. The registry moved: a kind needs its connector, so the real one is
+`diya_connector_tools.real_action_kinds()` and `diya_actions.KINDS` is gone (the Agent and the command line
+default to it). The Connections page now says Diya reads on its own and anything that would change an account
+waits for approval, and Todoist's card says it can add a task when you approve it.
+
+**It began with a repair.** Checking the Todoist API against the real service before building on it showed C2's
+connector was already broken: `/rest/v2/...` now answers 410 Gone, so a real token could not even be connected.
+That was fixed first, as its own commit (`docs/CONNECTORS_DESIGN.md`, "Found later, and fixed").
+
+**An outcome that cannot be told is `unknown`, not `failed`** (beyond what D4 described). A POST that was sent
+and got no answer -- a read or write timeout, a dropped connection, a garbled reply, or a 5xx from Todoist --
+may have created the task, and calling that a failure would invite a second attempt that does it twice. An
+effect says so by raising `ActionUncertain`; the action lands in `unknown` with the reason as its result, is
+never run again, and the owner resolves it exactly as they would a run cut off by a crash. Only what cannot have
+been sent (a refused connection, a connect or pool timeout, an unsupported protocol) is a plain `failed`, and so
+are the answers that mean it was not created (401, 403, 429, any other 4xx). The Actions page words an approval
+that ended `unknown` as "Not sure it was done", never "Not done".
+
+**The measurement D6 asked for, and what it called for.** `python diya_actions_bench.py` sends 25 messages that
+ask for a task and 51 that do not (eight categories, including needs and wishes, reminders, reading the list and
+mentioning the word "task"; `tests/labelled_task_requests.py`), three times each, through the real Agent and the
+real model (`qwen2.5:3b`) with the proposal tool offered; the tools that read are stubbed, Todoist is "connected"
+with a made-up token, and a proposal is only recorded. It counts the model *reaching for* the tool separately
+from a proposal being *recorded*, which is what the owner would see.
+
+| | before any guard | with the guards |
+|---|---|---|
+| asked for a task: a proposal recorded | 67 of 75 (89%) | 72 of 75 (96%) |
+| not asked: a proposal recorded | 10 of 153 (7%) | **0 of 153 (0%)** |
+| due phrases on a recorded proposal that were not the person's own words | 23 of 42 given | **0 of 20** |
+| refused because the model sent `"due_string": ""` | 6 | 0 |
+| not asked: the model reached for the tool at all | 10 of 153 | 13 of 153 (all refused) |
+
+Without a guard the model proposed a task nobody asked for in 7% of the not-asked messages and in 29% of the "needs
+and wishes" ones ("I need to buy milk", "I'm running low on printer ink"), and "make a note to call the plumber"
+three times in three; plain questions, facts, list-reading and mentions of the word were all zero. More worrying
+than the noise: in over half the cases where it gave a due date the date was invented ("add task call mum" came
+back "due tomorrow at 5pm"), the same failure `add_reminder` had, and the six empty-`due_string` refusals were
+never recovered: the model told the owner it "could not add the task without a due date", which was false. So
+the number did call for guards, three of them, all deterministic and none a second model (D10):
+
+1. **An empty optional argument is no argument** (`normalise_args` drops `""` and null): fixes the false refusals.
+2. **A task is proposed only if the latest message asks for one** (`ActionKind.asked`, here
+   `diya_intent.is_task_request`, the same shape as `is_reminder_request`): stops every unasked proposal.
+3. **A due phrase the person did not say is left out, and the model is told** (`ActionKind.prepare`, here
+   `todoist_add_task_prepare`; whole words, any capitals): a card shows only what the owner said.
+
+Both checks apply only while a message is being answered, as `add_reminder`'s does; a call made outside a turn is
+not judged by an old message. The guard is a short list of the ways people ask, so missing an unusual phrasing is
+the safe direction (they can say "add a task to ..."): it refuses "jot 'x' in Todoist", "stick it on my to-do list"
+and "queue up a task", and it allows a few things that only mention adding a task ("she asked me to add a task to the
+board"); both lists are kept in `tests/test_task_intent.py` on purpose. Probing it with phrasings it was not
+tuned on found one unsafe gap (a negation, "don't add a task for that", passed), which is now refused.
+
+**What this does not show.** The labelled messages were written by the author of the guard, so they show what the
+guard and the model do with THESE phrasings, not how either does on the way a real person writes; three runs
+of one small model is a pattern, not a rate; the model ran without the owner's accepted facts in its prompt; and
+`qwen2.5:3b` is the default model, not the only one, and **only it is measured**: a shortened run against the larger
+installed model (`qwen3:8b`) was started and did not finish inside the hour a background task is allowed, since that
+model is about six times slower on this machine. **No real Todoist account has been used**: every network call in the tests is faked, the live check
+(a real browser, a scratch database, the real kind with only `httpx.post` faked) drove one approval to success
+and one to "sent, no answer", and the service itself was asked only what it says to a fake token (a 401 on every
+path used). The first real task, from the owner's own token, is the one thing still unverified.
+
+Measured, not assumed: 136 connector-tool tests (the migration, the write, every status and every kind of network
+failure, the whole flow through the approval store, the guard and the due check through the real Agent), 203 for the
+guard's phrasing, 29 for the benchmark's own machinery, and the store, agent, API and command-line tests extended;
+**204 mutations of the new code, 203 caught** (the other, `.match` for `.search` on a pattern anchored with `^`, cannot
+behave differently). The first pass left twelve alive and four patterns unmatched: three of the survivors were
+redundancy in the regex itself (an article `an` that is ungrammatical before "task", a `new` already covered a
+few characters later, a `todo` that `to-?do` already matches), which were removed rather than tested; the rest were
+real gaps (destination forms for `log`, `enter` and `record`; two "question" cases that were never requests and so
+tested nothing; the Todoist body being a short list of its own; the benchmark's unasked-recorded count), which
+got tests.

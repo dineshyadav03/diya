@@ -50,17 +50,19 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   File listing is limited to `Documents/Diya` under your home folder, or the folders in `DIYA_FILES_ROOTS`.
 - Optional connectors on the **Connections** page: Home Assistant, Notion and Todoist, each off until you paste a token there,
   plus Google Calendar (a real Google login, once you set `DIYA_GOOGLE_CLIENT_ID`/`DIYA_GOOGLE_CLIENT_SECRET` from your own
-  Google Cloud project -- see [Connectors design](docs/CONNECTORS_DESIGN.md)). Read-only for now; nothing is sent anywhere
-  until you connect it, and disconnecting is instant.
+  Google Cloud project -- see [Connectors design](docs/CONNECTORS_DESIGN.md)). They read on their own; the one thing Diya can
+  change is a Todoist task you approve (below). Nothing is sent anywhere until you connect it, and disconnecting is instant.
 - An **Actions** page (and `python diya_actions_cli.py`) where anything Diya proposes to change outside this computer waits
-  for your approval: you press Approve on exactly what is shown, it runs once, and every step is recorded. Built end to
-  end, but **no kind of action is registered yet, so Diya cannot propose anything**: every connector is still read-only.
+  for your approval: you press Approve on exactly what is shown, it runs once, and every step is recorded. The one thing it can
+  propose is **adding a task to your Todoist Inbox**, and only when you ask for one ("add a task to ...", "put x on my to-do
+  list"), with a due date only if you said one; nothing else Diya touches can be changed, and **no real Todoist account has been
+  tried yet**, only the real API's answer to a fake token.
 - Hold-to-talk voice input through local Whisper, and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
 - Facts it extracts wait in a review queue; nothing reaches the model unless you accept it.
   Review them on the **Memory** page of the UI, or with `python diya_review.py list`, `accept`, `reject` and `edit` (see [Dreaming](docs/dreaming.md)); `judge` asks the local model for an optional second opinion.
   The model is told the accepted facts, in every chat; your old `user_profile.txt` was imported once.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 2486 tests pass on Windows (as of 2026-10-04).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 2864 tests pass on Windows (as of 2026-10-04).
 
 ## Known limits
 
@@ -69,7 +71,9 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - The optional model check on a staged fact (`python diya_review.py judge`) is the same small model that proposed it, and it was measured only on
   a few dozen invented cases: it says "not supported" to true facts that are only implied, and a message can steer it. It is a hint, never a decision.
 - `web_search` is not covered by the outbound-host allowlist that limits `get_weather` to Open-Meteo (`DIYA_TOOL_ALLOWED_HOSTS`).
-- Models are pulled by tag, not pinned; the 3B model sometimes calls tools it should not.
+- Models are pulled by tag, not pinned; the 3B model sometimes calls tools it should not. For adding a Todoist task it reached for the tool
+  unasked on about 8% of messages (13 of 153 in a measured run, `python diya_actions_bench.py`), and a guard in code refused every one;
+  the guard knows a short list of ways of asking, so an unusual phrasing ("jot it in Todoist") is refused and you can say it again.
 
 ## Docs
 
@@ -80,7 +84,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   local-memory projects (Truffle, Hindsight) and agent-harness engineering patterns (UFO's
   grant-in-chat audit trail, Dreaming-shaped nightly consolidation showing up independently in
   three unrelated projects) weighed against Diya's own design, not adopted wholesale.
-  [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built, including an optional, measured model verifier). [Person-tagged memory](docs/PERSON_MEMORY_DESIGN.md): who a fact is about, built into review, the model's own system message, and the CLI/UI (built). [Model benchmark](docs/MODEL_BENCHMARK.md): three installed models on this laptop, first pass. [Proactivity design](docs/PROACTIVITY_DESIGN.md): reminders that fire, the first step from an assistant that answers to one that tells you (built except the desktop notifier). [Connectors design](docs/CONNECTORS_DESIGN.md): outside accounts as a menu any owner picks from (Home Assistant, Notion, Todoist and Google Calendar all built; the OAuth connector's code is not yet verified against the real Google endpoints). [Actions design](docs/ACTIONS_DESIGN.md): the approval gate and action trail any future write must go through -- the model proposes, code executes, only the owner approves (built except the first real write: the store and its state machine, the model's side, and the Actions page and command line you approve on; nothing can write yet and every connector is still read-only).
+  [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built, including an optional, measured model verifier). [Person-tagged memory](docs/PERSON_MEMORY_DESIGN.md): who a fact is about, built into review, the model's own system message, and the CLI/UI (built). [Model benchmark](docs/MODEL_BENCHMARK.md): three installed models on this laptop, first pass. [Proactivity design](docs/PROACTIVITY_DESIGN.md): reminders that fire, the first step from an assistant that answers to one that tells you (built except the desktop notifier). [Connectors design](docs/CONNECTORS_DESIGN.md): outside accounts as a menu any owner picks from (Home Assistant, Notion, Todoist and Google Calendar all built; the OAuth connector's code is not yet verified against the real Google endpoints). [Actions design](docs/ACTIONS_DESIGN.md): the approval gate and action trail any future write must go through -- the model proposes, code executes, only the owner approves (built: the store and its state machine, the model's side, the Actions page and command line you approve on, and the first real write, adding a Todoist task; every other connector is read-only).
 
 ## Architecture
 
@@ -103,6 +107,7 @@ diya_review.py (by hand) or the UI's Memory page reads dream_pending.jsonl -> re
 ```bash
 pip install ".[dev]" && python -m pytest  # about 2 minutes, from the repo root
 python diya_evals.py                      # needs Ollama and both models; exits 1 if any case fails
+python diya_actions_bench.py --runs 3     # needs Ollama: when does the model propose a Todoist task, asked and not (about 30 minutes)
 ```
 
 The tests use a fake model client, temporary directories and a cleared `DIYA_*` environment, so they

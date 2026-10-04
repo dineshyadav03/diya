@@ -249,7 +249,8 @@ first.
 
 - Whether any connector gets write access at all yet, or every connector stays read-only until Stage 4's
   approval-gate design exists (D2 defaults to read-only either way; this is about the ceiling, not the
-  starting point).
+  starting point). *Answered 2026-10-04: Todoist may add a task, one at a time, approved on the Actions page
+  (`docs/ACTIONS_DESIGN.md`, A4); every other connector stays read-only.*
 - For WhatsApp specifically: whether an unofficial, session-based library is acceptable at all, given
   the real account-ban risk against Meta's terms (RESEARCH.md entry 11) -- this is not a default yes.
 - C3's OAuth client registration needs a real Google Cloud project under an account the owner

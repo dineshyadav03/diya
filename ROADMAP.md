@@ -262,14 +262,21 @@ Remaining:
    [`docs/ACTIONS_DESIGN.md`](docs/ACTIONS_DESIGN.md): the model proposes, code executes, only the owner
    approves (a button, not a chat reply); every action is a row with an append-only trail; an action
    that was interrupted is flagged, never silently retried; four units (A1-A4), of which A1-A3 add no
-   write capability at all and A4 (the first real write, Todoist add-task) needs the owner's yes.
+   write capability at all and A4 is the first real write (Todoist add-task, on the owner's yes).
    **Built: A1** (`diya_actions.py` and migration 5: the action table, its append-only events, the state
    machine, the caps, expiry, the hash an approval binds to, and "run at most once, ever"; 170 mutations
    all caught), **A2** (the model's side: a kind's tool only ever proposes, is offered only while its
    connector is connected, and records the chat, the message and which tools ran before it; 60 mutations
    all caught) and **A3** (the routes, the Actions page, the header count, and `python diya_actions_cli.py`;
    live-checked in a real browser). The real registry of write actions is still empty, so nothing can
-   write anywhere yet. **A4** (the first real write, Todoist add-task) is not started and needs the owner's yes.
+   write anywhere until A4. **Built: A4**, on the owner's yes (2026-10-04): adding a task to Todoist. It began with a repair (the
+   Todoist connector built in C2 was already broken: Todoist retired the API it used, so a real token could not even be connected),
+   then the write itself, then the measurement the design asked for: the real 3B model reached for the tool on about 8% of messages
+   that did not ask for it and made up a due date in over half the cases where it gave one, so three deterministic guards went in
+   (an empty optional argument is no argument; a task only when asked; a due date only if the person said it) and an outcome that
+   cannot be told (a request sent, no answer) is `unknown`, never retried. 0 of 153 unasked proposals recorded after the guards,
+   against 10 before. 204 mutations of the new code, 203 caught. **Not yet done: a real Todoist account** -- every call in the
+   tests is faked.
    The local first slice, reminders that fire (a time parser, real due times, a Reminders page, an optional
    desktop notifier), is designed in [`docs/PROACTIVITY_DESIGN.md`](docs/PROACTIVITY_DESIGN.md) as four units.
    **Built, all four:** P1 (the time reader), P2 (real due times, the tool that reads them, the guard against
