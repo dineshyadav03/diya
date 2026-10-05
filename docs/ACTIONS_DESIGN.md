@@ -391,9 +391,12 @@ tuned on found one unsafe gap (a negation, "don't add a task for that", passed),
 **What this does not show.** The labelled messages were written by the author of the guard, so they show what the
 guard and the model do with THESE phrasings, not how either does on the way a real person writes; three runs
 of one small model is a pattern, not a rate; the model ran without the owner's accepted facts in its prompt; and
-`qwen2.5:3b` is the default model, not the only one, and **only it is measured**: a shortened run against the larger
-installed model (`qwen3:8b`) was started and did not finish inside the hour a background task is allowed, since that
-model is about six times slower on this machine. **No real Todoist account has been used**: every network call in the tests is faked, the live check
+`qwen2.5:3b` is the default model, not the only one, and **the larger installed model is barely measured**: a first
+attempt against `qwen3:8b` (about six times slower on this machine) ran out of the hour a background task is allowed and a
+second was cut off with the session; the third, on the first two messages of each list, once (18 messages, 17 minutes),
+finished. It proposed a task for both that asked, reached for the tool on 1 of 16 that did not ("I need to buy milk", refused
+by the guard, none recorded), and gave no due date at all, so it invented none. That is a sample of 18, enough to say the
+larger model is not obviously worse and nothing about whether it is better. **No real Todoist account has been used**: every network call in the tests is faked, the live check
 (a real browser, a scratch database, the real kind with only `httpx.post` faked) drove one approval to success
 and one to "sent, no answer", and the service itself was asked only what it says to a fake token (a 401 on every
 path used). The first real task, from the owner's own token, is the one thing still unverified.
