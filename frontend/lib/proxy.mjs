@@ -149,6 +149,15 @@ export async function forwardReminderDone(request, context, options) {
   return forward(request, `/api/reminders/${reminderId}/done`, options)
 }
 
+// The tasks page's routes (docs/TASKS_DESIGN.md, unit T2). A task id is a whole number, and what is done to it is one of
+// two literals the caller passes (done, reopen), never read from the URL; anything else is turned away here instead of
+// being pasted into the URL of the API request.
+export async function forwardTaskAction(request, context, action, options) {
+  const { task_id: taskId } = await context.params
+  if (!WHOLE_NUMBER.test(String(taskId))) return errorResponse(404, 'No such task')
+  return forward(request, `/api/tasks/${taskId}/${action}`, options)
+}
+
 // The actions page's routes (docs/ACTIONS_DESIGN.md, unit A3). An action id is a whole number, and what is done to it
 // is one of three literals the caller passes (approve, reject, resolve), never read from the URL; anything else is
 // turned away here instead of being pasted into the URL of the API request.

@@ -18,6 +18,7 @@ import diya_connections_api
 import diya_connector_tools
 import diya_memory_api
 import diya_reminders_api
+import diya_tasks_api
 
 
 # ---- the per-install access token (docs/STAGE1_DESIGN.md section 3) ----
@@ -339,6 +340,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     # Reviewing what Dreaming staged (docs/STAGE2_DESIGN.md, unit 6): the same rules as diya_review.py.
     diya_memory_api.register(app, config, agent)
     diya_reminders_api.register(app, config, agent)
+    diya_tasks_api.register(app, config, agent)  # the to-do list inside Diya (docs/TASKS_DESIGN.md, unit T2)
     diya_connections_api.register(app, config, agent, connectors=connectors)
     # Deciding what Diya proposed (docs/ACTIONS_DESIGN.md, unit A3): the agent carries the action store and its kinds.
     diya_actions_api.register(app, config, agent)

@@ -139,6 +139,9 @@ export default function RemindersPage() {
           <Link className="icon-btn" href="/memory">
             Memory
           </Link>
+          <Link className="icon-btn" href="/tasks">
+            Tasks
+          </Link>
           <Link className="icon-btn" href="/connections">
             Connections
           </Link>

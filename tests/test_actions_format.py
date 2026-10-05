@@ -147,11 +147,25 @@ def test_there_are_words_for_exactly_the_statuses_the_store_has():
 
 def test_every_other_page_links_to_the_actions_page():
     pages = [p for p in (FRONTEND / "app").rglob("page.js") if "api" not in p.relative_to(FRONTEND / "app").parts]
-    assert {p.parent.name for p in pages} == {"app", "actions", "connections", "history", "memory", "reminders"}
+    assert {p.parent.name for p in pages} == {"app", "actions", "connections", "history", "memory", "reminders", "tasks"}
     for page in pages:
         if page.parent.name == "actions":
             continue
         assert 'href="/actions"' in page.read_text(encoding="utf-8"), page
+
+
+def test_every_other_page_links_to_the_tasks_page():
+    pages = [p for p in (FRONTEND / "app").rglob("page.js") if "api" not in p.relative_to(FRONTEND / "app").parts]
+    for page in pages:
+        if page.parent.name == "tasks":
+            continue
+        assert 'href="/tasks"' in page.read_text(encoding="utf-8"), page
+
+
+def test_the_chat_names_the_two_task_tools_by_what_they_do():
+    chat = (FRONTEND / "app" / "page.js").read_text(encoding="utf-8")
+    assert "add_task: { state: 'composing', label: 'added a task' }" in chat
+    assert "list_tasks: { state: 'solving', label: 'checked your tasks' }" in chat
 
 
 def test_the_chat_header_counts_what_is_waiting_or_unknown_and_says_nothing_when_it_cannot_tell():

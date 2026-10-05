@@ -71,6 +71,8 @@ def client_for(tmp_path, require=None):
                          extracted_at="2026-01-01T00:00:00+00:00", raw="- seeded candidate")
     memory.set_person(1, "Maya", "cli")  # so /api/memory/merge has an existing person to merge from
     agent.store.add_reminder("seeded reminder")  # and one reminder (id 1), for the same reason
+    agent.tasks.add("seeded task")  # and two tasks: an open one (id 1) to tick off, a finished one (id 2) to put back
+    agent.tasks.complete(agent.tasks.add("seeded finished task")["id"])
     # and one connector, so /api/connections/demo/connect has something real to act on
     app = diya_web.create_app(config, agent, transcriber=object(), connectors=SEEDED_CONNECTORS)
     return TestClient(app, base_url=HOST), app
@@ -89,6 +91,7 @@ def concrete_path(path):
     """A route's path with a real id and action in place of its parameters."""
     return (path.replace("{thread_id}", "1").replace("{fact_id}", "1").replace("{action}", "accept")
            .replace("{reminder_id}", "1").replace("{name}", "demo")
+           .replace("/api/tasks/{task_id}/reopen", "/api/tasks/2/reopen").replace("{task_id}", "1")
            .replace("/api/actions/{action_id}/reject", "/api/actions/2/reject")  # each decision has its own seeded action
            .replace("/api/actions/{action_id}/resolve", "/api/actions/3/resolve")
            .replace("{action_id}", "1"))
@@ -110,6 +113,10 @@ ENDPOINTS = [
     ("GET", "/api/reminders", {}),
     ("POST", "/api/reminders", {"json": {"text": "call mum", "when": "in 2 hours"}}),
     ("POST", "/api/reminders/1/done", {}),
+    ("GET", "/api/tasks", {}),
+    ("POST", "/api/tasks", {"json": {"text": "buy milk", "when": "tomorrow"}}),
+    ("POST", "/api/tasks/1/done", {}),
+    ("POST", "/api/tasks/2/reopen", {}),
     ("GET", "/api/actions", {}),
     ("GET", "/api/actions/1", {}),
     ("POST", "/api/actions/1/approve", {"json": {"args_hash": APPROVE_ME}}),

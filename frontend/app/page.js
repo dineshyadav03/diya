@@ -33,6 +33,8 @@ const TOOL_ORB = {
   get_weather: { state: 'connecting', label: 'checked the weather' },
   add_reminder: { state: 'composing', label: 'saved a reminder' },
   list_reminders: { state: 'solving', label: 'checked your reminders' },
+  add_task: { state: 'composing', label: 'added a task' },
+  list_tasks: { state: 'solving', label: 'checked your tasks' },
   list_files: { state: 'shaping', label: 'listed files' },
 }
 
@@ -340,6 +342,9 @@ export default function ChatPage() {
                 {dueCount}
               </span>
             )}
+          </Link>
+          <Link className="icon-btn nav-wide" href="/tasks" style={{ textDecoration: 'none' }}>
+            Tasks
           </Link>
           <Link className="icon-btn nav-wide" href="/connections" style={{ textDecoration: 'none' }}>
             Connections

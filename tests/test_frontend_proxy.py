@@ -431,6 +431,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/history/${threadId}", "/api/chat", "/api/threads", "/api/transcribe",
         "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
         "/api/reminders", "/api/reminders", "/api/reminders", "/api/reminders/${reminder.id}/done",  # the chat's due count, the page's list and add, and done
+        "/api/tasks", "/api/tasks", "/api/tasks/${task.id}/done", "/api/tasks/${task.id}/reopen",  # the Tasks page: its list, add, done and put back
         "/api/connections", "/api/connections/${connector.name}/connect", "/api/connections/${connector.name}/connect",
         "/api/connections/${connector.name}/disconnect",  # the token-kind form and the oauth-kind button both post here
         "/api/actions", "/api/actions",  # the chat header's waiting count, and the Actions page's list
@@ -479,6 +480,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         "/api/threads", "/api/history/{thread_id}", "/api/chat", "/api/transcribe",
         "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/merge", "/api/memory/{fact_id}/{action}",
         "/api/reminders", "/api/reminders/{reminder_id}/done",
+        "/api/tasks", "/api/tasks/{task_id}/done", "/api/tasks/{task_id}/reopen",
         "/api/connections", "/api/connections/{name}/connect", "/api/connections/{name}/disconnect",
         "/api/actions", "/api/actions/{action_id}", "/api/actions/{action_id}/approve",
         "/api/actions/{action_id}/reject", "/api/actions/{action_id}/resolve",
@@ -490,7 +492,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         assert "lib/proxy.mjs" in source and any(
             name in source
             for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardReminderDone(", "forwardConnection(",
-                         "forwardAction(", "forwardActionDecision(")
+                         "forwardAction(", "forwardActionDecision(", "forwardTaskAction(")
         ), path
         assert "force-dynamic" in source, path  # never cached
 
@@ -660,6 +662,86 @@ def test_a_reminder_id_that_is_not_a_whole_number_is_refused_before_anything_is_
 def test_a_whole_number_reminder_id_is_forwarded_to_its_own_path(reminder_id):
     out = run_harness({"mode": "route", "env": {}, "calls": [call("reminderDone", "POST", params={"reminder_id": reminder_id})]})
     assert [(c["method"], c["url"]) for c in out["captured"]] == [("POST", f"/api/reminders/{reminder_id}/done")]
+
+
+# --- the tasks page's routes (docs/TASKS_DESIGN.md, unit T2) -----------------------------------------
+
+TASK_CALLS = [
+    ("tasks", "GET", None, "/api/tasks"),
+    ("tasks", "POST", None, "/api/tasks"),
+    ("taskDone", "POST", {"task_id": "12"}, "/api/tasks/12/done"),
+    ("taskReopen", "POST", {"task_id": "12"}, "/api/tasks/12/reopen"),
+]
+
+
+@needs_node
+def test_the_task_routes_work_end_to_end_through_the_ui_server_with_no_token_in_the_browser(api):
+    tasks = api.agent.tasks
+    tasks.add("water plants")
+    finished = tasks.add("old one")["id"]
+    tasks.complete(finished)
+    listed, added, done, reopened = through_the_ui(
+        api,
+        [
+            call("tasks", "GET"),
+            json_call("tasks", {"text": "call mum", "when": "tomorrow at 5pm"}),
+            call("taskDone", "POST", params={"task_id": "1"}),
+            call("taskReopen", "POST", params={"task_id": str(finished)}),
+        ],
+    )
+    assert [a["status"] for a in (listed, added, done, reopened)] == [200, 201, 200, 200]
+    body = json.loads(unb64(listed["bodyB64"]))
+    assert [t["content"] for t in body["tasks"]] == ["water plants"] and [t["content"] for t in body["done"]] == ["old one"]
+    assert json.loads(unb64(added["bodyB64"]))["task"]["due_text"].endswith("17:00")
+    assert [t["content"] for t in tasks.tasks("open")] == ["old one", "call mum"]  # the first was ticked off, the old one put back
+
+
+@needs_node
+def test_the_api_refuses_the_task_routes_without_the_token_and_nothing_is_written(api):
+    tasks = api.agent.tasks
+    task_id = tasks.add("water plants")["id"]
+    answers = through_the_ui(api, [call("tasks", "GET"), json_call("tasks", {"text": "x"}),
+                                   call("taskDone", "POST", params={"task_id": str(task_id)}),
+                                   call("taskReopen", "POST", params={"task_id": str(task_id)})], token=None)
+    assert [a["status"] for a in answers] == [401, 401, 401, 401]
+    assert [t["content"] for t in tasks.tasks("all")] == ["water plants"] and tasks.get(task_id)["done"] is False
+
+
+@needs_node
+def test_the_task_routes_forward_to_their_own_path_and_method_with_the_token_and_nothing_else_of_the_browsers():
+    calls = [call(route, method, {"content-type": "application/json", "authorization": "Bearer from-the-browser", "cookie": "a=b"},
+                  "{}" if method == "POST" else None, params)
+             for route, method, params, _ in TASK_CALLS]
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": calls})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [(m, u) for _, m, _, u in TASK_CALLS]
+    for captured in out["captured"]:
+        assert captured["headers"]["authorization"] == f"Bearer {TOKEN}"
+        assert "cookie" not in captured["headers"]
+    assert "from-the-browser" not in json.dumps(out["captured"])
+
+
+@needs_node
+@pytest.mark.parametrize("route", ["taskDone", "taskReopen"])
+def test_a_task_route_answers_only_the_methods_the_api_route_does(route):
+    out = run_harness({"mode": "route", "env": {}, "calls": [call(route, "GET", params={"task_id": "1"})]})
+    assert out["results"] == [{"noHandler": True}] and out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("route", ["taskDone", "taskReopen"])
+@pytest.mark.parametrize("task_id", ["abc", "1.5", "-1", "1e3", "", " 1", "1 ", "1%2F2", "../1", "1/../2", "9" * 19, "0x10"])
+def test_a_task_id_that_is_not_a_whole_number_is_refused_before_anything_is_sent(route, task_id):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call(route, "POST", params={"task_id": task_id})]})
+    assert out["results"][0]["status"] == 404
+    assert out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("route, action", [("taskDone", "done"), ("taskReopen", "reopen")])
+@pytest.mark.parametrize("task_id", ["1", "12", "9" * 18])
+def test_a_whole_number_task_id_is_forwarded_to_its_own_path_and_each_route_does_only_its_own_thing(route, action, task_id):
+    out = run_harness({"mode": "route", "env": {}, "calls": [call(route, "POST", params={"task_id": task_id})]})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [("POST", f"/api/tasks/{task_id}/{action}")]
 
 
 # --- the actions page's routes (docs/ACTIONS_DESIGN.md, unit A3) ---------------------------------------

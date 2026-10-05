@@ -428,6 +428,11 @@ header .icon-btn.nav-wide { display: none; }
 .reminder[data-state="due"] { border-color: var(--accent); }
 .reminder-when-line { margin: 2px 0 8px; }
 .reminder-when { max-width: 220px; }
+/* The Tasks page (docs/TASKS_DESIGN.md, unit T2) reuses the reminders page's look; a task past its date is outlined
+   and says so in words, never by colour alone, and a finished one is dimmed. */
+.task[data-state="overdue"] { border-color: var(--danger); }
+.task[data-state="done"] .memory-text { color: var(--text-dim); }
+.task-overdue { color: var(--danger-text); font-weight: 600; }
 .due-badge {
   margin-left: 6px; min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--accent); color: var(--accent-text);
   font-size: 12px; font-weight: 600; line-height: 18px; text-align: center;
