@@ -411,3 +411,12 @@ few characters later, a `todo` that `to-?do` already matches), which were remove
 real gaps (destination forms for `log`, `enter` and `record`; two "question" cases that were never requests and so
 tested nothing; the Todoist body being a short list of its own; the benchmark's unasked-recorded count), which
 got tests.
+
+**Changed afterwards (2026-10-05, `docs/TASKS_DESIGN.md`).** Right after A4 the owner asked for the to-do list to live
+"inside the product only", and a list inside Diya's own database is not an action (D2 above: nothing leaves this
+computer), so it is saved at once and never waits on this page. That left two tools that both match "add a task to buy
+milk", so the choice is made in code, not by the model: a message that names Todoist is Todoist's (`diya_intent.
+is_todoist_task_request`, now this kind's `asked`), any other is the list's. Todoist is still optional and still approved
+card by card; it just has to be named. The tables above were measured BEFORE that change, with every one of the
+25 requests going to Todoist: only the 5 that name it would be proposed now, and the model's side of the other 20 is
+measured for the list in `docs/TASKS_DESIGN.md`.

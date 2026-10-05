@@ -277,6 +277,12 @@ Remaining:
    cannot be told (a request sent, no answer) is `unknown`, never retried. 0 of 153 unasked proposals recorded after the guards,
    against 10 before. 204 mutations of the new code, 203 caught. **Not yet done: a real Todoist account** -- every call in the
    tests is faked.
+   **A to-do list inside Diya itself (2026-10-05, [`docs/TASKS_DESIGN.md`](docs/TASKS_DESIGN.md)),** on the owner's "build the
+   to do list inside the product only -- why API?": a task is a row in Diya's own database, so nothing leaves the computer and
+   it needs no approval (it is not an action by D2); the model can add one and read the list, never close or change one; a
+   Tasks page lists, adds, ticks off and puts back. A message that names Todoist is Todoist's, any other is the list's,
+   decided in code. Measured with the real 3B model: 0 of 153 unasked messages saved a task, and two things found by reading
+   the answers were fixed (the model said it had added a task after being refused; it showed the local list as Todoist's).
    The local first slice, reminders that fire (a time parser, real due times, a Reminders page, an optional
    desktop notifier), is designed in [`docs/PROACTIVITY_DESIGN.md`](docs/PROACTIVITY_DESIGN.md) as four units.
    **Built, all four:** P1 (the time reader), P2 (real due times, the tool that reads them, the guard against
