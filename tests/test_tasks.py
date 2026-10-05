@@ -195,6 +195,29 @@ def test_a_thread_or_message_id_must_be_a_whole_number_or_none(tasks, name, valu
 
 # ---- duplicates and the cap --------------------------------------------------------------------------
 
+def test_a_write_holds_the_database_write_lock_from_its_first_statement(store):
+    """What keeps "is it already open?" and "is the list full?" true at the moment the task is written: while a write is in
+    progress no other connection can start one, even before the first statement has run. (Eight threads adding the same words
+    at once, below, usually pass without it too, because the unique index and a small window hide the race; this does not.)"""
+    tasks = Tasks(store, clock=lambda: NOW)
+    with tasks._write():
+        other = sqlite3.connect(store.path, timeout=0.05)
+        try:
+            with pytest.raises(sqlite3.OperationalError, match="locked"):
+                other.execute("BEGIN IMMEDIATE")
+        finally:
+            other.close()
+
+
+def test_a_write_that_fails_part_way_is_rolled_back_not_half_done(store):
+    tasks = Tasks(store, clock=lambda: NOW)
+    with pytest.raises(RuntimeError):
+        with tasks._write() as conn:
+            conn.execute("INSERT INTO tasks (content, content_key, done, source, created_at) VALUES ('x', 'x', 0, 'chat', 't')")
+            raise RuntimeError("part way")
+    assert tasks.tasks("all") == []
+
+
 def test_the_same_words_in_any_capitals_cannot_be_open_twice(tasks):
     first = tasks.add("Buy oat milk")
     for again in ("Buy oat milk", "buy OAT milk", "  BUY  oat   MILK "):

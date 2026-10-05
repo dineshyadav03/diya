@@ -292,6 +292,16 @@ def test_a_long_list_is_cut_after_thirty_and_says_there_is_more(config):
     assert agent.list_tasks().split("\n")[-1] == "#30: task 29"  # exactly thirty left: nothing more to say
 
 
+def test_reading_the_list_never_loads_more_than_one_past_what_it_shows(config, monkeypatch):
+    agent = make_agent(config)
+    asked = []
+    real = agent.tasks.tasks
+    monkeypatch.setattr(agent.tasks, "tasks", lambda state="open", limit=None: asked.append((state, limit)) or real(state, limit=limit))
+    agent.list_tasks()
+    agent.list_tasks("done")
+    assert asked == [("open", diya.MAX_TASKS_SHOWN + 1), ("done", diya.MAX_TASKS_SHOWN + 1)]  # one more than shown tells it there is more
+
+
 def test_the_model_reads_the_list_through_the_tool_loop(config):
     agent = make_agent(config, tool_reply("list_tasks", '{"status": "open"}'), text_reply("You have one task."))
     agent.add_task("Buy oat milk")

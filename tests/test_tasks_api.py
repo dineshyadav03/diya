@@ -286,6 +286,7 @@ def test_a_task_cannot_be_put_back_while_the_same_words_are_open_or_into_a_full_
 @pytest.mark.parametrize("action", ["done", "reopen"])
 @pytest.mark.parametrize("path_id, status", [
     ("99", 404), ("0", 404), ("-5", 404), ("9223372036854775808", 404), ("9223372036854775807", 404), ("abc", 422), ("1.5", 422),
+    ("-9223372036854775809", 404), ("-99999999999999999999999", 404),  # too small for SQLite as well: a 404, never an overflow error
 ])
 def test_an_unknown_task_or_id_is_refused_and_never_an_error(client, action, path_id, status):
     response = client.post(f"/api/tasks/{path_id}/{action}")
@@ -306,6 +307,33 @@ def test_marking_one_done_touches_no_other(client, tasks):
 
 
 # --- what reaches the browser ------------------------------------------------------------------------------------
+
+def test_a_refusal_reason_is_made_safe_whatever_it_says(client, parts, monkeypatch):
+    """Today no reason can carry a hidden character (the list escapes them itself); the route does not rely on that."""
+    for error, status in ((diya_tasks.InvalidTask, 422), (diya_tasks.DuplicateTask, 409), (diya_tasks.TooManyTasks, 409), (diya_tasks.UnknownTask, 404)):
+        def refuse(*args, error=error, **kwargs):
+            raise (error("bad" + ESC + "[2J" + BIDI + "evil", 1) if error is diya_tasks.DuplicateTask else error("bad" + ESC + "[2J" + BIDI + "evil"))
+
+        monkeypatch.setattr(parts[1].tasks, "add", refuse)
+        response = client.post("/api/tasks", json={"text": "x"})
+        assert response.status_code == status and no_hidden(response.json()), (error, response.json())
+        assert chr(92) + "u001b" in response.json()["detail"] and chr(92) + "u202e" in response.json()["detail"]
+
+
+def test_a_task_number_in_a_refusal_is_cut_from_what_the_person_is_told_and_only_that(client, parts, monkeypatch):
+    def refuse(*args, **kwargs):
+        raise diya_tasks.DuplicateTask("that task is already on the list (#12), (#x) 3 (#4)", 12)
+
+    monkeypatch.setattr(parts[1].tasks, "add", refuse)
+    assert client.post("/api/tasks", json={"text": "x"}).json()["detail"] == "that task is already on the list, (#x) 3"
+
+
+def test_the_date_shown_is_made_safe_whatever_it_says(client, tasks, monkeypatch):
+    tasks.add("Send the invoice", "Friday")
+    monkeypatch.setattr(diya_tasks, "describe_due", lambda task: "Fri" + ESC + "day" + BIDI)
+    (item,) = client.get("/api/tasks").json()["tasks"]
+    assert no_hidden(item) and item["due_text"] == "Fri" + chr(92) + "u001bday" + chr(92) + "u202e"
+
 
 def test_nothing_from_the_database_reaches_the_browser_with_a_hidden_character(client, parts):
     store = parts[1].store

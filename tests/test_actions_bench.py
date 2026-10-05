@@ -329,6 +329,17 @@ def test_the_report_counts_a_due_date_that_survives_as_the_persons_own_words():
     assert "Due phrases that are not the person's own words: 0 of 1 the model gave; 0 of 1 on a recorded task" in report_of(own)
 
 
+def test_an_empty_due_phrase_is_counted_under_the_name_each_tool_gives_it():
+    both = dict(SAMPLE, not_asked={}, ambiguous=[], asked=[
+        result("Add a task", [("propose_todoist_task", {"content": "x", "due_string": ""}, "Proposed"),
+                              ("propose_todoist_task", {"content": "y", "due_string": None}, "Proposed"),
+                              ("propose_todoist_task", {"content": "z", "due": ""}, "Proposed"),  # not Todoist's argument: unknown, and not an empty due
+                              ("add_task", {"content": "w", "due": ""}, "Added"),
+                              ("add_task", {"content": "v", "due_string": ""}, "Added")], [], [])])  # not the list's argument either
+    text = report_of(both)
+    assert "Arguments the model chose when asked (5 attempts): a due phrase in 0, empty or null due phrase in 3, unknown arguments in 2" in text
+
+
 def test_the_report_says_how_the_arguments_the_model_chose_fared():
     text = report_of(SAMPLE)
     assert "Arguments the model chose when asked (4 attempts): a due phrase in 1, empty or null due phrase in 1, unknown arguments in 0, refused by the checks in 2" in text
@@ -383,6 +394,16 @@ def test_percent_of_nothing_is_not_a_number():
     ("I won't add it as a task unless you tell me to, as tasks are only added with your explicit request.", False),
     ("I haven't added anything to your to-do list yet, as you didn't tell me what tasks to add.", False),
     ("I never added a task.", False),
+    # a claim in the sentence AND a word that takes it back: each of not, never, no and n't is enough to leave the sentence out
+    ("I added a task, not a reminder.", False),
+    ("I added a task, never a reminder.", False),
+    ("I added no task to your to-do list.", False),
+    ("I added a task, but it isn't due yet.", False),
+    # a sentence that only talks about tasks is not a claim, and one sentence's "no" does not undo another's claim
+    ("You have three tasks on your to-do list.", False),
+    ("Here is what is on your to-do list.", False),
+    ("I won't add that one. I added a task for the other.", True),
+    ("No problem\nI saved it as a task.", True),  # a line break ends a sentence even with no full stop
     ("No, I did not add the task.", False),
     ("It seems like no tasks were added since you did not ask me to add any.", False),
     ("I have added a reminder for you to check your printer ink levels tomorrow morning.", False),  # a reminder, not a task
@@ -468,7 +489,21 @@ def test_scoring_the_guard_needs_no_model_and_reports_what_it_got_wrong():
 def test_scoring_says_how_many_of_the_asked_messages_go_to_todoist():
     out = io.StringIO()
     bench.score_guard(out)
-    assert "Which list:         5 of the 25 asked go to Todoist; 5 name it" in out.getvalue()
+    assert "Which list:         5 of the 25 asked go to Todoist (5 name it); 0 of the 51 not asked do" in out.getvalue()
+
+
+def test_naming_todoist_is_not_the_same_as_going_to_todoist_in_the_routing_line(monkeypatch):
+    monkeypatch.setattr(bench, "ASKED", ASKED + ["What's in my Todoist?"])  # names it, asks for no task
+    out = io.StringIO()
+    bench.score_guard(out)
+    assert "Which list:         5 of the 26 asked go to Todoist (6 name it); 0 of the 51 not asked do" in out.getvalue()
+
+
+def test_a_not_asked_message_that_would_go_to_todoist_is_counted_in_the_routing_line(monkeypatch):
+    monkeypatch.setattr(bench, "all_not_asked", lambda: ["Add a task to Todoist to buy milk", "I need to buy milk"])
+    out = io.StringIO()
+    bench.score_guard(out)
+    assert "1 of the 2 not asked do" in out.getvalue()
 
 
 def test_scoring_a_guard_that_is_missing_says_so(monkeypatch):

@@ -284,7 +284,9 @@ def score_guard(out):
         print(f"  allowed: {t!r}", file=out)
     named = [t for t in ASKED if diya_intent.names_todoist(t)]
     todoists = [t for t in ASKED if diya_intent.is_todoist_task_request(t)]
-    print(f"Which list:         {len(todoists)} of the {len(ASKED)} asked go to Todoist; {len(named)} name it", file=out)
+    todoists_unasked = [t for t in all_not_asked() if diya_intent.is_todoist_task_request(t)]
+    print(f"Which list:         {len(todoists)} of the {len(ASKED)} asked go to Todoist ({len(named)} name it); "
+          f"{len(todoists_unasked)} of the {total} not asked do", file=out)
     print("Ambiguous (not scored):", file=out)
     for t in AMBIGUOUS:
         print(f"  {'allowed' if guard(t) else 'refused'}  {t!r}", file=out)

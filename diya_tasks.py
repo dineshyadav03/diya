@@ -184,9 +184,7 @@ class Tasks:
         content = _tidy(content, "a task", MAX_TASK_CHARS)
         if not content:
             raise InvalidTask("a task needs words")
-        if due is not None and not isinstance(due, str):
-            raise InvalidTask("when it is due must be words, like 'Friday 5pm'")
-        due = _tidy(due, "when it is due", MAX_DUE_CHARS) if due is not None else ""
+        due = _tidy(due, "when it is due", MAX_DUE_CHARS) if due is not None else ""  # which also refuses what is not words
         now = self._clock()
         due_ts = None
         if due:
