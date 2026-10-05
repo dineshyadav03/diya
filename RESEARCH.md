@@ -363,6 +363,151 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
   to need automatic pruning, require a held-out validation gate before any edit lands, not just a
   plausible-looking diff.
 
+### 16. The open-source personal-agent wave: OpenClaw, Hermes Agent, Khoj (and what happened to Truffle's page)
+
+- **Source:** OpenClaw's own README (https://github.com/openclaw/openclaw, fetched 2026-10-05: MIT, 391k stars,
+  82.3k forks, run by "the OpenClaw Foundation", an independent 501(c)(3) with donors including Amazon, OpenAI and
+  Red Hat); Microsoft Security's post of 2026-02-19 (https://www.microsoft.com/en-us/security/blog/2026/02/19/running-openclaw-safely-identity-isolation-runtime-risk/);
+  secondary: Fortune and trade-press coverage of its creator joining OpenAI (2026-02), vendor blogs on Hermes Agent
+  (Nous Research, MIT, released 2026-02, "180,000+ stars in under four months" is the vendors' figure) and Khoj
+  (its hosted Khoj Cloud was shut down 2026-04-15; the open-source self-hosted version continues).
+- **Noted:** 2026-10-05.
+- **What it is:** the category Diya is in is no longer niche. OpenClaw (a self-hosted agent runtime that talks to
+  20+ chat apps -- WhatsApp, Telegram, Slack, iMessage -- with its own memory, installable "skills" and a scheduler)
+  became the most-starred non-aggregator project on GitHub; Hermes Agent adds memory in a local SQLite file with
+  full-text search and skills it writes for itself; Khoj is the older "second brain" with scheduled automations.
+  What people actually use these for (vendor and community lists, secondary): a morning briefing sent to their chat
+  app on a schedule, email triage with drafts they approve, meeting prep from calendar and mail, follow-up
+  reminders, calendar changes.
+- **Skeptic note:** star counts and "users" are the projects' own; the use-case lists are SEO pages and community
+  posts, not usage data. Security-vendor numbers (reported: 300+ malicious skills in its marketplace ClawHub in
+  2026-02, a Cornell audit finding 26% of skill packages vulnerable, instances exposed on the default port, a CVE
+  in 2026) are from vendor blogs and were NOT re-checked here; Microsoft's own post is primary for the framing.
+- **Why it matters for Diya:** (a) the "describe it, it follows through" battleground (cross-cutting note 2) is
+  now crowded and fast: Diya will not out-feature a 391k-star project and should not try. (b) The thing every one
+  of these has and Diya lacks is reach: they live in the chat apps people already open (and can push to the phone);
+  Diya is a web page and a Windows toast. (c) Microsoft's verdict on the leader is the opening for Diya's claim:
+  run it only on a separate machine, with throwaway credentials, because it executes untrusted code with
+  persistent access. Its three named risks (credentials leaked, **memory altered so it follows an attacker over
+  time**, host compromise) come from combining untrusted skills with untrusted text. Diya has no skills
+  marketplace, no shell tool, no generic fetch tool.
+- **Truffle, rechecked:** truffle.net (2026-10-05) now says "Truffle1", a companion app called Symphony, on-device
+  memory and nightly "Dreaming" -- and still no price, no ship date, no specs; one web search found no independent
+  review. Whether Truffle ships is still unverified. "Parity with Truffle" (CLAUDE.md) is therefore a target Diya
+  cannot check; the comparison set that can be checked is the table above.
+- **Action:** no build from this entry alone; it drives entries 17-20. Treat OpenClaw/Hermes as the reference for
+  *what users do daily*, and the security record around them as the reference for *what to refuse*.
+
+### 17. Agent security 2026: the lethal trifecta, the Rule of Two, and memory poisoning (Diya's strongest ground)
+
+- **Source:** Simon Willison, "The lethal trifecta" (https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/, fetched);
+  Meta, "Agents Rule of Two" (https://ai.meta.com/blog/practical-ai-agent-security/, 2025-10-31, fetched); The Hacker
+  News on MemGhost (https://thehackernews.com/2026/07/new-memghost-attack-plants-persistent.html, fetched);
+  arXiv 2606.04329 "From Untrusted Input to Trusted Memory" (abstract fetched; also 2605.15338 and 2607.05189,
+  titles only); EchoLeak (arXiv 2509.10540, via search).
+- **Noted:** 2026-10-05.
+- **What it is:** (1) Willison: an agent is dangerous when it combines private data, untrusted content and a way
+  to send things out; guardrail/detection products are unreliable (a "95% catch rate" is a failure in security),
+  and the only dependable defence is to make it impossible for ingested untrusted input to trigger a
+  consequential action. (2) Meta's Rule of Two: within one session an agent should have at most two of: untrusted
+  input, access to private data/sensitive systems, ability to change state or communicate outward; otherwise a
+  human supervises. (3) Memory poisoning: the 2026 papers and the MemGhost report show that one crafted email can
+  make an agent save a false "fact" that steers later sessions, without telling the user. MemGhost's reported
+  success rate was 87.5% against OpenClaw on one model and 71.4% against a Claude-based agent; OpenClaw's team
+  disputed the test setup (it recommends a separate reader for untrusted mail) and said it is weighing provenance
+  tracking and confirmation prompts. The paper abstract adds that agents which write and retrieve memory more
+  aggressively are more exploitable and that existing prompt-injection defences do not cover memory poisoning. The
+  recommended mitigations are the ones Diya already has: separate reading from memory-writing, tag where a memory
+  came from, require the user's confirmation before a memory becomes permanent, and keep an audit log.
+- **Skeptic note:** MemGhost is one vendor-reported attack with a disputed setup; attack-success numbers depend on
+  the model and harness and do not transfer to Diya's 3B model. Only the arXiv abstract was read, not the paper.
+- **Why it matters for Diya:** this is where the project is most clearly on the right track, and it is checkable
+  in the code: `dreaming.py` extracts facts only from the owner's own messages (`role == "user"`), never from tool
+  output or web text, and every candidate waits for a human before the model sees it (Stage 2); every outside write
+  is a proposal the owner approves on exact arguments, with the tools that ran earlier shown as a taint warning
+  (Stage 4); there is no skill marketplace, shell or arbitrary-URL tool; outbound hosts are fixed first-party APIs.
+  The honest limits: none of this has been attacked by anyone but its author; text the owner pastes into chat
+  becomes "the owner's own message" (it still needs review); and `web_search` is the one outbound path where the
+  model chooses free text (a query to the search engine, which is not by itself an attacker-visible channel) and it
+  is not covered by the host allowlist (README, known limits).
+- **Action:** (a) write the Rule-of-Two accounting down per tool (which of the three each gives) and add a test that
+  fails when a new tool completes all three without the approval gate -- a public, checkable claim, small effort.
+  (b) keep the "reader never writes memory" property as a stated rule before any inbound channel (entry 16) is
+  added: a message from a phone is the owner's only if it is from the paired owner.
+
+### 18. ChatGPT Pulse retired for "scheduled tasks" -- proactivity the user steers wins
+
+- **Source:** OpenAI's retirement notice as reported by Digit (https://www.digit.in/news/general/openai-is-retiring-chatgpt-pulse-and-replacing-it-with-scheduled-tasks-here-is-why.html/amp/,
+  fetched) and Gigazine (2026-06-19); the Pulse help page (https://help.openai.com/en/articles/12293630-chatgpt-pulse).
+- **Noted:** 2026-10-05.
+- **What it is:** OpenAI launched Pulse (a daily set of research cards drawn from your chats, memory and connected
+  apps) in 2025-09 and announced its retirement in mid-June 2026 (reports say 06-17 or 06-18), replacing it with
+  "scheduled tasks": the user sets a reminder, a recurring task or a topic to track, for a time or a part of the day,
+  and gets a page to pause, edit and delete them. OpenAI's stated reason (as reported): proactive features are most
+  useful when personalised, action-oriented and steerable by the user; engagement was strongest on the task parts.
+- **Skeptic note:** the reasons are OpenAI's, second-hand; "most users abandon it" is from an SEO blog and not used.
+- **Why it matters for Diya:** the largest assistant on earth tried "the AI decides what to tell you each morning"
+  and walked back to "you tell it what to watch, when". That is what Diya's reminders and tasks already are
+  (docs/PROACTIVITY_DESIGN.md, docs/TASKS_DESIGN.md), and it says the missing pieces are the boring ones: recurrence,
+  a part-of-day time ("every morning"), and one page that lists everything scheduled so it can be paused or deleted.
+  OpenClaw's most-used pattern (a morning briefing on a cron) is the same idea with weather, calendar and tasks in it.
+- **Action:** the next build should be scheduled tasks (recurrence for reminders and tasks, a "Scheduled" view, and a
+  briefing built only from things Diya already reads), not new kinds of autonomy.
+
+### 19. Local models, runtime, MCP and speech in 2026 (what could replace what Diya runs today)
+
+- **Source:** Ollama library pages (fetched 2026-10-05: gemma4, qwen3), Ollama's web-search docs
+  (https://docs.ollama.com/capabilities/web-search, fetched), the MCP 2026-07-28 release-candidate coverage and the
+  2026-08-22 roadmap (secondary), small-model tool-calling roundups (secondary; several are SEO pages), Home Assistant
+  voice-stack write-ups (secondary).
+- **Noted:** 2026-10-05.
+- **What it is:** (1) Models on Ollama today: Gemma 4 in E2B (4.6-7.5 GB), E4B (6.6-9.5 GB), 12B, 26B MoE and 31B, 128K-256K
+  context, thinking modes; Qwen3 in 4B (2.5 GB, 256K context) and 8B (5.2 GB, the one already installed); the page
+  fetch did not say which of them support tools. Roundups (secondary) put Qwen3-4B at the top of the sub-7B models for
+  tool calling in early 2026 and say Gemma 4 (2026-04) added native function-call tokens; they also repeat the
+  advice that code-side guardrails matter more than the model for small models, which is what Diya measured itself.
+  (2) Ollama added an MLX engine for Apple silicon, llama.cpp alongside it, hosted `:cloud` models and a web-search
+  API (`https://ollama.com/api/web_search`: needs a free account's API key; what it receives is the query string).
+  (3) MCP's 2026-07-28 revision (release candidate) makes the protocol stateless and rewrites authorization; the 2026-08
+  roadmap makes agent identity a priority. (4) Speech: Piper TTS was archived in 2025-10; Kokoro (82M parameters,
+  Apache-2.0) is the usual replacement; Diya uses faster-whisper for input and the browser's speech for output.
+- **Skeptic note:** "best small model" claims come from third-party blogs, some plainly SEO; none is a measurement on
+  Diya's tasks. The Ollama web-search details are from its docs, untested here.
+- **Why it matters for Diya:** the cheapest real experiment in this whole survey is to run the existing benchmark and
+  evals (`python diya_actions_bench.py`, `python diya_evals.py`) against `qwen3:4b` and `gemma4:e4b` and compare them
+  with `qwen2.5:3b` on the same labelled messages: does either reach for tools unasked less than 16% of the time
+  (docs/TASKS_DESIGN.md), and is either fast enough on this CPU laptop (qwen3:8b was about six times slower than the
+  3B model, docs/MODEL_BENCHMARK.md)? Ollama's search API is also a candidate way to close the one known gap in the
+  host allowlist (`ddgs` cannot be wrapped): one known host, a key, queries visible to Ollama instead of DuckDuckGo --
+  a trade the owner would have to choose. MCP is worth being a *client* of only if a connector the owner needs has no
+  direct API, and then only for named, pinned servers behind the approval gate (the ClawHub record is the reason).
+- **Action:** (a) run the model bake-off, change nothing until it is measured; (b) no MCP, voice or runtime change now.
+
+### 20. Market and hardware signals: where "local" is and is not worth paying for
+
+- **Source:** coverage of Meta's purchase of Limitless (2025-12), Amazon's of Bee (2025), HP's of Humane's software
+  and team (2025-02, reported $116M, an 86% markdown from peak); Usercentrics' 2026 trust report and CNET/ZDNET
+  surveys as reported by eMarketer and others (the eMarketer page itself returned 403, so these figures are from
+  search summaries); hardware roundups for DGX Spark (about $4,000, 128 GB), Strix Halo mini PCs (128 GB, roughly $1.5k-2k),
+  Mac Studio M5 Ultra (shipped 2026-09) and the Tiiny AI Pocket Lab (a EUR 1,200 Kickstarter, 80 GB); coverage of Apple's
+  iOS 27 Siri (WWDC 2026: personal context across mail, messages and files, Gemini-backed with Private Cloud Compute).
+- **Noted:** 2026-10-05.
+- **What it is:** dedicated AI gadgets are consolidating into the big platforms (the buyers wanted the software and
+  the team, not the device); platform assistants are absorbing the basics (Apple's Siri searching your mail and
+  messages to make events and reminders, Meta Muse in entry 4); consumers say they are wary of AI with their data
+  (52% trust it less than people with it, per Usercentrics) and 52% would pay about 7% more for transparency, but
+  few will pay extra for "on-device AI" as such (reported: 3% of smartphone owners; 71% of US adults would not pay extra).
+- **Skeptic note:** every figure is second-hand, from surveys of mainstream consumers, not of people who would run
+  a home server; none was re-checked. Diya is a personal project, so market willingness to pay is context, not a
+  requirement.
+- **Why it matters for Diya:** (a) the hardware premise is the weakest part of the original thesis: the evidence says
+  value sits in the software and in trust, which fits the decision already taken (Windows and Ollama now, the Mac mini
+  deferred, none of the 2026 boxes needed for a 4B-8B model). (b) "Local" alone is not what people pay for; "I can see and
+  control what it remembers and does" is, and that is the claim entries 17 and the existing design support. (c) Do not
+  chase ambient recording or wearables: the independents sold, and always-on capture of other people raises consent
+  questions Diya has no reason to take on.
+- **Action:** none. Keep the Mac mini deferred; spend effort on trust and daily use.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,
@@ -372,3 +517,10 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
 3. Instinct's failure modes (prompt injection, unauthorized actions, data retention) are
    competitive claims Diya gets to make, not just hygiene.
 4. Do not chase multi-model routing or custom hardware. Ollama on one machine is the right constraint.
+5. (2026-10-05, entries 16-20) The category is now crowded by open-source agents with enormous reach (OpenClaw, Hermes
+   Agent) whose public record is mostly security failures. Diya's lane is "the personal agent you can audit": reviewed
+   memory, approved actions, no marketplace. Say that, test it, and do not compete on number of integrations.
+6. The market's answer to proactivity is user-steered scheduled tasks (entry 18), not autonomy: build recurrence and a
+   "Scheduled" view before anything that decides on its own what to tell the owner.
+7. Reach is Diya's real gap (entry 16): every comparable lives in the chat apps people already open. A phone channel is
+   the biggest missing piece for daily use, and the one that most needs the security rules of entry 17 first.
