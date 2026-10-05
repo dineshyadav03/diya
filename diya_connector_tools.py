@@ -14,7 +14,6 @@ connector" lives here, even though its own OAuth mechanics are a separate module
 """
 from __future__ import annotations
 
-import re
 
 import httpx
 
@@ -230,19 +229,11 @@ def todoist_add_task_render(args):
     return f"Add to your Todoist Inbox: {args['content']}{due}"
 
 
-def _said(phrase, text):
-    """Is `phrase` (a due date, say) among the person's own words? Whole words, any capitals, spaces and the full stop or
-    comma after it ignored -- "tomorrow" in "add it for Tomorrow." yes, "day" in "Monday" no."""
-    phrase = " ".join(str(phrase).lower().split()).strip(" .,;:!?")
-    words = " ".join(str(text).lower().split())
-    return bool(phrase) and re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", words) is not None
-
-
 def todoist_add_task_prepare(args, text):
     """A due date the person did not say is left out (docs/ACTIONS_DESIGN.md, section 6: measured, the model made one up in
     over half the cases where it gave one, e.g. "tomorrow at 5pm" for "add task call mum"), and the model is told."""
     due = args.get("due_string")
-    if due is None or _said(due, text):
+    if due is None or diya_intent.said_in(due, text):
         return args, []
     return ({key: value for key, value in args.items() if key != "due_string"},
             [f"It has no due date: {due!r} was left out, because the user did not say when."])
@@ -294,7 +285,7 @@ def todoist_add_task_kind():
         validate=todoist_add_task_validate,
         render=todoist_add_task_render,
         execute=todoist_add_task_execute,
-        asked=diya_intent.is_task_request,
+        asked=diya_intent.is_todoist_task_request,
         prepare=todoist_add_task_prepare,
         tool={
             "type": "function",
@@ -303,7 +294,7 @@ def todoist_add_task_kind():
                 "description": (
                     "Propose adding a task to the user's Todoist Inbox. This only PROPOSES it: nothing is added until the "
                     "user approves it on the Actions page. Use it only when the user asks you to add, create or put "
-                    "something on their Todoist or to-do list."
+                    "something in Todoist by name; for any other to-do list use add_task."
                 ),
                 "parameters": {
                     "type": "object",

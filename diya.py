@@ -20,6 +20,7 @@ import diya_connectors
 import diya_db
 import diya_intent
 import diya_memory
+import diya_tasks
 import diya_time
 
 WEATHER_CODES = {
@@ -288,6 +289,50 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_task",
+            "description": (
+                "Add a task to the user's to-do list, kept inside Diya. Only use this when the user explicitly asks to "
+                "add a task or put something on their to-do list -- for example 'add a task to ...' or 'put x on my "
+                "to-do list'. Do NOT use it because the user mentioned something they need or want, asked a question, "
+                "or asked for a reminder (use add_reminder for 'remind me'). If they named Todoist, this is not the tool."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {"type": "string", "description": "What the task is, in a few words, e.g. 'Buy oat milk'."},
+                    "due": {
+                        "type": "string",
+                        "description": (
+                            "Optional: when it is due, in the user's own words, unchanged (e.g. 'Friday', 'tomorrow at "
+                            "5pm'). Leave it out unless they said when. Never guess."
+                        ),
+                    },
+                },
+                "required": ["content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_tasks",
+            "description": (
+                "List the tasks on the user's to-do list kept inside Diya (the ones added with 'add a task'), open or done. "
+                "Use it when the user asks what is on their to-do list or task list. This is not Todoist (use "
+                "list_todoist_tasks for that) and not reminders (use list_reminders)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "description": "Optional: 'open' (the default), 'done' or 'all'."},
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 
@@ -304,6 +349,24 @@ REMINDER_NOT_ASKED = (
     "Not saved: the user did not ask for a reminder. Answer what they asked and save nothing. If they did want one, "
     "they can say 'remind me to ...'."
 )
+
+# What add_task answers the model when the person did not ask for a task, or asked for one in Todoist (docs/TASKS_DESIGN.md,
+# D4 and D6: a message that names Todoist is Todoist's, any other is the to-do list's, decided in code).
+TASK_NOT_ASKED = (
+    "Not added: the user did not ask for a task, so NOTHING was added. Do not say you added, saved or will add one. "
+    "Answer what they asked. If they did want one, they can say 'add a task to ...'."
+)
+TASK_IS_TODOISTS = (
+    "Not added to the to-do list inside Diya: the user named Todoist, so this is for Todoist, which is proposed with "
+    "propose_todoist_task when Todoist is connected. If it is not connected, tell them to connect it on the Connections "
+    "page, or to ask again without naming Todoist."
+)
+MAX_TASKS_SHOWN = 30  # how many tasks one list_tasks answer shows
+# list_tasks says whose list it is: asked for "my Todoist tasks" while Todoist was not connected, the model was measured
+# showing this list as if it were Todoist's, and once saying Todoist's list was empty.
+TASK_LIST_OWNER = "the to-do list inside Diya (this is not Todoist)"
+# Tools that only read or write the owner's own lists: running one is not "outside content" a later proposal came after.
+OWN_LIST_TOOLS = frozenset({"list_reminders", "list_tasks", "add_task"})
 
 # What the model is told when the user is just sharing a fact (see diya_intent.is_fact_share).
 # Left to itself, a small model turns "my flight is on Friday at 6" into paragraphs of advice and
@@ -363,6 +426,7 @@ class Agent:
         self._client = client
         self._clock = clock or datetime.now  # a naive local datetime; a parameter so tests do not depend on today
         self._turn = threading.local()  # what the current ask() is answering, per thread
+        self.tasks = diya_tasks.Tasks(self.store, clock=self._clock)  # the to-do list inside Diya (docs/TASKS_DESIGN.md)
         self._notes = None
         self._notes_lock = threading.Lock()
         self._profile_import_checked = False
@@ -377,6 +441,8 @@ class Agent:
             "web_search": web_search,
             "add_reminder": self.add_reminder,
             "list_reminders": self.list_reminders,
+            "add_task": self.add_task,
+            "list_tasks": self.list_tasks,
         }
         # Connector tools (docs/CONNECTORS_DESIGN.md, unit C2) are always registered here -- each
         # checks its own connection fresh on every call -- but only offered to the model (self.tools)
@@ -543,6 +609,63 @@ class Agent:
             lines.append(f"#{row['id']}: {row['content']}{when}")
         return "\n".join(lines)
 
+    def add_task(self, content, due=None):
+        """Add a task to the to-do list inside Diya (docs/TASKS_DESIGN.md). While a message is being answered, only if
+        that message asks for a task and does not name Todoist (D4, D6), and a due date is kept only if the person said
+        it (D4); a call made outside a turn is not judged by an old message, as add_reminder is not. What it returns is
+        what the model relays to the person, so it says exactly what was saved."""
+        in_turn = getattr(self._turn, "active", False)
+        said = self._turn.user_text if in_turn else None
+        if in_turn:
+            if not diya_intent.is_task_request(said):
+                return TASK_NOT_ASKED
+            if diya_intent.names_todoist(said):
+                return TASK_IS_TODOISTS
+        if isinstance(due, str) and not due.strip():
+            due = None  # an empty optional argument is no argument
+        notes = []
+        if in_turn and due is not None and not diya_intent.said_in(due, said):
+            notes.append(f"It has no due date: {due!r} was left out, because the user did not say when.")
+            due = None
+        try:
+            task = self.tasks.add(
+                content, due, source="chat",
+                thread_id=self._turn.thread_id if in_turn else None,
+                message_id=self._turn.message_id if in_turn else None,
+            )
+        except diya_tasks.DuplicateTask as exc:
+            return f"Not added: {exc}. Do not add it again; tell the user it is already there."
+        except diya_tasks.TooManyTasks as exc:
+            return f"Not added: {exc}. Tell the user to tick some off first."
+        except diya_tasks.TaskError as exc:
+            return f"Not added: {exc}. Fix that and try again, or tell the user."
+        if task["due_ts"]:
+            when = f", due {diya_tasks.describe_due(task)}"
+        elif task["due_at"]:
+            when = f", due {task['due_at']!r} (kept as words: that is not a date this can read)"
+        else:
+            when = ""
+        return " ".join([f"Added to the to-do list: {task['content']}{when}."] + notes)
+
+    def list_tasks(self, status=None):
+        """The to-do list as text for the model: '#id: task (due ...)' per line, at most MAX_TASKS_SHOWN."""
+        if status is None or (isinstance(status, str) and not status.strip()):
+            status = "open"
+        if isinstance(status, str):
+            status = status.strip().lower()
+        if status not in diya_tasks.STATES:
+            return f"status must be one of {', '.join(diya_tasks.STATES)}."
+        rows = self.tasks.tasks(status, limit=MAX_TASKS_SHOWN + 1)
+        if not rows:
+            return f"No tasks on {TASK_LIST_OWNER}." if status == "all" else f"No {status} tasks on {TASK_LIST_OWNER}."
+        lines = [f"Tasks on {TASK_LIST_OWNER}:"]
+        for row in rows[:MAX_TASKS_SHOWN]:
+            due = diya_tasks.describe_due(row)
+            lines.append(f"#{row['id']}: {row['content']}" + (f" (due {due})" if due else "") + (" (done)" if row["done"] else ""))
+        if len(rows) > MAX_TASKS_SHOWN:
+            lines.append("...and more.")
+        return "\n".join(lines)
+
     def ensure_profile_imported(self):
         """Give the old `user_profile.txt` a home in reviewed memory, once. Before memory was reviewed
         the model was told that file's text on every turn; now it is told the ACCEPTED facts, so the
@@ -662,10 +785,10 @@ class Agent:
             messages.append(message)
             for call in message.tool_calls:
                 tools_called.append(call.function.name)
-                if call.function.name not in self._proposal_tools and call.function.name != "list_reminders":
+                if call.function.name not in self._proposal_tools and call.function.name not in OWN_LIST_TOOLS:
                     # What a proposal later in this turn will say it came after (docs/ACTIONS_DESIGN.md, D6): every
-                    # tool that ran, whatever it returned -- but not another proposal, and not the owner's own list
-                    # of reminders. Recorded before it runs, so a tool that fails is still listed.
+                    # tool that ran, whatever it returned -- but not another proposal, and not the owner's own lists
+                    # (reminders, tasks). Recorded before it runs, so a tool that fails is still listed.
                     self._turn.reads.append(call.function.name)
                 func = self._functions[call.function.name]
                 args = json.loads(call.function.arguments)

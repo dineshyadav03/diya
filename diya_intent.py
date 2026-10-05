@@ -164,6 +164,31 @@ def is_task_request(text):
     return bool(_TASK_REQUEST.search(text)) and not _TASK_QUESTION.match(text) and not _TASK_NEGATED.search(text)
 
 
+_TODOIST = re.compile(r"\btodoist\b", re.IGNORECASE)
+
+
+def names_todoist(text):
+    """True if the message says Todoist. A task asked for by name in Todoist is Todoist's; any other is Diya's own list's
+    (docs/TASKS_DESIGN.md, D6) -- decided here, in code, so the two tools never compete for the same message."""
+    return isinstance(text, str) and _TODOIST.search(text) is not None
+
+
+def is_todoist_task_request(text):
+    """A request for a task (is_task_request) that names Todoist: the only kind a Todoist task is proposed for."""
+    return names_todoist(text) and is_task_request(text)
+
+
+def said_in(phrase, text):
+    """Is `phrase` (a due date, say) among the person's own words? Whole words, any capitals, spaces and the full stop or
+    comma after it ignored -- "tomorrow" in "add it for Tomorrow." yes, "day" in "Monday" no. Anything that is not text,
+    and an empty phrase, is not."""
+    if not isinstance(phrase, str) or not isinstance(text, str):
+        return False
+    phrase = " ".join(phrase.lower().split()).strip(" .,;:!?")
+    words = " ".join(text.lower().split())
+    return bool(phrase) and re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", words) is not None
+
+
 def is_reminder_request(text):
     """True if the message asks for a reminder ("remind me to ...", "set a reminder", "don't let me forget ...").
     Not a question about reminders, not a fact, not a sum: those are False, as is anything that is not text."""

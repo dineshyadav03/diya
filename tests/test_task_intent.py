@@ -160,3 +160,81 @@ def test_a_destination_too_far_from_the_verb_is_not_the_same_request():
     near = "add " + "x" * 100 + " to my todoist"
     far = "add " + "x" * 200 + " to my todoist"
     assert is_task_request(near) and not is_task_request(far)
+
+
+# ---- which list is it for? (docs/TASKS_DESIGN.md, D6) ----------------------------------------------------
+
+@pytest.mark.parametrize("text", [
+    "add 'call the dentist' to my Todoist", "Create a Todoist task to book the vet", "todoist: add buy stamps",
+    "put it in TODOIST", "Add it to the todoist", "Add 'water the plants' to Todoist",
+])
+def test_a_request_that_names_todoist_is_todoists(text):
+    assert diya_intent.names_todoist(text) and diya_intent.is_todoist_task_request(text), text
+
+
+@pytest.mark.parametrize("text", [
+    "Add a task to buy oat milk", "Put 'renew passport' on my to-do list", "New task: pay the electricity bill",
+    "add task call mum", "Add to my to-do list: take the bins out",
+])
+def test_a_request_that_does_not_name_todoist_is_not_todoists(text):
+    assert is_task_request(text) and not diya_intent.names_todoist(text) and not diya_intent.is_todoist_task_request(text), text
+
+
+@pytest.mark.parametrize("text", [
+    "How do I add a task in Todoist?", "What's in my Todoist?", "Don't add a task to Todoist", "I need to buy milk, Todoist is down",
+    "Todoist", "the todoist app",
+])
+def test_naming_todoist_is_not_asking_for_a_task(text):
+    assert not diya_intent.is_todoist_task_request(text), text
+
+
+@pytest.mark.parametrize("text", [None, 5, ["Todoist"], b"todoist"])
+def test_something_that_is_not_text_names_nothing(text):
+    assert diya_intent.names_todoist(text) is False and diya_intent.is_todoist_task_request(text) is False
+
+
+def test_todoist_is_a_whole_word():
+    assert not diya_intent.names_todoist("add a task to my Todoistan list") and not diya_intent.names_todoist("add a task to my untodoist")
+    assert diya_intent.names_todoist("add a task to my (Todoist)")
+
+
+def test_the_known_limit_a_task_about_todoist_itself_goes_to_todoist():
+    # Said plainly rather than hidden: the rule is a word, not an understanding. The result is safe (a card to approve, or a
+    # refusal that says why), never a task saved in the wrong place without the person seeing it.
+    assert diya_intent.is_todoist_task_request("Add a task to update my Todoist password")
+
+
+@pytest.mark.parametrize("phrase, text, said", [
+    ("tomorrow", "add a task to call mum tomorrow", True),
+    ("Tomorrow", "add it for tomorrow.", True),
+    ("tomorrow at 5pm", "Add a task called prepare slides, due tomorrow at 5pm", True),
+    ("tomorrow  at   5pm", "due TOMORROW AT 5PM please", True),
+    ("friday", "send the invoice by Friday?", True),
+    ("Friday.", "by friday", True),
+    ("friday!", "by friday", True),
+    ("next week", "do it next week, thanks", True),
+    ("day", "call mum on Monday", False),
+    ("friday 5pm", "send the invoice by Friday", False),
+    ("next friday", "send the invoice by Friday", False),
+    ("tomorrow at 5pm", "add task call mum", False),
+    ("in 2 days", "New task: pay the electricity bill", False),
+    ("", "anything", False),
+    ("   ", "anything", False),
+    (".", "anything.", False),
+    ("5pm", "add a task at 5pm", True),
+    ("a.m", "start at 9 a.m.", True),
+    ("tomorrow", None, False),
+    ("tomorrow", 42, False),
+    (None, "tomorrow", False),
+    (42, "42", False),
+    ("3.30pm", "at 3x30pm", False),  # a full stop in the phrase is a full stop, not "any character"
+    ("3.30pm", "at 3.30pm", True),
+    ("a+b", "a+b", True),
+    ("a+b", "aab", False),
+    ("(soon)", "do it (soon)", True),
+    ("tomorrow", "yesterday and tomorrow", True),  # anywhere in the message
+    ("tomorrow", "tomorrows", False),  # but whole words
+    ("morrow", "tomorrow", False),
+])
+def test_a_due_phrase_counts_as_said_only_when_it_is_the_persons_own_whole_words(phrase, text, said):
+    assert diya_intent.said_in(phrase, text) is said

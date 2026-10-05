@@ -393,40 +393,6 @@ def test_the_real_registry_is_exactly_the_todoist_task_and_its_tool_proposes_onl
     assert not any(hasattr(diya_connector_tools, name) for name in ("KINDS",))
 
 
-@pytest.mark.parametrize("phrase, text, said", [
-    ("tomorrow", "add a task to call mum tomorrow", True),
-    ("Tomorrow", "add it for tomorrow.", True),
-    ("tomorrow at 5pm", "Add a task called prepare slides, due tomorrow at 5pm", True),
-    ("tomorrow  at   5pm", "due TOMORROW AT 5PM please", True),
-    ("friday", "send the invoice by Friday?", True),
-    ("Friday.", "by friday", True),
-    ("friday!", "by friday", True),
-    ("next week", "do it next week, thanks", True),
-    ("day", "call mum on Monday", False),
-    ("friday 5pm", "send the invoice by Friday", False),
-    ("next friday", "send the invoice by Friday", False),
-    ("tomorrow at 5pm", "add task call mum", False),
-    ("in 2 days", "New task: pay the electricity bill", False),
-    ("", "anything", False),
-    ("   ", "anything", False),
-    (".", "anything.", False),
-    ("5pm", "add a task at 5pm", True),
-    ("a.m", "start at 9 a.m.", True),
-    ("tomorrow", None, False),
-    ("tomorrow", 42, False),
-    ("3.30pm", "at 3x30pm", False),  # a full stop in the phrase is a full stop, not "any character"
-    ("3.30pm", "at 3.30pm", True),
-    ("a+b", "a+b", True),
-    ("a+b", "aab", False),
-    ("(soon)", "do it (soon)", True),
-    ("tomorrow", "yesterday and tomorrow", True),  # anywhere in the message
-    ("tomorrow", "tomorrows", False),  # but whole words
-    ("morrow", "tomorrow", False),
-])
-def test_a_due_phrase_counts_as_said_only_when_it_is_the_persons_own_whole_words(phrase, text, said):
-    assert diya_connector_tools._said(phrase, text) is said
-
-
 def test_a_due_phrase_the_person_did_not_say_is_left_out_and_the_model_is_told():
     args, notes = diya_connector_tools.todoist_add_task_prepare({"content": "Call mum", "due_string": "tomorrow at 5pm"}, "add task call mum")
     assert args == {"content": "Call mum"}
@@ -454,7 +420,7 @@ def test_the_real_kind_uses_the_task_request_guard_and_the_due_phrase_check():
     import diya_intent
 
     (kind,) = real_action_kinds()
-    assert kind.asked is diya_intent.is_task_request
+    assert kind.asked is diya_intent.is_todoist_task_request
     assert kind.prepare is diya_connector_tools.todoist_add_task_prepare
 
 
@@ -474,7 +440,7 @@ def run_through_the_agent(config, message, arguments):
 
 def test_a_message_that_asks_for_a_task_gets_one_proposed_and_nothing_is_sent(monkeypatch, config):
     calls = post_ok(monkeypatch, {"id": "1"})
-    agent, told = run_through_the_agent(config, "Add a task to buy oat milk", {"content": "Buy oat milk"})
+    agent, told = run_through_the_agent(config, "Add a task to Todoist to buy oat milk", {"content": "Buy oat milk"})
     assert [a["summary"] for a in agent.actions.actions()] == ["Add to your Todoist Inbox: Buy oat milk"]
     assert told.startswith("Proposed as action #1: Add to your Todoist Inbox: Buy oat milk. Nothing has happened yet")
     assert calls == []
@@ -491,7 +457,7 @@ def test_a_message_that_does_not_ask_for_a_task_gets_none_proposed(monkeypatch, 
 
 def test_a_due_date_the_model_made_up_is_left_off_the_card_and_the_model_is_told(monkeypatch, config):
     post_ok(monkeypatch, {"id": "1"})
-    agent, told = run_through_the_agent(config, "add task call mum", {"content": "Call mum", "due_string": "tomorrow at 5pm"})
+    agent, told = run_through_the_agent(config, "add task call mum to Todoist", {"content": "Call mum", "due_string": "tomorrow at 5pm"})
     (action,) = agent.actions.actions()
     assert action["args"] == {"content": "Call mum"} and action["summary"] == "Add to your Todoist Inbox: Call mum"
     assert "It has no due date: 'tomorrow at 5pm' was left out, because the user did not say when." in told
@@ -499,7 +465,7 @@ def test_a_due_date_the_model_made_up_is_left_off_the_card_and_the_model_is_told
 
 def test_a_due_date_the_person_gave_is_on_the_card(monkeypatch, config):
     post_ok(monkeypatch, {"id": "1"})
-    agent, told = run_through_the_agent(config, "Add a task called prepare slides, due tomorrow at 5pm",
+    agent, told = run_through_the_agent(config, "Add a Todoist task called prepare slides, due tomorrow at 5pm",
                                         {"content": "Prepare slides", "due_string": "tomorrow at 5pm"})
     assert agent.actions.actions()[0]["summary"] == "Add to your Todoist Inbox: Prepare slides (due tomorrow at 5pm)"
     assert "left out" not in told
@@ -507,13 +473,13 @@ def test_a_due_date_the_person_gave_is_on_the_card(monkeypatch, config):
 
 def test_an_empty_due_date_is_no_due_date_and_does_not_bounce(monkeypatch, config):
     post_ok(monkeypatch, {"id": "1"})
-    agent, told = run_through_the_agent(config, "Add a task to buy oat milk", {"content": "Buy oat milk", "due_string": ""})
+    agent, told = run_through_the_agent(config, "Add a task to Todoist to buy oat milk", {"content": "Buy oat milk", "due_string": ""})
     assert agent.actions.actions()[0]["args"] == {"content": "Buy oat milk"} and told.startswith("Proposed as action #1")
 
 
 def test_a_due_date_in_the_persons_words_with_other_capitals_and_a_full_stop_is_kept(monkeypatch, config):
     post_ok(monkeypatch, {"id": "1"})
-    agent, _ = run_through_the_agent(config, "Add a task to call the bank. Make it due Friday.", {"content": "Call the bank", "due_string": "friday"})
+    agent, _ = run_through_the_agent(config, "Add a Todoist task to call the bank. Make it due Friday.", {"content": "Call the bank", "due_string": "friday"})
     assert agent.actions.actions()[0]["args"] == {"content": "Call the bank", "due_string": "friday"}
 
 
