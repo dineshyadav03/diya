@@ -958,7 +958,7 @@ def test_migration_five_adds_the_two_tables_and_changes_nothing_else(tmp_path):
     conn.execute("INSERT INTO reminders (content, created_at) VALUES ('keep me', 't')")
     conn.commit()
     applied = diya_db.apply_migrations(conn)
-    assert applied == [1, 2, 3, 4, 5]
+    assert applied == [v for v, _ in diya_db.MIGRATIONS] and applied[:5] == [1, 2, 3, 4, 5]  # whatever comes after five
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert {"actions", "action_events"} <= tables
     assert conn.execute("SELECT content FROM reminders").fetchall() == [("keep me",)]

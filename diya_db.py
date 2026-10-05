@@ -163,6 +163,31 @@ MIGRATIONS = (
         """,
         "CREATE INDEX IF NOT EXISTS action_events_by_action ON action_events (action_id)",
     )),
+    # Migration 6 (docs/TASKS_DESIGN.md, D1): a to-do list in Diya's own database. The same shape as `reminders` --
+    # `due_at` is the person's words for when, `due_ts` that read as a UTC instant (null when it could not be read) --
+    # but a task has no notification: nothing tells you, it waits to be looked at. `content_key` is the case-folded
+    # text, the identity used to refuse a second OPEN copy of the same task; a done task frees its words again.
+    # `source` is where it came from; `thread_id`/`message_id` are the chat and message a task from chat answered.
+    # Times are UTC text like 2026-10-05T10:15:00Z. Nothing reads this table until diya_tasks.py does.
+    (6, (
+        """
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT NOT NULL,
+            content_key TEXT NOT NULL,
+            due_at TEXT,
+            due_ts TEXT,
+            done INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0, 1)),
+            source TEXT NOT NULL CHECK (source IN ('chat', 'page')),
+            thread_id INTEGER,
+            message_id INTEGER,
+            created_at TEXT NOT NULL,
+            completed_at TEXT
+        )
+        """,
+        "CREATE UNIQUE INDEX IF NOT EXISTS tasks_one_open_per_key ON tasks (content_key) WHERE done = 0",
+        "CREATE INDEX IF NOT EXISTS tasks_by_done ON tasks (done)",
+    )),
 )
 
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored
