@@ -481,7 +481,13 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
   host allowlist (`ddgs` cannot be wrapped): one known host, a key, queries visible to Ollama instead of DuckDuckGo --
   a trade the owner would have to choose. MCP is worth being a *client* of only if a connector the owner needs has no
   direct API, and then only for named, pinned servers behind the approval gate (the ClawHub record is the reason).
-- **Action:** (a) run the model bake-off, change nothing until it is measured; (b) no MCP, voice or runtime change now.
+- **Action:** (a) run the model bake-off, change nothing until it is measured -- **done 2026-10-09**
+  (docs/MODEL_BENCHMARK.md, "Second pass"): `qwen3:4b-instruct` passed all nine evals in each of three runs
+  (`qwen2.5:3b`: 7, 8, 8) and reached for a task tool unasked on 2% of messages against 13%, invented no due dates (the 3B:
+  43% of those it gave) and never said it had added a task it had not, at about 1.4 times the time per message; `gemma4:e4b`
+  (7 of 9, five times slower per call) and the thinking build `qwen3:4b` (279 s for a three-word reply) are not usable on
+  this CPU. A model with a huge default context (`qwen3:4b`, 262,144 tokens) will not even load on 15.7 GB unless
+  `num_ctx` is capped through a Modelfile alias. Nothing was switched; (b) no MCP, voice or runtime change now.
 
 ### 20. Market and hardware signals: where "local" is and is not worth paying for
 

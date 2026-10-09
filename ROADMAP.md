@@ -228,6 +228,10 @@ Remaining:
    (8 and 7), but it was about 6 times slower (551 s against 91 s), and it did no better at reading reminder times. One run
    per message on one machine: a first pass, not a result. **The hardware half, the Mac mini, cannot be measured until it is
    here**; whether an 8B model is fast enough there is the open question.
+   **Second pass (2026-10-09):** `qwen3:4b-instruct` beat `qwen2.5:3b` on every routing measure over three runs each (9 of 9 evals every
+   time; tool called unasked on 2% of messages against 13%) at about 1.4 times the time per message, so an 8B model is no longer the
+   reason to want new hardware. Not switched: the repository default is still `qwen2.5:3b`, and the new one needs a context-capped
+   alias to load at all (`docs/MODEL_BENCHMARK.md`).
 2. Trustworthy memory. The review-and-promote step for staged facts. Reference for the
    verification step: the solver/verifier separation (Apodex). Designed in
    [`docs/STAGE2_DESIGN.md`](docs/STAGE2_DESIGN.md) as seven units, all built, including person-tagged
