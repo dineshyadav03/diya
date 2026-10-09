@@ -508,6 +508,90 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
   questions Diya has no reason to take on.
 - **Action:** none. Keep the Mac mini deferred; spend effort on trust and daily use.
 
+### 21. Cognition's "Agent Memory Repo" -- memory as a git folder of Markdown, consolidated by a "Dreaming" agent
+
+- **Source:** https://cognition.com/agent-memory-repo (fetched 2026-10-09; no publication date on the page, its
+  examples use 2026 dates), shared by the user 2026-10-09.
+- **Noted:** 2026-10-09.
+- **What it is:** an open standard for agent memory that persists across sessions. Memory is a folder in a git
+  repository of Markdown notes, one line per entry, each with optional metadata (a link to the session it came from,
+  the date added); a short `MEMORY.md` is the entry point an agent loads first. Each session clones the repo, searches
+  or follows links between notes like a wiki, updates what it learned and pushes. Several repos can be loaded at once,
+  and the agent writes each memory to the repo of the person it came from (asking when unclear). A separate
+  "Dreaming" agent runs periodically to merge duplicates, remove outdated entries and check sources to resolve
+  contradictions; git flags conflicting edits from parallel agents; every repo keeps its own owner, permissions and history.
+- **Skeptic note:** a vendor's standard, undated; the page's numbers are illustrative examples (a latency fix, an
+  autocomplete rate), not a measurement of the memory design. Nothing on it says how a bad memory is stopped from
+  getting in, or how the periodic merge is checked.
+- **Why it matters for Diya:** (a) a fourth independent project this autumn to land on Dreaming's shape (batch, off the
+  interactive path, consolidate) -- after entries 10, 12a and 15 -- and one that borrows the name; that is a signal about
+  the structure, not about Diya. (b) The difference is the one that matters: here the consolidating agent edits the
+  memory on its own (merge, delete, settle contradictions), which is a "compaction-driven write" in the memory-poisoning
+  papers' terms (entry 17); Diya's Dreaming only stages candidates and a person accepts them. (c) What is worth taking is the
+  *form*: plain Markdown under version control gives an owner a diff, a history, a way to edit by hand and a way to
+  leave. Diya's accepted facts are SQLite rows with an append-only event trail, and `diya_review.py export` writes only a
+  flat bullet list (no person grouping, no history) as a backup that round-trips through `import-profile`.
+- **Action:** no build now. If memory portability becomes a goal, the cheap, safe step is a Markdown export that keeps
+  the person grouping and the review trail (read-only, so the database stays the source of truth) -- an addition to the
+  existing `export`, not a new store. If accepted facts ever pile up enough to need merging or retiring, have Dreaming
+  *propose* each merge or retirement and let the owner approve it, the way Stage 4 treats a write; do not let it edit
+  accepted facts itself.
+
+### 22. Product signals shared 2026-10-09: Instinct's $1B, open-instinct, Littl, Bonsai (what checked out)
+
+- **Source:** the user's pasted posts; checked against the pages and search results of 2026-10-09 -- the Instinct funding
+  coverage (Reuters and TechCrunch as relayed by trade sites), https://github.com/mariagorskikh/open-instinct,
+  https://dolittl.ai, and searches for "Bonsai" / "Yaklabs".
+- **Noted:** 2026-10-09.
+- **What checked out:**
+  - **Instinct (entry 2):** reported 2026-09-28 to have raised $1B (Series C, Sequoia, Benchmark, Coatue) at a $10B
+    valuation, a month after a $250M round; access is still limited; users reach it by text or phone; a newer tier phones
+    businesses to book things; its "Trusted Person Network" lets people's agents talk to each other. Coverage disagrees on
+    details (one data provider lists a $6.47B valuation; launch is dated August or February) and revenue is unclear.
+  - **open-instinct:** real, MIT, 272 stars, version 0.1 ("treat live deployments as beta"), 837 tests. Not local: you
+    text a phone number from a hosted service (Inkbox), each agent runs in its own microVM on a hosted desktop service,
+    apps connect through Composio, the default model is Claude, payments use Stripe Link. What is worth reading:
+    six trust tiers (owner, partner, family, friend, contact, stranger) enforced in code before any tool runs, and
+    payments where the agent never holds a card -- it asks for a single-use card for the exact amount and the owner
+    approves on their phone.
+  - **Littl:** a pre-launch waitlist (Serendipity AI, Inc.; no founders named). The page says "private by design" and
+    that data is not sold to advertisers; it does NOT claim on-device processing, which the pasted post does, and the
+    "much faster than global agents" test is unsupported. The idea worth noting is the unit of the product: an outcome
+    ("plan our Japan trip", "keep the household running") that it keeps working on, not a prompt.
+  - **Bonsai / Yaklabs:** nothing found. Six searches turned up no such company or product; the only source is the
+    pasted post, so it is unverified. Its stated principles are the part to keep: what the assistant learns about you
+    should be readable, editable, correctable, portable and stored in files on your machine, and not tied to one model.
+- **Why it matters for Diya:** (a) $1B into a cloud personal agent you text is the cloud pole of cross-cutting note 1
+  getting stronger; it validates the category and says nothing about whether local can win it. (b) Bonsai's principles are
+  Diya's own thesis stated by someone else -- the fair test of "are we doing that?" is: can the owner see, correct and
+  take with them everything it knows? Today they can see and correct facts (Memory page) and export a flat list, but not
+  history, tasks or reminders in one portable form. (c) open-instinct's out-of-band approval (the card is approved on the
+  owner's phone, never in the chat with the agent) is the same rule as Diya's D1 (approval is a button or the CLI, never a
+  chat reply) and is the right model if Diya ever gets a phone channel (entry 16). (d) Trust tiers solve a multi-person
+  problem Diya does not have; do not copy them.
+- **Action:** none to build from this entry. Add "everything Diya knows about you can be exported in one readable form"
+  to the list of things to check against Bonsai-style claims; it is a small gap, not a missing foundation.
+
+### 23. Frontier-model posts shared 2026-10-09: Kardashev-0.7 and LoopCD (not actionable for Diya)
+
+- **Source:** the user's pasted posts; the paper https://arxiv.org/abs/2610.02185 (abstract fetched); a search for
+  Banbury Road / Kardashev-0.7.
+- **Noted:** 2026-10-09.
+- **What checked out:** **LoopCD** is real: submitted 2026-10-01, a training-free contrastive-decoding method for
+  *looped* transformers (models that reuse one block several times), with reported gains that match the post
+  (Ouro-2.6B-Thinking on AIME 2024, 61.88% to 73.33%; Huginn on HumanEval, 22.56% to 31.71%) and, in the abstract,
+  matching or beating unguided full-depth runs with half the loops at 22.5%-48.2% fewer forward FLOPs. The page does not
+  state an affiliation, and the post's remark that frontier models such as "GPT-6 Astra" and "Gemini 4" use looped
+  transformers is a rumour that is not in the paper. **Kardashev-0.7** (Banbury Road): the only source found was one
+  person's LinkedIn page; "32 models trained together with RLPS" and "0.7%-2% of the inference cost, 3% of the memory"
+  are the company's own words with no named baseline, no report and no independent coverage -- unverified.
+- **Why it matters for Diya:** neither is runnable by Diya today: looped models are not what Ollama serves, and a swarm of
+  32 models is the multi-model route cross-cutting note 4 rules out. The one thing to watch is the direction both point
+  to -- more capability per parameter and per watt at small sizes -- because that is what would let a laptop CPU run the
+  whole agent loop (see entry 19), and it is the same bet as the pasted opinion that most daily work will run on local models
+  within five years (an opinion in that post, not evidence).
+- **Action:** none. Re-run the model bake-off (entry 19) when a small model with a better tool-calling record lands on Ollama.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,
@@ -524,3 +608,7 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
    "Scheduled" view before anything that decides on its own what to tell the owner.
 7. Reach is Diya's real gap (entry 16): every comparable lives in the chat apps people already open. A phone channel is
    the biggest missing piece for daily use, and the one that most needs the security rules of entry 17 first.
+8. (2026-10-09, entries 21-23) "What it learns about you belongs to you" is now said by several products; Diya can make it
+   checkable: a person can see, correct and take away everything it knows. Memory that consolidates itself is a known
+   attack surface (entry 17), so any merge or retirement of accepted facts should be proposed to the owner, never done by
+   a background job.
