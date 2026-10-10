@@ -229,6 +229,7 @@ class ChatRequest(BaseModel):
 # text, never the exception's own: that goes to this program's console, where someone looking for the cause can read it.
 MODEL_DID_NOT_ANSWER = "The model didn’t answer (is Ollama running?), so there is no reply. Your message was kept; try again."
 ANSWERING_FAILED = "Something went wrong while answering, so there is no reply. Your message was kept; try again. The details are in the API’s console."
+TRANSCRIPTION_FAILED = "That recording could not be turned into text. Try again, or type it. The details are in the API’s console."
 
 
 class WhisperTranscriber:
@@ -327,8 +328,10 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
 
         try:
             text = transcriber.transcribe(tmp_path)
-        except Exception as exc:
-            return {"text": "", "error": str(exc)}
+        except Exception:  # a defect, a bad file or a missing model: say so in fixed words, and leave the trace where it can be read
+            print("[transcribe] transcribing failed:", file=sys.stderr)
+            traceback.print_exc()
+            return {"text": "", "error": TRANSCRIPTION_FAILED}
         finally:
             os.remove(tmp_path)
 

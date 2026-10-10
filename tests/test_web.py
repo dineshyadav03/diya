@@ -284,9 +284,19 @@ def test_transcribe_passes_the_audio_to_the_transcriber_and_cleans_up(config):
 def test_transcribe_defaults_to_webm_and_reports_errors_as_json(config):
     client, _, _, transcriber = build(config, transcriber=FakeTranscriber(error=RuntimeError("bad audio")))
     response = client.post("/api/transcribe", files={"audio": ("blob", b"x", "audio/webm")})
-    assert response.json() == {"text": "", "error": "bad audio"}
+    assert response.json() == {"text": "", "error": diya_web.TRANSCRIPTION_FAILED}
     assert transcriber.calls[0]["path"].endswith(".webm")
     assert not os.path.exists(transcriber.calls[0]["path"])
+
+
+def test_a_failed_transcription_says_so_in_fixed_words_and_keeps_the_details_for_the_console(config, capsys):
+    secret_path = "C:/Users/someone/models/whisper-small/model.bin"
+    client, _, _, _ = build(config, transcriber=FakeTranscriber(error=RuntimeError(f"cannot open {secret_path}")))
+    response = client.post("/api/transcribe", files={"audio": ("clip.webm", b"x", "audio/webm")})
+    assert response.status_code == 200 and response.json() == {"text": "", "error": diya_web.TRANSCRIPTION_FAILED}
+    assert secret_path not in response.text and "RuntimeError" not in response.text
+    err = capsys.readouterr().err
+    assert "[transcribe] transcribing failed" in err and secret_path in err  # where someone looking for the cause can read it
 
 
 def test_cors_names_the_ui_origin_and_is_no_longer_a_wildcard(config):
