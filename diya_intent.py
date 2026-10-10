@@ -14,6 +14,8 @@ of a question, a command or a need.
 """
 import re
 
+import diya_repeat
+
 MAX_CHARS = 400
 MAX_SENTENCES = 3
 MAX_ACK_WORDS = 30
@@ -162,6 +164,43 @@ def is_task_request(text):
         return False
     text = text.replace(chr(0x2019), "'")
     return bool(_TASK_REQUEST.search(text)) and not _TASK_QUESTION.match(text) and not _TASK_NEGATED.search(text)
+
+
+_MENTIONS_REPEAT = re.compile(r"\b(?:every|each|daily|weekly|monthly|weekdays?|hourly|yearly|annually|recurring|repeat\w*)\b", re.IGNORECASE)
+
+
+def mentions_repeat(text):
+    """Does the message say anything about repeating ("every", "each", "daily", "weekly" ...)? Not whether it asks for a repeat, or
+    that it can be read: only that the person talked about one, so a repeat the model passed that is NOT in their words means the
+    model garbled theirs (ask again) and not that it made one up (leave it out). docs/SCHEDULE_DESIGN.md, D7."""
+    return isinstance(text, str) and _MENTIONS_REPEAT.search(text) is not None
+
+
+# What may sit between "remind me" and a repeat for the repeat to be part of the request: the reminder's own content ("... to take
+# my pills every day at 8am"), but not another clause ("... to call mum tomorrow, I do it every Sunday").
+_NEW_CLAUSE = re.compile(r"[.!?;]|,\s*(?:i|we|he|she|they|it|and|but)\b|\b(?:because|but|although|though|since|whereas|while)\b", re.IGNORECASE)
+# What may follow a repeat that is part of a request: the content ("... every day at 8am to take my pills"), the end, or a pause. Anything
+# else ("... every day except Sunday") might change what was said, and is not guessed at.
+_CONTENT_FOLLOWS = re.compile(r"\s*(?:$|[.!?,;:]|(?:to|that|about|for|please|thanks)\b)", re.IGNORECASE)
+_LEAD_IN = re.compile(r"[\s,:;.-]*(?:(?:please|and|then|just|can you|could you|would you|will you)[\s,]*)*", re.IGNORECASE)
+
+
+def attached_repeat(text, now=None):
+    """The person's own words for a repeat that is part of their request for a reminder ("Remind me every Monday at 9am to ...",
+    "Every Monday at 9am, remind me to ...", "Set a reminder to ... every day at 8am"), or None: no reminder asked for, no repeat
+    that diya_repeat reads, or a repeat that is part of something else ("remind me to call mum tomorrow, I do it every Sunday") or
+    is followed by words that could change it ("every day except Sunday"). docs/SCHEDULE_DESIGN.md, D7."""
+    found = diya_repeat.find_repeat(text, now)  # None for anything that is not text
+    request = _REMINDER_REQUEST.search(text.replace(chr(0x2019), "'")) if found else None
+    if request is None:
+        return None
+    if found.start >= request.end():  # the request first, the content and the repeat after it
+        if _NEW_CLAUSE.search(text[request.end():found.start]) or not _CONTENT_FOLLOWS.match(text[found.end:]):
+            return None
+        return found.words
+    if found.end <= request.start():  # the repeat first: "Every Monday at 9am, remind me to ..."
+        return found.words if _LEAD_IN.fullmatch(text[found.end:request.start()]) else None
+    return None
 
 
 _TODOIST = re.compile(r"\btodoist\b", re.IGNORECASE)

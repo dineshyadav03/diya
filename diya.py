@@ -275,6 +275,14 @@ TOOLS = [
                             "'in 2 hours'). Omit if they gave no time. Never guess a time."
                         ),
                     },
+                    "repeat": {
+                        "type": "string",
+                        "description": (
+                            "Optional, and ONLY if the user said the reminder repeats: how often and when, in their own words, "
+                            "unchanged (e.g. 'every Monday at 9am', 'every day at 8am', 'every month on the 15th'). Omit it for a "
+                            "reminder that happens once. If you pass it, leave due_at out."
+                        ),
+                    },
                 },
                 "required": ["content"],
             },
@@ -345,6 +353,11 @@ MAX_REMINDER_CHARS = 300
 REMINDER_TIME_HINT = (
     "Pass the time exactly as the user said it (their own words, nothing added or left out); if you are not sure what "
     "they meant, ask them when, then try again."
+)
+# What add_reminder adds when a repeat cannot be used (docs/SCHEDULE_DESIGN.md, D7): the model passes the person's own words for it.
+REPEAT_HINT = (
+    "Pass the repeat exactly as the user said it (their own words, nothing added or left out); if they did not say how often "
+    "or when, ask them, then try again."
 )
 # What add_reminder answers the model when the person did not ask for a reminder (docs/PROACTIVITY_DESIGN.md, D9).
 REMINDER_NOT_ASKED = (
@@ -530,19 +543,61 @@ class Agent:
         result = self.notes.query(query_embeddings=[self.embed(query)], n_results=1)
         return result["documents"][0][0]
 
-    def add_reminder(self, content, due_at=None):
-        """Save a reminder. While a message is being answered (ask), only if that message asks for one
+    def add_reminder(self, content, due_at=None, repeat=None):
+        """Save a reminder, or a repeating one. While a message is being answered (ask), only if that message asks for one
         (docs/PROACTIVITY_DESIGN.md, D9); the time is read here, in code, from the person's own words, and
-        a time that cannot be read saves nothing and says so, so the model can ask (D2). What it returns is
-        what the model relays to the person, so it says exactly what was saved and for when."""
-        if getattr(self._turn, "active", False) and not diya_intent.is_reminder_request(self._turn.user_text):
+        a time that cannot be read saves nothing and says so, so the model can ask (D2). A repeat is kept only if the person
+        said it, and is read here too (docs/SCHEDULE_DESIGN.md, D2 and D7). What it returns is what the model relays to the
+        person, so it says exactly what was saved and for when."""
+        in_turn = getattr(self._turn, "active", False)
+        if in_turn and not diya_intent.is_reminder_request(self._turn.user_text):
             return REMINDER_NOT_ASKED
         if not isinstance(content, str) or not content.strip():
             return "Not saved: a reminder needs something to remind the user about."
         content = " ".join(content.split())
         if len(content) > MAX_REMINDER_CHARS:
             return f"Not saved: that reminder is over {MAX_REMINDER_CHARS} characters; shorten it and try again."
-        in_turn = getattr(self._turn, "active", False)
+        said_repeat = diya_intent.attached_repeat(self._turn.user_text, self.now()) if in_turn else None
+        if said_repeat is not None:
+            repeat = said_repeat  # the person's own words are the rule, whatever the model passed: its `repeat` only says "this repeats"
+        if isinstance(repeat, str) and not repeat.strip():
+            repeat = None  # an empty optional argument is no argument
+        if repeat is not None and not isinstance(repeat, str):
+            return "Not saved: the repeat must be given in words, like 'every Monday at 9am'."
+        notes = []
+        if repeat is not None and in_turn and not diya_intent.said_in(repeat, self._turn.user_text):
+            if diya_intent.mentions_repeat(self._turn.user_text):  # they did talk about repeating: the model changed their words
+                return f"Not saved: the repeat {repeat[:60]!r} is not the user's words. {REPEAT_HINT}"
+            notes.append(f"It does not repeat: {repeat[:60]!r} was left out, because the user did not say it repeats.")
+            repeat = None
+        if repeat is not None:
+            return self._save_repeating(content, repeat, due_at, in_turn)
+        return " ".join([self._save_one_off(content, due_at, in_turn)] + notes)
+
+    def _save_repeating(self, content, repeat, due_at, in_turn):
+        """The repeating half of add_reminder: the series is made by diya_schedule from the person's words; `due_at` is ignored
+        (the rule carries the time) and the answer says so."""
+        try:
+            series = self.schedule.create(
+                content, repeat, source="chat",
+                thread_id=self._turn.thread_id if in_turn else None,
+                message_id=self._turn.message_id if in_turn else None,
+            )
+        except diya_time.NotUnderstood as exc:
+            return f"Not saved: I could not read {repeat[:60]!r} as a repeat ({exc.reason}). {REPEAT_HINT}"
+        except diya_schedule.DuplicateSeries:
+            return "Not saved: that repeating reminder is already set. Do not set it again; tell the user it is already there."
+        except diya_schedule.TooManySeries as exc:
+            return f"Not saved: {exc}. Tell the user."
+        except diya_schedule.ScheduleError as exc:
+            return f"Not saved: {exc}. Fix that and try again, or tell the user."
+        words = diya_schedule.describe(series)
+        note = f" ({'; '.join(series['assumed'])})" if series["assumed"] else ""
+        ignored = " The separate time (due_at) was ignored: the repeat carries the time." if due_at is not None and str(due_at).strip() else ""
+        return f"Repeating reminder saved: {content}. {words['rule']}. The first one is {words['next']}.{note}{ignored}"
+
+    def _save_one_off(self, content, due_at, in_turn):
+        """The one-off half of add_reminder: unchanged from before repeats existed."""
         if due_at is None or (isinstance(due_at, str) and not due_at.strip()):
             problem = diya_time.disagreement("", self._turn.user_text) if in_turn else None
             if problem:
