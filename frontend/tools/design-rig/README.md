@@ -28,7 +28,7 @@ Needs Node >= 22 (global `WebSocket`) and Edge. Environment variables:
 | `EDGE_PATH` | path to `msedge.exe` |
 | `VP` | viewports, comma separated: `desktop`, `mobile` (375x812), `narrow` (320x568). Default `desktop,mobile` |
 | `SKIP` | comma separated scenario-name fragments to skip |
-| `VARIANT=flat` | inject CSS that removes the elevation tokens, to compare against the shipped look |
+| `THEME=light` or `dark` | choose the theme as the sidebar's toggle does (unset: the browser's own setting; headless Edge says light), so run it once for each |
 | `EXPECT_FAIL=1` | don't exit non-zero on failed checks (to capture a "before" that is expected to fail) |
 
 Scenarios live in `shots.mjs` (`SCENARIOS`). The sample data there is fictional. Screenshots can

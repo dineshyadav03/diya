@@ -1,41 +1,24 @@
 'use client'
 
 import { Fragment, useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
-import dynamic from 'next/dynamic'
-import { ThinkingOrb } from 'thinking-orbs'
 import VoiceBar from '../components/VoiceBar'
 import { describeLoadFailure, describeSendFailure } from '../lib/api-failure.mjs'
 
 // Every /api/... call below is same-origin: this app's own route handlers (app/api) forward it to
 // the Python API and attach the access token on the server. The browser never holds the token.
+// The navigation, and the counts on it, live in components/AppShell.jsx; this page is only the chat.
 
-// WebGL/three -- keep off the server render entirely rather than rely on
-// the library deferring canvas setup to an effect on its own.
-const ImageGeneration = dynamic(() => import('img-fx').then((m) => m.ImageGeneration), { ssr: false })
-
-// img-fx runs a continuous WebGL shader loop. Verified working (metal-fx,
-// border-beam, liquid-gooey, thinking-orbs, voice-glow all render fine),
-// but img-fx specifically hard-hung the browser used to test this build --
-// `getContext('webgl2')` reported success while actual rendering never
-// completed a frame, so there's no reliable way to feature-detect around
-// it from here. Off by default; flip to true to try it on a real GPU.
-const IMG_FX_ENABLED = false
-
-// Every real tool Diya can call (diya.py's TOOLS/AVAILABLE_FUNCTIONS), mapped
-// to the thinking-orbs state that actually matches what it does -- not a
-// decorative pick, each pairing is the real verb: notes/web lookups search,
-// weather reaches an external service, a reminder gets written down, and the
-// two listing tools shape an existing list into view.
-const TOOL_ORB = {
-  search_notes: { state: 'searching', label: 'searched your notes' },
-  web_search: { state: 'weaving', label: 'searched the web' },
-  get_weather: { state: 'connecting', label: 'checked the weather' },
-  add_reminder: { state: 'composing', label: 'saved a reminder' },
-  list_reminders: { state: 'solving', label: 'checked your reminders' },
-  add_task: { state: 'composing', label: 'added a task' },
-  list_tasks: { state: 'solving', label: 'checked your tasks' },
-  list_files: { state: 'shaping', label: 'listed files' },
+// Every real tool Diya can call (diya.py's TOOLS/AVAILABLE_FUNCTIONS), named by what it did, for the chips
+// under a reply. A tool that is not listed here is not shown.
+const TOOL_LABELS = {
+  search_notes: 'searched your notes',
+  web_search: 'searched the web',
+  get_weather: 'checked the weather',
+  add_reminder: 'saved a reminder',
+  list_reminders: 'checked your reminders',
+  add_task: 'added a task',
+  list_tasks: 'checked your tasks',
+  list_files: 'listed files',
 }
 
 let cachedVoices = []
@@ -71,64 +54,8 @@ export default function ChatPage() {
   // chat, is stale and must not touch the page: it would drop the old thread's messages into a chat
   // that has since been started over.
   const loadSeqRef = useRef(0)
-  // Once revealed, freeze the shader/scheduler rather than let it render
-  // forever -- see IMG_FX_ENABLED above for why this alone isn't enough
-  // to make it safe by default.
-  const [logoPaused, setLogoPaused] = useState(false)
   const threadIdRef = useRef(null)
   const logRef = useRef(null)
-  // How many reminders have come due, for the header link. Asked once a minute while the page is open. If it
-  // cannot be asked nothing is shown: a badge that says 0 when it does not know would be a lie, and nobody
-  // asked for this, so there is nothing to explain.
-  const [dueCount, setDueCount] = useState(null)
-  // How many actions are waiting for the owner's decision or need their word on an unknown outcome, for the header
-  // link (docs/ACTIONS_DESIGN.md, unit A3). Asked the same way, and for the same reason it shows nothing when unknown.
-  const [actionCount, setActionCount] = useState(null)
-
-  useEffect(() => {
-    let cancelled = false
-    async function check() {
-      try {
-        const response = await fetch('/api/actions')
-        const body = response.ok ? await response.json() : null
-        const counts = body && body.counts
-        const waiting = counts && Number.isInteger(counts.pending) && Number.isInteger(counts.unknown) ? counts.pending + counts.unknown : null
-        if (!cancelled) setActionCount(waiting)
-      } catch {
-        if (!cancelled) setActionCount(null)
-      }
-    }
-    check()
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') check()
-    }, 60_000)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    async function check() {
-      try {
-        const response = await fetch('/api/reminders')
-        const body = response.ok ? await response.json() : null
-        if (!cancelled) setDueCount(body && body.counts && Number.isInteger(body.counts.due) ? body.counts.due : null)
-      } catch {
-        if (!cancelled) setDueCount(null)
-      }
-    }
-    check()
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') check()
-    }, 60_000)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [])
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     setSpeakOn(localStorage.getItem('diya_speak') === '1')
@@ -260,7 +187,7 @@ export default function ChatPage() {
         threadIdRef.current = data.thread_id
         localStorage.setItem('diya_thread_id', data.thread_id)
       }
-      const usedTools = [...new Set(data.tools_called || [])].filter((name) => TOOL_ORB[name])
+      const usedTools = [...new Set(data.tools_called || [])].filter((name) => TOOL_LABELS[name])
       if (usedTools.length) {
         setMessages((prev) => [...prev, { id: nextIdRef.current++, role: 'tools', tools: usedTools }])
       }
@@ -296,81 +223,14 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="app">
-      <header>
-        <div className="title">
-          {/* img-fx's own pitch is a loader that becomes the image -- a nice
-              fit for a brand mark that only needs to resolve once per load,
-              rather than a feature Diya's actual chat surface has a use for
-              (there's no image-message flow to attach it to). */}
-          {IMG_FX_ENABLED ? (
-            <ImageGeneration
-              preset="pixels-organic"
-              images={['/diya-flame.svg']}
-              autoReveal
-              theme="dark"
-              paused={logoPaused}
-              onCycle={(phase) => {
-                if (phase === 'visible') setLogoPaused(true)
-              }}
-            >
-              <div className="brand-mark" />
-            </ImageGeneration>
-          ) : (
-            <img src="/diya-flame.svg" alt="" className="brand-mark" />
-          )}
-          Diya
-          {/* Ambient presence when nothing else is happening -- the one
-              orb state with no specific task behind it, on purpose. */}
-          {!thinking && !speaking && (
-            <span className="ambient-orb">
-              <ThinkingOrb state="breathing" size={20} theme="dark" />
-            </span>
-          )}
-        </div>
-        <div className="controls">
-          <Link className="icon-btn" href="/history" style={{ textDecoration: 'none' }}>
-            History
-          </Link>
-          <Link className="icon-btn nav-wide" href="/memory" style={{ textDecoration: 'none' }}>
-            Memory
-          </Link>
-          <Link className="icon-btn nav-wide" href="/reminders" style={{ textDecoration: 'none' }}>
-            Reminders
-            {dueCount > 0 && (
-              <span className="due-badge" aria-label={`${dueCount} due`}>
-                {dueCount}
-              </span>
-            )}
-          </Link>
-          <Link className="icon-btn nav-wide" href="/today" style={{ textDecoration: 'none' }}>
-            Today
-          </Link>
-          <Link className="icon-btn nav-wide" href="/scheduled" style={{ textDecoration: 'none' }}>
-            Scheduled
-          </Link>
-          <Link className="icon-btn nav-wide" href="/tasks" style={{ textDecoration: 'none' }}>
-            Tasks
-          </Link>
-          <Link className="icon-btn nav-wide" href="/connections" style={{ textDecoration: 'none' }}>
-            Connections
-          </Link>
-          <Link className="icon-btn nav-wide" href="/actions" style={{ textDecoration: 'none' }}>
-            Actions
-            {actionCount > 0 && (
-              <span className="due-badge" aria-label={`${actionCount} waiting for you`}>
-                {actionCount}
-              </span>
-            )}
-          </Link>
-          <button
-            className="icon-btn"
-            onClick={() => speak('This is a test of the voice output.', { force: true })}
-            suppressHydrationWarning
-          >
+    <div className="chat">
+      <div className="chat-bar">
+        <span className="chat-title">Chat</span>
+        <div className="chat-tools">
+          <button className="quiet-btn" onClick={() => speak('This is a test of the voice output.', { force: true })} suppressHydrationWarning>
             Test voice
           </button>
-          <label className="icon-btn">
+          <label className="quiet-btn">
             <input
               type="checkbox"
               checked={speakOn}
@@ -380,11 +240,11 @@ export default function ChatPage() {
                 if (!e.target.checked) window.speechSynthesis?.cancel()
               }}
               suppressHydrationWarning
-            />{' '}
-            Speak
+            />
+            Speak replies
           </label>
         </div>
-      </header>
+      </div>
       <div id="log" ref={logRef}>
         {ready && messages.length === 0 && !thinking && (loadProblem ? (
           <div className="empty-state" role="alert">
@@ -408,8 +268,7 @@ export default function ChatPage() {
               <div key={m.id ?? 'h' + i} className="msg system tool-recap">
                 {m.tools.map((name) => (
                   <span key={name} className="tool-recap-item">
-                    <ThinkingOrb state={TOOL_ORB[name].state} size={20} theme="dark" />
-                    {TOOL_ORB[name].label}
+                    {TOOL_LABELS[name]}
                   </span>
                 ))}
               </div>
@@ -438,8 +297,10 @@ export default function ChatPage() {
           )
         })}
         {thinking && (
-          <div className="msg assistant thinking-row">
-            <ThinkingOrb state="working" size={20} theme="dark" />
+          <div className="msg assistant thinking-row" role="status" aria-label="Diya is working on it">
+            <span />
+            <span />
+            <span />
           </div>
         )}
       </div>

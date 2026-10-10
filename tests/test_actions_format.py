@@ -1,10 +1,11 @@
 """How the Actions page words things (frontend/lib/actions-format.mjs, docs/ACTIONS_DESIGN.md unit A3): the tools a
 proposal came after, how long it has left, and what each status means. Pure functions, tested under Node the same way
 frontend/lib/memory-groups.mjs is (tests/test_memory_groups.py): easier to prove right in isolation than by rendering
-the page. Also pins that every page can reach the Actions page and the chat header counts what is waiting.
+the page. Also pins that the one navigation reaches every page and counts what is waiting.
 """
 import json
 import pathlib
+import re
 import shutil
 import subprocess
 
@@ -145,48 +146,43 @@ def test_there_are_words_for_exactly_the_statuses_the_store_has():
 
 # ---- the pages -----------------------------------------------------------------------------------------------
 
-def test_every_other_page_links_to_the_actions_page():
-    pages = [p for p in (FRONTEND / "app").rglob("page.js") if "api" not in p.relative_to(FRONTEND / "app").parts]
-    assert {p.parent.name for p in pages} == {"app", "actions", "connections", "history", "memory", "reminders", "scheduled", "tasks", "today"}
-    for page in pages:
-        if page.parent.name == "actions":
-            continue
-        assert 'href="/actions"' in page.read_text(encoding="utf-8"), page
+def pages():
+    return [p for p in (FRONTEND / "app").rglob("page.js") if "api" not in p.relative_to(FRONTEND / "app").parts]
 
 
-def test_every_other_page_links_to_the_tasks_page():
-    pages = [p for p in (FRONTEND / "app").rglob("page.js") if "api" not in p.relative_to(FRONTEND / "app").parts]
-    for page in pages:
-        if page.parent.name == "tasks":
-            continue
-        assert 'href="/tasks"' in page.read_text(encoding="utf-8"), page
+def shell_links():
+    source = (FRONTEND / "components" / "AppShell.jsx").read_text(encoding="utf-8")
+    return re.findall(r"href: '(/[a-z]*)'", source)
 
 
-def test_every_other_page_links_to_the_scheduled_page():
-    pages = [p for p in (FRONTEND / "app").rglob("page.js") if "api" not in p.relative_to(FRONTEND / "app").parts]
-    for page in pages:
-        if page.parent.name == "scheduled":
-            continue
-        assert 'href="/scheduled"' in page.read_text(encoding="utf-8"), page
+def test_the_one_navigation_links_every_page_there_is_and_no_page_that_is_not():
+    """Every page used to carry its own header with its own list of links, and each new page meant editing all of them. The shell
+    (components/AppShell.jsx, rendered by the layout) is the only list now, so this is the check that no page is left out of it."""
+    routes = {"/" if p.parent.name == "app" else "/" + p.parent.name for p in pages()}
+    assert routes == {"/", "/actions", "/connections", "/history", "/memory", "/reminders", "/scheduled", "/tasks", "/today"}
+    links = shell_links()
+    assert sorted(links) == sorted(routes) and len(links) == len(set(links))
 
 
-def test_every_other_page_links_to_the_today_page():
-    pages = [p for p in (FRONTEND / "app").rglob("page.js") if "api" not in p.relative_to(FRONTEND / "app").parts]
-    for page in pages:
-        if page.parent.name == "today":
-            continue
-        assert 'href="/today"' in page.read_text(encoding="utf-8"), page
+def test_the_layout_renders_the_shell_around_every_page_and_no_page_has_a_header_of_its_own():
+    layout = (FRONTEND / "app" / "layout.js").read_text(encoding="utf-8")
+    assert "import AppShell from '../components/AppShell'" in layout and "<AppShell>{children}</AppShell>" in layout
+    for page in pages():
+        source = page.read_text(encoding="utf-8")
+        assert "<header" not in source and 'className="app"' not in source, page
 
 
 def test_the_chat_names_the_two_task_tools_by_what_they_do():
     chat = (FRONTEND / "app" / "page.js").read_text(encoding="utf-8")
-    assert "add_task: { state: 'composing', label: 'added a task' }" in chat
-    assert "list_tasks: { state: 'solving', label: 'checked your tasks' }" in chat
+    assert "add_task: 'added a task'" in chat
+    assert "list_tasks: 'checked your tasks'" in chat
 
 
-def test_the_chat_header_counts_what_is_waiting_or_unknown_and_says_nothing_when_it_cannot_tell():
-    chat = (FRONTEND / "app" / "page.js").read_text(encoding="utf-8")
-    assert "counts.pending + counts.unknown" in chat
-    assert "Number.isInteger(counts.pending) && Number.isInteger(counts.unknown)" in chat
-    assert "setActionCount(null)" in chat and "actionCount > 0" in chat
-    assert "waiting for you" in chat
+def test_the_navigation_counts_what_is_waiting_or_unknown_and_says_nothing_when_it_cannot_tell():
+    shell = (FRONTEND / "components" / "AppShell.jsx").read_text(encoding="utf-8")
+    assert "counts.pending + counts.unknown" in shell
+    assert "Number.isInteger(counts.pending) && Number.isInteger(counts.unknown)" in shell
+    assert "setWaiting(null)" in shell and "n > 0" in shell
+    assert "waiting for you" in shell
+    # reminders: the same rule, for the number that have come due
+    assert "Number.isInteger(body.counts.due)" in shell and "setDue(null)" in shell

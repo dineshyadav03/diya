@@ -148,40 +148,7 @@ export default function ActionsPage() {
   const kinds = data ? data.kinds : []
 
   return (
-    <div className="app">
-      <header>
-        <div className="title">
-          <img src="/diya-flame.svg" alt="" className="brand-mark" />
-          Diya
-        </div>
-        <div className="controls">
-          <Link className="icon-btn" href="/history">
-            History
-          </Link>
-          <Link className="icon-btn" href="/memory">
-            Memory
-          </Link>
-          <Link className="icon-btn" href="/reminders">
-            Reminders
-          </Link>
-          <Link className="icon-btn" href="/today">
-            Today
-          </Link>
-          <Link className="icon-btn" href="/scheduled">
-            Scheduled
-          </Link>
-          <Link className="icon-btn" href="/tasks">
-            Tasks
-          </Link>
-          <Link className="icon-btn" href="/connections">
-            Connections
-          </Link>
-          <Link className="icon-btn" href="/">
-            &larr; Back to chat
-          </Link>
-        </div>
-      </header>
-      <main className="history-page memory-page actions-page">
+    <main className="history-page memory-page actions-page">
         <div className="history-inner">
           <h1>Actions</h1>
           {data === null ? (
@@ -356,6 +323,5 @@ export default function ActionsPage() {
           )}
         </div>
       </main>
-    </div>
   )
 }

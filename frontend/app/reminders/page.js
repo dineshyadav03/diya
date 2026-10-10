@@ -145,40 +145,7 @@ export default function RemindersPage() {
   const reminders = data ? data.reminders : []
 
   return (
-    <div className="app">
-      <header>
-        <div className="title">
-          <img src="/diya-flame.svg" alt="" className="brand-mark" />
-          Diya
-        </div>
-        <div className="controls">
-          <Link className="icon-btn" href="/history">
-            History
-          </Link>
-          <Link className="icon-btn" href="/memory">
-            Memory
-          </Link>
-          <Link className="icon-btn" href="/today">
-            Today
-          </Link>
-          <Link className="icon-btn" href="/scheduled">
-            Scheduled
-          </Link>
-          <Link className="icon-btn" href="/tasks">
-            Tasks
-          </Link>
-          <Link className="icon-btn" href="/connections">
-            Connections
-          </Link>
-          <Link className="icon-btn" href="/actions">
-            Actions
-          </Link>
-          <Link className="icon-btn" href="/">
-            &larr; Back to chat
-          </Link>
-        </div>
-      </header>
-      <main className="history-page memory-page reminders-page">
+    <main className="history-page memory-page reminders-page">
         <div className="history-inner">
           <h1>Reminders</h1>
           {data === null ? (
@@ -308,6 +275,5 @@ export default function RemindersPage() {
           )}
         </div>
       </main>
-    </div>
   )
 }

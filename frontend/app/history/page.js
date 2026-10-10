@@ -25,41 +25,7 @@ export default function HistoryPage() {
   }, [])
 
   return (
-    <div className="app">
-      {/* The same header as the chat, so the two screens read as one app. */}
-      <header>
-        <div className="title">
-          <img src="/diya-flame.svg" alt="" className="brand-mark" />
-          Diya
-        </div>
-        <div className="controls">
-          <Link className="icon-btn" href="/memory">
-            Memory
-          </Link>
-          <Link className="icon-btn" href="/reminders">
-            Reminders
-          </Link>
-          <Link className="icon-btn" href="/today">
-            Today
-          </Link>
-          <Link className="icon-btn" href="/scheduled">
-            Scheduled
-          </Link>
-          <Link className="icon-btn" href="/tasks">
-            Tasks
-          </Link>
-          <Link className="icon-btn" href="/connections">
-            Connections
-          </Link>
-          <Link className="icon-btn" href="/actions">
-            Actions
-          </Link>
-          <Link className="icon-btn" href="/">
-            &larr; Back to chat
-          </Link>
-        </div>
-      </header>
-      <main className="history-page">
+    <main className="history-page">
         <div className="history-inner">
           <h1>Past chats</h1>
           {threads === null ? (
@@ -97,6 +63,5 @@ export default function HistoryPage() {
           )}
         </div>
       </main>
-    </div>
   )
 }

@@ -76,40 +76,7 @@ export default function TodayPage() {
   const nothingDated = data && !data.due_now.length && !data.later_today.length && !data.tasks_overdue.length && !data.tasks_today.length
 
   return (
-    <div className="app">
-      <header>
-        <div className="title">
-          <img src="/diya-flame.svg" alt="" className="brand-mark" />
-          Diya
-        </div>
-        <div className="controls">
-          <Link className="icon-btn" href="/history">
-            History
-          </Link>
-          <Link className="icon-btn" href="/memory">
-            Memory
-          </Link>
-          <Link className="icon-btn" href="/reminders">
-            Reminders
-          </Link>
-          <Link className="icon-btn" href="/scheduled">
-            Scheduled
-          </Link>
-          <Link className="icon-btn" href="/tasks">
-            Tasks
-          </Link>
-          <Link className="icon-btn" href="/connections">
-            Connections
-          </Link>
-          <Link className="icon-btn" href="/actions">
-            Actions
-          </Link>
-          <Link className="icon-btn" href="/">
-            &larr; Back to chat
-          </Link>
-        </div>
-      </header>
-      <main className="history-page memory-page reminders-page today-page">
+    <main className="history-page memory-page reminders-page today-page">
         <div className="history-inner">
           <h1>Today</h1>
           {data === null ? (
@@ -252,6 +219,5 @@ export default function TodayPage() {
           )}
         </div>
       </main>
-    </div>
   )
 }

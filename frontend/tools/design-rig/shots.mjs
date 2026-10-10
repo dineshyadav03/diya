@@ -9,8 +9,8 @@
 // overflow, and evaluates the scenario's `checks` (DOM assertions).
 //
 // Environment: BASE_URL, EDGE_PATH, CDP_PORT, VP=desktop,mobile,narrow (default desktop,mobile),
-// VARIANT=flat (injects CSS that removes the elevation tokens, to compare against the shipped
-// look), EXPECT_FAIL=1 (don't exit non-zero when a check fails -- for capturing a "before").
+// THEME=light|dark (chooses the theme the way the sidebar's toggle does; unset follows the browser's own setting, which
+// headless Edge reports as light), EXPECT_FAIL=1 (don't exit non-zero when a check fails -- for capturing a "before").
 //
 // Needs Node >= 22 (global WebSocket) and Microsoft Edge. Uses a throwaway browser profile.
 import { spawn } from 'node:child_process'
@@ -27,7 +27,8 @@ if (!outDir) {
 const BASE = process.env.BASE_URL || 'https://127.0.0.1:3000'
 const EDGE = process.env.EDGE_PATH || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 const PORT = Number(process.env.CDP_PORT || 9333)
-const VARIANT_CSS = { flat: ':root{--elev-1:transparent!important;--elev-2:transparent!important;--border:transparent!important}' }[process.env.VARIANT] || ''
+const THEME = ['light', 'dark'].includes(process.env.THEME) ? process.env.THEME : ''
+const THEME_JS = THEME ? `try { localStorage.setItem('diya_theme', '${THEME}') } catch {}` : ''
 fs.mkdirSync(outDir, { recursive: true })
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -74,6 +75,19 @@ const FAIL_CHECKS = [
 
 // name, path, stub config, steps (run in the page after hydration), checks (DOM assertions)
 const SCENARIOS = [
+  // The content pages, against the real (scratch) API behind the dev server: anything the rig does not stub passes through. Seed the
+  // scratch database first (a few reminders, tasks, repeating reminders and facts); an empty list is audited too, but it is a poorer test.
+  ...[
+    ['today', '/today', 'Today'], ['reminders', '/reminders', 'Reminders'], ['scheduled', '/scheduled', 'Scheduled'], ['tasks', '/tasks', 'Tasks'],
+    ['memory', '/memory', 'Memory'], ['actions', '/actions', 'Actions'], ['connections', '/connections', 'Connections'],
+  ].map(([id, route, name]) => ({
+    name: `page-${id}`, path: route, stub: {}, steps: [`await __wait(1500)`],
+    checks: [
+      { name: `the sidebar marks ${name} as the current page`, js: `document.querySelector('nav [aria-current="page"]')?.textContent.startsWith('${name}')` },
+      { name: 'the page has one heading', js: `document.querySelectorAll('main h1').length === 1` },
+      { name: 'nothing is still loading', js: `!document.querySelector('.thread-skeleton')` },
+    ],
+  })),
   { name: 'chat-empty', path: '/', stub: {}, steps: [] },
   {
     name: 'chat-conversation', path: '/', stub: { replies: CONVO, mic: 'denied' },
@@ -81,7 +95,7 @@ const SCENARIOS = [
   },
   { name: 'chat-thinking', path: '/', stub: { chat: 'pending' }, steps: [`await __send("What's the weather in London?", 300)`] },
   { name: 'chat-typing', path: '/', stub: {}, steps: [`await __type("Remind me to call the dentist on Monday")`] },
-  { name: 'chat-menu-open', path: '/', stub: {}, steps: [`document.querySelector('.mock-vchat-btn--liquid').click(); await __wait(900)`] },
+  { name: 'chat-menu-open', path: '/', stub: {}, steps: [`document.querySelector('button[aria-label="New chat"]').click(); await __wait(300)`] },
   { name: 'chat-listening', path: '/', stub: { mic: 'ok' }, steps: [`await __micDown(700)`] },
   { name: 'chat-transcribing', path: '/', stub: { mic: 'ok' }, steps: [`await __micDown(700); await __micUp(600)`] },
   {
@@ -116,7 +130,7 @@ const SCENARIOS = [
     checks: [
       { name: 'the past messages are shown after trying again', js: `document.querySelectorAll('#log .msg').length === 2` },
       { name: 'the error is gone', js: `!document.querySelector('.empty-state')` },
-      { name: 'the composer is usable again', js: `!document.querySelector('.mock-vchat-input').disabled && /message diya/i.test(document.querySelector('.mock-vchat-input').placeholder)` },
+      { name: 'the composer is usable again', js: `!document.querySelector('.composer-input').disabled && /message diya/i.test(document.querySelector('.composer-input').placeholder)` },
     ],
   },
   // While the saved chat is not on screen (still loading, or it failed) nothing can be sent: a
@@ -125,11 +139,11 @@ const SCENARIOS = [
     name: 'chat-resume-failed-blocked', path: '/', stub: { thread: '55', historyMode: 'down', mic: 'ok' },
     steps: [`await __send("Remind me to call the dentist on Monday", 600)`, `await __micDown(700); await __micUp(300)`],
     checks: [
-      { name: 'the message box is off and says why', js: `document.querySelector('.mock-vchat-input').disabled && /didn.t load/i.test(document.querySelector('.mock-vchat-input').placeholder)` },
+      { name: 'the message box is off and says why', js: `document.querySelector('.composer-input').disabled && /didn.t load/i.test(document.querySelector('.composer-input').placeholder)` },
       { name: 'Send and the microphone are off', js: `document.querySelector('button[aria-label="Send"]').disabled && document.querySelector('button[aria-label="Hold to talk"]').disabled` },
-      { name: 'Send is not shown armed (no metal ring) even with text typed', js: `document.querySelector('button[aria-label="Send"]').parentElement.classList.contains('mock-vchat-actions')` },
+      { name: 'Send is not filled in even with text typed', js: `document.querySelector('button[aria-label="Send"]').disabled` },
       { name: 'a submit that got through anyway sent nothing', js: `window.__chatCalls === 0 && document.querySelectorAll('#log .msg').length === 0` },
-      { name: 'what was typed is still there, not thrown away', js: `document.querySelector('.mock-vchat-input').value === 'Remind me to call the dentist on Monday'` },
+      { name: 'what was typed is still there, not thrown away', js: `document.querySelector('.composer-input').value === 'Remind me to call the dentist on Monday'` },
       { name: 'the microphone did not start recording', js: `!document.querySelector('.mic-status')` },
       { name: 'the error is still shown, with its way out', js: `!!document.querySelector('.empty-state[role="alert"] button')` },
     ],
@@ -137,7 +151,7 @@ const SCENARIOS = [
   {
     name: 'chat-resume-loading-blocked', path: '/', stub: { thread: '55', historyMode: 'held' }, steps: [],
     checks: [
-      { name: 'the message box is off and says the chat is loading', js: `document.querySelector('.mock-vchat-input').disabled && /loading this chat/i.test(document.querySelector('.mock-vchat-input').placeholder)` },
+      { name: 'the message box is off and says the chat is loading', js: `document.querySelector('.composer-input').disabled && /loading this chat/i.test(document.querySelector('.composer-input').placeholder)` },
       { name: 'neither the empty chat nor an error is shown yet', js: `!document.querySelector('.empty-state')` },
     ],
   },
@@ -146,13 +160,13 @@ const SCENARIOS = [
     stub: { thread: '55', historyMode: 'down', history: [{ role: 'user', content: 'earlier question' }, { role: 'assistant', content: 'earlier answer' }] },
     steps: [
       `window.__historyMode = 'held'`,
-      `document.querySelector('.empty-state button').click(); await __wait(500); const i = document.querySelector('.mock-vchat-input'); window.__mid = { off: i.disabled, hint: i.placeholder }`,
+      `document.querySelector('.empty-state button').click(); await __wait(500); const i = document.querySelector('.composer-input'); window.__mid = { off: i.disabled, hint: i.placeholder }`,
       `window.__releaseHistory(); await __wait(700)`,
     ],
     checks: [
       { name: 'while trying again the composer is off and says the chat is loading', js: `window.__mid.off === true && /loading this chat/i.test(window.__mid.hint)` },
       { name: 'the past messages are shown once it loads', js: `document.querySelectorAll('#log .msg').length === 2` },
-      { name: 'the composer is usable again', js: `!document.querySelector('.mock-vchat-input').disabled` },
+      { name: 'the composer is usable again', js: `!document.querySelector('.composer-input').disabled` },
     ],
   },
   {
@@ -160,14 +174,14 @@ const SCENARIOS = [
     name: 'chat-resume-new-chat-while-loading', path: '/',
     stub: { thread: '55', historyMode: 'held', history: [{ role: 'user', content: 'earlier question' }, { role: 'assistant', content: 'earlier answer' }] },
     steps: [
-      `document.querySelector('.mock-vchat-btn--liquid').click(); await __wait(900)`,
+      `document.querySelector('button[aria-label="New chat"]').click(); await __wait(300)`,
       `document.querySelector('button[aria-label="Confirm new chat"]').click(); await __wait(600)`,
       `window.__releaseHistory(); await __wait(700)`,
     ],
     checks: [
       { name: 'the old chat did not land in the new one', js: `document.querySelectorAll('#log .msg').length === 0` },
       { name: 'the ordinary empty chat is showing', js: `/ask diya anything/i.test(document.querySelector('.empty-state h1').textContent)` },
-      { name: 'the composer is usable', js: `!document.querySelector('.mock-vchat-input').disabled` },
+      { name: 'the composer is usable', js: `!document.querySelector('.composer-input').disabled` },
       { name: 'the old thread is forgotten', js: `localStorage.getItem('diya_thread_id') === null` },
     ],
   },
@@ -178,12 +192,12 @@ const SCENARIOS = [
   },
   {
     name: 'chat-resume-failed-new-chat', path: '/', stub: { thread: '55', historyMode: '401' },
-    steps: [`document.querySelector('.mock-vchat-btn--liquid').click(); await __wait(900)`, `document.querySelector('button[aria-label="Confirm new chat"]').click(); await __wait(600)`],
+    steps: [`document.querySelector('button[aria-label="New chat"]').click(); await __wait(300)`, `document.querySelector('button[aria-label="Confirm new chat"]').click(); await __wait(600)`],
     checks: [
       { name: 'starting a new chat clears the error', js: `!document.querySelector('.empty-state[role="alert"]')` },
       { name: 'the ordinary empty state is back', js: `/ask diya anything/i.test(document.querySelector('.empty-state h1').textContent)` },
       { name: 'the old thread is forgotten', js: `localStorage.getItem('diya_thread_id') === null` },
-      { name: 'the composer is usable again', js: `!document.querySelector('.mock-vchat-input').disabled` },
+      { name: 'the composer is usable again', js: `!document.querySelector('.composer-input').disabled` },
     ],
   },
   { name: 'history-list', path: '/history', stub: { threads: THREADS }, steps: [] },
@@ -319,23 +333,24 @@ const stubSource = (stub) => `(() => {
     ? async () => { const ac = new AudioContext(); const d = ac.createMediaStreamDestination(); const o = ac.createOscillator(); o.connect(d); o.start(); return d.stream; }
     : async () => { throw new Error('Permission denied'); };
   if (sc.thread) localStorage.setItem('diya_thread_id', sc.thread);
+  ${THEME_JS}
   window.__emptySeen = 0; setInterval(() => { if (document.querySelector('.empty-state')) window.__emptySeen++; }, 20);
   // Next's dev-only "N" badge is tooling, not UI; keep it out of the screenshots (and any variant CSS).
   document.addEventListener('DOMContentLoaded', () => {
     const s = document.createElement('style');
-    s.textContent = 'nextjs-portal{display:none!important}' + ${JSON.stringify(VARIANT_CSS)};
+    s.textContent = 'nextjs-portal{display:none!important}';
     document.head.appendChild(s);
   });
   window.__wait = (ms) => new Promise((r) => setTimeout(r, ms));
   window.__type = async (text) => {
-    const input = document.querySelector('.mock-vchat-input');
+    const input = document.querySelector('.composer-input');
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, text);
     input.dispatchEvent(new Event('input', { bubbles: true }));
     await __wait(700);
   };
   window.__send = async (text, settle = 900) => {
     await __type(text);
-    document.querySelector('form.mock-vchat').requestSubmit();
+    document.querySelector('form.composer').requestSubmit();
     await __wait(settle);
   };
   const mic = () => document.querySelector('button[aria-label="Hold to talk"]');
@@ -419,7 +434,7 @@ async function main() {
         const loaded = once('Page.loadEventFired')
         await send('Page.navigate', { url: BASE + sc.path })
         await loaded
-        await sleep(3500) // hydration + dynamic imports (metal-fx, effects)
+        await sleep(3500) // hydration
         for (const step of sc.steps) {
           try { await evalJs(`(async () => { ${step} })()`) } catch (e) { console.log('   STEP ERROR:', String(e.message).slice(0, 160)); break }
         }

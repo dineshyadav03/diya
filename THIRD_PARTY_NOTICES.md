@@ -2,19 +2,17 @@
 
 ## Libraries.dev (Jakub Antalik) — MIT
 
-Diya's composer bar is ported from the demo chat-input mock in
-[Jakubantalik/Libraries.dev](https://github.com/Jakubantalik/Libraries.dev):
+Diya's message box used to be ported from the demo chat-input mock in
+[Jakubantalik/Libraries.dev](https://github.com/Jakubantalik/Libraries.dev), with six of that
+author's npm packages around it. The interface was redesigned (`docs/UI_DESIGN.md`): the mock's
+rules, markup and fit-to-width scaling, and the packages (`voice-glow`, `border-beam`, `liquid-gooey`,
+`metal-fx`, `thinking-orbs`, `img-fx`), are gone. What remains from that source:
 
-- the `.mock-vchat*` / `.mk-ico*` rules in `frontend/app/globals.css`
-  (from `sites/home/public/assets/examples.css`), and the markup structure and
-  fit-to-width scaling in `frontend/components/VoiceBar.jsx`
-  (from `sites/home/src/examples/beam-mocks.tsx` and `sites/home/src/voice.tsx`)
-- `frontend/public/icons/mic-16.svg`, `chevron-15.svg`, `chevron-16.svg`
-  (from `sites/home/public/assets/icons/`)
-
-The npm packages used from the same author (`voice-glow`, `border-beam`,
-`liquid-gooey`, `metal-fx`, `thinking-orbs`, `img-fx`) are installed from npm
-and are not vendored here; they are MIT-licensed by the same author.
+- `frontend/public/icons/mic-16.svg` (from `sites/home/public/assets/icons/`), used by the
+  Hold to talk button.
+- `frontend/public/icons/arrow-up-16.svg`, on the Send button: committed together with the composer
+  and built the same way, but its source was not written down at the time, so it is treated as part
+  of the same MIT-licensed set.
 
 ```
 MIT License

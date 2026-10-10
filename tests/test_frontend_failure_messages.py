@@ -249,10 +249,10 @@ def test_nothing_can_be_sent_into_a_chat_that_is_loading_or_failed_to_load():
     assert "if (unavailable) return" in voice[voice.index("async function startRecording"):voice.index("try {", voice.index("async function startRecording"))]
     assert "disabled={!!unavailable}" in voice and "placeholder={unavailable || 'Message Diya...'}" in voice
     assert "disabled={micDisabled || !!unavailable}" in voice
-    assert voice.count("sendButton(!!unavailable)") == 2  # with and without the metal ring
-    assert "const hasText = value.trim().length > 0 && !unavailable" in voice  # the "armed" ring is never lit when nothing can be sent
-    # New chat, in the menu, is the way out and must stay usable
-    menu = voice[voice.index("<Liquid"):voice.index("</Liquid>")]
+    assert 'disabled={!hasText}' in voice  # Send is off unless there is something to send...
+    assert "const hasText = value.trim().length > 0 && !unavailable" in voice  # ...and never while nothing can be sent
+    # New chat is the way out and must stay usable
+    menu = voice[voice.index("{confirming ? ("):voice.index('<div className="composer-actions">')]
     assert "unavailable" not in menu and "disabled" not in menu
 
 

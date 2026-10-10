@@ -1,461 +1,351 @@
-/* Palette. One continuous surface: the app's background IS the composer's surface
-   (#25221d -- its 40% grey fill composited over its dock), so the header, the chat,
-   the history and the composer read as a single piece, not separate zones.
+/* Diya's interface: one calm system in two themes (docs/UI_DESIGN.md).
 
-   The brand assets are still the source of truth for colour (public/diya-flame.svg:
-   cream #faf8f4, amber #c9812f, bronze #8a5a1f). On this dark surface cream is the
-   text. The accent is OAT (#cbbfa8): the logo's own cream tile, dimmed and desaturated
-   (hue 39 deg vs the tile's 40; 25% saturation vs the flame's 62%), so the flame is the
-   only saturated colour on screen and the mark is never competed with. (The flame's
-   amber was the accent until it was rejected; the asset's bronze is only 2.7:1 here.)
-   The assets themselves are untouched, so the flame keeps its own cream tile.
+   LIGHT follows Notion's system: a warm paper page, white cards with a hairline, near-black type, one blue for the one
+   primary action. DARK follows xAI's: a near-black page, charcoal cards with a hairline, white type, outline pills and the
+   rare white-filled one. Both are the same variables, so a different blue (or a third theme) is one block here.
 
-   Hierarchy comes from ELEVATION, never from a second background colour: translucent
-   cream lifts (--elev-*) and hairlines (--border) over the same surface. Every text
-   pairing below clears WCAG AA (4.5:1) on each surface it actually sits on. */
+   Which one is shown: the operating system's setting, unless the person chose Light or Dark in the sidebar (that choice is
+   kept in this browser and written to <html data-theme="..."> before the page paints, see layout.js). The dark block appears
+   twice, once for the system setting and once for the explicit choice; tests/test_frontend_theme.py checks that the two are
+   identical and that every pairing below clears the contrast it is used at.
+
+   Contrast, measured (WCAG 2.x), not eyeballed: --text-dim on the page and on a card is 6.0 and 6.5 (light) and 6.3 and 5.6
+   (dark); white on --accent is 4.6 (light), --link on the page is 6.3 (light) and 8.3 (dark); --border-strong, the edge of
+   every field and button, is 3.6 (light) and 3.8 (dark). --border is only ever the hairline round a card, which is decoration. */
 :root {
-  color-scheme: dark;
-  --bg: #25221d;
-  --elev-1: rgba(250, 248, 244, 0.06);  /* bubbles, cards, controls */
-  --elev-2: rgba(250, 248, 244, 0.10);  /* hover / pressed */
-  --border: rgba(250, 248, 244, 0.14);  /* hairlines: header edge, bubble and card outlines */
-  --ring: rgba(250, 248, 244, 0.14);    /* the composer's outline */
-  --text: #faf8f4;            /* asset cream: 14.9:1 on --bg */
-  --text-dim: #b3aa99;        /* 6.9:1 on --bg, 5.2:1 on the hover elevation */
-  --accent: #cbbfa8;          /* oat: 8.7:1 on --bg, so it serves as fill, focus ring and border colour */
-  --accent-text: #2b2417;     /* text on --accent: 8.5:1 */
-  --danger: #d9634a;          /* fills and outlines */
-  --danger-text: #ee8b72;     /* the same red as text: 6.5:1 (--danger itself is 4.4:1) */
-  --focus: 2px solid var(--accent);
+  color-scheme: light;
+  --bg: #f6f5f4;              /* the page and the sidebar */
+  --surface: #ffffff;         /* cards, fields, the composer */
+  --surface-hover: #efedeb;   /* a hovered row or button, and the person's own messages */
+  --border: #e6e6e6;          /* the hairline round a card */
+  --border-strong: #86817b;   /* the edge of a field or a button */
+  --text: #000000;
+  --text-dim: #615d59;
+  --accent: #0075de;          /* the one primary action */
+  --accent-text: #ffffff;
+  --accent-edge: #0075de;     /* the outline that says "this one needs you" */
+  --link: #005bab;            /* links, the focus ring, "now" */
+  --danger: #c4321c;
+  --danger-text: #b42318;
+  --danger-fill-text: #ffffff;
+  --focus: 2px solid var(--link);
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --pill: 9999px;
+  --sidebar: 248px;
 }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0a0a0a;
+    --surface: #191919;
+    --surface-hover: #262626;
+    --border: #212327;
+    --border-strong: #70757b;
+    --text: #ffffff;
+    --text-dim: #8d9197;
+    --accent: #ffffff;
+    --accent-text: #0a0a0a;
+    --accent-edge: #ffffff;
+    --link: #62aef0;
+    --danger: #ff7a6b;
+    --danger-text: #ff7a6b;
+    --danger-fill-text: #0a0a0a;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0a0a;
+  --surface: #191919;
+  --surface-hover: #262626;
+  --border: #212327;
+  --border-strong: #70757b;
+  --text: #ffffff;
+  --text-dim: #8d9197;
+  --accent: #ffffff;
+  --accent-text: #0a0a0a;
+  --accent-edge: #ffffff;
+  --link: #62aef0;
+  --danger: #ff7a6b;
+  --danger-text: #ff7a6b;
+  --danger-fill-text: #0a0a0a;
+}
+
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; margin: 0; }
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Text", sans-serif;
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
   background: var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
 }
-.app {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-/* The header is the same surface as everything else; a hairline is what sets it apart.
-   max() because env() is 0px (not unset) on desktop -- a plain fallback never applied and
-   the header hugged the top edge. */
-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  row-gap: 8px;
-  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
-}
-header .title { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; flex-shrink: 0; }
-header .title svg { flex-shrink: 0; }
-.ambient-orb { display: inline-flex; }
-/* Purely decorative: on a phone the header has no slack (title + three controls fill 375px),
-   so the orb goes rather than crowd the buttons or force them onto a second row. */
-@media (max-width: 420px) { .ambient-orb { display: none; } }
-.brand-mark { width: 27px; height: 27px; border-radius: 6px; flex-shrink: 0; }
-header .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-/* One control style for link, button and label alike, so they share a height. */
-header .icon-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-height: 34px; padding: 0 12px;
-  background: var(--elev-1); border: 1px solid var(--border); color: var(--text-dim);
-  border-radius: 10px; font: inherit; font-size: 13px; line-height: 1; text-decoration: none;
-  cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
-}
-header .icon-btn:hover { background: var(--elev-2); color: var(--text); }
-header .icon-btn:focus-visible, header label.icon-btn:focus-within { outline: var(--focus); outline-offset: 2px; }
-header input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; cursor: pointer; }
-@media (pointer: coarse) { header .icon-btn { min-height: 40px; } }
-
-#log {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 16px 36px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  /* The chat and the composer are one surface, so there is no edge for scrolling messages
-     to run into: they fade out just above the composer instead of being cut off. The extra
-     bottom padding keeps the newest message clear of the fade. */
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
-}
-.msg {
-  padding: 11px 15px;
-  border-radius: 18px;
-  max-width: 82%;
-  white-space: pre-wrap;
-  line-height: 1.4;
-  font-size: 15.5px;
-}
-.user { background: var(--accent); color: var(--accent-text); align-self: flex-end; border-bottom-right-radius: 4px; }
-.assistant {
-  background: var(--elev-1); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px;
-  border: 1px solid var(--border); /* lift + hairline: it reads as raised without being another background colour */
-}
-.system {
-  align-self: center;
-  max-width: 95%;
-  background: none;
-  color: var(--text-dim);
-  font-family: ui-monospace, "SF Mono", monospace;
-  font-size: 12px;
-  padding: 2px 8px;
-  text-align: center;
-}
-/* A message that never reached the server: outlined instead of filled (it is not "sent"),
-   with the reason and a way out directly beneath it. Same wording and same accent
-   "Try again" button as the history error state. */
-.user.failed { background: transparent; color: var(--text); border: 1.5px dashed var(--danger); }
-.send-error {
-  align-self: flex-end; max-width: 82%; margin-top: -4px;
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 10px;
-  font-size: 13px; line-height: 1.35; color: var(--danger-text);
-}
-.send-error-icon {
-  display: inline-flex; align-items: center; justify-content: center; flex: none;
-  width: 16px; height: 16px; border-radius: 50%;
-  background: var(--danger-text); color: var(--accent-text); font-size: 11px; font-weight: 800; line-height: 1; /* 6.3:1 (on --danger it was 4.3:1) */
-}
-.cta.small { margin-top: 0; min-height: 34px; padding: 0 14px; border-radius: 10px; font-size: 13.5px; }
-.thinking-row { display: flex; align-items: center; padding: 9px 15px; }
-.tool-recap { display: flex; flex-direction: column; gap: 4px; font-family: ui-monospace, "SF Mono", monospace; }
-.tool-recap-item { display: flex; align-items: center; gap: 6px; }
-
-/* ── Composer bar: the exact chat-input mock from Jakubantalik/Libraries.dev
-   (sites/home/public/assets/examples.css, .mock-vchat and friends, dark
-   theme values) -- the same markup/CSS libraries.dev/voice wraps in
-   VoiceBeam for its own reference demo, made real (typable input, a
-   working mic button and send) instead of decorative. */
-.bar-dock {
-  padding: 16px 12px calc(env(safe-area-inset-bottom, 10px) + 16px);
-  display: flex;
-  justify-content: center;
-  /* Not a separate zone any more: the dock is the page's own surface. */
-  background: var(--bg);
-}
-/* Exactly the width the mock (and voice-glow's / border-beam's px-authored
-   geometry) was drawn for. It was 480px, wider than the 371px form, so on
-   desktop the composer sat left of centre inside a wrapper the glow was
-   measured against. On narrow screens it still shrinks (VoiceBar's fit scale). */
-.voice-fit { width: 100%; max-width: 371px; }
-
-.mock-vchat {
-  position: relative;
-  width: 371px;
-  max-width: 100%;
-  height: 104px;
-  border-radius: 20px;
-  overflow: hidden;
-  /* `hidden` still makes this a scroll container: metal-fx's halo (armed Send)
-     overflows it by ~30px each way, so any scroll-into-view -- an automation
-     click, a phone revealing a focused control -- permanently shifted the
-     whole composer up/left inside its own card. `clip` clips identically but
-     can't be scrolled at all. */
-  overflow: clip;
-  /* The composer's surface IS the app's surface (--bg is what its old 40% grey fill
-     composited to), so it is left transparent and outlined -- the voice glow still
-     shows through it exactly as before. The mock's near-invisible outline
-     (rgba(44,47,54,.52)) is now a real hairline. */
-  background: transparent;
-  box-shadow:
-    inset 0 0 0 1px var(--ring),
-    inset 0 0 50px 0 rgba(255, 255, 255, 0.02);
-  font-family: Inter, -apple-system, sans-serif;
-}
-.mock-vchat-input {
-  position: absolute;
-  left: 14px;
-  top: 20px;
-  right: 14px;
-  height: 16px;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 16px;
-  color: #eaeaea;
-  caret-color: #eaeaea;
-  z-index: 5;
-}
-/* was #4e4e4e: 1.9:1 on the composer, unreadable. 5.2:1 now. */
-.mock-vchat-input::placeholder { color: #9b9382; opacity: 1; }
-/* While the "Listening..." / "Transcribing..." chip covers the input, hide what is
-   underneath it -- the placeholder (and any typed text) used to ghost through. */
-.mock-vchat:has(.mic-status) .mock-vchat-input { color: transparent; caret-color: transparent; }
-.mock-vchat:has(.mic-status) .mock-vchat-input::placeholder { color: transparent; }
-/* metal-fx fades its root in (opacity 0 -> 1) once its WebGL ring has
-   initialized, and sets its child to visibility:hidden until that reveal.
-   In testing the WebGL init itself got stuck (opacity pinned at 0
-   indefinitely, no console error -- likely this sandbox's WebGL2 support),
-   so both the root and the button underneath stayed invisible, and the
-   button's visibility:hidden also blocked clicks (unlike opacity:0, which
-   wouldn't have). Neither the ring rendering nor the button being usable
-   should depend on that; this forces both. It does not touch the child's
-   background (data-normalize's rule) -- if the ring does render, this
-   won't paint over it. The ring is only mounted while there's text to
-   send (VoiceBar's hasText), so the metal-fx rule only ever applies then. */
-.mock-vchat-btn[aria-label="Send"] { visibility: visible !important; }
-.mock-vchat-actions .metal-fx-root { opacity: 1 !important; }
-.mic-status {
-  position: absolute;
-  left: 14px;
-  top: 18px;
-  right: 14px;
-  height: 20px;
-  z-index: 6;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: #b2b2b2;
-  pointer-events: none;
-}
-.mock-vchat-row {
-  position: absolute;
-  left: 11px;
-  right: 13px;
-  bottom: 13px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  z-index: 5;
-}
-.mock-vchat-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-.mock-vchat-btn {
-  height: 36px;
-  min-width: 36px;
-  padding: 0 10px;
-  border-radius: 36px;
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  color: #eaeaea;
-  box-sizing: border-box;
-  position: relative;
-  overflow: hidden;
-  border: 0;
-  margin: 0;
-  font: inherit;
-  cursor: pointer;
-  appearance: none;
-  transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.mock-vchat-btn::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: rgba(255, 255, 255, 0);
-  transition: background 0.15s ease;
-  pointer-events: none;
-}
-.mock-vchat-btn:hover::after { background: rgba(255, 255, 255, 0.02); }
-.mock-vchat-btn:active { transform: scale(0.96); }
-.mock-vchat-btn:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.35); outline-offset: 2px; }
-.mock-vchat-btn:disabled { opacity: 0.5; cursor: default; }
-.mock-vchat-btn.recording { background: var(--danger); }
-/* The mock's text chip ("Agent" in the original), used here for "New chat". */
-.mock-vchat-agent {
-  padding: 0 10px 0 14px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 14px;
-  color: #caccd2;
-  white-space: nowrap;
+a { color: var(--link); }
+:focus-visible { outline: var(--focus); outline-offset: 2px; }
+h1, h2, h3 { letter-spacing: -0.01em; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
-/* Buttons inside <Liquid> (the "+" -> "New chat" menu): the library's blobs
-   are their surface, so the buttons themselves are transparent. The goo
-   filter turns alpha into a hard edge (alpha*18-7), which erases any
-   translucent fill -- so the fill stays opaque and the whole liquid layer is
-   dimmed to 10% instead, matching the 10% white of the mic and send buttons.
-   The pill has a fixed width so the menu's geometry (see VoiceBar.jsx)
-   doesn't depend on font metrics. */
-.liquid-menu [data-gooey-svg] { opacity: 0.1; }
-.mock-vchat-btn--liquid { background: transparent; }
-.mock-vchat-btn--liquid.mock-vchat-agent { width: 84px; padding: 0; }
+/* ── The shell: a sidebar on a laptop, a top bar and a menu on a phone ───────── */
+.skip-link {
+  position: absolute; left: 12px; top: -48px; z-index: 50; padding: 8px 14px; border-radius: var(--pill);
+  background: var(--accent); color: var(--accent-text); font-size: 14px; font-weight: 600; text-decoration: none;
+}
+.skip-link:focus { top: 12px; }
+.shell { height: 100%; display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); }
+.sidebar {
+  display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto;
+  padding: 16px 12px 12px; background: var(--bg); border-right: 1px solid var(--border);
+}
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 14px; color: var(--text); font-size: 17px; font-weight: 650; letter-spacing: -0.02em; text-decoration: none; }
+.brand-mark { width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0; }
+.nav-group { display: flex; flex-direction: column; gap: 2px; margin: 0 0 10px; padding: 0; list-style: none; }
+.nav-label { margin: 8px 8px 4px; font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); }
+.nav-link {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; padding: 0 10px;
+  border-radius: var(--r-sm); color: var(--text-dim); font-size: 14.5px; text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.nav-link:hover { background: var(--surface-hover); color: var(--text); }
+.nav-link[aria-current="page"] { background: var(--surface-hover); color: var(--text); font-weight: 600; }
+.due-badge {
+  min-width: 20px; padding: 0 7px; border-radius: var(--pill); background: var(--accent); color: var(--accent-text);
+  font-size: 12px; font-weight: 600; line-height: 20px; text-align: center;
+}
+.sidebar-foot { margin-top: auto; padding: 12px 8px 0; border-top: 1px solid var(--border); }
+.theme-toggle { display: flex; padding: 3px; gap: 2px; border: 1px solid var(--border-strong); border-radius: var(--pill); }
+.theme-toggle button {
+  flex: 1; min-height: 30px; padding: 0 8px; border: 0; border-radius: var(--pill); background: transparent; color: var(--text-dim);
+  font: inherit; font-size: 13px; cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
+}
+.theme-toggle button:hover { color: var(--text); }
+.theme-toggle button[aria-checked="true"] { background: var(--surface-hover); color: var(--text); font-weight: 600; }
+.theme-label { display: block; margin: 0 0 6px; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); }
+.topbar { display: none; }
+.shell-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+@media (max-width: 879px) {
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: max(8px, env(safe-area-inset-top)) 12px 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg);
+  }
+  .topbar .brand { padding: 0; }
+  .menu-btn {
+    min-height: 44px; padding: 0 16px; border-radius: var(--pill); border: 1px solid var(--border-strong); background: transparent;
+    color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .menu-btn .due-badge { margin-left: 8px; }
+  .sidebar {
+    display: none; position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; top: var(--topbar-h, 61px);
+    border-right: 0; padding: 12px 16px 24px;
+  }
+  .shell[data-nav-open="true"] .sidebar { display: flex; }
+  .sidebar .brand { display: none; }
+  .nav-link { min-height: 44px; font-size: 16px; }
+  .theme-toggle button { min-height: 40px; }
+}
 
-.mk-ico { position: relative; display: block; flex: none; width: 16px; height: 16px; }
-.mk-ico-mic {
-  background: #b2b2b2;
-  -webkit-mask: url("/icons/mic-16.svg") center / 16px 16px no-repeat;
-  mask: url("/icons/mic-16.svg") center / 16px 16px no-repeat;
-}
-.mk-ico-chevron {
-  transform: rotate(90deg);
-  background: rgba(255, 255, 255, 0.4);
-  -webkit-mask: url("/icons/chevron-15.svg") center / 16px 16px no-repeat;
-  mask: url("/icons/chevron-15.svg") center / 16px 16px no-repeat;
-}
-.mk-ico-arrow {
-  background: #eaeaea;
-  -webkit-mask: url("/icons/arrow-up-16.svg") center / 16px 16px no-repeat;
-  mask: url("/icons/arrow-up-16.svg") center / 16px 16px no-repeat;
-}
-.mk-ico-plus::before,
-.mk-ico-plus::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 10px;
-  height: 1.5px;
-  margin: -0.75px 0 0 -5px;
-  border-radius: 1px;
-  background: currentColor;
-}
-.mk-ico-plus::after { transform: rotate(90deg); }
-
-/* ── Empty, loading and error states (chat and history share these) ─────────
-   The mark is public/diya-flame.svg, referenced as-is: its cream tile is the page
-   background, so it sits on the page without a visible box. */
-.empty-state {
-  margin: auto; max-width: 320px; padding: 24px 16px;
-  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
-}
-/* The asset is untouched and keeps its own cream tile; on the dark surface it is the
-   brightest thing on screen, so it is kept modest and given an outline and a soft shadow
-   (elevation) so it reads as an app-icon chip resting on the surface. */
-.empty-mark { width: 60px; height: 60px; border-radius: 14px; margin-bottom: 12px; box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgba(0, 0, 0, 0.35); }
-.empty-state h1, .empty-state h2 { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.25; }
-.empty-state p { margin: 0; color: var(--text-dim); font-size: 14.5px; line-height: 1.45; }
+/* ── Buttons and the empty states ─────────────────────────────────────────────── */
 .cta {
   display: inline-flex; align-items: center; justify-content: center; margin-top: 16px;
-  min-height: 40px; padding: 0 20px; border-radius: 12px; border: 0;
+  min-height: 40px; padding: 0 22px; border-radius: var(--pill); border: 0;
   background: var(--accent); color: var(--accent-text);
   font: inherit; font-size: 14.5px; font-weight: 600; text-decoration: none; cursor: pointer;
-  transition: filter 0.15s ease;
+  transition: opacity 0.15s ease;
 }
-.cta:hover { filter: brightness(0.95); }
-.cta:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.cta:hover { opacity: 0.88; }
+.cta.small { margin-top: 0; min-height: 34px; padding: 0 16px; font-size: 13.5px; }
+.empty-state {
+  margin: auto; max-width: 340px; padding: 24px 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+}
+.empty-mark { width: 52px; height: 52px; border-radius: 13px; margin-bottom: 12px; border: 1px solid var(--border); }
+.empty-state h1, .empty-state h2 { margin: 0; font-size: 22px; font-weight: 650; line-height: 1.25; letter-spacing: -0.02em; }
+.empty-state p { margin: 0; color: var(--text-dim); font-size: 15px; line-height: 1.5; }
 
-/* ── History: the same header, page colour and surfaces as the chat ───────── */
-.history-page { flex: 1; overflow-y: auto; padding: 20px 16px 32px; }
-.history-inner { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; min-height: 100%; }
-.history-inner > h1 { margin: 4px 0 16px; font-size: 22px; font-weight: 600; line-height: 1.2; }
-.thread {
-  display: block; padding: 12px 14px; margin-bottom: 8px; border: 1px solid var(--border);
-  border-radius: 12px; text-decoration: none; color: var(--text); background: var(--elev-1);
-  transition: border-color 0.15s ease, background 0.15s ease;
+/* ── The chat ────────────────────────────────────────────────────────────────────── */
+.chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.chat-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 10px 24px; border-bottom: 1px solid var(--border);
 }
-.thread:hover { border-color: var(--accent); background: var(--elev-2); }
-.thread:focus-visible { outline: var(--focus); outline-offset: 2px; }
-.thread:active { background: var(--elev-2); }
+.chat-title { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); }
+.chat-tools { display: flex; align-items: center; gap: 8px; }
+.quiet-btn {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 14px; border-radius: var(--pill);
+  border: 1px solid var(--border-strong); background: transparent; color: var(--text); font: inherit; font-size: 13.5px; cursor: pointer;
+  transition: background 0.15s ease;
+}
+.quiet-btn:hover { background: var(--surface-hover); }
+.quiet-btn input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; cursor: pointer; }
+@media (pointer: coarse) { .quiet-btn { min-height: 44px; } }
+
+#log {
+  flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+  /* a readable column in the middle of a wide screen; the scrollbar stays at the edge */
+  padding: 24px max(16px, calc((100% - 760px) / 2)) 24px;
+}
+.msg { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15.5px; line-height: 1.6; max-width: 100%; }
+.user {
+  align-self: flex-end; max-width: min(85%, 560px); padding: 10px 16px; border-radius: var(--r-lg);
+  background: var(--surface-hover); color: var(--text);
+}
+.assistant { align-self: flex-start; padding: 2px 0; color: var(--text); }
+.system { align-self: center; max-width: 95%; color: var(--text-dim); font-family: var(--mono); font-size: 12px; line-height: 1.5; text-align: center; }
+/* A message that never reached the server: outlined, not filled (it is not "sent"), with the reason and a way out beneath it. */
+.user.failed { background: transparent; color: var(--text); border: 1.5px dashed var(--danger); }
+.send-error {
+  align-self: flex-end; max-width: min(85%, 560px); margin-top: -8px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 10px;
+  font-size: 13.5px; line-height: 1.4; color: var(--danger-text);
+}
+.send-error-icon {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--danger); color: var(--danger-fill-text); font-size: 11px; font-weight: 800; line-height: 1;
+}
+.tool-recap { align-self: flex-start; display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px; text-align: left; margin-bottom: -6px; }
+.tool-recap-item {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border: 1px solid var(--border-strong); border-radius: var(--pill);
+  color: var(--text-dim); font-family: var(--font); font-size: 12.5px;
+}
+.tool-recap-item::before { content: ""; width: 5px; height: 9px; margin: -2px 2px 0 0; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(40deg); }
+.thinking-row { align-self: flex-start; display: flex; align-items: center; gap: 5px; padding: 8px 0; }
+.thinking-row span { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); animation: dots 1.2s ease-in-out infinite; }
+.thinking-row span:nth-child(2) { animation-delay: 0.15s; }
+.thinking-row span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes dots { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
+
+/* ── The composer: a text box ────────────────────────────────────────────────────── */
+.composer-dock { padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + 16px); display: flex; justify-content: center; background: var(--bg); }
+.composer {
+  position: relative; width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 6px; overflow: hidden;
+  padding: 14px 12px 10px 18px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--surface);
+}
+.composer:focus-within { outline: var(--focus); outline-offset: 1px; }
+.composer-input {
+  width: 100%; min-height: 28px; padding: 0; margin: 0; border: 0; outline: none; background: transparent;
+  color: var(--text); caret-color: var(--text); font: inherit; font-size: 16px; line-height: 1.5;
+}
+.composer-input::placeholder { color: var(--text-dim); opacity: 1; }
+.composer-input:disabled { cursor: not-allowed; }
+.composer-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.composer-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.composer-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; min-width: 36px; padding: 0 12px;
+  border-radius: var(--pill); border: 1px solid var(--border-strong); background: transparent; color: var(--text);
+  font: inherit; font-size: 13.5px; cursor: pointer; transition: background 0.15s ease, opacity 0.15s ease;
+}
+.composer-btn:hover:not(:disabled) { background: var(--surface-hover); }
+.composer-btn:disabled { opacity: 0.45; cursor: default; }
+.composer-btn--send { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+.composer-btn--send:hover:not(:disabled) { background: var(--accent); opacity: 0.88; }
+.composer-btn--send:disabled { background: transparent; color: var(--text-dim); border-color: var(--border-strong); }
+.composer-btn.recording { background: var(--danger); color: var(--danger-fill-text); border-color: transparent; }
+.composer-btn--quiet { border-color: transparent; color: var(--text-dim); padding: 0 10px; }
+.composer-confirm { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; color: var(--text-dim); }
+@media (pointer: coarse) { .composer-btn { height: 44px; min-width: 44px; } }
+.mic-status { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-dim); }
+.mic-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); animation: dots 1.2s ease-in-out infinite; }
+.composer-progress {
+  position: absolute; left: 0; right: 0; top: 0; height: 2px; opacity: 0;
+  background: linear-gradient(90deg, transparent, var(--link), transparent); background-size: 40% 100%; background-repeat: no-repeat;
+}
+.composer[data-busy="true"] .composer-progress { opacity: 1; animation: sweep 1.4s ease-in-out infinite; }
+@keyframes sweep { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+.mk-ico { position: relative; display: block; flex: none; width: 16px; height: 16px; background: currentColor; }
+.mk-ico-mic { -webkit-mask: url("/icons/mic-16.svg") center / 16px 16px no-repeat; mask: url("/icons/mic-16.svg") center / 16px 16px no-repeat; }
+.mk-ico-arrow { -webkit-mask: url("/icons/arrow-up-16.svg") center / 16px 16px no-repeat; mask: url("/icons/arrow-up-16.svg") center / 16px 16px no-repeat; }
+
+/* ── The pages: the same column, cards and labels ────────────────────────────────── */
+.history-page { flex: 1; min-height: 0; overflow-y: auto; padding: 32px 24px 48px; }
+.history-inner { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; min-height: 100%; }
+.history-inner > h1 { margin: 0 0 6px; font-size: 30px; font-weight: 700; line-height: 1.15; letter-spacing: -0.03em; }
+@media (max-width: 879px) { .history-page { padding: 20px 16px 40px; } .history-inner > h1 { font-size: 26px; } }
+.thread {
+  display: block; padding: 12px 16px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: var(--r-md);
+  text-decoration: none; color: var(--text); background: var(--surface); transition: border-color 0.15s ease, background 0.15s ease;
+}
+.thread:hover { border-color: var(--border-strong); background: var(--surface-hover); }
 .thread .preview { font-size: 15px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.thread .date { font-size: 12.5px; color: var(--text-dim); }
+.thread .date { font-size: 13px; color: var(--text-dim); }
 .thread-skeleton {
-  height: 62px; margin-bottom: 8px; border-radius: 12px; border: 1px solid var(--border);
-  background: linear-gradient(90deg, var(--elev-1) 0%, var(--elev-2) 50%, var(--elev-1) 100%);
+  height: 62px; margin-bottom: 8px; border-radius: var(--r-md); border: 1px solid var(--border);
+  background: linear-gradient(90deg, var(--surface) 0%, var(--surface-hover) 50%, var(--surface) 100%);
   background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite;
 }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
-@media (prefers-reduced-motion: reduce) { .thread-skeleton { animation: none; } }
-
-/* ── Memory: what Diya knows, and what is waiting for a decision ─────────────
-   The same surfaces and hairlines as History; the only colour that is not oat or cream is the danger red,
-   used for a fact the checks doubt and for the "forget" and "reject" buttons. */
 .memory-page .history-inner > h1 { margin-bottom: 8px; }
-.memory-lede { margin: 0 0 14px; color: var(--text-dim); font-size: 14.5px; line-height: 1.45; }
-.memory-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 14px; font-size: 13px; color: var(--text-dim); }
-.memory-meter { flex: 1 1 120px; min-width: 100px; height: 6px; border-radius: 3px; background: var(--elev-2); overflow: hidden; }
+.memory-lede { margin: 0 0 18px; color: var(--text-dim); font-size: 15px; line-height: 1.55; }
+.memory-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 14px; font-size: 13.5px; color: var(--text-dim); }
+.memory-meter { flex: 1 1 120px; min-width: 100px; height: 6px; border-radius: 3px; background: var(--surface-hover); overflow: hidden; }
 .memory-meter > div { height: 100%; background: var(--accent); border-radius: 3px; }
-.memory-page h2 { margin: 22px 0 8px; font-size: 16px; font-weight: 600; }
-.memory-page h3 { margin: 10px 0 4px; font-size: 12.5px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
-.memory-dim { margin: 0; color: var(--text-dim); font-size: 13.5px; line-height: 1.45; }
-.memory-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.memory-fact { padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--elev-1); }
-.memory-fact[data-status="candidate"] { border-color: var(--accent); }
-.memory-text { margin: 0; font-size: 15.5px; line-height: 1.4; overflow-wrap: anywhere; }
-.memory-person-tag { margin: 4px 0 0; font-size: 12px; color: var(--text-dim); }
-.memory-flags { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.memory-flag { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--danger); font-size: 12px; color: var(--danger-text); }
-.memory-flag--source { border-color: var(--border); color: var(--text-dim); }
-.memory-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.memory-btn {
-  min-height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border);
-  background: var(--elev-1); color: var(--text); font: inherit; font-size: 13.5px; cursor: pointer;
-  transition: background 0.15s ease, filter 0.15s ease;
+/* Section labels are the system's eyebrow: small, monospace, capitals. */
+.memory-page h2 {
+  margin: 28px 0 10px; font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim);
 }
-.memory-btn:hover:not(:disabled) { background: var(--elev-2); }
+.memory-page h3 { margin: 12px 0 4px; font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.memory-dim { margin: 0; color: var(--text-dim); font-size: 14px; line-height: 1.5; }
+.memory-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.memory-fact { padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+.memory-fact[data-status="candidate"] { border-color: var(--accent-edge); }
+.memory-text { margin: 0; font-size: 15.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.memory-person-tag { margin: 4px 0 0; font-size: 12.5px; color: var(--text-dim); }
+.memory-flags { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.memory-flag { padding: 2px 10px; border-radius: var(--pill); border: 1px solid var(--danger); font-size: 12.5px; color: var(--danger-text); }
+.memory-flag--source { border-color: var(--border-strong); color: var(--text-dim); }
+.memory-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.memory-btn {
+  min-height: 34px; padding: 0 16px; border-radius: var(--pill); border: 1px solid var(--border-strong); background: transparent;
+  color: var(--text); font: inherit; font-size: 13.5px; cursor: pointer; transition: background 0.15s ease, opacity 0.15s ease;
+}
+.memory-btn:hover:not(:disabled) { background: var(--surface-hover); }
 .memory-btn:disabled { opacity: 0.5; cursor: default; }
-.memory-btn:focus-visible { outline: var(--focus); outline-offset: 2px; }
 .memory-btn--primary { background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 600; }
-.memory-btn--primary:hover:not(:disabled) { background: var(--accent); filter: brightness(0.95); }
+.memory-btn--primary:hover:not(:disabled) { background: var(--accent); opacity: 0.88; }
 .memory-btn--danger { color: var(--danger-text); border-color: var(--danger); background: transparent; }
 .memory-btn--quiet { border-color: transparent; background: transparent; color: var(--text-dim); }
-@media (pointer: coarse) { .memory-btn { min-height: 40px; } }
+@media (pointer: coarse) { .memory-btn { min-height: 44px; } }
 .memory-input {
-  flex: 1 1 200px; min-height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border);
-  background: var(--elev-1); color: var(--text); font: inherit; font-size: 14.5px;
+  flex: 1 1 200px; min-height: 40px; padding: 0 14px; border-radius: var(--r-sm); border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text); font: inherit; font-size: 15px;
 }
-.memory-input:focus-visible { outline: var(--focus); outline-offset: 1px; }
+.memory-input::placeholder { color: var(--text-dim); opacity: 1; }
 .memory-edit, .memory-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .memory-add { margin-top: 12px; }
 .memory-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.memory-notice, .memory-error { margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.4; }
-.memory-notice { background: var(--elev-1); border: 1px solid var(--border); }
+.memory-notice, .memory-error { margin: 0 0 12px; padding: 10px 14px; border-radius: var(--r-sm); font-size: 14px; line-height: 1.45; }
+.memory-notice { background: var(--surface); border: 1px solid var(--border-strong); }
 .memory-error { border: 1.5px dashed var(--danger); color: var(--danger-text); }
-.memory-why { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 13.5px; line-height: 1.45; }
+.memory-why { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 14px; line-height: 1.5; }
 .memory-why ul { margin: 4px 0; padding-left: 18px; }
-.memory-why code { font-size: 12.5px; overflow-wrap: anywhere; }
-.memory-history { color: var(--text-dim); font-size: 12.5px; }
-.memory-page details { margin-top: 8px; }
-.memory-page summary { cursor: pointer; color: var(--text-dim); font-size: 14px; padding: 6px 0; }
+.memory-why code { font-size: 13px; overflow-wrap: anywhere; }
+.memory-history { color: var(--text-dim); font-size: 13px; }
+.memory-page details { margin-top: 10px; }
+.memory-page summary { cursor: pointer; color: var(--text-dim); font-size: 14.5px; padding: 8px 0; }
 .memory-page details .memory-list { margin-top: 6px; }
-/* The chat header has no slack on a phone (see .ambient-orb), so its Memory link only shows where there is
-   room; History always links to Memory. */
-header .icon-btn.nav-wide { display: none; }
-@media (min-width: 421px) { header .icon-btn.nav-wide { display: inline-flex; } }
-/* The reminders page reuses the memory page's look; a reminder that has come due is outlined like a fact
-   waiting for review, and the chat header's Reminders link carries a small count when any are due. */
-.reminder[data-state="due"] { border-color: var(--accent); }
-.reminder-when-line { margin: 2px 0 8px; }
-.reminder-when { max-width: 220px; }
-/* The Tasks page (docs/TASKS_DESIGN.md, unit T2) reuses the reminders page's look; a task past its date is outlined
-   and says so in words, never by colour alone, and a finished one is dimmed. */
+.reminder[data-state="due"] { border-color: var(--accent-edge); }
+.reminder-when-line { margin: 2px 0 0; }
+.reminder-when { max-width: 240px; }
 .task[data-state="overdue"] { border-color: var(--danger); }
 .task[data-state="done"] .memory-text { color: var(--text-dim); }
 .task-overdue { color: var(--danger-text); font-weight: 600; }
-.due-badge {
-  margin-left: 6px; min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--accent); color: var(--accent-text);
-  font-size: 12px; font-weight: 600; line-height: 18px; text-align: center;
-}
-/* The Actions page (docs/ACTIONS_DESIGN.md, unit A3) reuses the memory page's cards. What an action would do is
-   shown as plain labelled fields; one that Diya proposed after reading outside text carries a dashed caution; one
-   whose outcome is unknown is outlined like an error until the owner has recorded what happened. */
-.action-fields { margin: 8px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; font-size: 13.5px; }
+.action-fields { margin: 8px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; font-size: 14px; }
 .action-field { display: contents; }
 .action-fields dt { color: var(--text-dim); }
 .action-fields dd { margin: 0; overflow-wrap: anywhere; }
-.action-caution { margin: 10px 0 0; padding: 8px 10px; border: 1.5px dashed var(--danger); border-radius: 10px; color: var(--danger-text); font-size: 13.5px; line-height: 1.4; }
+.action-caution { margin: 12px 0 0; padding: 10px 12px; border: 1.5px dashed var(--danger); border-radius: var(--r-sm); color: var(--danger-text); font-size: 14px; line-height: 1.45; }
 .memory-fact[data-status="unknown"], .memory-fact[data-status="failed"] { border-color: var(--danger); }
-/* The Scheduled page (docs/SCHEDULE_DESIGN.md, unit R4) reuses the reminders page's look; a paused repeating reminder says
-   so in words and is dimmed, a stopped one is dimmed too, and what happened lately is a plain list. */
-.scheduled[data-state="paused"], .scheduled[data-state="ended"] { opacity: 0.8; }
+.scheduled[data-state="paused"], .scheduled[data-state="ended"] { opacity: 0.85; }
 .scheduled-paused { font-weight: 600; }
-.scheduled-trail { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.scheduled-trail { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 8px; font-size: 14.5px; }
 .reminder-snooze { font-size: 13px; }
-/* The Today page (docs/SCHEDULE_DESIGN.md, unit R5) reuses the reminders page's look: one plain sentence on top, then the same
-   cards. What falls today is marked in words, never by colour alone. */
-.today-date { margin: 0 0 2px; }
-.today-headline { margin: 0 0 12px; font-size: 19px; font-weight: 600; line-height: 1.35; }
+.today-date { margin: 0 0 4px; }
+.today-headline { margin: 0 0 14px; font-size: 20px; font-weight: 600; line-height: 1.4; letter-spacing: -0.015em; }
 .today-mark { font-weight: 600; }
-.today-undated { margin-top: 18px; }
-.today-page h2 a { margin-left: 8px; font-size: 13px; font-weight: 400; color: var(--text-dim); }
+.today-undated { margin-top: 20px; }
+.today-page h2 a, .scheduled-page h2 a { margin-left: 10px; font-family: var(--font); font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--link); }
