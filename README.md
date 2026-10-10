@@ -46,7 +46,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 
 - Chat with eight tools (notes search, web search, weather, reminders, a to-do list, file listing); threads are saved.
 - Reminders: say "remind me to call mum tomorrow at 5pm". The time is read in code, a reminder is saved only if you asked for one, and the
-  **Reminders** page (or the count in the chat header) shows what is due, with buttons to push one back 10 minutes, an hour or to tomorrow
+  **Reminders** page (the sidebar shows how many are due) shows what is due, with buttons to push one back 10 minutes, an hour or to tomorrow
   morning. An optional desktop notifier (`diya_notify.py`) can tell you outside the app, but only once you schedule it yourself
   ([docs/reminders.md](docs/reminders.md)); nothing here schedules it for you.
   File listing is limited to `Documents/Diya` under your home folder, or the folders in `DIYA_FILES_ROOTS`.
@@ -76,7 +76,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Facts it extracts wait in a review queue; nothing reaches the model unless you accept it.
   Review them on the **Memory** page of the UI, or with `python diya_review.py list`, `accept`, `reject` and `edit` (see [Dreaming](docs/dreaming.md)); `judge` asks the local model for an optional second opinion.
   The model is told the accepted facts, in every chat; your old `user_profile.txt` was imported once.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 4060 tests pass on Windows (as of 2026-10-10).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 4095 tests pass on Windows (as of 2026-10-10).
 
 ## Known limits
 
@@ -108,7 +108,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   local-memory projects (Truffle, Hindsight) and agent-harness engineering patterns (UFO's
   grant-in-chat audit trail, Dreaming-shaped nightly consolidation showing up independently in
   three unrelated projects) weighed against Diya's own design, not adopted wholesale.
-  [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built, including an optional, measured model verifier). [Person-tagged memory](docs/PERSON_MEMORY_DESIGN.md): who a fact is about, built into review, the model's own system message, and the CLI/UI (built). [Model benchmark](docs/MODEL_BENCHMARK.md): three installed models on this laptop, first pass. [Proactivity design](docs/PROACTIVITY_DESIGN.md): reminders that fire, the first step from an assistant that answers to one that tells you (built except the desktop notifier). [Connectors design](docs/CONNECTORS_DESIGN.md): outside accounts as a menu any owner picks from (Home Assistant, Notion, Todoist and Google Calendar all built; the OAuth connector's code is not yet verified against the real Google endpoints). [Actions design](docs/ACTIONS_DESIGN.md): the approval gate and action trail any future write must go through -- the model proposes, code executes, only the owner approves (built: the store and its state machine, the model's side, the Actions page and command line you approve on, and the first real write, adding a Todoist task; every other connector is read-only). [Tasks design](docs/TASKS_DESIGN.md): the to-do list kept inside Diya itself, why that and not an API, and what the model may do with it (built: the list, its two tools, the Tasks page). [Schedule design](docs/SCHEDULE_DESIGN.md): repeating reminders, snooze, a record of what happened, and the Scheduled and Today pages (built, and measured with the real models; the measurement changed the design).
+  [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built, including an optional, measured model verifier). [Person-tagged memory](docs/PERSON_MEMORY_DESIGN.md): who a fact is about, built into review, the model's own system message, and the CLI/UI (built). [Model benchmark](docs/MODEL_BENCHMARK.md): three installed models on this laptop, first pass. [Proactivity design](docs/PROACTIVITY_DESIGN.md): reminders that fire, the first step from an assistant that answers to one that tells you (built except the desktop notifier). [Connectors design](docs/CONNECTORS_DESIGN.md): outside accounts as a menu any owner picks from (Home Assistant, Notion, Todoist and Google Calendar all built; the OAuth connector's code is not yet verified against the real Google endpoints). [Actions design](docs/ACTIONS_DESIGN.md): the approval gate and action trail any future write must go through -- the model proposes, code executes, only the owner approves (built: the store and its state machine, the model's side, the Actions page and command line you approve on, and the first real write, adding a Todoist task; every other connector is read-only). [Tasks design](docs/TASKS_DESIGN.md): the to-do list kept inside Diya itself, why that and not an API, and what the model may do with it (built: the list, its two tools, the Tasks page). [Schedule design](docs/SCHEDULE_DESIGN.md): repeating reminders, snooze, a record of what happened, and the Scheduled and Today pages (built, and measured with the real models; the measurement changed the design). [UI design](docs/UI_DESIGN.md): the redesigned interface, a warm-paper light theme and a near-black dark theme, one sidebar, a plain message box, and the measured palette.
 
 ## Architecture
 
@@ -141,7 +141,7 @@ calls Open-Meteo. Results vary between runs on a 3B model.
 ## License and credits
 
 All rights reserved: the code is published to read, and no license to use, copy, modify or distribute
-it is granted. Third-party parts keep their own licenses (the composer is ported from the MIT-licensed
+it is granted. Third-party parts keep their own licenses (the microphone icon is from the MIT-licensed
 [Libraries.dev](https://github.com/Jakubantalik/Libraries.dev); see [notices](THIRD_PARTY_NOTICES.md)).
 The project is modeled on a research dossier: `dossier_content.py` is its source; the PDF (`render_pdf.py`) and the web page
 (`render_html.py`, standard library only) are both generated from it, and a test fails if the committed page is stale.

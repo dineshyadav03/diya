@@ -29,13 +29,16 @@ describes a commercial local-first assistant. Diya is a one-person project; the 
 | Notes memory | Partial. `search_notes` searches `sample_notes/` (or `DIYA_NOTES_DIR`) through an in-memory Chroma index rebuilt at each start. No ingestion beyond that folder. |
 | Long-term memory | Done for the loop, at small scale: Dreaming stages candidate facts, `diya_review.py` reviews them, and the model is told the accepted ones (see below). Reviewed on the command line or on the UI's Memory page, with an optional second opinion from the model (`judge`, advisory only). Not built: finding facts by relevance. |
 | Proactivity | Reminders have real due times and can repeat (every day, every weekday, every Monday, every month on the 15th, every 2 weeks), read in code from the person's own words (`docs/SCHEDULE_DESIGN.md`). The UI's Reminders page shows what is due, with snooze buttons; the Scheduled page lists, pauses, skips and stops repeating reminders and says in plain words what happened; the Today page shows the day, built in code from the owner's own reminders and tasks with no model text. Each refreshes once a minute while open. The optional desktop notifier (`diya_notify.py`, unit P4) tells you outside the app, but only once the owner schedules it; nothing schedules it. Dreaming runs on a schedule. The notes watcher is a Phase 1 script and is not connected to the assistant. |
-| Client | Done for the web. A Next.js UI with chat, history, hold-to-talk voice input and optional spoken replies. No native apps. |
+| Client | Done for the web. A Next.js UI with chat, history, hold-to-talk voice input and optional spoken replies, in a light and a dark theme that were checked for contrast (`docs/UI_DESIGN.md`). No native apps. |
 | Self-authored tools | Not built. |
 | Dedicated always-on hardware | Not started. Diya runs on the owner's Windows machine. |
 
 ## Current user experience
 
-- One dark surface with a warm oat accent; the flame logo is the only saturated colour.
+- Two themes from one set of tokens (`docs/UI_DESIGN.md`): a warm-paper light theme with one blue, and a near-black dark theme with hairlines
+  and white pills. It follows the operating system's setting, or Light/Dark/System at the foot of the sidebar. One sidebar (a menu on a
+  phone) is the only navigation, with a count on Reminders (due) and Actions (waiting); the chat is a document-like transcript and a plain
+  message box.
 - **Chat.** A message goes to `/api/chat`. Diya answers, and the UI shows which tools it used.
 - **Plain facts get one line.** A message that only shares a fact ("my flight is Friday at 6") gets a
   one-sentence acknowledgement and no tool calls (`diya_intent.py`). Questions and requests are
