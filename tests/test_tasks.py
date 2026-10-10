@@ -68,7 +68,7 @@ def test_a_database_at_version_five_gains_the_table_and_keeps_its_actions(tmp_pa
     conn.execute("INSERT INTO actions (kind, args, args_hash, summary, status, created_at, expires_at)"
                  " VALUES ('k', '{}', 'h', 's', 'pending', 't', 't')")
     conn.commit()
-    assert diya_db.apply_migrations(conn) == [6]
+    assert diya_db.apply_migrations(conn) == [v for v, _ in diya_db.MIGRATIONS if v > 5]  # 6 and whatever comes after
     assert conn.execute("SELECT kind FROM actions").fetchall() == [("k",)]
     assert conn.execute("SELECT COUNT(*) FROM tasks").fetchone() == (0,)
     conn.close()

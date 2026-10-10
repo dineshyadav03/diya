@@ -106,6 +106,7 @@ def test_a_fresh_database_has_exactly_the_expected_columns():
         ("done", "INTEGER", True, "0", False),
         ("due_ts", "TEXT", False, None, False),  # migration 3: a real due time beside the words
         ("notified_at", "TEXT", False, None, False),
+        ("series_id", "INTEGER", False, None, False),  # migration 7: the repeating reminder it came from, if any
     ]
     assert columns(conn, "people") == [  # migration 4: who a fact is about
         ("id", "INTEGER", False, None, True),
