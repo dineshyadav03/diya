@@ -56,6 +56,9 @@ class Config:
     # notification shows the reminder's own words (DIYA_NOTIFY_SHOW_TEXT=0 shows "A reminder is due" instead).
     notify_log_path: str = "notify_log.txt"
     notify_show_text: bool = True
+    # Memory that remembers on its own (docs/AUTO_MEMORY_DESIGN.md): when on, what Dreaming stages is put in a lane by diya_autonomy
+    # instead of waiting for a person to accept it. OFF until the measurement in the design (unit A6) has been read and the owner says so.
+    auto_memory: bool = False  # DIYA_AUTO_MEMORY
     whisper_model: str = "base"
     # The API listens on this computer only. Reaching it from another device (the iPhone) is an
     # explicit choice: DIYA_LAN=1 plus DIYA_ALLOWED_HOSTS (never an accident of the default).
@@ -181,7 +184,7 @@ def load_config(env=None) -> Config:
     if read_flag("DIYA_LAN"):
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
-                        ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT")):
+                        ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag

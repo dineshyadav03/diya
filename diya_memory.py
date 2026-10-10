@@ -33,7 +33,9 @@ MAX_PROFILE_CHARS = 2000
 
 STATUSES = ("candidate", "accepted", "rejected", "retired")
 SOURCES = ("dreaming", "legacy_profile", "manual")
-ACTORS = ("cli", "api", "import", "system")
+ACTORS = ("cli", "api", "import", "system", "auto")  # "auto": decided by code under the memory policy (diya_autonomy.py), not by a person
+ASK_PREFIX = "ask:"  # the flag the memory policy leaves on a candidate it is going to ask about: ask:<kind>:<reason> (docs/AUTO_MEMORY_DESIGN.md)
+SECRET_PLACEHOLDER = "(not kept: it looked like a secret)"  # what stands in for the text of a fact that was a secret
 
 # action -> (the status a fact must be in, the status it ends up in)
 ACTIONS = {
@@ -563,10 +565,11 @@ class Memory:
         return ImportResult(imported, already, duplicates, used, used > MAX_PROFILE_CHARS)
 
     # ---- deciding ----
-    def decide(self, fact_id, action, actor):
+    def decide(self, fact_id, action, actor, detail=None):
         """Apply `action` (accept, reject, reopen, retire or restore) to a fact. Raises FactError, and
         writes nothing, if the fact is not in a status that action applies to, or (accept, restore)
-        if an accepted fact already says the same thing or the profile has no room."""
+        if an accepted fact already says the same thing or the profile has no room. `detail`, if given, is
+        a dict recorded with the event (the memory policy says which lane it chose and why)."""
         _check_actor(actor)
         if action not in ACTIONS:
             raise ValueError(f"action must be one of {', '.join(ACTIONS)}, got {action!r}")
@@ -588,7 +591,41 @@ class Memory:
                 self._check_room(conn, fact_id, text, person, enforce_fact_length=(action == "accept"))
             now = _now()
             conn.execute("UPDATE facts SET status = ? WHERE id = ?", (becomes, fact_id))
-            self._event(conn, fact_id, ACTION_EVENT[action], actor, now)
+            self._event(conn, fact_id, ACTION_EVENT[action], actor, now, json.dumps(detail, sort_keys=True) if detail is not None else None)
+
+    def discard_secret(self, fact_id, kind, actor):
+        """Reject a candidate that is, or names, a secret, and do not keep what it said: its text and the line it came from are replaced,
+        and the event records only that a secret of this `kind` was not kept (never the secret). Only a candidate can be discarded."""
+        _check_actor(actor)
+        if not isinstance(kind, str) or not re.fullmatch(r"[a-z]{2,20}", kind):
+            raise InvalidFact("a secret's kind is a short lower-case word")
+        with self._write() as conn:
+            row = conn.execute("SELECT status FROM facts WHERE id = ?", (fact_id,)).fetchone()
+            if row is None:
+                raise UnknownFact(f"there is no fact {fact_id}")
+            if row[0] != "candidate":
+                raise IllegalTransition(f"fact {fact_id} is {row[0]}; only a candidate can be discarded as a secret")
+            conn.execute(
+                "UPDATE facts SET status = 'rejected', text = ?, text_key = ?, raw = NULL, flags = '[]' WHERE id = ?",
+                (SECRET_PLACEHOLDER, text_key(SECRET_PLACEHOLDER), fact_id),
+            )
+            self._event(conn, fact_id, "rejected", actor, _now(), json.dumps({"lane": "never", "reasons": [f"secret:{kind}"], "kept": False}, sort_keys=True))
+
+    def count_events(self, event, actor, since):
+        """How many events of this kind by this actor happened at or after `since` (an ISO time, UTC)."""
+        with self._read() as conn:
+            return conn.execute("SELECT COUNT(*) FROM fact_events WHERE event = ? AND actor = ? AND at >= ?", (event, actor, since)).fetchone()[0]
+
+    def taken_back_count(self, since):
+        """How many facts that were accepted automatically a person has since retired (a rejection can only follow a candidate, so undoing
+        an accepted fact is always a retirement), at or after `since`: the number the
+        memory policy's circuit breaker watches. A fact is counted once however many times it was touched."""
+        with self._read() as conn:
+            return conn.execute(
+                "SELECT COUNT(DISTINCT e.fact_id) FROM fact_events e WHERE e.event = 'retired' AND e.actor IN ('cli', 'api')"
+                " AND e.at >= ? AND EXISTS (SELECT 1 FROM fact_events a WHERE a.fact_id = e.fact_id AND a.event = 'accepted' AND a.actor = 'auto')",
+                (since,),
+            ).fetchone()[0]
 
     def edit(self, fact_id, text, actor):
         """Reword a candidate before deciding on it. The previous wording stays in the event. A model's second
@@ -658,7 +695,7 @@ class Memory:
             others = [{"id": o["id"], "text": o["text"], "status": o["status"]} for o in every if o["id"] != fact["id"]]
             cleaned = normalise_fact(fact["text"])  # what cleaning says about the text as it is NOW (it may have been edited)
             kept = list(cleaned.flags) if cleaned is not None else []
-            opinion = [flag for flag in fact["flags"] if flag.startswith(VERIFIER_PREFIX)]
+            opinion = [flag for flag in fact["flags"] if flag.startswith((VERIFIER_PREFIX, ASK_PREFIX))]  # neither can be recomputed here
             flags = kept + diya_checks.check_flags({"id": fact["id"], "text": fact["text"]}, messages, others) + opinion
             if self.set_flags(fact["id"], flags, actor):
                 changed += 1
@@ -896,6 +933,8 @@ def flag_short(flag):
         return f"rejected before as fact {printable(arg)}"
     if name == "verifier" and arg in _VERIFIER_SHORT:
         return _VERIFIER_SHORT[arg]
+    if name == "ask":
+        return f"Diya will ask you about it ({printable(arg.partition(':')[2] or arg.partition(':')[0])})"
     return _FLAG_SHORT.get(name) or printable(flag)
 
 
@@ -916,6 +955,10 @@ def flag_long(memory, flag):
     if name == "verifier" and arg in _VERIFIER_SHORT:
         return (f"verifier: the same small model was asked whether the messages this came from support it, and said {arg}. "
                 "It shares the blind spots of the model that proposed the fact, so this is a hint, never evidence.")
+    if name == "ask":
+        kind, _, reason = arg.partition(":")
+        return (f"ask: the memory policy did not accept this on its own ({printable(reason or kind)}); Diya will ask you about it "
+                "and it is not told to the model until you say yes")
     if name in ("duplicate", "similar", "previously_rejected"):
         verb = {"duplicate": "says the same as", "similar": "shares most of its words with",
                 "previously_rejected": "is the same as one you rejected,"}[name]

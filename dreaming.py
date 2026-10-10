@@ -168,6 +168,26 @@ class Dreamer:
         new_facts = response.choices[0].message.content.strip()
         self._finish_staged(new_facts, first_message_id, last_message_id)
 
+    def remember_on_its_own(self):
+        """When DIYA_AUTO_MEMORY is on, carry what is staged into the store and put every candidate in its lane (diya_autonomy.apply):
+        remembered, asked about, or not kept. Off, this does nothing, and what was staged waits for a person as it always did. It never
+        stops Dreaming: a failure is written to the log and the next cycle tries again."""
+        if not self.config.auto_memory:
+            return
+        try:
+            import diya_autonomy
+            import diya_memory
+
+            memory = diya_memory.Memory(self.store)
+            ingested = diya_memory.ingest_queue(memory, self.config, actor="system")
+            done = diya_autonomy.apply(memory)
+            print(
+                f"Memory on its own: {done.remembered} remembered, {done.asked} to ask about, {done.never} not kept, "
+                f"{done.held} held (profile full); {ingested.new} newly taken in from the staged queue."
+            )
+        except Exception as exc:  # noqa: BLE001 -- the log is where a headless run says what went wrong
+            print(f"[error] Memory on its own failed ({exc}). Nothing was changed past what is above; will retry next cycle.")
+
     def _finish_staged(self, new_facts, first_message_id, last_message_id):
         if not new_facts or new_facts.upper().startswith("NONE"):
             self.save_last_dreamed_id(last_message_id)
@@ -217,7 +237,9 @@ def main():
                 print(f"[error] {config_error}")
                 return 1
             try:
-                Dreamer(config).dream_cycle()
+                dreamer = Dreamer(config)
+                dreamer.dream_cycle()
+                dreamer.remember_on_its_own()
             except Exception:
                 traceback.print_exc()
                 return 1
