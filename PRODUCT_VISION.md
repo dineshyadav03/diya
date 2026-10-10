@@ -23,7 +23,7 @@ describes a commercial local-first assistant. Diya is a one-person project; the 
 
 | Area | Status |
 |---|---|
-| Local inference | Done. Ollama, `qwen2.5:3b` for chat, `nomic-embed-text` for embeddings, via the OpenAI-compatible API. |
+| Local inference | Done. Ollama, `qwen2.5:3b` for chat by default (on the owner's computer `diya-chat`, `qwen3:4b-instruct` with its context capped; see `docs/MODEL_BENCHMARK.md`), `nomic-embed-text` for embeddings, via the OpenAI-compatible API. |
 | Tools | Eight, in `diya.py`: `search_notes`, `web_search`, `get_weather`, `add_reminder`, `list_reminders`, `add_task`, `list_tasks`, `list_files` (plus a connector's tools while it is connected). `add_reminder` saves nothing unless the message asked for a reminder, reads the time (and a repeat) itself and refuses a time the model changed; `add_task` is the same shape for the to-do list kept inside Diya (docs/TASKS_DESIGN.md) and the model has no tool that closes, edits or deletes a task. Loop capped at 8 rounds; network tools time out after 5 s. `list_files` only lists inside `DIYA_FILES_ROOTS` (default `Documents/Diya`); `get_weather` only reaches the hosts in `DIYA_TOOL_ALLOWED_HOSTS` (default: the two Open-Meteo hosts). No MCP app store. |
 | Conversations | Done. Threads and messages in SQLite, a history page, reopening a thread. Not built: renaming, search. |
 | Notes memory | Partial. `search_notes` searches `sample_notes/` (or `DIYA_NOTES_DIR`) through an in-memory Chroma index rebuilt at each start. No ingestion beyond that folder. |

@@ -137,10 +137,21 @@ At five times the 3B's time per call it is not a candidate on this CPU. For refe
 - `reasoning_effort` and the 2-second Gemma 4 call are single probes. Gemma 4 was not benchmarked, only run through the evals.
 - Timings are wall-clock with other programs open, and the Gemma 4 download was still finishing during the first `qwen3:4b-instruct` run.
 
-### To use it (nothing was switched)
+### The switch (2026-10-10)
 
-The repository default is still `qwen2.5:3b`. To try the 4B-instruct model: `ollama pull qwen3:4b-instruct`; write a file named
-`Modelfile` containing the two lines in the first problem above; `ollama create diya-qwen3-4b -f Modelfile`; start Diya with
-`DIYA_MODEL=diya-qwen3-4b`. If long chats matter, the cap can be raised to 32768 (a 4.8 GB cache, untested here). Left on this machine
+On the owner's word, this computer now runs `qwen3:4b-instruct` as `diya-chat`: the two lines above are in `ollama/diya-chat.Modelfile`
+(`ollama create diya-chat -f ollama/diya-chat.Modelfile`, which shares the weights and downloads nothing; it has the same model id as the
+`bakeoff-qwen3-4b-instruct` alias that was measured), and `DIYA_MODEL=diya-chat` is set as a user environment variable, so the API and the
+scheduled Dreaming task use it. Checked again before switching, with today's code (the nine evals, three runs on a quiet machine): **9 of 9,
+9 of 9, 9 of 9**, in 134 s (with the model loading), 90 s and 91 s a run, against 69 to 81 s for the 3B. The repository default in
+`diya_config.py` is unchanged, because a plain `ollama pull qwen2.5:3b` is all a fresh install needs and the alias is one more step.
+To go back: delete the user environment variable `DIYA_MODEL` (the 3B is still installed). Not repeated here: the reminder-time reading
+(the "a change of model should repeat it" note above), which `python diya_schedule_bench.py` does; the first week of use is the real test.
+
+### To use it on another computer
+
+The repository default is still `qwen2.5:3b`. To try the 4B-instruct model: `ollama pull qwen3:4b-instruct`;
+`ollama create diya-chat -f ollama/diya-chat.Modelfile`; start Diya with
+`DIYA_MODEL=diya-chat`. If long chats matter, the cap can be raised to 32768 (a 4.8 GB cache, untested here). Left on this machine
 by the bake-off: `qwen3:4b-instruct` (2.5 GB, the useful one), `qwen3:4b` (2.5 GB, the thinking build, not usable), `gemma4:e4b`
 (6.6 GB, not viable here) and three aliases named `bakeoff-*` (a few KB each); `ollama rm <name>` removes any of them.

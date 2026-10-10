@@ -1,0 +1,12 @@
+# The chat model for Diya on a 16 GB computer: the same weights as qwen3:4b-instruct, with the context capped.
+#
+# qwen3:4b-instruct asks Ollama for a 262,144-token context window by default, and its cache for that is about 39 GB, so on 16 GB it fails to
+# load. Diya cannot pass num_ctx through Ollama's OpenAI-style endpoint, so the cap is made here, once:
+#
+#     ollama pull qwen3:4b-instruct
+#     ollama create diya-chat -f ollama/diya-chat.Modelfile
+#     (then set DIYA_MODEL=diya-chat)
+#
+# 16,384 tokens is a 2.4 GB cache and is the value that was measured (docs/MODEL_BENCHMARK.md). It shares the weights, so nothing more is downloaded.
+FROM qwen3:4b-instruct
+PARAMETER num_ctx 16384
