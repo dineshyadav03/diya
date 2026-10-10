@@ -136,6 +136,49 @@ def sensitive_class(text):
     return None
 
 
+# ---- the model's own judgement of what is private ------------------------------------------------------------------
+
+# The word lists above know the words of health, money and the rest, and miss everything said without them: a medicine's name, "I got laid
+# off", "my mother has been in the hospital", "the door code is 4829". Measured (docs/AUTO_MEMORY_DESIGN.md, section 8), the local model
+# itself, asked this one question, flagged every one of those and a further 11 it had never seen, so what the words let through goes to it.
+# The words stay: they cost nothing and never tire. The model's answer can only ADD caution: anything but a plain "OK" (an unsure answer, an
+# answer that is not one of the three words, no answer at all) means the person is asked. This text was frozen before the held-out sentences
+# were written; change it only together with new held-out sentences, never to fit the ones already measured.
+PRIVACY_PROMPT = (
+    "You are a privacy filter for a personal assistant's memory. Decide whether remembering the sentence below about a person would store "
+    "something private: health or medicine (physical or mental), money or debts, a legal matter, losing a job or another hardship, family "
+    "or relationship trouble, a home address or an exact place, a phone number, an email or an ID number, a password or a code or anything "
+    "that unlocks something, religion, politics, sexuality, or anything else a person would want to be asked about before it is kept. "
+    "Everyday facts such as hobbies, tastes in food or music, pets, habits, plans, work, tools and gadgets are NOT private.\n\n"
+    'Sentence: "{text}"\n\nAnswer with exactly one word: PRIVATE, OK or UNSURE.'
+)
+PRIVACY_ANSWERS = {"OK": "ok", "PRIVATE": "private", "UNSURE": "unsure"}
+
+
+def privacy_verdict(client, model, text):
+    """The model's answer to "is this sentence private?": "ok", "private", "unsure", or "failed" when it could not be asked. Anything that is
+    not clearly one of the three words counts as "unsure"; only "ok" lets a fact be remembered without a question."""
+    try:
+        reply = client.chat.completions.create(
+            model=model, temperature=0, max_tokens=8, messages=[{"role": "user", "content": PRIVACY_PROMPT.format(text=text)}]
+        )
+        words = (reply.choices[0].message.content or "").strip().split()
+    except Exception:  # noqa: BLE001 -- the model is down, slow or confused: the answer is "ask", not an error
+        return "failed"
+    first = words[0].strip(".,!:;\"'*").upper() if words else ""
+    return PRIVACY_ANSWERS.get(first, "unsure")
+
+
+_CAUTIOUS_FIRST = ("failed", "private", "unsure", "ok")
+
+
+def privacy_of(client, model, texts):
+    """The most cautious verdict over several sentences: the fact, and the message of the person's it was taken from. A fact is a rewrite, and a rewrite
+    can lose what made the original private ("my visa expires in June and I still haven't heard back" became "Visa expires in June", which the model
+    called OK), so the person's own words are asked about too and the worse answer counts."""
+    return min((privacy_verdict(client, model, text) for text in texts), key=_CAUTIOUS_FIRST.index)
+
+
 # ---- the decision -----------------------------------------------------------------------------------------------
 
 _NEVER_FLAGS = (
@@ -200,10 +243,12 @@ class Report(NamedTuple):
     held: int  # could not be accepted yet: the profile is full
 
 
-def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIMIT, actor="auto"):
+def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIMIT, actor="auto", private=None):
     """Put every candidate in its lane and act on it, each change one transaction with its event (which records the lane and why).
     Idempotent: a second run over the same candidates changes nothing. `now` is an aware datetime, for tests; the caps and the circuit
-    breaker look at the 24 hours before it. Returns what was done."""
+    breaker look at the 24 hours before it. `private(fact)` is the model's judgement of a fact the words let through (privacy_of): asked
+    only of a fact about to be remembered, and only "ok" lets it be; with none given there is no such check (the pure-policy tests).
+    Returns what was done."""
     import diya_memory
     from datetime import datetime, timedelta, timezone
 
@@ -224,6 +269,14 @@ def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIM
                 _clear_ask(memory, fact["id"], actor)
             never += 1
         elif decision.lane == LANE_REMEMBER:
+            verdict = _privacy(fact, private)
+            if verdict != "ok":  # the model thinks it private, is unsure, or could not be asked: the person decides
+                if verdict == "failed":
+                    _mark_ask(memory, fact, KIND_DOUBT, "privacy_check_failed", actor)  # not sticky: asked again at the next run
+                else:
+                    _mark_ask(memory, fact, KIND_SENSITIVE, f"model_{verdict}", actor)
+                asked += 1
+                continue
             try:
                 memory.decide(fact["id"], "accept", actor, detail)
             except diya_memory.DuplicateFact:
@@ -245,6 +298,18 @@ def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIM
             _mark_ask(memory, fact, decision.kind, decision.reasons[0], actor)
             asked += 1
     return Report(remembered, asked, never, held)
+
+
+def _privacy(fact, private):
+    """"ok" if the fact may be remembered as far as privacy goes, else why not. A fact the model already judged private or unsure keeps
+    waiting for the person without being asked again (a second answer must not undo the first), and one the model could not be asked about
+    is asked again next time."""
+    if private is None:
+        return "ok"
+    for flag in fact["flags"]:
+        if flag.startswith("ask:sensitive:model_"):
+            return flag.rpartition("model_")[2]
+    return private(fact)
 
 
 def _clear_ask(memory, fact_id, actor):

@@ -63,6 +63,10 @@ class Config:
     # Memory that remembers on its own (docs/AUTO_MEMORY_DESIGN.md): when on, what Dreaming stages is put in a lane by diya_autonomy
     # instead of waiting for a person to accept it. OFF until the measurement in the design (unit A6) has been read and the owner says so.
     auto_memory: bool = False  # DIYA_AUTO_MEMORY
+    # Which model answers "is this private?" before a fact is remembered without asking (diya_autonomy.privacy_verdict). Empty means the chat
+    # model. It is a setting because the answer depends on the model: measured, qwen2.5:3b flagged every private sentence and
+    # qwen3:4b-instruct missed some (docs/AUTO_MEMORY_DESIGN.md, section 8).
+    privacy_model: str = ""  # DIYA_PRIVACY_MODEL
     whisper_model: str = "base"
     # The API listens on this computer only. Reaching it from another device (the iPhone) is an
     # explicit choice: DIYA_LAN=1 plus DIYA_ALLOWED_HOSTS (never an accident of the default).
@@ -141,6 +145,7 @@ _STRING_SETTINGS = {
     "dream_pending_path": "DIYA_DREAM_PENDING_PATH",
     "notify_log_path": "DIYA_NOTIFY_LOG_PATH",
     "whisper_model": "DIYA_WHISPER_MODEL",
+    "privacy_model": "DIYA_PRIVACY_MODEL",
     "host": "DIYA_HOST",
     "token_path": "DIYA_TOKEN_PATH",
     "connector_tokens_dir": "DIYA_CONNECTOR_TOKENS_DIR",

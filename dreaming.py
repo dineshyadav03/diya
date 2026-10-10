@@ -11,6 +11,9 @@ import diya_config
 import diya_db
 
 
+SOURCE_JUDGE_CHARS = 600  # how much of the person's message the privacy question is asked about
+
+
 def _is_message_id(value):
     return isinstance(value, int) and not isinstance(value, bool)  # True == 1 in Python, but is no id
 
@@ -180,13 +183,39 @@ class Dreamer:
 
             memory = diya_memory.Memory(self.store)
             ingested = diya_memory.ingest_queue(memory, self.config, actor="system")
-            done = diya_autonomy.apply(memory)
+            done = diya_autonomy.apply(memory, private=self._privacy_judge())
             print(
                 f"Memory on its own: {done.remembered} remembered, {done.asked} to ask about, {done.never} not kept, "
                 f"{done.held} held (profile full); {ingested.new} newly taken in from the staged queue."
             )
         except Exception as exc:  # noqa: BLE001 -- the log is where a headless run says what went wrong
             print(f"[error] Memory on its own failed ({exc}). Nothing was changed past what is above; will retry next cycle.")
+
+    def _privacy_judge(self):
+        """`private(fact)` for the memory policy: the model's most cautious answer to "is this private?" about the fact and about the message of the
+        person's it was taken from (what the checks recorded as its source), each message asked about once however many facts came from it."""
+        import diya_autonomy  # here and not at the top: it needs diya_memory, which reaches this module
+
+        judge = self.config.privacy_model or self.config.model
+        asked = {}
+
+        def sources(fact):
+            texts = []
+            for flag in fact["flags"]:
+                name, _, value = flag.partition(":")
+                if name == "source_message" and value.isdigit():
+                    texts += [m["content"][:SOURCE_JUDGE_CHARS] for m in self.store.get_messages_between(int(value), int(value)) if m["role"] == "user"]
+            return texts
+
+        def private(fact):
+            verdicts = [diya_autonomy.privacy_of(self.client, judge, [fact["text"]])]
+            for text in sources(fact):
+                if text not in asked:
+                    asked[text] = diya_autonomy.privacy_of(self.client, judge, [text])
+                verdicts.append(asked[text])
+            return min(verdicts, key=diya_autonomy._CAUTIOUS_FIRST.index)
+
+        return private
 
     def _finish_staged(self, new_facts, first_message_id, last_message_id):
         if not new_facts or new_facts.upper().startswith("NONE"):

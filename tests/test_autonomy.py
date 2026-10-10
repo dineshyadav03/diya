@@ -19,6 +19,7 @@ import diya_checks
 import diya_memory
 from diya_db import Store
 from diya_memory import FactError, IllegalTransition, InvalidFact, Memory, UnknownFact
+from fakes import FakeClient, text_reply
 import labelled_autonomy as L
 
 NOW = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
@@ -509,12 +510,12 @@ def test_with_the_switch_off_what_was_staged_waits_for_a_person_as_it_always_did
 
 def test_with_the_switch_on_what_was_staged_is_taken_in_and_put_in_its_lanes(staged, capsys):
     config, store = staged
-    dreaming.Dreamer(dataclasses.replace(config, auto_memory=True)).remember_on_its_own()
+    dreaming.Dreamer(dataclasses.replace(config, auto_memory=True), client=FakeClient([text_reply("OK")] * 2)).remember_on_its_own()
     memory = Memory(store)
     assert {f["text"]: f["status"] for f in memory.facts()} == {"likes tea in the morning": "accepted", "is allergic to peanuts": "candidate"}
     out = capsys.readouterr().out
     assert "Memory on its own: 1 remembered, 1 to ask about, 0 not kept, 0 held (profile full); 2 newly taken in" in out
-    dreaming.Dreamer(dataclasses.replace(config, auto_memory=True)).remember_on_its_own()  # a second cycle changes nothing
+    dreaming.Dreamer(dataclasses.replace(config, auto_memory=True), client=FakeClient()).remember_on_its_own()  # a second cycle changes nothing
     assert "Memory on its own: 0 remembered, 1 to ask about, 0 not kept, 0 held (profile full); 0 newly taken in" in capsys.readouterr().out
     assert memory.verify_integrity() == []
 
@@ -526,13 +527,14 @@ def test_a_failure_in_the_memory_pass_is_logged_and_does_not_stop_dreaming(stage
         raise RuntimeError("the store is on fire")
 
     monkeypatch.setattr(auto, "apply", broken)
-    dreaming.Dreamer(dataclasses.replace(config, auto_memory=True)).remember_on_its_own()  # does not raise
+    dreaming.Dreamer(dataclasses.replace(config, auto_memory=True), client=FakeClient()).remember_on_its_own()  # does not raise
     assert "[error] Memory on its own failed (the store is on fire)" in capsys.readouterr().out
 
 
 def test_the_scheduled_entry_point_runs_the_memory_pass_after_the_cycle_and_logs_it(staged, monkeypatch, tmp_path):
     config, store = staged
     (tmp_path / "state.json").write_text(json.dumps({"last_message_id": 99}), encoding="utf-8")  # nothing new to dream about: no model is called
+    monkeypatch.setattr(dreaming, "OpenAI", lambda **kw: FakeClient([text_reply("OK")] * 2))
     for name, value in (("DIYA_DB_PATH", config.db_path), ("DIYA_DREAM_LOG_PATH", config.dream_log_path), ("DIYA_DREAM_STATE_PATH", config.dream_state_path),
                         ("DIYA_DREAM_PENDING_PATH", config.dream_pending_path), ("DIYA_PROFILE_PATH", config.profile_path), ("DIYA_AUTO_MEMORY", "1")):
         monkeypatch.setenv(name, value)
@@ -572,3 +574,227 @@ def test_a_fact_that_waited_and_is_then_rejected_loses_the_flag_too(world):
     auto.apply(memory, now=NOW)
     got = memory.get(fid)
     assert got["status"] == "rejected" and not [f for f in got["flags"] if f.startswith("ask:")]
+
+
+# --- the model's own judgement of what is private (docs/AUTO_MEMORY_DESIGN.md, section 8) -----------------------------
+
+def calls_to(verdicts):
+    """A stand-in for the model's judgement that records what it was asked and answers from `verdicts` (a dict by text, or one word for all)."""
+    asked = []
+
+    def private(fact):
+        asked.append(fact["text"])
+        return verdicts if isinstance(verdicts, str) else verdicts.get(fact["text"], "ok")
+
+    private.asked = asked
+    return private
+
+
+@pytest.mark.parametrize("verdict, status, flag", [
+    ("ok", "accepted", None),
+    ("private", "candidate", "ask:sensitive:model_private"),
+    ("unsure", "candidate", "ask:sensitive:model_unsure"),
+    ("failed", "candidate", "ask:doubt:privacy_check_failed"),
+])
+def test_only_a_plain_ok_from_the_model_lets_a_fact_be_remembered(world, verdict, status, flag):
+    _, memory, _ = world
+    fid = stage(world, "I like tea in the morning", "likes tea in the morning")
+    report = auto.apply(memory, now=NOW, private=calls_to(verdict))
+    assert memory.get(fid)["status"] == status
+    assert (flag in memory.get(fid)["flags"]) if flag else not [f for f in memory.get(fid)["flags"] if f.startswith("ask:")]
+    assert report == (auto.Report(1, 0, 0, 0) if verdict == "ok" else auto.Report(0, 1, 0, 0))
+
+
+def test_the_model_is_asked_only_about_a_fact_that_is_about_to_be_remembered(world):
+    _, memory, _ = world
+    ids = [stage(world, said, text) for said, text in HOBBIES[:2]]
+    stage(world, "my password is hunter2", "my password is hunter2")  # never
+    stage(world, "I am allergic to peanuts", "is allergic to peanuts")  # sensitive by its words: asked without the model
+    private = calls_to("ok")
+    auto.apply(memory, now=NOW, private=private)
+    assert private.asked == [HOBBIES[0][1], HOBBIES[1][1]] and all(memory.get(i)["status"] == "accepted" for i in ids)
+
+
+def test_a_fact_the_daily_cap_holds_back_is_not_put_to_the_model(world):
+    _, memory, _ = world
+    for said, text in HOBBIES:
+        stage(world, said, text)
+    private = calls_to("ok")
+    auto.apply(memory, now=NOW, limit=2, private=private)
+    assert len(private.asked) == 2
+
+
+def test_the_model_is_given_the_facts_own_words(world):
+    _, memory, _ = world
+    stage(world, "I like tea in the morning", "likes tea in the morning")
+    private = calls_to("ok")
+    auto.apply(memory, now=NOW, private=private)
+    assert private.asked == ["likes tea in the morning"]
+
+
+def test_what_the_model_judged_private_keeps_waiting_and_a_later_ok_does_not_undo_it(world):
+    _, memory, _ = world
+    fid = stage(world, "I like tea in the morning", "likes tea in the morning")
+    auto.apply(memory, now=NOW, private=calls_to("private"))
+    again = calls_to("ok")
+    assert auto.apply(memory, now=NOW, private=again) == auto.Report(0, 1, 0, 0)
+    assert again.asked == [] and memory.get(fid)["status"] == "candidate" and "ask:sensitive:model_private" in memory.get(fid)["flags"]
+
+
+def test_a_model_that_could_not_be_asked_is_asked_again_next_time_and_then_the_fact_can_go_through(world):
+    _, memory, _ = world
+    fid = stage(world, "I like tea in the morning", "likes tea in the morning")
+    auto.apply(memory, now=NOW, private=calls_to("failed"))
+    assert "ask:doubt:privacy_check_failed" in memory.get(fid)["flags"]
+    assert auto.apply(memory, now=NOW, private=calls_to("ok")) == auto.Report(1, 0, 0, 0)
+    got = memory.get(fid)
+    assert got["status"] == "accepted" and not [f for f in got["flags"] if f.startswith("ask:")]
+
+
+def test_without_a_judgement_there_is_no_such_check(world):
+    _, memory, _ = world
+    fid = stage(world, "I like tea in the morning", "likes tea in the morning")
+    assert auto.apply(memory, now=NOW) == auto.Report(1, 0, 0, 0) and memory.get(fid)["status"] == "accepted"
+
+
+def test_the_event_for_a_fact_the_model_held_back_records_why(world):
+    _, memory, _ = world
+    fid = stage(world, "I like tea in the morning", "likes tea in the morning")
+    auto.apply(memory, now=NOW, private=calls_to("unsure"))
+    assert [e[0] for e in memory.events(fid)][-1] == "flagged" and memory.verify_integrity() == []
+
+
+# --- the question itself ------------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("answer, verdict", [
+    ("OK", "ok"), ("ok", "ok"), ("OK.", "ok"), (" OK\n", "ok"), ("OK, but it mentions a doctor", "ok"), ('"OK"', "ok"), ("**OK**", "ok"),
+    ("PRIVATE", "private"), ("Private.", "private"), ("PRIVATE - health", "private"),
+    ("UNSURE", "unsure"), ("unsure", "unsure"),
+    ("Not private", "unsure"), ("It is fine", "unsure"), ("yes", "unsure"), ("I cannot decide", "unsure"), ("", "unsure"), ("   ", "unsure"), (None, "unsure"),
+])
+def test_what_the_model_says_is_read_by_its_first_word_and_anything_unclear_counts_as_unsure(answer, verdict):
+    assert auto.privacy_verdict(FakeClient([text_reply(answer)]), "m", "likes tea") == verdict
+
+
+def test_a_model_that_cannot_be_reached_is_failed_not_an_error():
+    assert auto.privacy_verdict(FakeClient(chat_error=ConnectionError("down")), "m", "likes tea") == "failed"
+    assert auto.privacy_verdict(FakeClient([]), "m", "likes tea") == "failed"  # nothing came back at all
+
+
+def test_the_question_is_asked_of_the_named_model_without_randomness_and_with_the_sentence_in_it():
+    client = FakeClient([text_reply("OK")])
+    auto.privacy_verdict(client, "the-judge", "I take metformin every morning")
+    call = client.chat_calls[0]
+    assert call["model"] == "the-judge" and call["options"] == {"temperature": 0, "max_tokens": 8} and call["tools"] is None
+    (message,) = call["messages"]
+    assert message["role"] == "user" and 'Sentence: "I take metformin every morning"' in message["content"]
+    assert message["content"].endswith("Answer with exactly one word: PRIVATE, OK or UNSURE.")
+
+
+def test_a_sentence_with_braces_or_quotes_is_put_in_as_it_is():
+    client = FakeClient([text_reply("OK")])
+    auto.privacy_verdict(client, "m", 'likes the {braces} and "quotes"')
+    assert 'Sentence: "likes the {braces} and "quotes""' in client.chat_calls[0]["messages"][0]["content"]
+
+
+def test_the_prompt_is_the_one_that_was_measured():
+    """It was frozen before the held-out sentences were written (docs/AUTO_MEMORY_DESIGN.md, section 8). Changing a word of it is changing what
+    was measured: do that only with new held-out sentences, and update this fingerprint on purpose."""
+    import hashlib
+
+    assert hashlib.sha256(auto.PRIVACY_PROMPT.encode()).hexdigest() == "5a0b258e93f9ae8464a936da93bb8ce58450472486f411b5116fde6f72998bab"
+
+
+# --- in Dreaming's pass ---------------------------------------------------------------------------------------------------
+
+def test_the_hook_asks_the_privacy_model_when_one_is_named(staged):
+    config, store = staged
+    client = FakeClient([text_reply("OK")] * 2)
+    dreaming.Dreamer(dataclasses.replace(config, auto_memory=True, model="the-chat-model", privacy_model="the-suspicious-model"), client=client).remember_on_its_own()
+    assert [c["model"] for c in client.chat_calls] == ["the-suspicious-model"] * 2  # the fact, and the message it came from
+
+
+def test_the_hook_asks_the_chat_model_when_no_privacy_model_is_named(staged):
+    config, store = staged
+    client = FakeClient([text_reply("OK")] * 2)
+    dreaming.Dreamer(dataclasses.replace(config, auto_memory=True, model="the-chat-model"), client=client).remember_on_its_own()
+    assert [c["model"] for c in client.chat_calls] == ["the-chat-model"] * 2
+
+
+def test_a_model_that_is_down_means_nothing_is_remembered_and_the_person_is_asked(staged, capsys):
+    config, store = staged
+    dreaming.Dreamer(dataclasses.replace(config, auto_memory=True), client=FakeClient(chat_error=ConnectionError("down"))).remember_on_its_own()
+    assert {f["text"]: f["status"] for f in Memory(store).facts()} == {"likes tea in the morning": "candidate", "is allergic to peanuts": "candidate"}
+    assert "0 remembered, 2 to ask about" in capsys.readouterr().out
+
+
+def test_the_privacy_model_is_a_setting_that_defaults_to_the_chat_model():
+    assert diya_config.load_config({}).privacy_model == ""
+    assert diya_config.load_config({"DIYA_PRIVACY_MODEL": "qwen2.5:3b"}).privacy_model == "qwen2.5:3b"
+    assert diya_config.load_config({"DIYA_PRIVACY_MODEL": "  "}).privacy_model == ""
+
+
+# --- the person's own words are asked about too (a rewrite can lose what made the original private) ----------------------
+
+@pytest.mark.parametrize("verdicts, worst", [
+    (["ok", "ok"], "ok"), (["ok", "unsure"], "unsure"), (["unsure", "ok"], "unsure"), (["ok", "private"], "private"), (["private", "unsure"], "private"),
+    (["unsure", "failed"], "failed"), (["failed", "ok"], "failed"), (["ok"], "ok"), (["private"], "private"),
+])
+def test_the_most_cautious_of_several_answers_counts(verdicts, worst):
+    client = FakeClient([text_reply({"ok": "OK", "unsure": "UNSURE", "private": "PRIVATE"}.get(v, "")) for v in verdicts if v != "failed"])
+    if "failed" in verdicts:
+        client = FakeClient([text_reply("OK")] * verdicts.index("failed"))  # the (n+1)th question gets no answer
+    assert auto.privacy_of(client, "m", [f"sentence {n}" for n in range(len(verdicts))]) == worst
+
+
+def test_every_sentence_is_put_to_the_model_in_order():
+    client = FakeClient([text_reply("OK"), text_reply("OK")])
+    auto.privacy_of(client, "m", ["the fact", "the message"])
+    assert [c["messages"][0]["content"].count('"the fact"') + c["messages"][0]["content"].count('"the message"') for c in client.chat_calls] == [1, 1]
+    assert 'Sentence: "the fact"' in client.chat_calls[0]["messages"][0]["content"] and 'Sentence: "the message"' in client.chat_calls[1]["messages"][0]["content"]
+
+
+def test_a_fact_is_asked_about_when_the_message_it_came_from_is_private_though_the_fact_reads_as_harmless(staged):
+    config, store = staged
+    client = FakeClient([text_reply("OK"), text_reply("PRIVATE")])  # the fact: fine; the message it came from: private
+    dreaming.Dreamer(dataclasses.replace(config, auto_memory=True), client=client).remember_on_its_own()
+    tea = next(f for f in Memory(store).facts() if f["text"] == "likes tea in the morning")
+    assert tea["status"] == "candidate" and "ask:sensitive:model_private" in tea["flags"]
+
+
+def test_the_message_is_asked_about_once_however_many_facts_came_from_it(tmp_path):
+    config = dataclasses.replace(diya_config.load_config({}), db_path=str(tmp_path / "d.db"), dream_log_path=str(tmp_path / "l"), dream_state_path=str(tmp_path / "s"),
+                                 dream_pending_path=str(tmp_path / "p.jsonl"), profile_path=str(tmp_path / "pr"), auto_memory=True)
+    store = Store(config.db_path)
+    thread = store.create_thread()
+    first = store.add_message(thread, "user", "I like tea in the morning and I play badminton on Sundays")
+    record = {"timestamp": "t", "first_message_id": first, "last_message_id": first, "model": "m",
+              "facts": ["- likes tea in the morning", "- plays badminton on Sundays"]}
+    (tmp_path / "p.jsonl").write_text(json.dumps(record) + "\n", encoding="utf-8")
+    client = FakeClient([text_reply("OK")] * 5)
+    dreaming.Dreamer(config, client=client).remember_on_its_own()
+    questions = [c["messages"][0]["content"] for c in client.chat_calls]
+    assert len(questions) == 3 and sum("I like tea in the morning and I play badminton on Sundays" in q for q in questions) == 1  # fact, message, fact
+    assert {f["status"] for f in Memory(store).facts()} == {"accepted"}
+
+
+def test_only_the_start_of_a_long_message_is_put_to_the_model(tmp_path):
+    config = dataclasses.replace(diya_config.load_config({}), db_path=str(tmp_path / "d.db"), dream_log_path=str(tmp_path / "l"), dream_state_path=str(tmp_path / "s"),
+                                 dream_pending_path=str(tmp_path / "p.jsonl"), profile_path=str(tmp_path / "pr"), auto_memory=True)
+    store = Store(config.db_path)
+    long_message = "I like tea in the morning. " + "and more words " * 100 + "THE-END"
+    first = store.add_message(store.create_thread(), "user", long_message)
+    (tmp_path / "p.jsonl").write_text(json.dumps({"timestamp": "t", "first_message_id": first, "last_message_id": first, "model": "m", "facts": ["- likes tea in the morning"]}) + "\n", encoding="utf-8")
+    client = FakeClient([text_reply("OK")] * 3)
+    dreaming.Dreamer(config, client=client).remember_on_its_own()
+    asked_about_message = client.chat_calls[1]["messages"][0]["content"]
+    assert "I like tea in the morning." in asked_about_message and "THE-END" not in asked_about_message and dreaming.SOURCE_JUDGE_CHARS == 600
+
+
+def test_a_fact_with_no_source_message_is_judged_on_its_own_words_alone(world):
+    _, memory, _ = world
+    fid = stage(world, "I like tea in the morning", "likes tea in the morning")
+    memory.set_flags(fid, [f for f in memory.get(fid)["flags"] if not f.startswith("source_message")], "system")
+    private = calls_to("ok")
+    auto.apply(memory, now=NOW, private=private)
+    assert private.asked == ["likes tea in the morning"]
