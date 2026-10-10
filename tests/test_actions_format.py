@@ -147,7 +147,7 @@ def test_there_are_words_for_exactly_the_statuses_the_store_has():
 
 def test_every_other_page_links_to_the_actions_page():
     pages = [p for p in (FRONTEND / "app").rglob("page.js") if "api" not in p.relative_to(FRONTEND / "app").parts]
-    assert {p.parent.name for p in pages} == {"app", "actions", "connections", "history", "memory", "reminders", "tasks"}
+    assert {p.parent.name for p in pages} == {"app", "actions", "connections", "history", "memory", "reminders", "scheduled", "tasks", "today"}
     for page in pages:
         if page.parent.name == "actions":
             continue
@@ -160,6 +160,22 @@ def test_every_other_page_links_to_the_tasks_page():
         if page.parent.name == "tasks":
             continue
         assert 'href="/tasks"' in page.read_text(encoding="utf-8"), page
+
+
+def test_every_other_page_links_to_the_scheduled_page():
+    pages = [p for p in (FRONTEND / "app").rglob("page.js") if "api" not in p.relative_to(FRONTEND / "app").parts]
+    for page in pages:
+        if page.parent.name == "scheduled":
+            continue
+        assert 'href="/scheduled"' in page.read_text(encoding="utf-8"), page
+
+
+def test_every_other_page_links_to_the_today_page():
+    pages = [p for p in (FRONTEND / "app").rglob("page.js") if "api" not in p.relative_to(FRONTEND / "app").parts]
+    for page in pages:
+        if page.parent.name == "today":
+            continue
+        assert 'href="/today"' in page.read_text(encoding="utf-8"), page
 
 
 def test_the_chat_names_the_two_task_tools_by_what_they_do():

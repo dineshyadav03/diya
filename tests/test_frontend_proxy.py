@@ -432,6 +432,9 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
         "/api/reminders", "/api/reminders", "/api/reminders", "/api/reminders/${reminder.id}/done",  # the chat's due count, the page's list and add, and done
         "/api/tasks", "/api/tasks", "/api/tasks/${task.id}/done", "/api/tasks/${task.id}/reopen",  # the Tasks page: its list, add, done and put back
+        "/api/reminders/${reminder.id}/snooze",  # the Reminders page's push-back buttons
+        "/api/scheduled", "/api/scheduled", "/api/scheduled/${series.id}/${action}",  # the Scheduled page: its list, add, and pause/resume/skip/stop
+        "/api/today",  # the Today page
         "/api/connections", "/api/connections/${connector.name}/connect", "/api/connections/${connector.name}/connect",
         "/api/connections/${connector.name}/disconnect",  # the token-kind form and the oauth-kind button both post here
         "/api/actions", "/api/actions",  # the chat header's waiting count, and the Actions page's list
@@ -479,7 +482,9 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
     assert set(routes) == {
         "/api/threads", "/api/history/{thread_id}", "/api/chat", "/api/transcribe",
         "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/merge", "/api/memory/{fact_id}/{action}",
-        "/api/reminders", "/api/reminders/{reminder_id}/done",
+        "/api/reminders", "/api/reminders/{reminder_id}/done", "/api/reminders/{reminder_id}/snooze",
+        "/api/today", "/api/scheduled", "/api/scheduled/{series_id}/pause", "/api/scheduled/{series_id}/resume",
+        "/api/scheduled/{series_id}/skip", "/api/scheduled/{series_id}/stop",
         "/api/tasks", "/api/tasks/{task_id}/done", "/api/tasks/{task_id}/reopen",
         "/api/connections", "/api/connections/{name}/connect", "/api/connections/{name}/disconnect",
         "/api/actions", "/api/actions/{action_id}", "/api/actions/{action_id}/approve",
@@ -492,7 +497,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         assert "lib/proxy.mjs" in source and any(
             name in source
             for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardReminderDone(", "forwardConnection(",
-                         "forwardAction(", "forwardActionDecision(", "forwardTaskAction(")
+                         "forwardAction(", "forwardActionDecision(", "forwardTaskAction(", "forwardScheduledAction(", "forwardReminderSnooze(")
         ), path
         assert "force-dynamic" in source, path  # never cached
 
@@ -742,6 +747,154 @@ def test_a_task_id_that_is_not_a_whole_number_is_refused_before_anything_is_sent
 def test_a_whole_number_task_id_is_forwarded_to_its_own_path_and_each_route_does_only_its_own_thing(route, action, task_id):
     out = run_harness({"mode": "route", "env": {}, "calls": [call(route, "POST", params={"task_id": task_id})]})
     assert [(c["method"], c["url"]) for c in out["captured"]] == [("POST", f"/api/tasks/{task_id}/{action}")]
+
+
+# --- the Today page's route (docs/SCHEDULE_DESIGN.md, unit R5) ----------------------------------------------------
+
+
+@needs_node
+def test_the_today_route_works_end_to_end_through_the_ui_server_with_no_token_in_the_browser(api):
+    api.agent.tasks.add("water plants", "Oct 10 at 11:59pm")
+    api.agent.store.add_reminder("call mum")
+    (answer,) = through_the_ui(api, [call("today", "GET")])
+    assert answer["status"] == 200
+    body = json.loads(unb64(answer["bodyB64"]))
+    assert set(body) == {"date", "headline", "due_now", "later_today", "tasks_overdue", "tasks_today", "repeating", "counts"}
+    assert body["counts"]["no_time"] == 1
+
+
+@needs_node
+def test_the_api_refuses_the_today_route_without_the_token(api):
+    (answer,) = through_the_ui(api, [call("today", "GET")], token=None)
+    assert answer["status"] == 401
+
+
+@needs_node
+def test_the_today_route_forwards_to_its_own_path_with_the_token_and_nothing_else_of_the_browsers():
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [
+        call("today", "GET", {"authorization": "Bearer from-the-browser", "cookie": "a=b"})]})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [("GET", "/api/today")]
+    assert out["captured"][0]["headers"]["authorization"] == f"Bearer {TOKEN}" and "cookie" not in out["captured"][0]["headers"]
+
+
+@needs_node
+@pytest.mark.parametrize("method", ["POST", "PUT", "DELETE"])
+def test_the_today_route_answers_only_get(method):
+    out = run_harness({"mode": "route", "env": {}, "calls": [call("today", method)]})
+    assert out["results"] == [{"noHandler": True}] and out["captured"] == []
+
+
+# --- the scheduled page's routes and the snooze button (docs/SCHEDULE_DESIGN.md, unit R4) --------------------------
+
+SCHEDULE_ACTIONS = [("scheduledPause", "pause"), ("scheduledResume", "resume"), ("scheduledSkip", "skip"), ("scheduledStop", "stop")]
+SCHEDULE_CALLS = [
+    ("scheduled", "GET", None, "/api/scheduled"),
+    ("scheduled", "POST", None, "/api/scheduled"),
+    *[(route, "POST", {"series_id": "12"}, f"/api/scheduled/12/{action}") for route, action in SCHEDULE_ACTIONS],
+    ("reminderSnooze", "POST", {"reminder_id": "12"}, "/api/reminders/12/snooze"),
+]
+
+
+@needs_node
+def test_the_schedule_routes_work_end_to_end_through_the_ui_server_with_no_token_in_the_browser(api):
+    schedule = api.agent.schedule
+    for words in ("every Monday", "every day", "every Friday", "every month on the 15th"):
+        schedule.create(f"thing {words}", words)
+    rid = api.agent.store.add_reminder("call mum", "x", "2030-01-01T09:00:00Z")
+    listed, made, paused, resumed, skipped, stopped, snoozed = through_the_ui(
+        api,
+        [
+            call("scheduled", "GET"),
+            json_call("scheduled", {"text": "water plants", "repeat": "every Sunday at 6pm"}),
+            call("scheduledPause", "POST", params={"series_id": "1"}),
+            call("scheduledResume", "POST", params={"series_id": "1"}),
+            call("scheduledSkip", "POST", params={"series_id": "2"}),
+            call("scheduledStop", "POST", params={"series_id": "3"}),
+            json_call_with("reminderSnooze", {"when": "tomorrow at 5pm"}, {"reminder_id": str(rid)}),
+        ],
+    )
+    assert [a["status"] for a in (listed, made, paused, resumed, skipped, stopped, snoozed)] == [200, 201, 200, 200, 200, 200, 200]
+    assert len(json.loads(unb64(listed["bodyB64"]))["series"]) == 4
+    assert json.loads(unb64(made["bodyB64"]))["created"]["rule"] == "Every Sunday at 18:00"
+    assert [(s["id"], s["paused"], s["ended"]) for s in schedule.series("all")] == [
+        (1, False, False), (2, False, False), (3, False, True), (4, False, False), (5, False, False)]
+    assert [e["event"] for e in schedule.events()].count("paused") == 1 and "skipped" in {e["event"] for e in schedule.events()}
+    assert json.loads(unb64(snoozed["bodyB64"]))["due_text"].endswith("17:00")
+
+
+@needs_node
+def test_the_api_refuses_the_schedule_routes_without_the_token_and_nothing_is_written(api):
+    schedule = api.agent.schedule
+    schedule.create("bins", "every Monday")
+    rid = api.agent.store.add_reminder("call mum", "x", "2030-01-01T09:00:00Z")
+    before = api.agent.store.get_reminder(rid)["due_ts"]
+    answers = through_the_ui(api, [call("scheduled", "GET"), json_call("scheduled", {"text": "x", "repeat": "every day"}),
+                                   *[call(route, "POST", params={"series_id": "1"}) for route, _ in SCHEDULE_ACTIONS],
+                                   json_call_with("reminderSnooze", {"when": "tomorrow"}, {"reminder_id": str(rid)})], token=None)
+    assert [a["status"] for a in answers] == [401] * 7
+    assert len(schedule.series("all")) == 1 and schedule.get(1)["paused"] is False and schedule.get(1)["ended"] is False
+    assert len(schedule.events()) == 1 and api.agent.store.get_reminder(rid)["due_ts"] == before
+
+
+@needs_node
+def test_the_schedule_routes_forward_to_their_own_path_and_method_with_the_token_and_nothing_else_of_the_browsers():
+    calls = [call(route, method, {"content-type": "application/json", "authorization": "Bearer from-the-browser", "cookie": "a=b"},
+                  "{}" if method == "POST" else None, params)
+             for route, method, params, _ in SCHEDULE_CALLS]
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": calls})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [(m, u) for _, m, _, u in SCHEDULE_CALLS]
+    for captured in out["captured"]:
+        assert captured["headers"]["authorization"] == f"Bearer {TOKEN}"
+        assert "cookie" not in captured["headers"]
+    assert "from-the-browser" not in json.dumps(out["captured"])
+
+
+@needs_node
+@pytest.mark.parametrize("route", [route for route, _ in SCHEDULE_ACTIONS])
+def test_a_schedule_action_route_answers_only_the_methods_the_api_route_does(route):
+    out = run_harness({"mode": "route", "env": {}, "calls": [call(route, "GET", params={"series_id": "1"})]})
+    assert out["results"] == [{"noHandler": True}] and out["captured"] == []
+
+
+@needs_node
+def test_the_snooze_route_answers_only_post():
+    out = run_harness({"mode": "route", "env": {}, "calls": [call("reminderSnooze", "GET", params={"reminder_id": "1"})]})
+    assert out["results"] == [{"noHandler": True}] and out["captured"] == []
+
+
+BAD_IDS = ["abc", "1.5", "-1", "1e3", "", " 1", "1 ", "1%2F2", "../1", "1/../2", "9" * 19, "0x10"]
+
+
+@needs_node
+@pytest.mark.parametrize("route", [route for route, _ in SCHEDULE_ACTIONS])
+@pytest.mark.parametrize("series_id", BAD_IDS)
+def test_a_series_id_that_is_not_a_whole_number_is_refused_before_anything_is_sent(route, series_id):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call(route, "POST", params={"series_id": series_id})]})
+    assert out["results"][0]["status"] == 404
+    assert out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("reminder_id", BAD_IDS)
+def test_a_snooze_id_that_is_not_a_whole_number_is_refused_before_anything_is_sent(reminder_id):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call("reminderSnooze", "POST", params={"reminder_id": reminder_id})]})
+    assert out["results"][0]["status"] == 404
+    assert out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("route, action", SCHEDULE_ACTIONS)
+@pytest.mark.parametrize("series_id", ["1", "12", "9" * 18])
+def test_a_whole_number_series_id_is_forwarded_to_its_own_path_and_each_route_does_only_its_own_thing(route, action, series_id):
+    out = run_harness({"mode": "route", "env": {}, "calls": [call(route, "POST", params={"series_id": series_id})]})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [("POST", f"/api/scheduled/{series_id}/{action}")]
+
+
+@needs_node
+@pytest.mark.parametrize("reminder_id", ["1", "12", "9" * 18])
+def test_a_whole_number_reminder_id_is_forwarded_to_its_snooze_path(reminder_id):
+    out = run_harness({"mode": "route", "env": {}, "calls": [call("reminderSnooze", "POST", params={"reminder_id": reminder_id})]})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [("POST", f"/api/reminders/{reminder_id}/snooze")]
 
 
 # --- the actions page's routes (docs/ACTIONS_DESIGN.md, unit A3) ---------------------------------------

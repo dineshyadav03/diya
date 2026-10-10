@@ -185,3 +185,20 @@ export async function forwardConnection(request, context, action, options) {
   if (!CONNECTOR_NAME.test(String(name))) return errorResponse(404, 'No such connector')
   return forward(request, `/api/connections/${name}/${action}`, options)
 }
+
+// The scheduled page's routes (docs/SCHEDULE_DESIGN.md, unit R4). A repeating reminder's id is a whole number, and what is
+// done to it is one of four literals the caller passes (pause, resume, skip, stop), never read from the URL; anything else
+// is turned away here instead of being pasted into the URL of the API request.
+export async function forwardScheduledAction(request, context, action, options) {
+  const { series_id: seriesId } = await context.params
+  if (!WHOLE_NUMBER.test(String(seriesId))) return errorResponse(404, 'No such repeating reminder')
+  return forward(request, `/api/scheduled/${seriesId}/${action}`, options)
+}
+
+// Pushing a pending reminder back (the Reminders page's snooze buttons): the id is a whole number, the body carries the
+// words for when.
+export async function forwardReminderSnooze(request, context, options) {
+  const { reminder_id: reminderId } = await context.params
+  if (!WHOLE_NUMBER.test(String(reminderId))) return errorResponse(404, 'No such reminder')
+  return forward(request, `/api/reminders/${reminderId}/snooze`, options)
+}

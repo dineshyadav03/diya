@@ -19,6 +19,13 @@ async function readJson(response) {
   }
 }
 
+// What the snooze buttons send: words the API reads exactly as it reads a time typed in the form.
+const SNOOZES = [
+  { label: '10 min', when: 'in 10 minutes', said: '10 minutes' },
+  { label: '1 hour', when: 'in 1 hour', said: 'an hour' },
+  { label: 'Tomorrow morning', when: 'tomorrow at 9am', said: 'tomorrow morning' },
+]
+
 const SECTIONS = [
   { state: 'due', title: 'Due now', empty: 'Nothing is due.' },
   { state: 'upcoming', title: 'Coming up', empty: 'Nothing is coming up.' },
@@ -123,6 +130,18 @@ export default function RemindersPage() {
   const markDone = (reminder) =>
     settle(() => fetch(`/api/reminders/${reminder.id}/done`, { method: 'POST' }), String(reminder.id), () => 'Marked done.')
 
+  const snooze = (reminder, choice) =>
+    settle(
+      () =>
+        fetch(`/api/reminders/${reminder.id}/snooze`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ when: choice.when }),
+        }),
+      String(reminder.id),
+      ({ due_text: dueText }) => `Pushed back ${choice.said}. You will be told again ${dueText}.`,
+    )
+
   const reminders = data ? data.reminders : []
 
   return (
@@ -138,6 +157,12 @@ export default function RemindersPage() {
           </Link>
           <Link className="icon-btn" href="/memory">
             Memory
+          </Link>
+          <Link className="icon-btn" href="/today">
+            Today
+          </Link>
+          <Link className="icon-btn" href="/scheduled">
+            Scheduled
           </Link>
           <Link className="icon-btn" href="/tasks">
             Tasks
@@ -239,6 +264,14 @@ export default function RemindersPage() {
                                   ? `You asked for “${reminder.said}”, which was not read as a time.`
                                   : 'No time was given.'}
                               {reminder.state === 'due' && reminder.told ? ' · You were told' : ''}
+                              {reminder.series ? (
+                                <>
+                                  {' · '}
+                                  <Link href="/scheduled">Repeats</Link>
+                                </>
+                              ) : (
+                                ''
+                              )}
                             </p>
                             <div className="memory-actions">
                               <button
@@ -250,6 +283,19 @@ export default function RemindersPage() {
                               >
                                 Done
                               </button>
+                              {reminder.state !== 'no_time' &&
+                                SNOOZES.map((choice) => (
+                                  <button
+                                    key={choice.when}
+                                    type="button"
+                                    className="memory-btn reminder-snooze"
+                                    onClick={() => snooze(reminder, choice)}
+                                    disabled={busy === String(reminder.id)}
+                                    aria-label={`Push back ${choice.said}: ${reminder.content}`}
+                                  >
+                                    {choice.label}
+                                  </button>
+                                ))}
                             </div>
                           </li>
                         ))}

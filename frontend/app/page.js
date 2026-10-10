@@ -343,6 +343,12 @@ export default function ChatPage() {
               </span>
             )}
           </Link>
+          <Link className="icon-btn nav-wide" href="/today" style={{ textDecoration: 'none' }}>
+            Today
+          </Link>
+          <Link className="icon-btn nav-wide" href="/scheduled" style={{ textDecoration: 'none' }}>
+            Scheduled
+          </Link>
           <Link className="icon-btn nav-wide" href="/tasks" style={{ textDecoration: 'none' }}>
             Tasks
           </Link>

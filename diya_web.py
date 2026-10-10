@@ -13,11 +13,13 @@ from pydantic import BaseModel
 
 import diya
 import diya_actions_api
+import diya_brief_api
 import diya_config
 import diya_connections_api
 import diya_connector_tools
 import diya_memory_api
 import diya_reminders_api
+import diya_schedule_api
 import diya_tasks_api
 
 
@@ -341,6 +343,8 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     diya_memory_api.register(app, config, agent)
     diya_reminders_api.register(app, config, agent)
     diya_tasks_api.register(app, config, agent)  # the to-do list inside Diya (docs/TASKS_DESIGN.md, unit T2)
+    diya_schedule_api.register(app, config, agent)  # repeating reminders and snooze (docs/SCHEDULE_DESIGN.md, unit R4)
+    diya_brief_api.register(app, config, agent)  # the day: what is due, overdue and coming (docs/SCHEDULE_DESIGN.md, unit R5)
     diya_connections_api.register(app, config, agent, connectors=connectors)
     # Deciding what Diya proposed (docs/ACTIONS_DESIGN.md, unit A3): the agent carries the action store and its kinds.
     diya_actions_api.register(app, config, agent)

@@ -293,6 +293,12 @@ export default function MemoryPage() {
           <Link className="icon-btn" href="/reminders">
             Reminders
           </Link>
+          <Link className="icon-btn" href="/today">
+            Today
+          </Link>
+          <Link className="icon-btn" href="/scheduled">
+            Scheduled
+          </Link>
           <Link className="icon-btn" href="/tasks">
             Tasks
           </Link>

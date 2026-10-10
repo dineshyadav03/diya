@@ -73,6 +73,10 @@ def client_for(tmp_path, require=None):
     agent.store.add_reminder("seeded reminder")  # and one reminder (id 1), for the same reason
     agent.tasks.add("seeded task")  # and two tasks: an open one (id 1) to tick off, a finished one (id 2) to put back
     agent.tasks.complete(agent.tasks.add("seeded finished task")["id"])
+    for words in ("every day", "every Monday", "every Friday", "every month on the 15th"):  # four repeating reminders, one for each thing the
+        agent.schedule.create(f"seeded series {words}", words)  # routes do to one: 1 to pause, 2 (paused below) to resume, 3 to skip, 4 to stop
+    agent.schedule.pause(2)
+    agent.store.add_reminder("seeded timed reminder", "x", "2030-01-01T09:00:00Z")  # reminder 2: still pending when the snooze route runs, after 1 is done
     # and one connector, so /api/connections/demo/connect has something real to act on
     app = diya_web.create_app(config, agent, transcriber=object(), connectors=SEEDED_CONNECTORS)
     return TestClient(app, base_url=HOST), app
@@ -89,7 +93,12 @@ OK = (200, 201)  # adding a fact answers 201
 
 def concrete_path(path):
     """A route's path with a real id and action in place of its parameters."""
-    return (path.replace("{thread_id}", "1").replace("{fact_id}", "1").replace("{action}", "accept")
+    return (path.replace("/api/reminders/{reminder_id}/snooze", "/api/reminders/2/snooze")  # reminder 1 is done by an earlier route
+           .replace("/api/scheduled/{series_id}/resume", "/api/scheduled/2/resume")  # each change has its own seeded repeating reminder
+           .replace("/api/scheduled/{series_id}/skip", "/api/scheduled/3/skip")
+           .replace("/api/scheduled/{series_id}/stop", "/api/scheduled/4/stop")
+           .replace("{series_id}", "1")
+           .replace("{thread_id}", "1").replace("{fact_id}", "1").replace("{action}", "accept")
            .replace("{reminder_id}", "1").replace("{name}", "demo")
            .replace("/api/tasks/{task_id}/reopen", "/api/tasks/2/reopen").replace("{task_id}", "1")
            .replace("/api/actions/{action_id}/reject", "/api/actions/2/reject")  # each decision has its own seeded action
@@ -113,6 +122,14 @@ ENDPOINTS = [
     ("GET", "/api/reminders", {}),
     ("POST", "/api/reminders", {"json": {"text": "call mum", "when": "in 2 hours"}}),
     ("POST", "/api/reminders/1/done", {}),
+    ("POST", "/api/reminders/2/snooze", {"json": {"when": "tomorrow at 5pm"}}),
+    ("GET", "/api/scheduled", {}),
+    ("GET", "/api/today", {}),
+    ("POST", "/api/scheduled", {"json": {"text": "water plants", "repeat": "every Sunday"}}),
+    ("POST", "/api/scheduled/1/pause", {}),
+    ("POST", "/api/scheduled/2/resume", {}),
+    ("POST", "/api/scheduled/3/skip", {}),
+    ("POST", "/api/scheduled/4/stop", {}),
     ("GET", "/api/tasks", {}),
     ("POST", "/api/tasks", {"json": {"text": "buy milk", "when": "tomorrow"}}),
     ("POST", "/api/tasks/1/done", {}),
