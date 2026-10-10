@@ -47,12 +47,12 @@ one step left to you. For a pass every five minutes, in PowerShell, from the fol
 
 ```powershell
 $action   = New-ScheduledTaskAction -Execute "C:\Path\To\pythonw.exe" -Argument "diya_notify.py" -WorkingDirectory "C:\Path\To\diya"
-$trigger  = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
-$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable
+$trigger  = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
+$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
 Register-ScheduledTask -TaskName "Diya_Notify" -Action $action -Trigger $trigger -Settings $settings
 ```
 
-Run it as yourself, while you are logged in (that is the default): a notification needs your desktop. Remove it with
+The two battery switches matter on a laptop: without them Windows quietly does not run the task on battery. Run it as yourself, while you are logged in (that is the default): a notification needs your desktop. Remove it with
 `Unregister-ScheduledTask -TaskName "Diya_Notify" -Confirm:$false`. Like Dreaming's task, it runs the files in the folder
 as they are, so a change to the code takes effect at the next pass. Nothing fires while the computer is off or asleep;
 a reminder that came due then is told at the first pass afterwards.
