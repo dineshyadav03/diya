@@ -12,12 +12,15 @@
 // Each function keeps its place's existing wording for the "nothing answered" case, which is true.
 
 const REFUSED = 'the access token the UI sends is missing or wrong (see docs/lan.md, Access token)'
+const SIGNED_OUT = 'You’re signed out of Diya. Reload this page to sign in again.'
 
-// 'unreachable' | 'unauthorized' | 'unreadable' | 'error'. A status that is not an integer (NaN
-// included: it has type "number") counts as no answer.
+// 'unreachable' | 'unauthorized' | 'signin' | 'unreadable' | 'error'. A status that is not an integer (NaN
+// included: it has type "number") counts as no answer. 511 is the UI's own sign-in (docs/UI_LOGIN_DESIGN.md): this
+// browser is not signed in to Diya, which is nothing to do with the API's access token (401).
 function classify(status) {
   if (!Number.isInteger(status) || status === 502 || status === 503 || status === 504) return 'unreachable'
   if (status === 401) return 'unauthorized'
+  if (status === 511) return 'signin'
   if (status >= 200 && status < 300) return 'unreadable'
   return 'error'
 }
@@ -35,7 +38,7 @@ export function readFailure(body) {
 // send." because the design rig's checks look for it. With one, the API did answer (it kept the message and could not
 // reply), so the row says "No reply." and gives the reason as the API worded it; a refused token (401) keeps its own text.
 export function describeSendFailure(status, detail) {
-  if (typeof detail === 'string' && detail && Number.isInteger(status) && status >= 400 && status !== 401) {
+  if (typeof detail === 'string' && detail && Number.isInteger(status) && status >= 400 && status !== 401 && status !== 511) {
     return `No reply. ${detail}`
   }
   switch (classify(status)) {
@@ -43,6 +46,8 @@ export function describeSendFailure(status, detail) {
       return 'Didn’t send. Diya’s server didn’t answer.'
     case 'unauthorized':
       return `Didn’t send. Diya’s server refused it: ${REFUSED}.`
+    case 'signin':
+      return `Didn’t send. ${SIGNED_OUT}`
     case 'unreadable':
       return 'Didn’t send. Diya’s server sent back something this page couldn’t read.'
     default:
@@ -58,6 +63,8 @@ export function describeLoadFailure(status) {
       return 'Diya’s server didn’t answer. Check that it’s running, then try again.'
     case 'unauthorized':
       return `Diya’s server refused the request: ${REFUSED}.`
+    case 'signin':
+      return SIGNED_OUT
     case 'unreadable':
       return 'Diya’s server sent back something this page couldn’t read.'
     default:
@@ -73,6 +80,8 @@ export function describeTranscribeFailure(status) {
       return "Couldn't reach Diya's server to transcribe that. Hold the mic to try again."
     case 'unauthorized':
       return `Couldn't transcribe that: Diya's server refused it, because ${REFUSED}. Hold the mic to try again.`
+    case 'signin':
+      return "Couldn't transcribe that: you're signed out of Diya. Reload this page to sign in again."
     case 'unreadable':
       return "Couldn't transcribe that: Diya's server sent back something this page couldn't read. Hold the mic to try again."
     default:
@@ -93,6 +102,8 @@ export function describeActionFailure(status, detail) {
       return 'Diya’s server didn’t answer, so nothing was changed. Check that it’s running, then try again.'
     case 'unauthorized':
       return `Diya’s server refused it, so nothing was changed: ${REFUSED}.`
+    case 'signin':
+      return `${SIGNED_OUT} Nothing was changed.`
     case 'unreadable':
       return 'Diya’s server sent back something this page couldn’t read. Refresh to see what it did.'
     default:

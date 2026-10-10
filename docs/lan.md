@@ -24,13 +24,34 @@ pairs are an error, not a guess. To use files elsewhere, set `DIYA_SSL_CERT` and
    (`mkcert localhost 127.0.0.1 ::1 <name-or-ip>`) and remove the old pair.
 2. Install and trust mkcert's root CA on the device. `mkcert -CAROOT` shows where it is; on iOS,
    trust it under Settings > General > About > Certificate Trust Settings.
-3. Start the UI with `npm run dev:lan` (in `frontend/`), open `https://<name-or-ip>:3000` on the
-   device, and allow inbound TCP 3000 in the operating system's firewall. The API can stay as it is,
-   on this computer only: see "How the UI reaches the API" below.
+3. Choose a passcode of at least 12 characters and put it in `DIYA_UI_PASSCODE` (the terminal that
+   starts the UI, or `frontend/.env.local`): `npm run dev:lan` **refuses to start without it** (see
+   "A passcode for the UI" below). Then start the UI with `npm run dev:lan` (in `frontend/`), open
+   `https://<name-or-ip>:3000` on the device, sign in, and allow inbound TCP 3000 in the operating
+   system's firewall. The API can stay as it is, on this computer only: see "How the UI reaches the
+   API" below.
 4. Only if another device should call the API directly (curl, a script), start it in LAN mode with
    that same name or address, and allow inbound TCP 8080 too.
    PowerShell: `$env:DIYA_LAN = "1"; $env:DIYA_ALLOWED_HOSTS = "<name-or-ip>"; python diya_web.py`
    POSIX: `DIYA_LAN=1 DIYA_ALLOWED_HOSTS=<name-or-ip> python diya_web.py`
+
+## A passcode for the UI
+
+The UI's server attaches the API's access token to every call it forwards (below), so the token protects
+nothing against someone who can reach the UI itself. In LAN mode that is anyone on the network, who could
+read your chats, change your memory and approve an action as you. `DIYA_UI_PASSCODE` closes that:
+
+- With it set, every page and every call needs a signed session cookie, which signing in with the
+  passcode gives (30 days, `HttpOnly`, `SameSite=Strict`, `Secure` over HTTPS). Changing the passcode
+  ends every session. "Sign out" is at the foot of the sidebar.
+- Five wrong passcodes in a row lock sign-in for five minutes, doubling at each further lock up to an
+  hour (counted for everyone together, because a caller's address cannot be trusted). Waiting, or
+  restarting the UI, is the way back.
+- Without it, nothing changes: the UI is for this computer only and asks for nothing. `npm run dev:lan`
+  is the one case that insists on it.
+- It is a plain setting in a plain file, like `DIYA_TOKEN`; anyone who can read `frontend/.env.local`
+  has it. It does not make plain HTTP safe, and `dev:lan` runs Next.js's development server (the login
+  covers its endpoints too). The reasoning and the limits are in [UI login design](UI_LOGIN_DESIGN.md).
 
 ## How the UI reaches the API
 

@@ -439,6 +439,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/connections/${connector.name}/disconnect",  # the token-kind form and the oauth-kind button both post here
         "/api/actions", "/api/actions",  # the chat header's waiting count, and the Actions page's list
         "/api/actions/${action.id}/approve", "/api/actions/${action.id}/reject", "/api/actions/${action.id}/resolve",
+        "/session", "/session", "/session",  # the sign-in page's POST, the sidebar's "am I signed in" and its sign-out (docs/UI_LOGIN_DESIGN.md)
     ])
     assert not [p for p in browser_files() if re.search(r"fetch\(\s*[^`'\"\s]", p.read_text(encoding="utf-8"))]  # no computed URLs
 

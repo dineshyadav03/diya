@@ -26,6 +26,10 @@ def tree(tmp_path):
     return tmp_path
 
 
+LOGIN = {"DIYA_UI_PASSCODE": "a passcode of some length"}  # what LAN mode now requires (docs/UI_LOGIN_DESIGN.md); the tests that are about something else pass it
+QUIET = {"NEXT_TELEMETRY_DISABLED": "1"}  # what the launcher adds to the UI server's environment (audit F4)
+
+
 def pair(folder, name="localhost+2"):
     (folder / f"{name}.pem").write_text("cert")
     (folder / f"{name}-key.pem").write_text("key")
@@ -56,7 +60,7 @@ def test_dev_listens_on_loopback_with_the_discovered_certificate(tree):
 
 def test_lan_mode_is_only_what_the_lan_flag_asks_for(tree):
     pair(tree)
-    _, plan = launch(tree, "dev", "--lan")
+    _, plan = launch(tree, "dev", "--lan", env=LOGIN)
     assert (plan["host"], plan["lan"]) == ("0.0.0.0", True)
     _, plain = launch(tree, "dev")
     assert plain["host"] == "127.0.0.1"
@@ -113,7 +117,7 @@ def test_start_needs_no_certificate_and_is_loopback_too(tree):
     result, plan = launch(tree, "start")
     assert result.returncode == 0, result.stderr
     assert plan["args"] == ["start", "-H", "127.0.0.1", "-p", "3000"]
-    assert launch(tree, "start", "--lan")[1]["args"][2] == "0.0.0.0"
+    assert launch(tree, "start", "--lan", env=LOGIN)[1]["args"][2] == "0.0.0.0"
 
 
 def test_an_unknown_mode_is_refused(tree):
@@ -139,17 +143,17 @@ def test_the_ui_server_is_started_trusting_the_system_certificate_store(tree, ar
     the OS trust store, where mkcert puts its root, unless asked -- and is never handed a flag it
     does not know."""
     pair(tree)
-    _, plan = launch(tree, *argv)
-    assert plan["env"] == ({"NODE_OPTIONS": "--use-system-ca"} if SYSTEM_CA else {})
+    _, plan = launch(tree, *argv, env=LOGIN)
+    assert plan["env"] == {**({"NODE_OPTIONS": "--use-system-ca"} if SYSTEM_CA else {}), **QUIET}
 
 
 @needs_system_ca
 def test_an_existing_node_options_is_kept_and_the_flag_is_not_added_twice(tree):
     pair(tree)
     _, plan = launch(tree, "dev", env={"NODE_OPTIONS": "--max-old-space-size=512"})
-    assert plan["env"] == {"NODE_OPTIONS": "--max-old-space-size=512 --use-system-ca"}
+    assert plan["env"] == {"NODE_OPTIONS": "--max-old-space-size=512 --use-system-ca", **QUIET}
     _, plan = launch(tree, "dev", env={"NODE_OPTIONS": "--use-system-ca --max-old-space-size=512"})
-    assert plan["env"] == {}  # already there: nothing to change
+    assert plan["env"] == QUIET  # already there: nothing to change
 
 
 def test_lan_mode_differs_from_loopback_only_in_the_interface_it_listens_on(tree):
@@ -157,7 +161,7 @@ def test_lan_mode_differs_from_loopback_only_in_the_interface_it_listens_on(tree
     and no name or address of the other device is baked in anywhere."""
     pair(tree)
     _, loopback = launch(tree, "dev")
-    _, lan = launch(tree, "dev", "--lan")
+    _, lan = launch(tree, "dev", "--lan", env=LOGIN)
     assert loopback["env"] == lan["env"]
     assert [a for a in loopback["args"] if a != "127.0.0.1"] == [a for a in lan["args"] if a != "0.0.0.0"]
     assert not re.findall(r"\d{1,3}(?:\.\d{1,3}){3}", json.dumps(lan).replace("0.0.0.0", ""))
@@ -195,7 +199,7 @@ def test_the_ui_server_process_really_receives_the_trust_flag(tree):
 
 def test_lan_mode_says_the_api_needs_no_lan_mode_for_the_ui(tree):
     pair(tree)
-    result, _ = real_start(tree, "dev", "--lan")
+    result, _ = real_start(tree, "dev", "--lan", env=LOGIN)
     assert "the API needs neither DIYA_LAN nor DIYA_ALLOWED_HOSTS for the UI" in " ".join(result.stderr.split())
     quiet, _ = real_start(tree, "dev")
     assert "LAN mode" not in quiet.stderr
@@ -248,3 +252,134 @@ def test_package_json_scripts_name_no_address_or_certificate_file():
         assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", command), name
     assert {n for n, c in scripts.items() if "--lan" in c} == {"dev:lan", "start:lan"}
     assert scripts["dev"] == "node tools/next-tls.mjs dev" and scripts["start"] == "node tools/next-tls.mjs start"
+
+
+# --- the passcode that protects the UI (docs/UI_LOGIN_DESIGN.md) -----------------------------------------------------
+
+GOOD = "a passcode of some length"  # at least 12 characters
+
+
+def test_lan_mode_will_not_start_without_a_passcode(tree):
+    pair(tree)
+    result, plan = launch(tree, "dev", "--lan")
+    assert result.returncode == 1 and plan is None
+    assert "LAN mode needs a passcode" in result.stderr and "DIYA_UI_PASSCODE" in result.stderr and "12 characters" in result.stderr
+
+
+@pytest.mark.parametrize("passcode", ["short", "elevenchars", "   padded   ", ""])
+def test_lan_mode_will_not_start_with_a_passcode_that_is_too_short(tree, passcode):
+    pair(tree)
+    result, plan = launch(tree, "dev", "--lan", env={"DIYA_UI_PASSCODE": passcode})
+    assert result.returncode == 1 and plan is None and "LAN mode needs a passcode" in result.stderr
+    assert passcode.strip() == "" or passcode.strip() not in result.stderr  # what was typed is never repeated
+
+
+def test_lan_mode_starts_with_a_passcode_of_twelve_characters_or_more_and_says_a_login_is_on(tree):
+    pair(tree)
+    for passcode in ("twelve chars", GOOD):
+        result, plan = launch(tree, "dev", "--lan", env={"DIYA_UI_PASSCODE": passcode})
+        assert result.returncode == 0, result.stderr
+        assert plan["lan"] is True and plan["login"] is True and passcode not in result.stdout
+
+
+def test_without_lan_mode_no_passcode_is_needed_and_the_plan_says_there_is_no_login(tree):
+    pair(tree)
+    result, plan = launch(tree, "dev")
+    assert result.returncode == 0 and plan["login"] is False
+
+
+def test_a_short_passcode_is_allowed_without_lan_mode(tree):
+    pair(tree)
+    result, plan = launch(tree, "dev", env={"DIYA_UI_PASSCODE": "short"})
+    assert result.returncode == 0 and plan["login"] is True
+
+
+@pytest.mark.parametrize("line, expected", [
+    (f"DIYA_UI_PASSCODE={GOOD}", True),
+    (f"DIYA_UI_PASSCODE = {GOOD}", True),
+    (f'DIYA_UI_PASSCODE="{GOOD}"', True),
+    (f"DIYA_UI_PASSCODE='{GOOD}'", True),
+    (f"DIYA_UI_PASSCODE={GOOD} # my phone", True),
+    ("DIYA_UI_PASSCODE=short # but a long comment follows it", False),
+    ('DIYA_UI_PASSCODE="tenchars10"', False),    # ten characters between quotes: the quotes are not part of it
+    ("DIYA_UI_PASSCODE='tenchars10'", False),
+    ('DIYA_UI_PASSCODE="twelve chars"', True),
+    ("DIYA_UI_PASSCODE='twelve chars'", True),
+    ('DIYA_UI_PASSCODE="short"', False),
+    ("DIYA_UI_PASSCODE=", False),
+    (f"# DIYA_UI_PASSCODE={GOOD}", False),
+    (f"NOT_DIYA_UI_PASSCODE={GOOD}", False),
+    (f"DIYA_TOKEN={GOOD}", False),
+])
+def test_the_passcode_can_be_kept_in_the_env_file_next_loads_and_is_read_the_way_it_will_be(tree, line, expected):
+    pair(tree)
+    (tree / "frontend" / ".env.local").write_text("OTHER=1\n" + line + "\nMORE=2\n", encoding="utf-8")
+    result, plan = launch(tree, "dev", "--lan")
+    assert (result.returncode == 0) is expected, (result.stdout, result.stderr)
+    assert GOOD not in result.stdout + result.stderr or expected  # never echoed when refused
+
+
+def test_the_environment_wins_over_the_env_file(tree):
+    pair(tree)
+    (tree / "frontend" / ".env.local").write_text("DIYA_UI_PASSCODE=short\n", encoding="utf-8")
+    result, plan = launch(tree, "dev", "--lan", env={"DIYA_UI_PASSCODE": GOOD})
+    assert result.returncode == 0 and plan["login"] is True
+
+
+def test_the_minimum_length_is_the_same_number_in_the_launcher_and_in_the_login_module():
+    launcher = re.search(r"const MIN_PASSCODE = (\d+)", LAUNCHER.read_text(encoding="utf-8")).group(1)
+    module = re.search(r"export const MIN_PASSCODE = (\d+)", (ROOT / "frontend" / "server" / "ui-login.mjs").read_text(encoding="utf-8")).group(1)
+    assert launcher == module == "12"
+
+
+# --- the UI does not report usage to its framework's makers (audit F4) -------------------------------------------------
+
+def test_next_is_told_not_to_report_usage(tree):
+    pair(tree)
+    result, plan = launch(tree, "dev")
+    assert plan["env"]["NEXT_TELEMETRY_DISABLED"] == "1"
+
+
+def test_the_ui_server_process_really_receives_the_switch(tree):
+    pair(tree)
+    stub = tree / "frontend" / "node_modules" / "next" / "dist" / "bin" / "next"
+    stub.parent.mkdir(parents=True, exist_ok=True)
+    stub.write_text("console.log(JSON.stringify({telemetry: process.env.NEXT_TELEMETRY_DISABLED ?? null, passcode: process.env.DIYA_UI_PASSCODE ?? null}))")
+    full_env = {k: v for k, v in os.environ.items() if not k.startswith("DIYA_") and k not in ("NODE_OPTIONS", "NEXT_TELEMETRY_DISABLED")}
+    full_env.update(LOGIN)
+    result = subprocess.run(["node", str(tree / "frontend" / "tools" / "next-tls.mjs"), "dev"], capture_output=True, text=True, env=full_env, timeout=30)
+    child = json.loads(result.stdout.splitlines()[-1])
+    assert child == {"telemetry": "1", "passcode": LOGIN["DIYA_UI_PASSCODE"]}  # the passcode reaches the server it protects, the way the token does
+    assert LOGIN["DIYA_UI_PASSCODE"] not in result.stderr  # and is not printed by the launcher
+
+
+def test_a_person_who_set_it_themselves_is_not_overruled(tree):
+    pair(tree)
+    result, plan = launch(tree, "dev", env={"NEXT_TELEMETRY_DISABLED": "0"})
+    assert "NEXT_TELEMETRY_DISABLED" not in plan["env"]
+
+
+@pytest.mark.parametrize("name", [".env.local", ".env.development.local", ".env.development", ".env"])
+def test_every_env_file_next_loads_is_looked_in_for_the_passcode(tree, name):
+    pair(tree)
+    (tree / "frontend" / name).write_text(f"DIYA_UI_PASSCODE={GOOD}\n", encoding="utf-8")
+    result, plan = launch(tree, "dev", "--lan")
+    assert result.returncode == 0 and plan["login"] is True
+
+
+@pytest.mark.parametrize("name", [".env.production", ".env.test", "env.local", ".env.local.bak"])
+def test_a_file_next_does_not_load_for_dev_is_not_where_the_passcode_is_looked_for(tree, name):
+    pair(tree)
+    (tree / "frontend" / name).write_text(f"DIYA_UI_PASSCODE={GOOD}\n", encoding="utf-8")
+    assert launch(tree, "dev", "--lan")[0].returncode == 1
+
+
+def test_a_short_passcode_without_lan_mode_is_warned_about_and_never_repeated(tree):
+    pair(tree)
+    result, child = real_start(tree, "dev", env={"DIYA_UI_PASSCODE": "tiny one"})
+    assert result.returncode == 0
+    assert "shorter than 12 characters" in result.stderr and "tiny one" not in result.stderr + result.stdout
+    quiet, _ = real_start(tree, "dev", env={"DIYA_UI_PASSCODE": GOOD})
+    assert "shorter than" not in quiet.stderr and "asks for a passcode" in quiet.stderr
+    none, _ = real_start(tree, "dev")
+    assert "asks for a passcode" not in none.stderr

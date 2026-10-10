@@ -64,6 +64,28 @@ function uiHasToken(env) {
   return false
 }
 
+// The passcode that protects the UI (DIYA_UI_PASSCODE, docs/UI_LOGIN_DESIGN.md): in this environment, or in one of the .env files Next
+// itself loads. The value is read only to check its length; it is never printed.
+const MIN_PASSCODE = 12 // the same number as MIN_PASSCODE in server/ui-login.mjs (a test pins both)
+
+function uiPasscode(env) {
+  const fromEnv = (env.DIYA_UI_PASSCODE || '').trim()
+  if (fromEnv) return fromEnv
+  for (const name of ['.env.local', '.env.development.local', '.env.development', '.env']) {
+    try {
+      const found = /^\s*DIYA_UI_PASSCODE\s*=\s*(.*)$/m.exec(readFileSync(join(frontendDir, name), 'utf8'))
+      if (found) {
+        let value = found[1].trim()
+        const quote = value[0]
+        if ((quote === '"' || quote === "'") && value.lastIndexOf(quote) > 0) value = value.slice(1, value.lastIndexOf(quote))
+        else value = value.split(/\s#/)[0].trim()
+        if (value) return value
+      }
+    } catch {} // no such file
+  }
+  return ''
+}
+
 function tokenOptedOut(env) {
   return ['0', 'false', 'no', 'off'].includes((env.DIYA_REQUIRE_TOKEN || '').trim().toLowerCase())
 }
@@ -82,6 +104,14 @@ function plan(argv, env) {
   const mode = argv[0]
   if (mode !== 'dev' && mode !== 'start') fail('usage: next-tls.mjs <dev|start> [--lan] [--dry-run]')
   const lan = argv.includes('--lan')
+  const passcode = uiPasscode(env)
+  if (lan && passcode.length < MIN_PASSCODE) {
+    fail(
+      `LAN mode needs a passcode for the UI: without one, anyone on the network who can reach this computer's port would be you. ` +
+        `Set DIYA_UI_PASSCODE (at least ${MIN_PASSCODE} characters) in this terminal or in frontend/.env.local, then start it again. ` +
+        `See docs/UI_LOGIN_DESIGN.md.`,
+    )
+  }
   const port = (env.DIYA_FRONTEND_PORT || '').trim() || '3000'
   if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
     fail(`DIYA_FRONTEND_PORT must be a port number, got ${JSON.stringify(port)}`)
@@ -92,14 +122,20 @@ function plan(argv, env) {
     args.push('--experimental-https', '--experimental-https-key', keyFile, '--experimental-https-cert', certFile)
   }
   const trust = trustEnvironment(env)
-  return { mode, lan, host: args[2], port, args, env: trust.env, systemTrust: trust.supported }
+  // Next.js reports anonymous usage unless told not to; nothing here is meant to leave the computer (audit F4). A person who set it themselves is not overruled.
+  const quiet = (env.NEXT_TELEMETRY_DISABLED || '').trim() ? {} : { NEXT_TELEMETRY_DISABLED: '1' }
+  return { mode, lan, host: args[2], port, args, env: { ...trust.env, ...quiet }, systemTrust: trust.supported, login: passcode.length > 0, shortPasscode: passcode.length > 0 && passcode.length < MIN_PASSCODE }
 }
 
-const { lan, args, host, port, env: extraEnv, systemTrust } = plan(process.argv.slice(2), process.env)
+const { lan, args, host, port, env: extraEnv, systemTrust, login, shortPasscode } = plan(process.argv.slice(2), process.env)
 
 if (process.argv.includes('--dry-run')) {
-  console.log(JSON.stringify({ host, port, lan, args, env: extraEnv }))
+  console.log(JSON.stringify({ host, port, lan, args, env: extraEnv, login }))
 } else {
+  if (shortPasscode) {
+    console.warn(`DIYA_UI_PASSCODE is shorter than ${MIN_PASSCODE} characters. It works here, but LAN mode would refuse it: a longer one is much harder to guess.`)
+  }
+  if (login) console.warn('The UI asks for a passcode before showing anything (docs/UI_LOGIN_DESIGN.md).')
   if (lan) {
     console.warn(
       `LAN mode: the UI is served on every interface. Its server forwards the browser's API calls to ` +

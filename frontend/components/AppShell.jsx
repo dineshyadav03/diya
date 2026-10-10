@@ -122,8 +122,49 @@ function ThemeToggle() {
   )
 }
 
+// Only shown when the UI is protected with a passcode (docs/UI_LOGIN_DESIGN.md) and this browser has signed in; otherwise there is nothing to sign out of.
+function SignOut() {
+  const [signedIn, setSignedIn] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    fetch('/session')
+      .then((response) => response.json())
+      .then((data) => {
+        if (alive) setSignedIn(Boolean(data.required && data.signedIn))
+      })
+      .catch(() => {
+        if (alive) setSignedIn(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  async function signOut() {
+    try {
+      await fetch('/session', { method: 'DELETE' })
+    } finally {
+      window.location.assign('/login')
+    }
+  }
+
+  if (!signedIn) return null
+  return (
+    <button type="button" className="signout" onClick={signOut}>
+      Sign out
+    </button>
+  )
+}
+
+// The sign-in page is drawn without the shell: its navigation and counts all ask the API, and none of that is answered before signing in.
 export default function AppShell({ children }) {
   const pathname = usePathname() || '/'
+  if (pathname === '/login') return <>{children}</>
+  return <Shell pathname={pathname}>{children}</Shell>
+}
+
+function Shell({ children, pathname }) {
   const [open, setOpen] = useState(false)
   const topbarRef = useRef(null)
   const counts = useCounts()
@@ -201,6 +242,7 @@ export default function AppShell({ children }) {
         ))}
         <div className="sidebar-foot">
           <ThemeToggle />
+          <SignOut />
         </div>
       </nav>
       <div className="shell-main" id="main">

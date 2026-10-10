@@ -99,10 +99,11 @@ def test_the_three_kinds_of_failure_read_differently(function):
 def test_all_three_places_agree_on_what_each_status_means():
     """One classification, three wordings: a status must never be 'the token' in one place and 'no
     answer' in another."""
-    statuses = [None, 200, 204, 400, 401, 403, 404, 500, 502, 503, 504]
+    statuses = [None, 200, 204, 400, 401, 403, 404, 500, 502, 503, 504, 511]
     send, load, mic = (describe(f, *statuses) for f in FUNCTIONS)
     for status, s, l, m in zip(statuses, send, load, mic):
         assert ("access token" in s) == ("access token" in l) == ("access token" in m), status
+        assert ("signed out of Diya" in s) == ("signed out of Diya" in l) == ("signed out of Diya" in m) == (status == 511), status
         assert ("didn’t answer" in s) == ("didn’t answer" in l) == ("Couldn't reach" in m), status
         assert (f"HTTP {status}" in s) == (f"HTTP {status}" in l) == (f"HTTP {status}" in m), status
 
@@ -124,7 +125,7 @@ def test_a_status_that_is_not_an_integer_is_no_answer_not_a_401_or_an_error():
 
 @needs_node
 def test_every_chat_message_starts_with_the_words_the_design_rig_and_the_person_look_for():
-    for text in describe("describeSendFailure", None, 200, 401, 404, 500, 502, 503, 504):
+    for text in describe("describeSendFailure", None, 200, 401, 404, 500, 502, 503, 504, 511):
         assert text.startswith("Didn’t send.")
 
 
@@ -485,3 +486,19 @@ def test_the_chat_page_keeps_the_chat_a_failed_message_was_saved_in_so_trying_ag
     assert "if (failure.threadId !== undefined)" in catch
     assert "threadIdRef.current = failure.threadId" in catch
     assert "localStorage.setItem('diya_thread_id', failure.threadId)" in catch
+
+
+# --- the UI's own sign-in (docs/UI_LOGIN_DESIGN.md): a 511 is "sign in again", never "the token is wrong" ---------------------
+
+@needs_node
+def test_a_511_says_to_sign_in_again_everywhere_and_is_not_taken_for_the_api_refusing_the_token():
+    for function in FUNCTIONS:
+        text = call(function, 511)
+        assert "signed out of Diya" in text and "Reload" in text and "access token" not in text and "didn" not in text.lower().replace("didn’t send", "")
+    assert "signed out of Diya" in call("describeActionFailure", 511, None) and "Nothing was changed" in call("describeActionFailure", 511, None)
+    assert "signed out of Diya" in call("describeActionFailure", 511, "a reason")  # the page's own wording, whatever the body said
+
+
+@needs_node
+def test_a_511_is_not_given_a_reason_from_the_body():
+    assert call("describeSendFailure", 511, REASON) == call("describeSendFailure", 511)
