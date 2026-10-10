@@ -226,7 +226,8 @@ def main():
     """
     try:
         config, config_error = diya_config.load_config(), None
-    except diya_config.ConfigError as exc:
+        diya_config.ensure_data_dir(config)
+    except (diya_config.ConfigError, OSError) as exc:
         # Still record the problem, in the default log location.
         config, config_error = diya_config.Config(), exc
 

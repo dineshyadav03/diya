@@ -76,7 +76,37 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Facts it extracts wait in a review queue; nothing reaches the model unless you accept it.
   Review them on the **Memory** page of the UI, or with `python diya_review.py list`, `accept`, `reject` and `edit` (see [Dreaming](docs/dreaming.md)); `judge` asks the local model for an optional second opinion.
   The model is told the accepted facts, in every chat; your old `user_profile.txt` was imported once.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 4095 tests pass on Windows (as of 2026-10-10).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 4738 tests pass on Windows (as of 2026-10-10).
+
+## Privacy, and where your data is kept
+
+- **Stays on this computer:** the model, the embeddings, speech-to-text (after Whisper's first download), your chats, your memory, reminders and tasks.
+- **Leaves, only when it is used:** `web_search` (the words it searches, to DuckDuckGo), `get_weather` (the place, to Open-Meteo), a connector you
+  connected, and, once, the download of the Whisper model from Hugging Face.
+- **Usage reporting is switched off** in the three libraries that would otherwise send some: ChromaDB (the notes index), Hugging Face (the download) and
+  Next.js (the UI's launcher). One thing code cannot decide: spoken replies use the voice your *browser* picks, and some browsers' default voices are
+  online services. Leave "Speak replies" off, or pick a local voice, if that matters to you.
+- **Where it is kept.** By default, beside the code. If that folder is copied by a cloud-sync program (OneDrive, Dropbox), set `DIYA_DATA_DIR` to a folder
+  outside it: one setting moves the database, the access-token hash, Dreaming's state, log and review queue, the notifier's log and the connectors' tokens
+  (a file's own `DIYA_*` setting still wins). The folder is made when Diya starts. The TLS certificate pair is separate: `DIYA_SSL_CERT` and `DIYA_SSL_KEY`.
+  To move what already exists: `python diya_data.py move --to "$env:LOCALAPPDATA\DiyaData" --certs` (PowerShell). It **copies and checks** (same bytes, same rows in every
+  table, the database's integrity checks) and never deletes or overwrites anything, refuses a cloud-sync folder, and ends by printing the settings to apply;
+  deleting the originals afterwards is yours to do. `--dry-run` shows the plan first.
+- **A passcode for the UI.** `DIYA_UI_PASSCODE` (in the terminal that starts the UI, or in `frontend/.env.local`) puts a sign-in in front of every page and
+  call; `npm run dev:lan` refuses to start without one of at least 12 characters, because otherwise anyone on the network could use Diya as you. See
+  [UI login design](docs/UI_LOGIN_DESIGN.md) and [LAN mode](docs/lan.md).
+
+## A better model for this laptop (optional)
+
+`qwen2.5:3b` is the default because a plain `ollama pull` is all it needs. On a 16 GB computer `qwen3:4b-instruct` was measured as better (9 of 9 evals in
+every run against 7 to 8; it reaches for a tool nobody asked for on 2% of messages against 13%; [model benchmark](docs/MODEL_BENCHMARK.md)), at about 1.4 times
+the time per message and 1.7 GB more memory. It needs its context window capped or it fails to load:
+
+```bash
+ollama pull qwen3:4b-instruct
+ollama create diya-chat -f ollama/diya-chat.Modelfile   # the same weights, capped at 16,384 tokens; nothing more is downloaded
+# then set DIYA_MODEL=diya-chat for the API and for the scheduled Dreaming task
+```
 
 ## Known limits
 

@@ -535,10 +535,13 @@ class Agent:
 
     def _build_notes(self):
         import chromadb  # heavy; only needed once notes are actually searched
+        from chromadb.config import Settings
 
         # A unique name per Agent: Chroma's in-memory client is shared across a process, so a
         # fixed name would collide as soon as a second Agent (tests, evals) builds its own.
-        notes = chromadb.Client().create_collection(f"notes-{uuid.uuid4().hex[:12]}")
+        # Chroma reports anonymous usage events unless told not to; nothing here is meant to leave the computer.
+        client = chromadb.Client(Settings(anonymized_telemetry=False))
+        notes = client.create_collection(f"notes-{uuid.uuid4().hex[:12]}")
         for filename in os.listdir(self.config.notes_dir):
             # UTF-8 explicitly, not the platform default (cp1252 on Windows), which turned any
             # non-ASCII note into mojibake; 'replace' so one stray byte can't stop startup.

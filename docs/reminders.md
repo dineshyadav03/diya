@@ -52,6 +52,9 @@ $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhen
 Register-ScheduledTask -TaskName "Diya_Notify" -Action $action -Trigger $trigger -Settings $settings
 ```
 
+If you keep Diya's data outside the code folder (`DIYA_DATA_DIR`, see the README), set it as a user environment variable so this task finds the
+same database as the API does; see [Dreaming](dreaming.md), "Files and settings".
+
 The two battery switches matter on a laptop: without them Windows quietly does not run the task on battery. Run it as yourself, while you are logged in (that is the default): a notification needs your desktop. Remove it with
 `Unregister-ScheduledTask -TaskName "Diya_Notify" -Confirm:$false`. Like Dreaming's task, it runs the files in the folder
 as they are, so a change to the code takes effect at the next pass. Nothing fires while the computer is off or asleep;

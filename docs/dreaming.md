@@ -95,5 +95,11 @@ everything the tool prints from the database has its control and invisible chara
 | `diya.db` | `DIYA_DB_PATH` | reviewed facts (`facts`) and the history of every change to them (`fact_events`), beside the chats |
 | `user_profile.txt` | `DIYA_PROFILE_PATH` | the old profile: imported once as accepted facts, then not read |
 
+`DIYA_DATA_DIR` moves all of these (and the notifier's log, the API's token hash and the connectors' tokens) into one folder outside the code: each
+file keeps its name there, and a file's own setting above still wins. The scheduled task needs the same setting as the API does, so set it as a
+*user* environment variable (Windows: Settings > System > About > Advanced system settings > Environment Variables, or
+`[Environment]::SetEnvironmentVariable('DIYA_DATA_DIR', 'C:\Path\To\Folder', 'User')`), which a scheduled task sees at its next run, and
+`DIYA_MODEL` the same way. Run from a terminal opened before the change, the old values are still in that terminal.
+
 All of these hold personal data and are gitignored. `milestone4_watcher.py` (a Phase 1 notes
 watcher) is a separate job; it is not part of Dreaming and the assistant does not read its output.

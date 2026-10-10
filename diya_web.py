@@ -245,6 +245,8 @@ class WhisperTranscriber:
     def model(self):
         with self._lock:
             if self._model is None:
+                # The model is downloaded from Hugging Face the first time; its client reports anonymous usage unless told not to.
+                os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
                 from faster_whisper import WhisperModel
 
                 self._model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
@@ -375,8 +377,9 @@ def main():
     try:
         config = diya_config.load_config()
         diya_config.check_exposure(config)
+        diya_config.ensure_data_dir(config)
         tls = diya_config.tls_files(config)
-    except diya_config.ConfigError as exc:
+    except (diya_config.ConfigError, OSError) as exc:
         print(f"Couldn't start Diya's server: {exc}.")
         sys.exit(1)
     if tls is None:

@@ -1,3 +1,4 @@
+import os
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -309,6 +310,9 @@ class Store:
         self.path = path
 
     def connect(self):
+        folder = os.path.dirname(self.path)
+        if folder:
+            os.makedirs(folder, exist_ok=True)  # a database in a folder that does not exist yet (DIYA_DATA_DIR) is made there
         conn = sqlite3.connect(self.path)
         apply_migrations(conn)
         return conn

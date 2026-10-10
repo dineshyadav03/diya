@@ -333,6 +333,53 @@ def test_whisper_is_loaded_lazily_and_once_with_the_same_settings_as_before(fake
     assert fake_whisper == [("base", "cpu", "int8")]
 
 
+def test_the_model_download_does_not_report_usage_and_the_owner_can_still_allow_it(fake_whisper, monkeypatch):
+    monkeypatch.delenv("HF_HUB_DISABLE_TELEMETRY", raising=False)
+    diya_web.WhisperTranscriber("base").transcribe("a.wav")
+    assert os.environ["HF_HUB_DISABLE_TELEMETRY"] == "1"
+    monkeypatch.setenv("HF_HUB_DISABLE_TELEMETRY", "0")  # a person who set it themselves is not overruled
+    diya_web.WhisperTranscriber("base").transcribe("a.wav")
+    assert os.environ["HF_HUB_DISABLE_TELEMETRY"] == "0"
+
+
+def test_the_setting_is_made_before_the_library_is_imported(monkeypatch):
+    seen = []
+    monkeypatch.delenv("HF_HUB_DISABLE_TELEMETRY", raising=False)
+
+    class Model:
+        def __init__(self, name, device, compute_type):
+            seen.append(os.environ.get("HF_HUB_DISABLE_TELEMETRY"))
+
+    monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+    diya_web.WhisperTranscriber("base").warm_up()
+    assert seen == ["1"]
+
+
+def test_the_setting_is_made_before_the_library_is_imported_not_only_before_the_model_is_built(monkeypatch):
+    """Libraries read such a setting when they are imported, so what matters is the value at that moment."""
+    import importlib.abc
+    import importlib.machinery
+
+    seen = []
+
+    class Finder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+        def find_spec(self, name, path, target=None):
+            return importlib.machinery.ModuleSpec(name, self) if name == "faster_whisper" else None
+
+        def create_module(self, spec):
+            seen.append(os.environ.get("HF_HUB_DISABLE_TELEMETRY"))
+            return types.ModuleType(spec.name)
+
+        def exec_module(self, module):
+            module.WhisperModel = lambda name, device, compute_type: None
+
+    monkeypatch.delenv("HF_HUB_DISABLE_TELEMETRY", raising=False)
+    monkeypatch.delitem(sys.modules, "faster_whisper", raising=False)
+    monkeypatch.setattr(sys, "meta_path", [Finder(), *sys.meta_path])
+    diya_web.WhisperTranscriber("base").warm_up()
+    assert seen == ["1"]
+
+
 def test_whisper_warm_up_prints_the_legacy_progress_lines(fake_whisper, capsys):
     diya_web.WhisperTranscriber("small").warm_up()
     assert capsys.readouterr().out.splitlines() == ["Loading Whisper model...", "Whisper ready."]
@@ -413,6 +460,24 @@ def test_main_in_lan_mode_listens_on_all_interfaces_and_answers_to_the_named_hos
     client = TestClient(served["app"], base_url="https://phone.local")
     assert client.get("/openapi.json").status_code == 200  # (the fake agent here has no store to list)
     assert client.get("/openapi.json", headers={"Host": "other.example"}).status_code == 400
+
+
+def test_main_keeps_the_token_hash_in_the_data_folder_it_makes(served, tmp_path, monkeypatch, capsys):
+    write_mkcert_pair(tmp_path)
+    monkeypatch.setenv("DIYA_DATA_DIR", str(tmp_path / "data"))
+    diya_web.main()
+    assert (tmp_path / "data" / "diya_token.hash").is_file() and not (tmp_path / "diya_token.hash").exists()
+    assert str(tmp_path / "data") in capsys.readouterr().out  # the line that says where the hash is kept
+
+
+def test_main_says_when_a_data_folder_cannot_be_made(served, tmp_path, monkeypatch, capsys):
+    write_mkcert_pair(tmp_path)
+    (tmp_path / "file").write_text("in the way")
+    monkeypatch.setenv("DIYA_DATA_DIR", str(tmp_path / "file" / "data"))
+    with pytest.raises(SystemExit) as caught:
+        diya_web.main()
+    assert caught.value.code == 1 and "Couldn't start Diya's server" in capsys.readouterr().out
+    assert "app" not in served
 
 
 def test_main_says_when_it_is_listening_on_this_computer_only(served, tmp_path, capsys):

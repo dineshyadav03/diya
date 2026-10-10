@@ -43,6 +43,10 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class Config:
+    # One folder for everything Diya writes about you (DIYA_DATA_DIR): the database, the profile file, Dreaming's state, log and review queue,
+    # the notifier's log, the API's token hash and the connectors' tokens and log. Empty means each file's own default (beside the
+    # code, in the working directory), as ever. Each file's own DIYA_* setting still wins over it. The folder is made when a program starts.
+    data_dir: str = ""
     db_path: str = "diya.db"
     model: str = "qwen2.5:3b"
     embed_model: str = "nomic-embed-text"
@@ -147,6 +151,18 @@ _STRING_SETTINGS = {
 }
 
 
+# The settings whose default is a file or folder Diya writes about you: with DIYA_DATA_DIR set they default to the same name in that folder.
+_DATA_FILES = ("db_path", "profile_path", "dream_log_path", "dream_state_path", "dream_pending_path", "notify_log_path",
+               "token_path", "connector_tokens_dir", "connectors_log_path")
+
+
+def ensure_data_dir(config: "Config") -> None:
+    """Make the data folder if DIYA_DATA_DIR names one that does not exist yet. Called by the programs that start Diya (the API,
+    Dreaming, the notifier); load_config itself never touches the disk."""
+    if config.data_dir:
+        os.makedirs(config.data_dir, exist_ok=True)
+
+
 def load_config(env=None) -> Config:
     """Build a Config from `env` (defaults to os.environ). Blank values count as unset."""
     env = os.environ if env is None else env
@@ -160,6 +176,13 @@ def load_config(env=None) -> Config:
         value = read(name)
         if value is not None:
             values[field] = value
+
+    data_dir = read("DIYA_DATA_DIR")
+    if data_dir is not None:
+        values["data_dir"] = data_dir
+        for field in _DATA_FILES:
+            if field not in values:  # a file's own setting still wins
+                values[field] = os.path.join(data_dir, Config.__dataclass_fields__[field].default)
 
     port = read("DIYA_PORT")
     if port is not None:

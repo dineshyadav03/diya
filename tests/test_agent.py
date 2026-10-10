@@ -112,6 +112,17 @@ def test_the_index_is_built_once(config):
     assert len([c for c in client.embed_calls if c["input"].startswith(("Dentist", "Buy", "Water"))]) == 3
 
 
+def test_the_notes_index_is_built_with_chromas_usage_reporting_off(config, monkeypatch):
+    import chromadb
+
+    made = []
+    real = chromadb.Client
+    monkeypatch.setattr(chromadb, "Client", lambda settings=None: made.append(settings) or real(settings))
+    agent, _ = make_agent(config)
+    agent.notes  # built on first use
+    assert len(made) == 1 and made[0].anonymized_telemetry is False
+
+
 def test_search_notes_returns_the_most_relevant_note(config):
     agent, _ = make_agent(config)
     assert agent.search_notes("when is my dentist appointment") == "Dentist appointment on Tuesday at 3pm."

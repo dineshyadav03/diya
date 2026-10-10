@@ -163,7 +163,8 @@ def main(argv=None, config=None, out=None, notify=None, now=None):
         return exc.code if isinstance(exc.code, int) else EXIT_UNUSABLE
     try:
         config = config or diya_config.load_config()
-    except diya_config.ConfigError as exc:
+        diya_config.ensure_data_dir(config)
+    except (diya_config.ConfigError, OSError) as exc:
         print(f"diya_notify: {exc}", file=out)
         return EXIT_UNUSABLE
     if notify is None:
