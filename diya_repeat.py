@@ -56,7 +56,9 @@ _WEEKLY = re.compile(rf"(?:(?:every|each)(?:\s+week)?|weekly)\s+(?P<days>(?:{_WD
 _MONTHLY = re.compile(
     r"(?:(?:every|each)\s+month|monthly)\s+(?P<dom>[0-9]{1,2})(?:st|nd|rd|th)\b"
     r"|(?:every|each)\s+(?P<dom2>[0-9]{1,2})(?:st|nd|rd|th)(?:\s+day)?(?:\s+month)?\b"
+    r"|(?P<dom3>[0-9]{1,2})(?:st|nd|rd|th)\s+(?:every|each)\s+month\b"  # "on the 1st of every month"
 )
+_NIGHT = re.compile(r"(?:every|each)\s+night\b")
 _INTERVAL = re.compile(rf"(?:every|each)\s+(?P<n>{_COUNT})\s+(?P<unit>days?|weeks?)\b")
 _BARE_WEEK = re.compile(r"(?:(?:every|each)\s+week|weekly)\b")
 _BARE_MONTH = re.compile(r"(?:(?:every|each)\s+month|monthly)\b")
@@ -244,7 +246,7 @@ def parse_repeat(text, now=None):
     s = diya_time._normalise(text)
     if not s:
         raise NotUnderstood("no repeat was given")
-    if not re.match(r"(?:every|each|daily|weekly|monthly|weekdays)\b", s):
+    if not re.match(r"(?:every|each|daily|weekly|monthly|weekdays)\b|[0-9]{1,2}(?:st|nd|rd|th)\s+(?:every|each)\s+month\b", s):
         raise NotUnderstood(f"could not read {' '.join(text.split())[:60]!r} as a repeat; say 'every ...' (for example 'every Monday at 9am')")
     assumed = []
 
@@ -265,6 +267,11 @@ def parse_repeat(text, now=None):
         part = re.match(r"morning|afternoon|evening", s[m.end():]).group(0)
         rest = s[m.end() + len(part):]
         return Repeat("daily", clock(rest, part), assumed=tuple(assumed))
+    m = _NIGHT.match(s)
+    if m:  # "every night at 10pm": night has no hour of its own, so a time is required
+        if not s[m.end():].strip():
+            raise NotUnderstood("'every night' needs a time: say 'every night at 10pm', for example")
+        return Repeat("daily", clock(s[m.end():]), assumed=tuple(assumed))
     m = _DAILY.match(s)
     if m:
         return Repeat("daily", clock(s[m.end():]), assumed=tuple(assumed))
@@ -277,7 +284,7 @@ def parse_repeat(text, now=None):
         return Repeat("weekly", clock(s[m.end():]), days=days, assumed=tuple(assumed))
     m = _MONTHLY.match(s)
     if m:
-        dom = int(m.group("dom") or m.group("dom2"))
+        dom = int(m.group("dom") or m.group("dom2") or m.group("dom3"))
         if not 1 <= dom <= 31:
             raise NotUnderstood(f"the {_ordinal(dom)} is not a day of the month")
         at = clock(s[m.end():])
@@ -302,3 +309,64 @@ def parse_repeat(text, now=None):
     if _BARE_MONTH.match(s):
         raise NotUnderstood("'every month' needs a date: say 'every month on the 15th', for example")
     raise NotUnderstood(f"could not read {' '.join(text.split())[:60]!r} as a repeat; try 'every day', 'every Monday', 'every month on the 15th' or 'every 2 weeks'")
+
+
+MAX_SCAN_CHARS = 600  # how much of a message is searched for a repeat
+MAX_RUN_WORDS = 12  # the longest run of words tried as one repeat
+_KEY_WORD = re.compile(r"\b(?:every|each|daily|weekly|monthly|weekdays)\b", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class Found:
+    """A repeat found in a person's message: their words for it as they wrote them, the rule those read as, and where the words
+    sit in the message (`text[start:end] == words`)."""
+
+    words: str
+    rule: Repeat
+    start: int
+    end: int
+
+
+def _longest_run(text, spans, first, now):
+    """(Found, index of its last word) for the longest run of words starting at word `first` that reads as a repeat, or None."""
+    for last in range(min(first + MAX_RUN_WORDS, len(spans)) - 1, first - 1, -1):
+        start = spans[first][0]
+        words = text[start:spans[last][1]].rstrip(".,;:!?")
+        if not _KEY_WORD.search(words):
+            continue
+        try:
+            rule = parse_repeat(words, now)
+        except NotUnderstood:
+            continue
+        # the reader skips filler words ("about", "of", "at"), so a run can end in some that belong to what follows, not to the repeat
+        while last > first and text[spans[last][0]:spans[last][1]].lower().strip(".,;:!?'\"") in diya_time._FILLER:
+            last -= 1
+        words = text[start:spans[last][1]].rstrip(".,;:!?")
+        return Found(words, rule, start, start + len(words)), last
+    return None
+
+
+def find_repeat(text, now=None):
+    """The repeat a person said somewhere in `text`: where the first run of their words that reads as a repeat starts, taking the
+    longest run from there ("every day at 8am" out of "remind me every day at 8am to take my pills"), or None.
+
+    None as well when the message says more than this will read, because the part that reads would silently drop the rest: "until
+    June", "every hour", "every second Tuesday", "every weekend" (the refusals of `parse_repeat`, checked on the whole message), and
+    a second repeat after the first (it will not guess between them)."""
+    if not isinstance(text, str):
+        return None
+    text = text[:MAX_SCAN_CHARS]
+    try:
+        _refuse(text)
+    except NotUnderstood:
+        return None
+    spans = [m.span() for m in re.finditer(r"\S+", text)]
+    for first in range(len(spans)):
+        found = _longest_run(text, spans, first, now)
+        if found is None:
+            continue
+        result, last = found
+        if any(_longest_run(text, spans, later, now) for later in range(last + 1, len(spans))):
+            return None
+        return result
+    return None
