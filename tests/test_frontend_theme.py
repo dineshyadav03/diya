@@ -64,6 +64,8 @@ PAIRS = [
     ("--border-strong", "--bg", 3.0, "the edge of a button on the page"),
     ("--border-strong", "--surface", 3.0, "the edge of a field and of the composer"),
     ("--accent", "--bg", 3.0, "the primary action against the page"),
+    ("--accent", "--surface", 3.0, "the outline of a card that needs you, and a badge on a card"),
+    ("--accent", "--surface-hover", 3.0, "a badge or a filled button on a hovered row"),
 ]
 
 
@@ -74,7 +76,8 @@ def test_the_dark_theme_is_written_twice_and_both_copies_are_the_same():
 
 def test_the_two_themes_are_the_two_systems_they_say_they_are():
     assert (LIGHT["--bg"], LIGHT["--surface"], LIGHT["--accent"]) == ("#f6f5f4", "#ffffff", "#0075de")  # Notion: warm paper, white cards, one blue
-    assert (DARK["--bg"], DARK["--surface"], DARK["--accent"]) == ("#0a0a0a", "#191919", "#ffffff")  # xAI: near-black, charcoal, the white pill
+    assert (DARK["--bg"], DARK["--surface"], DARK["--accent"]) == ("#0a0a0a", "#191919", "#0075de")  # xAI: near-black, charcoal; the owner asked for the light theme's blue here too
+    assert DARK["--accent"] == LIGHT["--accent"] and DARK["--accent-text"] == LIGHT["--accent-text"]
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])

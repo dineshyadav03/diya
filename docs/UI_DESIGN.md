@@ -24,7 +24,9 @@
 - **Light = Notion's system.** A warm paper page (`#f6f5f4`), white cards with a 1 px hairline and 12 px corners, near-black type,
   muted text `#615d59`, and a single blue (`#0075de`) that is the only colour on a primary action. Pill-shaped primary buttons.
 - **Dark = xAI's system.** A near-black page (`#0a0a0a`), charcoal cards (`#191919`) with a 1 px hairline and no shadow, white type,
-  outline pills, small uppercase monospace labels ("eyebrows") for section names. The primary action is the rare white pill.
+  outline pills, small uppercase monospace labels ("eyebrows") for section names. The primary action uses the light theme's blue
+  (added at the owner's request; xAI's own is a white pill): `#0075de` with white text is 4.6:1, and as a fill or an outline it is
+  3.3-4.3:1 on the dark surfaces. Too dim as small text on black (4.3:1), so links and the focus ring use the lighter sky blue.
 - The theme follows the operating system and can be set to Light, Dark or System at the foot of the sidebar; the choice is kept in
   this browser only, and the page never flashes the wrong theme on load.
 - Everything is a CSS variable (`--bg`, `--surface`, `--text`, `--text-dim`, `--border`, `--border-strong`, `--accent`, `--link`,
@@ -75,7 +77,7 @@ decoration around a card). Visible focus on everything, 44 px touch targets on a
 | `--surface-hover` | `#efedeb` | `#262626` | a hovered row or button |
 | `--text` | `#000000` (19.3:1) | `#ffffff` (19.8:1) | headings and body |
 | `--text-dim` | `#615d59` (6.0:1 on the page, 6.5:1 on a card) | `#8d9197` (6.3:1, 5.6:1) | secondary text |
-| `--accent` / on it | `#0075de` / `#ffffff` (4.6:1) | `#ffffff` / `#0a0a0a` (19.8:1) | the primary action |
+| `--accent` / on it | `#0075de` / `#ffffff` (4.6:1) | the same (4.6:1; 4.3 against the page, 3.9 against a card) | the primary action |
 | `--link` | `#005bab` (6.3:1) | `#62aef0` (8.3:1) | links and the focus ring |
 | `--danger-text` | `#b42318` (6.6:1) | `#ff7a6b` (6.9:1) | errors, "Overdue" |
 | `--border` | `#e6e6e6` | `#212327` | the hairline round a card (decoration) |

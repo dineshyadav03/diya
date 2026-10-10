@@ -1,8 +1,10 @@
 /* Diya's interface: one calm system in two themes (docs/UI_DESIGN.md).
 
    LIGHT follows Notion's system: a warm paper page, white cards with a hairline, near-black type, one blue for the one
-   primary action. DARK follows xAI's: a near-black page, charcoal cards with a hairline, white type, outline pills and the
-   rare white-filled one. Both are the same variables, so a different blue (or a third theme) is one block here.
+   primary action. DARK follows xAI's: a near-black page, charcoal cards with a hairline, white type and outline pills, and the
+   same blue for the primary action and the "needs you" outline (the owner asked for it). The blue is too dim to be small text on
+   black (4.3:1), so a link and the focus ring use the lighter sky blue of the same family. Both themes are the same variables, so
+   a different blue (or a third theme) is one block here.
 
    Which one is shown: the operating system's setting, unless the person chose Light or Dark in the sidebar (that choice is
    kept in this browser and written to <html data-theme="..."> before the page paints, see layout.js). The dark block appears
@@ -47,9 +49,9 @@
     --border-strong: #70757b;
     --text: #ffffff;
     --text-dim: #8d9197;
-    --accent: #ffffff;
-    --accent-text: #0a0a0a;
-    --accent-edge: #ffffff;
+    --accent: #0075de;
+    --accent-text: #ffffff;
+    --accent-edge: #0075de;
     --link: #62aef0;
     --danger: #ff7a6b;
     --danger-text: #ff7a6b;
@@ -65,9 +67,9 @@
   --border-strong: #70757b;
   --text: #ffffff;
   --text-dim: #8d9197;
-  --accent: #ffffff;
-  --accent-text: #0a0a0a;
-  --accent-edge: #ffffff;
+  --accent: #0075de;
+  --accent-text: #ffffff;
+  --accent-edge: #0075de;
   --link: #62aef0;
   --danger: #ff7a6b;
   --danger-text: #ff7a6b;
