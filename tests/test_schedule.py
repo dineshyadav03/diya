@@ -511,3 +511,107 @@ def test_which_reminders_came_from_a_series_is_asked_in_one_go_and_junk_is_ignor
     (made,) = schedule.materialize()
     assert schedule.series_of([plain, made, 99]) == {made: 1}
     assert schedule.series_of([]) == {} and schedule.series_of(["1; DROP TABLE reminders", None, True, 1.5]) == {}
+
+
+# ---- what the mutation run found nothing checking ----------------------------------------------------------------------
+
+def test_a_write_holds_the_database_write_lock_from_its_first_statement(store):
+    """What keeps "is it already active?" and "is it full?" true at the moment the series is written (as for the task list)."""
+    schedule = Schedule(store, clock=lambda: NOW)
+    with schedule._write():
+        other = sqlite3.connect(store.path, timeout=0.05)
+        try:
+            with pytest.raises(sqlite3.OperationalError, match="locked"):
+                other.execute("BEGIN IMMEDIATE")
+        finally:
+            other.close()
+
+
+def test_the_limits_are_the_documented_ones():
+    assert (diya_schedule.MAX_ACTIVE, diya_schedule.MAX_CONTENT_CHARS, diya_schedule.MAX_CATCH_UP) == (20, 300, 5000)
+
+
+def test_exactly_the_catch_up_limit_behind_is_worked_through_and_further_behind_records_what_it_worked_through(schedule, clock, store, monkeypatch):
+    monkeypatch.setattr(diya_schedule, "MAX_CATCH_UP", 3)
+    schedule.create("take pills", "every day at 8am")  # first falls 11 Oct
+    clock["now"] = datetime(2026, 10, 13, 8, 30)  # the 11th, 12th and 13th: exactly three
+    schedule.materialize()
+    schedule.create("water plants", "every day at 8am")  # first falls 14 Oct
+    clock["now"] = datetime(2026, 10, 17, 8, 30)  # the 14th to the 17th: four, one more than it will work through
+    schedule.materialize()
+    missed = [(e["series_id"], e["detail"]) for e in schedule.events() if e["event"] == "missed"]
+    assert missed[0] == (1, {"missed": 2, "made_for": ts(datetime(2026, 10, 13, 8, 0))})  # three falls: all worked through, one made, two missed
+    assert (2, {"missed": 2, "made_for": ts(datetime(2026, 10, 17, 8, 0))}) in missed  # four: it stops at the limit, then moves on to the latest
+    assert schedule.get(2)["next_ts"] == ts(datetime(2026, 10, 18, 8, 0))
+
+
+def test_a_paused_series_that_is_past_due_asks_for_no_write_lock(schedule, clock, monkeypatch):
+    schedule.create("bins", "every Monday at 9am")
+    schedule.pause(1)
+    clock["now"] = datetime(2026, 10, 13, 9, 0)
+
+    def not_allowed(self):
+        raise AssertionError("materialize asked for the write lock for a series that makes nothing")
+
+    monkeypatch.setattr(Schedule, "_write", not_allowed)
+    assert schedule.materialize() == []
+
+
+def test_a_stopped_series_row_that_somehow_still_has_a_time_asks_for_no_write_lock_and_makes_nothing(schedule, clock, store, monkeypatch):
+    schedule.create("bins", "every Monday at 9am")
+    conn = store.connect()
+    conn.execute("UPDATE reminder_series SET ended = 1 WHERE id = 1")  # stop() clears the time; a row that says otherwise is still stopped
+    conn.commit()
+    conn.close()
+    clock["now"] = datetime(2026, 10, 13, 9, 0)
+
+    def not_allowed(self):
+        raise AssertionError("materialize asked for the write lock for a stopped series")
+
+    monkeypatch.setattr(Schedule, "_write", not_allowed)
+    assert schedule.materialize() == []
+
+
+def test_series_of_answers_only_for_real_reminder_ids(schedule, clock):
+    schedule.create("take pills", "every day at 8am")
+    clock["now"] = datetime(2026, 10, 11, 9, 0)
+    (rid,) = schedule.materialize()
+    assert schedule.series_of([rid]) == {rid: 1} and schedule.series_of([rid, True, rid]) == {rid: 1}
+    assert schedule.series_of([True]) == {}  # True is not reminder 1
+    assert schedule.series_of([str(rid)]) == {} and schedule.series_of([float(rid)]) == {} and schedule.series_of([None, "x", [1]]) == {}
+    assert schedule.series_of([]) == {}
+
+
+def test_the_words_are_kept_with_single_spaces_in_the_series_and_in_a_snooze(schedule, store):
+    series = schedule.create("bins", "  every   Monday  at 9am ")
+    assert series["said"] == "every Monday at 9am"
+    rid = store.add_reminder("call mum", "x", ts(datetime(2026, 10, 11, 9, 0)))
+    schedule.snooze(rid, "  in   10  minutes ")
+    assert [e for e in schedule.events() if e["event"] == "snoozed"][0]["detail"]["said"] == "in 10 minutes"
+
+
+def test_the_trail_stores_detail_as_sorted_json_and_as_null_when_there_is_none(schedule, store):
+    schedule.create("bins", "every Monday at 9am")
+    schedule.pause(1)
+    conn = store.connect()
+    try:
+        rows = conn.execute("SELECT event, detail FROM schedule_events ORDER BY id").fetchall()
+    finally:
+        conn.close()
+    assert rows == [("created", '{"rule": "weekly:0@09:00", "said": "every Monday at 9am"}'), ("paused", None)]
+
+
+def test_the_trail_sorts_the_keys_of_its_detail_so_the_same_event_is_always_the_same_text(schedule, clock, store):
+    """"created" happens to put its keys in order already; "snoozed" and "missed" do not, so they show whether the dump sorts them."""
+    schedule.create("take pills", "every day at 8am")
+    clock["now"] = datetime(2026, 10, 13, 9, 0)
+    schedule.materialize()  # three falls behind: one made, two missed
+    rid = store.add_reminder("call mum", "x", ts(datetime(2026, 10, 14, 9, 0)))
+    schedule.snooze(rid, "in 10 minutes")
+    conn = store.connect()
+    try:
+        rows = dict(conn.execute("SELECT event, detail FROM schedule_events WHERE event IN ('missed', 'snoozed')").fetchall())
+    finally:
+        conn.close()
+    assert rows["missed"] == '{"made_for": "%s", "missed": 2}' % ts(datetime(2026, 10, 13, 8, 0))
+    assert rows["snoozed"] == '{"from": "%s", "said": "in 10 minutes", "to": "%s"}' % (ts(datetime(2026, 10, 14, 9, 0)), ts(datetime(2026, 10, 13, 9, 10)))
