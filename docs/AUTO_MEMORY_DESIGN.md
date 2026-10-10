@@ -64,7 +64,8 @@ Deterministic detectors (patterns and word lists, tested on labelled cases, deli
 
 When a message corrects something ("no, I live in Pune", "that's wrong", "I don't like tea any more", "forget that I said X"), code finds
 the accepted fact it concerns (the same similarity the checks use; ambiguous means ask which), retires it and records the new one in one
-transaction (`Memory.supersede`), and the reply says exactly what changed ("Updated: lives in Pune. Was: lives in Delhi. Undo."). A
+transaction (`Memory.supersede`; the retire event carries the id of the fact that replaced it, so the Memory page can show what it
+replaced; RESEARCH.md entry 26), and the reply says exactly what changed ("Updated: lives in Pune. Was: lives in Delhi. Undo."). A
 correction is recognised only in the owner's own message and only changes facts, never settings, reminders or tasks. "Forget that" and
 "forget everything about <person>" retire; they do not delete (the trail stays), and a hard delete remains a deliberate command.
 

@@ -662,6 +662,67 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
 - **Action:** none to build. Keep public wording to "feature parity with what Truffle does, per the dossier", never its hardware,
   its price or its shipping numbers, and do not cite the unconfirmed figures above.
 
+### 26. Memory that tidies itself, again: Mem0 "Dream" and Devin's "Memory and Dreaming" (what they do, and what Diya's design already does differently)
+
+- **Source:** two posts the user pasted 2026-10-10, checked the same day against https://docs.mem0.ai/platform/features/dream
+  (fetched) and, for Devin, two web searches (the blog URL itself returned 404 to my fetch; the launch is confirmed by the
+  docs page https://docs.devin.ai/product-guides/memory and trade-press summaries, all dated 2026-10-05). Builds on entry 21
+  (the "Agent Memory Repo" standard behind Devin's memory).
+- **Noted:** 2026-10-10.
+- **Mem0 Dream, as its docs describe it:** three operations over a user's memories. *Merge* folds a duplicate into a canonical
+  memory (hidden from search unless asked for); *supersede* marks an older fact replaced by a newer one (still returned, labelled
+  as history, unless `latest_only` is set); *synthesis* writes a new "pattern" memory when several memories support one, linking
+  back to its sources. Merge and supersede run as memories are added; synthesis is a background job needing at least 20 memories,
+  weekly on the Pro plan (daily on Enterprise), covering only memories created after it was switched on. Nothing is deleted, every
+  change is recorded and reviewable, and synthesis can be switched off per project. The post says merge needs the new memory to
+  keep all the old one's information, supersede needs a clear replacement of the same fact, and "anything ambiguous results in
+  no action".
+- **Devin Memory and Dreaming, as the post and docs describe it:** per-person notes in a personal git repository of Markdown (the
+  open standard of entry 21); the agent saves lessons while it works (preferences, corrections, project gotchas), each linked to
+  the session it came from; a daily Dreaming pass merges overlapping notes, drops transient details and notes no session used, and
+  looks for lessons missed at the time. The app shows the notes read-only (to change one, you ask Devin), lists recent Dreaming
+  sessions with what each changed, and has a switch that stops reading and writing memory while keeping the notes.
+- **Skeptic note:** both are vendor posts with no measurement of whether the consolidation is right. Mem0's "a few hundred
+  duplicate or contradicting memories in the median active project" has no method behind it, and its docs page gives no accuracy or
+  volume numbers. The post and the docs differ: the post says Dream is a Pro/Enterprise feature and mentions `immutable` and
+  `exclude_from_dream` memories; the docs page says supersede and merge are on every plan and mentions neither flag. Neither says
+  how a wrong memory is kept out in the first place.
+- **Why it matters for Diya:** (a) Two more products, in one week, that make memory self-maintaining and automatic; that is the
+  direction the owner chose on 2026-10-10 (`docs/AUTO_MEMORY_DESIGN.md`), so this is confirmation of the shape, not new evidence
+  that it is safe. (b) Mem0's rules are the same instinct as Diya's lanes: act only when the case is clear and leave the
+  ambiguous alone. Diya is stricter in one place -- a possible update of a known fact is *asked about* (the `similar` flag), not
+  silently ignored or silently applied. (c) Their lifecycle states (active / superseded / merged, each pointing to its
+  replacement, history kept) are what Diya's append-only event trail already gives; the one thing worth copying is that a
+  retirement caused by a correction should record *which fact replaced it*, so the Memory page can show "was: ... now: ...".
+  (d) Synthesis is the part Diya should not copy as it stands. A pattern memory is a statement the owner never made; Diya's
+  rule D2 (only the owner's own words are ever a source) means a synthesized fact could only ever be *offered* to the owner as a
+  question, never accepted on its own, and that is a later idea at best. (e) Devin's memory is about how someone likes to work;
+  Diya's is about a person's life (health, money, family), which is why Diya has sensitive classes and never-kept secrets and
+  they do not need to. (f) Devin removes notes "no session used": Diya puts every accepted fact in every prompt, so it has no
+  such signal, and uses a time horizon plus a question instead (design D5, trigger 3).
+- **Action:** one small addition to unit A3 (corrections): the retire event written by `Memory.supersede` carries the id of the
+  replacing fact. Nothing else to build. Do not add synthesis; if ever revisited, it proposes and the owner decides.
+
+### 27. "Factoring RSA-260" (Cognition, 9 September 2026): checked, and not about anything Diya does
+
+- **Source:** the user's pasted blog post (Eric Lu, Cognition), checked 2026-10-10 against a web search (the post itself, two
+  trade-press write-ups) and Wikipedia's page on the RSA numbers, plus arithmetic done locally.
+- **Noted:** 2026-10-10.
+- **What checked out:** the arithmetic. The posted number has 260 digits and 862 bits; the two posted factors have 130 digits
+  each; their product equals the number exactly; both pass 40 rounds of the Miller-Rabin primality test and the number itself
+  fails it. Wikipedia's RSA-numbers page lists RSA-260 as factored by Eric Lu on 3 September 2026 with the same number (the
+  fetch tool relayed 259 of its 260 digits, all identical to the pasted ones). The "previous record RSA-250, February 2020" is
+  the well-known Boudot, Gaudry, Guillevic, Heninger, Thome and Zimmermann result, and the post cites it.
+- **What did not (and could not) be checked:** the cost figures ($400k, 4,900 GPU-days), the "10x cheaper than the previous
+  public state of the art" claim, and the $30M estimate for RSA-1024 are the author's own estimates, repeated by the press
+  without independent verification. The post says plainly that RSA-2048 is unaffected.
+- **Why it matters for Diya:** not a technology Diya can use. What it says about working with agents matches how this project
+  runs: the author's own account is that the human supplied priorities, a unified set of benchmarks, and the habit of catching
+  unproductive work, and that the agents drifted as the code moved away from the upstream project they knew. That is the case
+  for measuring with the real model before trusting a feature (the benches), and for keeping Diya close to ordinary, documented
+  patterns rather than clever ones.
+- **Action:** none.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,
@@ -682,3 +743,9 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
    checkable: a person can see, correct and take away everything it knows. Memory that consolidates itself is a known
    attack surface (entry 17), so any merge or retirement of accepted facts should be proposed to the owner, never done by
    a background job.
+9. (2026-10-10, entries 26-27) Self-tidying memory is now sold by several vendors (Mem0 Dream, Devin Dreaming, Truffle's own
+   "Dreaming"). Every one of them acts on its own and none says how a wrong memory is stopped from getting in or how a merge
+   is checked. Diya's version is the same idea with the checking built in: lanes decided by code, secrets never kept, sensitive
+   classes asked about, a cap and a circuit breaker, Undo, and a measurement on real conversations before it is switched on.
+   The rule from note 8 still holds for what the owner did not say: nothing a background job *infers* (a merged, retired or
+   synthesized fact) becomes true without the owner.
