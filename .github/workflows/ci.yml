@@ -32,3 +32,18 @@ jobs:
       # pre-push audit does by hand, now automated.
       - name: Scan for hardcoded private-network addresses
         run: python scripts/check_hardcoded_addresses.py
+
+      # Nothing else builds the web UI: the pytest run above checks its source and runs its helpers under Node, but a page that does not
+      # compile would still pass it. `npm ci` installs exactly what package-lock.json says. Next's own usage reporting is switched off.
+      # (Checked locally first: `next build` of these sources succeeds.)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build the web UI
+        working-directory: frontend
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          npm ci
+          npx next build
