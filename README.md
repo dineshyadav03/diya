@@ -46,8 +46,18 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 
 - Chat with eight tools (notes search, web search, weather, reminders, a to-do list, file listing); threads are saved.
 - Reminders: say "remind me to call mum tomorrow at 5pm". The time is read in code, a reminder is saved only if you asked for one, and the
-  **Reminders** page (or the count in the chat header) shows what is due. Nothing notifies you outside the app yet.
+  **Reminders** page (or the count in the chat header) shows what is due, with buttons to push one back 10 minutes, an hour or to tomorrow
+  morning. An optional desktop notifier (`diya_notify.py`) can tell you outside the app, but only once you schedule it yourself
+  ([docs/reminders.md](docs/reminders.md)); nothing here schedules it for you.
   File listing is limited to `Documents/Diya` under your home folder, or the folders in `DIYA_FILES_ROOTS`.
+- **Repeating reminders**: say "remind me every Monday at 9am to take out the bins". The repeat is read in code from your own words
+  (every day, every weekday, every Monday and Thursday, every month on the 15th, every 2 weeks; no time means 09:00, and Diya says
+  so), and each time one falls it becomes an ordinary reminder. The **Scheduled** page lists them, and pauses, resumes, skips the
+  next time of, or stops one, with a plain-words record of what happened. A week missed while the computer was off is one
+  reminder, not seven. Hourly, "until June", "every second Tuesday" and yearly are refused, not guessed. See
+  [Schedule design](docs/SCHEDULE_DESIGN.md).
+- A **Today** page: what is due now and later today, the tasks overdue or due today, and the repeating reminders that make one next.
+  It is built in code from your own reminders and tasks; no model writes any of it.
 - A **to-do list inside Diya**: say "add a task to buy oat milk" and it is saved at once, in Diya's own database, with nothing
   sent anywhere. The **Tasks** page lists what is open (and what is overdue), takes a new one, ticks one off and puts it back.
   A task is saved only if you asked for one, a due date only if you said it, and it is never sent to Todoist unless you name
@@ -66,12 +76,19 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Facts it extracts wait in a review queue; nothing reaches the model unless you accept it.
   Review them on the **Memory** page of the UI, or with `python diya_review.py list`, `accept`, `reject` and `edit` (see [Dreaming](docs/dreaming.md)); `judge` asks the local model for an optional second opinion.
   The model is told the accepted facts, in every chat; your old `user_profile.txt` was imported once.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 3233 tests pass on Windows (as of 2026-10-05).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 4060 tests pass on Windows (as of 2026-10-10).
 
 ## Known limits
 
-- Reminders only show in the UI, and the 3B model sometimes changes the time you gave: the tool refuses a changed time and the model asks again, so a valid
+- Nothing tells you outside the app until you schedule the desktop notifier yourself, and the 3B model sometimes changes the time you gave: the tool refuses a changed time and the model asks again, so a valid
   request is sometimes not saved at first (4 of 27 runs in a small measurement). "Next Friday", a bare "at 5" and "3/4" are refused on purpose.
+- Repeating reminders: the repeat is read from your own words when it is part of the request ("remind me every day at 8am to ..."), not from
+  what the model passes on, because measured on the 3B model that saved the wrong time (9 of 60) and said a reminder repeated when it did not
+  (11 of 60); with the words read in code it was 59 of 60 right, and a repeat Diya refuses (hourly, "until June") was never saved (0 of 27).
+  The 20 labelled requests were looked at while building it; on 30 fresh phrasings 29 behaved (the miss, "I need a reminder every morning ...",
+  fails safe). A repeat that is part of something else ("I do it every Sunday") or has words after it that could change it ("every day except
+  Sunday") is not read, and the model's own version is kept only if it is your words exactly. Tasks do not repeat. See
+  [Schedule design](docs/SCHEDULE_DESIGN.md), section 6.
 - The optional model check on a staged fact (`python diya_review.py judge`) is the same small model that proposed it, and it was measured only on
   a few dozen invented cases: it says "not supported" to true facts that are only implied, and a message can steer it. It is a hint, never a decision.
 - `web_search` is not covered by the outbound-host allowlist that limits `get_weather` to Open-Meteo (`DIYA_TOOL_ALLOWED_HOSTS`).
@@ -91,7 +108,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   local-memory projects (Truffle, Hindsight) and agent-harness engineering patterns (UFO's
   grant-in-chat audit trail, Dreaming-shaped nightly consolidation showing up independently in
   three unrelated projects) weighed against Diya's own design, not adopted wholesale.
-  [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built, including an optional, measured model verifier). [Person-tagged memory](docs/PERSON_MEMORY_DESIGN.md): who a fact is about, built into review, the model's own system message, and the CLI/UI (built). [Model benchmark](docs/MODEL_BENCHMARK.md): three installed models on this laptop, first pass. [Proactivity design](docs/PROACTIVITY_DESIGN.md): reminders that fire, the first step from an assistant that answers to one that tells you (built except the desktop notifier). [Connectors design](docs/CONNECTORS_DESIGN.md): outside accounts as a menu any owner picks from (Home Assistant, Notion, Todoist and Google Calendar all built; the OAuth connector's code is not yet verified against the real Google endpoints). [Actions design](docs/ACTIONS_DESIGN.md): the approval gate and action trail any future write must go through -- the model proposes, code executes, only the owner approves (built: the store and its state machine, the model's side, the Actions page and command line you approve on, and the first real write, adding a Todoist task; every other connector is read-only). [Tasks design](docs/TASKS_DESIGN.md): the to-do list kept inside Diya itself, why that and not an API, and what the model may do with it (built: the list, its two tools, the Tasks page).
+  [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built, including an optional, measured model verifier). [Person-tagged memory](docs/PERSON_MEMORY_DESIGN.md): who a fact is about, built into review, the model's own system message, and the CLI/UI (built). [Model benchmark](docs/MODEL_BENCHMARK.md): three installed models on this laptop, first pass. [Proactivity design](docs/PROACTIVITY_DESIGN.md): reminders that fire, the first step from an assistant that answers to one that tells you (built except the desktop notifier). [Connectors design](docs/CONNECTORS_DESIGN.md): outside accounts as a menu any owner picks from (Home Assistant, Notion, Todoist and Google Calendar all built; the OAuth connector's code is not yet verified against the real Google endpoints). [Actions design](docs/ACTIONS_DESIGN.md): the approval gate and action trail any future write must go through -- the model proposes, code executes, only the owner approves (built: the store and its state machine, the model's side, the Actions page and command line you approve on, and the first real write, adding a Todoist task; every other connector is read-only). [Tasks design](docs/TASKS_DESIGN.md): the to-do list kept inside Diya itself, why that and not an API, and what the model may do with it (built: the list, its two tools, the Tasks page). [Schedule design](docs/SCHEDULE_DESIGN.md): repeating reminders, snooze, a record of what happened, and the Scheduled and Today pages (built, and measured with the real models; the measurement changed the design).
 
 ## Architecture
 

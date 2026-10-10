@@ -293,14 +293,29 @@ Remaining:
    unasked reminders, and a check that the model did not change the person's words), P3 (the API, the Reminders
    page, the header count) and P4 (`diya_notify.py`, a Windows toast, verified for real on this machine).
    **Not registered:** the owner schedules P4's task themselves (`docs/reminders.md` has the commands) --
-   nothing here does it for them. Snooze and recurrence wait for the rest of the durable-workflow work below.
+   nothing here does it for them.
+   **Scheduled work (2026-10-10, [`docs/SCHEDULE_DESIGN.md`](docs/SCHEDULE_DESIGN.md)), built, all five units:** repeating reminders
+   ("every Monday at 9am", every weekday, every month on the 15th, every 2 weeks) read in code, each fall becoming an ordinary
+   reminder; pause, resume, skip and stop with an append-only record of what happened; snooze; a **Scheduled** page and a **Today**
+   page built in code from the owner's own data (no model text). Measured with the real models before it was called done, and the
+   measurement changed the design: the 3B default model saved the wrong time in 9 of 60 repeat requests and told the person a
+   reminder repeated when it did not (11 of 60), so when a repeat is part of the request the rule is now read from the person's own
+   words, not the model's: 16 of 60 right became 59 of 60 on `qwen2.5:3b` and 53 became 59 on `qwen3:4b-instruct`, with a refused
+   repeat never saved as repeating (0 of 27) and a single reminder never made to repeat (0 of 36). The 20 labelled requests were
+   looked at while building it; on 30 fresh phrasings written afterwards 29 behaved correctly. 474 mutations of the new code: 447
+   caught, 25 equivalent, 2 removed with dead code. Along the way a to-do task due "today" was found to be unreadable after 09:00
+   and fixed. Not done: the notifier is still the owner's step to schedule; tasks do not repeat; no calendar line on Today.
 5. "Jev" decision benchmark. Open-source baseline: laya-mlx (MLX, so Apple silicon only).
    `RESEARCH.md` entry 10 (supermemory, 2026-09-27) argued a fast decision model should gate harness
    choices instead of code. Measured, not assumed: [`docs/GATE_BENCHMARK.md`](docs/GATE_BENCHMARK.md)
    ran `diya_intent.py`'s checks against `qwen2.5:3b` on the same labelled cases. The model did worse at
    both (0 of 12 genuine fact-shares recognised; 57 of 71 reminder requests against the code's 61). Code
    stays the reference; no second model was added.
-6. Daily-driver experience.
+6. Daily-driver experience. Defined in [`docs/SCHEDULE_DESIGN.md`](docs/SCHEDULE_DESIGN.md) D9, in the order it would be built: (1) a way
+   to see the day (built: the Today page); (2) things that come back without being asked (built: repeating reminders and snooze, with
+   the notifier the owner has still to schedule); (3) reach: a phone channel, designed on its own under the rules of `RESEARCH.md`
+   entry 17 (a message is the owner's only if it is from the paired owner, approvals never by chat); (4) one command that starts the
+   API, the UI and the notifier together. (3) and (4) each need their own design and the owner's yes.
 
 ## Future items
 
