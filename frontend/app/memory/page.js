@@ -29,6 +29,32 @@ function Flags({ flags }) {
   )
 }
 
+// How memory that remembers on its own stands (docs/AUTO_MEMORY_DESIGN.md, D6 and unit A7). Off, it says so, because the page's old promise (only what you
+// accept is ever told to the model) is the one that holds; on, it says what it has taken today, and when the circuit breaker has paused it, why.
+function Automatic({ automatic }) {
+  if (!automatic) return null
+  if (!automatic.on) {
+    return (
+      <p className="memory-automatic memory-dim">
+        Automatic memory is off: nothing is remembered until you accept it.
+      </p>
+    )
+  }
+  return (
+    <div className="memory-automatic">
+      <p>
+        Automatic memory is on. It has taken {automatic.today} of {automatic.limit} allowed in the last day, and you have taken back{' '}
+        {automatic.taken_back}. Anything private, doubtful or that may replace what Diya knows waits below for you.
+      </p>
+      {automatic.breaker_open && (
+        <p className="memory-error" role="alert">
+          Paused: you took back {automatic.taken_back} of its facts in the last day, so it is asking about everything until that passes.
+        </p>
+      )}
+    </div>
+  )
+}
+
 function Why({ detail }) {
   if (detail === false) return <div className="memory-why" role="status">Loading…</div>
   if (detail?.failed) return <div className="memory-why" role="alert">{detail.failed}</div>
@@ -253,6 +279,7 @@ export default function MemoryPage() {
           <p className="memory-text">{fact.text}</p>
         )}
         {fact.person && !hidePerson && <p className="memory-person-tag">About {fact.person}</p>}
+        {fact.by === 'auto' && <p className="memory-auto-tag">Learned on its own</p>}
         <Flags flags={fact.flags} />
         {!isEditing && (
           <div className="memory-actions">
@@ -300,9 +327,10 @@ export default function MemoryPage() {
           ) : (
             <>
               <p className="memory-lede">
-                What Diya knows about you. Facts it finds in your conversations wait here until you accept them; only
-                accepted facts are ever told to the model.
+                What Diya knows about you. Only accepted facts are ever told to the model: the ones you accept, and, if automatic
+                memory is on, the plain ones it took on its own, which are marked and can be undone here.
               </p>
+              <Automatic automatic={summary.automatic} />
               <div className="memory-summary">
                 <div className="memory-meter" aria-hidden="true">
                   <div style={{ width: `${Math.min(100, (summary.used / summary.limit) * 100)}%` }} />
@@ -359,7 +387,9 @@ export default function MemoryPage() {
                           factRow(
                             fact,
                             ({ isBusy }) =>
-                              button('Forget', 'memory-btn--danger', () => decide(fact, 'retire', 'Forgotten: Diya will not use it from the next message.'), isBusy, fact),
+                              fact.by === 'auto'
+                                ? button('Undo', 'memory-btn--danger', () => decide(fact, 'retire', 'Undone: Diya will not use it from the next message.'), isBusy, fact)
+                                : button('Forget', 'memory-btn--danger', () => decide(fact, 'retire', 'Forgotten: Diya will not use it from the next message.'), isBusy, fact),
                             true, // the heading already says who: repeating it on every fact would be noise
                           ),
                         )}

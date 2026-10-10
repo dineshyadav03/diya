@@ -23,10 +23,12 @@ a visible escape, never as itself.
 from __future__ import annotations
 
 import dataclasses
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from pydantic import BaseModel
 
+import diya_autonomy
 import diya_memory
 from diya_memory import (
     BudgetExceeded,
@@ -75,15 +77,32 @@ def register(app, config, agent):
     app.routes lists them by path (the tests that check every route for the token and the Host rule rely on it)."""
     # The store is looked up per request, not here: registering routes touches nothing (create_app is free).
 
+    def automatic(memory, now=None):
+        """How memory that remembers on its own stands (docs/AUTO_MEMORY_DESIGN.md, D6): whether it is on, what it took in the last 24 hours against
+        the daily limit, and whether the circuit breaker has paused it because the person took back too many of its facts."""
+        since = ((now or datetime.now(timezone.utc)) - timedelta(hours=diya_autonomy.WINDOW_HOURS)).isoformat()
+        taken_back = memory.taken_back_count(since)
+        return {
+            "on": bool(config.auto_memory),
+            "today": memory.count_events("accepted", "auto", since),
+            "limit": diya_autonomy.DAILY_AUTO_LIMIT,
+            "taken_back": taken_back,
+            "breaker_limit": diya_autonomy.BREAKER_LIMIT,
+            "breaker_open": taken_back >= diya_autonomy.BREAKER_LIMIT,
+        }
+
     def summary(memory):
         return {
             "counts": memory.counts(),
             "used": len(memory.render()),
             "limit": diya_memory.MAX_PROFILE_CHARS,
             "max_fact_chars": diya_memory.MAX_FACT_CHARS,
+            "automatic": automatic(memory),
         }
 
-    def public(fact):
+    def public(fact, actors=None):
+        if actors is None:  # one fact on its own (a list passes the actors it has already asked for, once)
+            actors = Memory(agent.store).accepting_actors()
         return {
             "id": fact["id"],
             "text": printable(fact["text"]),
@@ -92,12 +111,15 @@ def register(app, config, agent):
             "person": printable(fact["person"]) if fact["person"] is not None else None,
             "flags": [{"code": printable(flag), "label": diya_memory.flag_short(flag)} for flag in fact["flags"]],
             "created_at": printable(fact["created_at"]),
+            # who accepted it: "auto" for what Diya took on its own, "you" for what a person accepted, typed or imported; None until accepted
+            "by": None if fact["id"] not in actors else "auto" if actors[fact["id"]] == "auto" else "you",
         }
 
     @app.get("/api/memory")
     def list_facts():
         memory = Memory(agent.store)
-        return {"summary": summary(memory), "facts": [public(fact) for fact in memory.facts()]}
+        actors = memory.accepting_actors()
+        return {"summary": summary(memory), "facts": [public(fact, actors) for fact in memory.facts()]}
 
     @app.get("/api/memory/{fact_id}")
     def show(fact_id: int):

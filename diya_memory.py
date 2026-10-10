@@ -616,6 +616,17 @@ class Memory:
         with self._read() as conn:
             return conn.execute("SELECT COUNT(*) FROM fact_events WHERE event = ? AND actor = ? AND at >= ?", (event, actor, since)).fetchone()[0]
 
+    def accepting_actors(self):
+        """Who accepted each fact that is accepted now: {fact id: actor} of its latest accepting event (accepted, added, imported or restored).
+        One query for all of them, for the page that tells the person which facts Diya took on its own."""
+        with self._read() as conn:
+            rows = conn.execute(
+                "SELECT fact_id, actor FROM fact_events WHERE id IN ("
+                " SELECT MAX(e.id) FROM fact_events e JOIN facts f ON f.id = e.fact_id"
+                " WHERE f.status = 'accepted' AND e.event IN ('accepted', 'added', 'imported', 'restored') GROUP BY e.fact_id)"
+            ).fetchall()
+        return dict(rows)
+
     def taken_back_count(self, since):
         """How many facts that were accepted automatically a person has since retired (a rejection can only follow a candidate, so undoing
         an accepted fact is always a retirement), at or after `since`: the number the

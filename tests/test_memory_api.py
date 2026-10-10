@@ -93,7 +93,9 @@ def no_hidden(value):
 def test_an_empty_memory_lists_nothing_and_says_how_big_it_may_grow(client):
     body = client.get("/api/memory").json()
     assert body == {"summary": {"counts": {"candidate": 0, "accepted": 0, "rejected": 0, "retired": 0},
-                                "used": 0, "limit": 2000, "max_fact_chars": 200}, "facts": []}
+                                "used": 0, "limit": 2000, "max_fact_chars": 200,
+                                "automatic": {"on": False, "today": 0, "limit": 20, "taken_back": 0, "breaker_limit": 3, "breaker_open": False}},
+                    "facts": []}
 
 
 def test_the_list_carries_status_flags_in_words_and_the_size_used(client, memory, app_parts):
@@ -106,8 +108,10 @@ def test_the_list_carries_status_flags_in_words_and_the_size_used(client, memory
 
     body = client.get("/api/memory").json()
 
-    assert body["summary"] == {"counts": {"candidate": 1, "accepted": 1, "rejected": 0, "retired": 0},
-                               "used": len("- has a cat named Pixel"), "limit": 2000, "max_fact_chars": 200}
+    summary = dict(body["summary"])
+    assert summary.pop("automatic")["on"] is False
+    assert summary == {"counts": {"candidate": 1, "accepted": 1, "rejected": 0, "retired": 0},
+                       "used": len("- has a cat named Pixel"), "limit": 2000, "max_fact_chars": 200}
     first, second = body["facts"]
     assert (first["id"], first["text"], first["status"], first["source"]) == (1, "has a cat named Pixel", "accepted", "dreaming")
     assert first["flags"] == [{"code": "source_message:1", "label": "source message 1"}]
@@ -117,7 +121,7 @@ def test_the_list_carries_status_flags_in_words_and_the_size_used(client, memory
 def test_the_list_sends_only_what_a_list_needs(client, memory):
     add_candidate(memory, "likes tea")
     (fact,) = client.get("/api/memory").json()["facts"]
-    assert set(fact) == {"id", "text", "status", "source", "person", "flags", "created_at"}  # not the staged line, the model or the history
+    assert set(fact) == {"id", "text", "status", "source", "person", "flags", "created_at", "by"}  # not the staged line, the model or the history
 
 
 def test_a_fact_named_by_dreaming_carries_its_person_a_self_fact_carries_none(client, memory):
@@ -529,3 +533,83 @@ def test_a_fact_accepted_in_the_page_is_told_to_the_model_on_the_very_next_messa
     client.post(f"/api/memory/{fact_id}/retire")
     client.post("/api/chat", json={"message": "and again"})
     assert all(m["role"] != "system" for m in model.chat_calls[2]["messages"])
+
+
+# --- who took a fact, and how memory that remembers on its own stands (docs/AUTO_MEMORY_DESIGN.md, unit A7) --------
+
+def automatic(client):
+    return client.get("/api/memory").json()["summary"]["automatic"]
+
+
+def test_a_fact_says_whether_a_person_or_diya_accepted_it(client, memory):
+    add_candidate(memory, "likes tea")
+    add_candidate(memory, "likes coffee", position=1)
+    add_candidate(memory, "is a doctor", position=2)
+    memory.decide(1, "accept", "api")
+    memory.decide(2, "accept", "auto", {"lane": "remember", "reasons": ["plain"]})
+    memory.add_manual("plays chess", "api")
+    memory.add_manual("reads novels", "import")  # what the old profile import does: a person's own words
+    by = {f["text"]: f["by"] for f in client.get("/api/memory").json()["facts"]}
+    assert by == {"likes tea": "you", "likes coffee": "auto", "is a doctor": None, "plays chess": "you", "reads novels": "you"}
+
+
+def test_the_latest_acceptance_is_the_one_that_counts(client, memory):
+    add_candidate(memory, "likes coffee")
+    memory.decide(1, "accept", "auto", {})
+    memory.decide(1, "retire", "api")
+    memory.decide(1, "restore", "api")  # the person took it back and then put it back: theirs now
+    assert client.get("/api/memory").json()["facts"][0]["by"] == "you"
+
+
+def test_a_fact_that_is_no_longer_accepted_says_nobody_took_it(client, memory):
+    add_candidate(memory, "likes coffee")
+    memory.decide(1, "accept", "auto", {})
+    memory.decide(1, "retire", "api")
+    assert client.get("/api/memory").json()["facts"][0]["by"] is None
+
+
+def test_one_fact_on_its_own_says_who_took_it_too(client, memory):
+    add_candidate(memory, "likes coffee")
+    memory.decide(1, "accept", "auto", {})
+    assert client.get("/api/memory/1").json()["fact"]["by"] == "auto"
+    memory.decide(1, "retire", "api")
+    body = client.post("/api/memory/1/restore").json()
+    assert body["fact"]["by"] == "you" and "automatic" in body["summary"]
+
+
+def test_the_automatic_summary_when_it_is_off_and_nothing_has_happened(client):
+    assert automatic(client) == {"on": False, "today": 0, "limit": 20, "taken_back": 0, "breaker_limit": 3, "breaker_open": False}
+
+
+def test_the_automatic_summary_follows_the_setting(config, memory):
+    on = dataclasses.replace(config, auto_memory=True)
+    agent = diya.Agent(on, client=FakeClient([text_reply("ok")]))
+    client = TestClient(diya_web.create_app(on, agent, object()), base_url=LOCAL)
+    assert automatic(client)["on"] is True
+
+
+def test_what_it_took_today_is_counted_and_a_person_taking_it_back_is_too(client, memory):
+    for n, text in enumerate(["likes tea", "likes jazz", "plays chess", "reads novels"]):
+        add_candidate(memory, text, position=n)
+        memory.decide(n + 1, "accept", "auto", {})
+    assert automatic(client)["today"] == 4 and automatic(client)["taken_back"] == 0
+    memory.decide(1, "retire", "api")
+    memory.decide(2, "retire", "cli")
+    memory.decide(3, "retire", "system")  # not a person
+    got = automatic(client)
+    assert got["taken_back"] == 2 and got["breaker_open"] is False
+
+
+def test_the_breaker_is_open_when_three_have_been_taken_back(client, memory):
+    for n, text in enumerate(["likes tea", "likes jazz", "plays chess"]):
+        add_candidate(memory, text, position=n)
+        memory.decide(n + 1, "accept", "auto", {})
+        memory.decide(n + 1, "retire", "api")
+    got = automatic(client)
+    assert got["taken_back"] == 3 and got["breaker_open"] is True and got["today"] == 3
+
+
+def test_what_a_person_accepted_does_not_count_as_taken_on_its_own(client, memory):
+    add_candidate(memory, "likes tea")
+    memory.decide(1, "accept", "api")
+    assert automatic(client)["today"] == 0
