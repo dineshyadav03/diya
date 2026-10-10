@@ -5,10 +5,12 @@ import secrets
 import sys
 import tempfile
 import threading
+import traceback
 
+import openai
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
 import diya
@@ -223,6 +225,12 @@ class ChatRequest(BaseModel):
     message: str
 
 
+# What a chat turn that could not be answered says, in words for the person (the page shows them under the message). They are fixed
+# text, never the exception's own: that goes to this program's console, where someone looking for the cause can read it.
+MODEL_DID_NOT_ANSWER = "The model didn’t answer (is Ollama running?), so there is no reply. Your message was kept; try again."
+ANSWERING_FAILED = "Something went wrong while answering, so there is no reply. Your message was kept; try again. The details are in the API’s console."
+
+
 class WhisperTranscriber:
     """Speech-to-text. The model is loaded on first use (or by warm_up() at server start),
     not when this module is imported -- loading takes ~60s the first time (downloading the
@@ -327,16 +335,24 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     @app.post("/api/chat")
     def chat(req: ChatRequest):
         thread_id = req.thread_id or agent.store.create_thread()
-        history = agent.with_profile(agent.store.get_history(thread_id))
-        message_id = agent.store.add_message(thread_id, "user", req.message)
+        saved = agent.store.get_messages(thread_id)
+        # The same words, from the person, as the last message of this thread, which nothing answered: they are trying again
+        # after a failed turn. That message is used again, not saved a second time, so a retry leaves one message, not two.
+        retry = bool(saved) and saved[-1]["role"] == "user" and saved[-1]["content"] == req.message
+        earlier = saved[:-1] if retry else saved
+        history = agent.with_profile([{"role": m["role"], "content": m["content"]} for m in earlier])
+        message_id = saved[-1]["id"] if retry else agent.store.add_message(thread_id, "user", req.message)
         history.append({"role": "user", "content": req.message})
         try:
             answer, tools_called = agent.ask(history, thread_id=thread_id, message_id=message_id)
-        except Exception as exc:
-            answer = f"Couldn't reach the model ({exc}). Try again in a moment."
-            tools_called = []
-        else:
-            agent.store.add_message(thread_id, "assistant", answer)
+        except openai.OpenAIError as exc:  # nothing listening, a timeout, an error from Ollama itself
+            print(f"[chat] the model did not answer ({type(exc).__name__}: {exc})", file=sys.stderr)
+            return JSONResponse({"detail": MODEL_DID_NOT_ANSWER, "thread_id": thread_id}, status_code=503)
+        except Exception:  # a defect here, not the model's doing: say so, and leave the trace where it can be read
+            print("[chat] answering failed:", file=sys.stderr)
+            traceback.print_exc()
+            return JSONResponse({"detail": ANSWERING_FAILED, "thread_id": thread_id}, status_code=500)
+        agent.store.add_message(thread_id, "assistant", answer)
         return {"thread_id": thread_id, "answer": answer, "tools_called": tools_called}
 
     # Reviewing what Dreaming staged (docs/STAGE2_DESIGN.md, unit 6): the same rules as diya_review.py.

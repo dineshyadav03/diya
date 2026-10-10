@@ -12,7 +12,7 @@ from datetime import datetime
 
 import httpx
 from ddgs import DDGS
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 
 import diya_actions
 import diya_config
@@ -409,6 +409,24 @@ FACT_SHARE_HINT = (
     "\"you\" or \"your\". No advice, no extra "
     "information, no questions.)"
 )
+
+
+def _tool_arguments(raw):
+    """The arguments of a tool call as a dict, or a ValueError that says what is wrong with them. A model that passes a tool
+    nothing sends an empty string as often as `{}`, and both mean "no arguments"; anything else must be a JSON object."""
+    if isinstance(raw, dict):
+        return raw
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return {}
+    if not isinstance(raw, str):
+        raise ValueError(f"a JSON object was expected, not {type(raw).__name__}")
+    try:
+        args = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"not valid JSON: {exc.msg}") from None
+    if not isinstance(args, dict):
+        raise ValueError(f"a JSON object was expected, not {type(args).__name__}")
+    return args
 
 
 def _last_user_text(messages):
@@ -841,6 +859,7 @@ class Agent:
         tools_called = []
         fact_share = diya_intent.is_fact_share(_last_user_text(messages))
         tools = None if fact_share else self.tools
+        offered = frozenset(spec["function"]["name"] for spec in tools or ())
         for _ in range(MAX_TOOL_ROUNDS):
             response = self._complete(messages, fact_share, tools)
             message = response.choices[0].message
@@ -861,22 +880,40 @@ class Agent:
             messages.append(message)
             for call in message.tool_calls:
                 tools_called.append(call.function.name)
-                if call.function.name not in self._proposal_tools and call.function.name not in OWN_LIST_TOOLS:
-                    # What a proposal later in this turn will say it came after (docs/ACTIONS_DESIGN.md, D6): every
-                    # tool that ran, whatever it returned -- but not another proposal, and not the owner's own lists
-                    # (reminders, tasks). Recorded before it runs, so a tool that fails is still listed.
-                    self._turn.reads.append(call.function.name)
-                func = self._functions[call.function.name]
-                args = json.loads(call.function.arguments)
-                print(f"  [tool call] {call.function.name}({args})")
-                try:
-                    result = func(**args)
-                except Exception as exc:
-                    result = f"Error: {exc}"
-                    print(f"  [tool error] {result}")
+                # Every call gets exactly one tool message back, whatever became of it: that is what the model's API
+                # expects, and a call the model got wrong is told so, in words it can act on, rather than ending the turn.
+                result = self._run_tool_call(call, offered)
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
 
         return "I couldn't finish that after several tool calls -- something's likely stuck. Try rephrasing.", tools_called
+
+    def _run_tool_call(self, call, offered):
+        """What one tool call from the model comes to, as the text the model is told. A tool that does not exist, arguments that
+        are not a JSON object, and a tool that fails are each reported to the model in words it can act on; none of them ends the
+        turn, and the model's retries are bounded by MAX_TOOL_ROUNDS. A tool that exists but is not offered this turn (a
+        connector that is not connected, a reminder nobody asked for) is refused by the tool itself, with its own explanation.
+        `offered` is only what the error for an unknown name lists."""
+        name = call.function.name
+        if name not in self._functions:
+            available = ", ".join(sorted(offered)) or "none"
+            return f"Error: there is no tool called {str(name)[:60]!r}. The tools you can use now: {available}."
+        if name not in self._proposal_tools and name not in OWN_LIST_TOOLS:
+            # What a proposal later in this turn will say it came after (docs/ACTIONS_DESIGN.md, D6): every
+            # tool that ran, whatever it returned -- but not another proposal, and not the owner's own lists
+            # (reminders, tasks). Recorded before it runs, so a tool that fails is still listed.
+            self._turn.reads.append(name)
+        try:
+            args = _tool_arguments(call.function.arguments)
+        except ValueError as exc:
+            print(f"  [tool error] {name}: {exc}")
+            return f"Error: the arguments for {name} could not be used ({exc}). Call it again with a JSON object."
+        print(f"  [tool call] {name}({args})")
+        try:
+            return self._functions[name](**args)
+        except Exception as exc:
+            result = f"Error: {exc}"
+            print(f"  [tool error] {result}")
+            return result
 
 
 # ---- entry-point helpers (the programs that own the console call these, not import) ----
@@ -973,9 +1010,12 @@ def chat_loop(agent, thread_id, history):
 
         try:
             answer, _ = agent.ask(history, thread_id=thread_id, message_id=message_id)
-        except Exception as exc:
+        except OpenAIError as exc:
             # Your message is already saved -- Ollama just isn't reachable right now.
             print(f"assistant> Couldn't reach the model ({exc}). Try again in a moment.")
+            continue
+        except Exception as exc:  # not the model's doing: do not say it was
+            print(f"assistant> Something went wrong while answering ({type(exc).__name__}: {exc}). Your message was kept; try again.")
             continue
 
         agent.store.add_message(thread_id, "assistant", answer)

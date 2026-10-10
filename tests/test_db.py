@@ -62,6 +62,19 @@ def test_history_is_returned_in_insertion_order_as_role_content_dicts(store):
     assert store.get_history(t + 99) == []
 
 
+def test_messages_are_the_history_with_their_ids_in_the_same_order(store):
+    t, other = store.create_thread(), store.create_thread()
+    first = store.add_message(t, "user", "hi")
+    store.add_message(other, "user", "elsewhere")
+    second = store.add_message(t, "assistant", "hello")
+    assert store.get_messages(t) == [
+        {"id": first, "role": "user", "content": "hi"},
+        {"id": second, "role": "assistant", "content": "hello"},
+    ]
+    assert [{"role": m["role"], "content": m["content"]} for m in store.get_messages(t)] == store.get_history(t)
+    assert store.get_messages(t + 99) == []
+
+
 def test_history_is_per_thread(store):
     a, b = store.create_thread(), store.create_thread()
     store.add_message(a, "user", "in a")

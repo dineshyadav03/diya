@@ -331,10 +331,20 @@ def test_one_shot_mode_saves_both_sides_of_the_exchange(config, monkeypatch, cap
 
 
 def test_the_chat_loop_saves_messages_and_survives_a_model_error(config, monkeypatch, capsys):
-    agent, _ = make_agent(config, text_reply("Hi there."))  # second ask() runs out of replies -> IndexError
+    import httpx
+    import openai
+
+    agent, client = make_agent(config, text_reply("Hi there."))
     thread = agent.store.create_thread()
     typed = iter(["hello", "", "again", "exit"])
-    monkeypatch.setattr("builtins.input", lambda prompt="": next(typed))
+
+    def next_input(prompt=""):
+        line = next(typed)
+        if line == "again":  # the model goes away after its first answer
+            client._chat_error = openai.APIConnectionError(message="refused", request=httpx.Request("POST", "http://localhost:11434/v1"))
+        return line
+
+    monkeypatch.setattr("builtins.input", next_input)
     diya.chat_loop(agent, thread, [])
     out = capsys.readouterr().out
     assert "assistant> Hi there." in out
@@ -344,6 +354,18 @@ def test_the_chat_loop_saves_messages_and_survives_a_model_error(config, monkeyp
         {"role": "assistant", "content": "Hi there."},
         {"role": "user", "content": "again"},
     ]
+
+
+def test_the_chat_loop_does_not_blame_the_model_for_what_is_not_the_models_doing(config, monkeypatch, capsys):
+    agent, _ = make_agent(config)  # no replies at all: the fake client raises IndexError, which is a defect, not a model that is down
+    thread = agent.store.create_thread()
+    typed = iter(["hello", "exit"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(typed))
+    diya.chat_loop(agent, thread, [])
+    out = capsys.readouterr().out
+    assert "Couldn't reach the model" not in out
+    assert "assistant> Something went wrong while answering (IndexError: " in out and "Your message was kept; try again." in out
+    assert agent.store.get_history(thread) == [{"role": "user", "content": "hello"}]
 
 
 # --- get_weather: old city names and picking the right match (no network: httpx.get is faked) -------

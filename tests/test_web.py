@@ -145,12 +145,131 @@ def test_chat_injects_the_profile_but_never_saves_it(config, tmp_path):
     assert all(m["role"] != "system" for m in agent.store.get_history(body["thread_id"]))
 
 
-def test_chat_survives_a_model_failure_and_keeps_the_users_message(config):
-    client, agent, _, _ = build(config)  # no scripted replies: the fake client raises IndexError
-    body = client.post("/api/chat", json={"message": "hello?"}).json()
-    assert body["answer"].startswith("Couldn't reach the model (")
-    assert body["tools_called"] == []
-    assert agent.store.get_history(body["thread_id"]) == [{"role": "user", "content": "hello?"}]
+def model_errors():
+    """The ways the OpenAI client says the model did not answer: nothing listening, too slow, an error from the server itself."""
+    import httpx
+    import openai
+
+    request = httpx.Request("POST", "http://localhost:11434/v1/chat/completions")
+    return [
+        openai.APIConnectionError(message="SECRET-DETAIL connection refused", request=request),
+        openai.APITimeoutError(request=request),
+        openai.InternalServerError("SECRET-DETAIL model crashed", response=httpx.Response(500, request=request), body=None),
+    ]
+
+
+@pytest.mark.parametrize("error", model_errors(), ids=lambda e: type(e).__name__)
+def test_a_model_that_does_not_answer_is_a_503_with_a_fixed_reason_and_the_message_is_kept(config, capsys, error):
+    client, agent, model, _ = build(config)
+    model._chat_error = error
+    response = client.post("/api/chat", json={"message": "hello?"})
+    assert response.status_code == 503
+    assert response.json() == {"detail": diya_web.MODEL_DID_NOT_ANSWER, "thread_id": 1}  # the reason is ours, not the exception's
+    assert "SECRET-DETAIL" not in response.text
+    assert agent.store.get_history(1) == [{"role": "user", "content": "hello?"}]  # kept, and nothing pretends to be a reply
+    err = capsys.readouterr().err
+    assert "[chat] the model did not answer (" + type(error).__name__ in err
+    if "SECRET-DETAIL" in str(error):
+        assert "SECRET-DETAIL" in err  # the detail is on the console, for whoever looks for the cause
+
+
+def test_a_failure_that_is_not_the_models_is_a_500_that_says_so_and_leaves_the_trace_on_the_console(config, capsys):
+    client, agent, model, _ = build(config)
+    model._chat_error = RuntimeError("SECRET-DETAIL a bug")
+    response = client.post("/api/chat", json={"message": "hello?"})
+    assert response.status_code == 500
+    assert response.json() == {"detail": diya_web.ANSWERING_FAILED, "thread_id": 1}
+    assert "SECRET-DETAIL" not in response.text
+    err = capsys.readouterr().err
+    assert "[chat] answering failed:" in err and "Traceback" in err and "RuntimeError: SECRET-DETAIL a bug" in err
+    assert agent.store.get_history(1) == [{"role": "user", "content": "hello?"}]
+
+
+def test_a_tool_call_the_model_got_wrong_is_not_a_failed_turn(config):
+    from fakes import tool_reply
+
+    client, agent, _, _ = build(config, tool_reply("no_such_tool", "{}"), text_reply("Sorted."))
+    response = client.post("/api/chat", json={"message": "what is on my list?"})
+    assert response.status_code == 200 and response.json()["answer"] == "Sorted."
+    assert [m["role"] for m in agent.store.get_history(1)] == ["user", "assistant"]
+
+
+def failing_then(config, *replies):
+    """An app whose model fails once, then answers with `replies`; returns (client, agent, model, the first failure's body)."""
+    client, agent, model, _ = build(config, *replies)
+    error = model_errors()[0]
+    model._chat_error = error
+    first = client.post("/api/chat", json={"message": "hello?"})
+    model._chat_error = None
+    return client, agent, model, first.json()
+
+
+def test_trying_again_after_a_failed_turn_uses_the_message_that_is_already_there(config):
+    client, agent, model, failed = failing_then(config, text_reply("Hi!"))
+    body = client.post("/api/chat", json={"thread_id": failed["thread_id"], "message": "hello?"}).json()
+    assert body == {"thread_id": failed["thread_id"], "answer": "Hi!", "tools_called": []}
+    assert agent.store.get_history(failed["thread_id"]) == [{"role": "user", "content": "hello?"}, {"role": "assistant", "content": "Hi!"}]
+    assert [m["content"] for m in model.chat_calls[0]["messages"]] == ["hello?"]  # the model is asked once, not shown the message twice
+
+
+def test_a_retry_is_one_chat_not_two(config):
+    client, agent, _, failed = failing_then(config, text_reply("Hi!"))
+    client.post("/api/chat", json={"thread_id": failed["thread_id"], "message": "hello?"})
+    assert [t["id"] for t in client.get("/api/threads").json()["threads"]] == [failed["thread_id"]]
+
+
+def test_the_retry_answers_the_original_message_not_a_copy_of_it(config, monkeypatch):
+    client, agent, _, _ = build(config, text_reply("Hi!"))
+    thread = agent.store.create_thread()
+    agent.store.add_message(thread, "user", "earlier question")
+    agent.store.add_message(thread, "assistant", "earlier answer")
+    original = agent.store.add_message(thread, "user", "hello?")  # saved, then the model failed
+    failed = {"thread_id": thread}
+    seen = []
+    real = agent.ask
+    monkeypatch.setattr(agent, "ask", lambda history, **kw: seen.append(kw) or real(history, **kw))
+    client.post("/api/chat", json={"thread_id": failed["thread_id"], "message": "hello?"})
+    assert seen == [{"thread_id": failed["thread_id"], "message_id": original}]
+
+
+def test_other_words_after_a_failed_turn_are_a_new_message(config):
+    client, agent, model, failed = failing_then(config, text_reply("Hi!"))
+    client.post("/api/chat", json={"thread_id": failed["thread_id"], "message": "never mind, what time is it?"})
+    assert [m["content"] for m in agent.store.get_history(failed["thread_id"])] == ["hello?", "never mind, what time is it?", "Hi!"]
+    assert [m["content"] for m in model.chat_calls[0]["messages"]] == ["hello?", "never mind, what time is it?"]
+
+
+def test_the_same_words_after_an_answer_are_a_new_message_not_a_retry(config):
+    client, agent, _, _ = build(config, text_reply("One."), text_reply("Two."))
+    first = client.post("/api/chat", json={"message": "count"}).json()
+    client.post("/api/chat", json={"thread_id": first["thread_id"], "message": "count"})
+    assert [m["content"] for m in agent.store.get_history(first["thread_id"])] == ["count", "One.", "count", "Two."]
+
+
+def test_the_same_words_as_an_assistant_message_are_not_a_retry(config):
+    client, agent, model, _ = build(config, text_reply("Fine."))
+    thread = agent.store.create_thread()
+    agent.store.add_message(thread, "user", "say it back")
+    agent.store.add_message(thread, "assistant", "count")
+    client.post("/api/chat", json={"thread_id": thread, "message": "count"})
+    assert [(m["role"], m["content"]) for m in agent.store.get_history(thread)] == [
+        ("user", "say it back"), ("assistant", "count"), ("user", "count"), ("assistant", "Fine."),
+    ]
+    assert [m["content"] for m in model.chat_calls[0]["messages"]] == ["say it back", "count", "count"]  # the assistant's words stay in
+
+
+def test_the_same_words_in_another_chat_are_never_a_retry(config):
+    client, agent, _, failed = failing_then(config, text_reply("Hi!"))
+    other = client.post("/api/chat", json={"message": "hello?"}).json()  # a new chat, same words
+    assert other["thread_id"] != failed["thread_id"]
+    assert [m["role"] for m in agent.store.get_history(failed["thread_id"])] == ["user"]
+
+
+def test_the_profile_is_still_given_on_a_retry(config, tmp_path):
+    (tmp_path / "web_profile.txt").write_text("Plays guitar.")
+    client, agent, model, failed = failing_then(config, text_reply("Hi!"))
+    client.post("/api/chat", json={"thread_id": failed["thread_id"], "message": "hello?"})
+    assert model.chat_calls[0]["messages"][0] == {"role": "system", "content": "What you know about the user so far:\n- Plays guitar."}
 
 
 def test_transcribe_passes_the_audio_to_the_transcriber_and_cleans_up(config):

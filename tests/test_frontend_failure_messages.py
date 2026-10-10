@@ -154,8 +154,8 @@ def test_the_chat_page_reports_the_status_the_request_actually_got():
     source = CHAT.read_text(encoding="utf-8")
     assert re.search(r"import \{[^}]*\bdescribeSendFailure\b[^}]*\} from '\.\./lib/api-failure\.mjs'", source)
     fetch_at = source.index("fetch('/api/chat'")
-    assert fetch_at < source.index("status = res.status") < source.index("if (!res.ok) throw")  # noted before the check
-    assert "setFailed(id, describeSendFailure(status))" in source
+    assert fetch_at < source.index("status = res.status") < source.index("if (!res.ok) {")  # noted before the check
+    assert "setFailed(id, describeSendFailure(status, failure.detail))" in source
     assert "let status" in source and source.index("let status") < fetch_at  # visible to the catch below it
     assert "<span>{m.failed}</span>" in source
     assert "setFailed(id, true)" not in source  # a bare `true` would render nothing
@@ -198,7 +198,7 @@ def loading_a_saved_chat():
 
 def test_the_chat_page_says_why_a_saved_chat_could_not_be_opened():
     source = CHAT.read_text(encoding="utf-8")
-    assert re.search(r"import \{ describeLoadFailure, describeSendFailure \} from '\.\./lib/api-failure\.mjs'", source)
+    assert re.search(r"import \{ describeLoadFailure, describeSendFailure, readFailure \} from '\.\./lib/api-failure\.mjs'", source)
     load = loading_a_saved_chat()
     fetch_at = load.index("fetch(`/api/history/${threadId}`)")
     assert load.index("let status") < fetch_at < load.index("status = r.status") < load.index("if (!r.ok) throw")
@@ -404,3 +404,84 @@ def test_the_memory_page_changes_things_only_with_posts_to_its_own_api_paths_and
     for _quote, target in targets:
         assert target.startswith("/api/memory"), target
         assert "typed" not in target and "text" not in target and "editing" not in target, target  # ids and actions only
+
+
+# --- what the API said when it kept a message and could not answer it (the chat route's 503 and 500) -----------------
+
+def call(function, *arguments):
+    """m.<function>(...arguments) under Node, arguments given as JSON (a JSON null is a JavaScript null; "undefined" is spelled by leaving it out)."""
+    code = (
+        "import { pathToFileURL } from 'node:url'\n"
+        "const m = await import(pathToFileURL(process.argv[1]).href)\n"
+        "const args = JSON.parse(process.argv[3])\n"
+        "process.stdout.write(JSON.stringify(m[process.argv[2]](...args)) ?? 'null')\n"
+    )
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", code, str(MODULE), function, json.dumps(list(arguments))],
+        capture_output=True, text=True, encoding="utf-8", timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+REASON = "The model didn’t answer (is Ollama running?), so there is no reply. Your message was kept; try again."
+
+
+@needs_node
+@pytest.mark.parametrize("status", [400, 404, 500, 502, 503, 504])
+def test_a_reason_from_the_api_is_shown_as_it_was_worded_and_says_there_is_no_reply(status):
+    assert call("describeSendFailure", status, REASON) == f"No reply. {REASON}"
+
+
+@needs_node
+def test_a_refused_token_keeps_its_own_message_whatever_a_reason_says():
+    assert call("describeSendFailure", 401, "anything") == call("describeSendFailure", 401)
+    assert "access token" in call("describeSendFailure", 401, "anything")
+
+
+@needs_node
+@pytest.mark.parametrize("status", [None, 200, 204, 301, "503", "500", True, [503]])
+def test_a_reason_is_not_used_without_an_error_status(status):
+    assert call("describeSendFailure", status, REASON) == call("describeSendFailure", status)
+
+
+@needs_node
+@pytest.mark.parametrize("detail", [None, "", 5, ["a"], {"a": 1}])
+def test_a_reason_that_is_not_words_is_not_used(detail):
+    assert call("describeSendFailure", 503, detail) == call("describeSendFailure", 503)
+
+
+@needs_node
+def test_without_a_reason_the_messages_are_what_they_always_were():
+    for status in (None, 200, 401, 404, 500, 502, 503, 504):
+        assert call("describeSendFailure", status).startswith("Didn’t send.")
+
+
+@needs_node
+@pytest.mark.parametrize("body, expected", [
+    ({"detail": "words", "thread_id": 4}, {"detail": "words", "threadId": 4}),
+    ({"detail": "  padded  ", "thread_id": 4}, {"detail": "padded", "threadId": 4}),
+    ({"detail": "x" * 400}, {"detail": "x" * 300}),
+    ({"detail": "words"}, {"detail": "words"}),
+    ({"thread_id": 7}, {"threadId": 7}),
+    ({"detail": ["validation", "list"], "thread_id": "4"}, {}),
+    ({"detail": "   ", "thread_id": 4.5}, {}),
+    ({"detail": 5, "thread_id": None}, {}),
+    (None, {}),
+    ("words", {}),
+    ([], {}),
+    ({}, {}),
+])
+def test_reading_what_a_failed_chat_call_said(body, expected):
+    assert call("readFailure", body) == expected
+
+
+def test_the_chat_page_keeps_the_chat_a_failed_message_was_saved_in_so_trying_again_goes_there():
+    source = CHAT.read_text(encoding="utf-8")
+    assert re.search(r"import \{[^}]*\breadFailure\b[^}]*\} from '\.\./lib/api-failure\.mjs'", source)
+    assert "let failure = {}" in source and source.index("let failure") < source.index("fetch('/api/chat'")
+    assert "failure = readFailure(await res.json().catch(() => null))" in source  # a body that is not JSON is no reason, not a crash
+    catch = source[source.index("} catch {\n        // The server keeps a message"):source.index("setFailed(id, describeSendFailure(status, failure.detail))")]
+    assert "if (failure.threadId !== undefined)" in catch
+    assert "threadIdRef.current = failure.threadId" in catch
+    assert "localStorage.setItem('diya_thread_id', failure.threadId)" in catch

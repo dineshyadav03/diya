@@ -22,9 +22,22 @@ function classify(status) {
   return 'error'
 }
 
-// The chat's red "Didn't send" row under a message. Every text starts "Didn't send." because the
-// design rig's checks look for it.
-export function describeSendFailure(status) {
+// What a failed chat call said, when the API said anything: the reason it gave (`detail`, in words for a person) and
+// the chat it kept the message in (`thread_id`; the first message of a new chat has no id until the server answers).
+// `body` is the parsed JSON of the error response, or null when it had none.
+export function readFailure(body) {
+  const detail = typeof body?.detail === 'string' && body.detail.trim() ? body.detail.trim().slice(0, 300) : undefined
+  const threadId = Number.isInteger(body?.thread_id) ? body.thread_id : undefined
+  return { detail, threadId }
+}
+
+// The chat's red row under a message that was not answered. Without a reason from the API every text starts "Didn't
+// send." because the design rig's checks look for it. With one, the API did answer (it kept the message and could not
+// reply), so the row says "No reply." and gives the reason as the API worded it; a refused token (401) keeps its own text.
+export function describeSendFailure(status, detail) {
+  if (typeof detail === 'string' && detail && Number.isInteger(status) && status >= 400 && status !== 401) {
+    return `No reply. ${detail}`
+  }
   switch (classify(status)) {
     case 'unreachable':
       return 'Didn’t send. Diya’s server didn’t answer.'

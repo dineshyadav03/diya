@@ -429,6 +429,16 @@ class Store:
         conn.close()
         return [{"role": role, "content": content} for role, content in rows]
 
+    def get_messages(self, thread_id):
+        """One thread's messages, oldest first, each with its id: what get_history returns, plus the ids that say which
+        message is which (the chat route needs them to tell a retry of an unanswered message from a new one)."""
+        conn = self.connect()
+        rows = conn.execute(
+            "SELECT id, role, content FROM messages WHERE thread_id = ? ORDER BY id", (thread_id,)
+        ).fetchall()
+        conn.close()
+        return [{"id": row_id, "role": role, "content": content} for row_id, role, content in rows]
+
     def list_threads(self):
         conn = self.connect()
         rows = conn.execute("SELECT id, title, created_at FROM threads ORDER BY id").fetchall()

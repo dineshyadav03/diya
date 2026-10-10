@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react'
 import VoiceBar from '../components/VoiceBar'
-import { describeLoadFailure, describeSendFailure } from '../lib/api-failure.mjs'
+import { describeLoadFailure, describeSendFailure, readFailure } from '../lib/api-failure.mjs'
 
 // Every /api/... call below is same-origin: this app's own route handlers (app/api) forward it to
 // the Python API and attach the access token on the server. The browser never holds the token.
@@ -167,6 +167,7 @@ export default function ChatPage() {
     try {
       let data
       let status // stays undefined when the request never got an answer at all
+      let failure = {} // what the server said was wrong, if it said (its reason, and the chat it kept the message in)
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
@@ -174,12 +175,21 @@ export default function ChatPage() {
           body: JSON.stringify({ thread_id: threadIdRef.current, message: text }),
         })
         status = res.status
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        if (!res.ok) {
+          failure = readFailure(await res.json().catch(() => null))
+          throw new Error(`HTTP ${res.status}`)
+        }
         data = await res.json()
         if (typeof data.answer !== 'string') throw new Error('not a reply')
       } catch {
+        // The server keeps a message it could not answer, in a chat this page may not have heard of yet (the first message of
+        // a new chat): remember that chat, so trying again goes to it and does not start a second one.
+        if (failure.threadId !== undefined) {
+          threadIdRef.current = failure.threadId
+          localStorage.setItem('diya_thread_id', failure.threadId)
+        }
         // the reason is stored on the message (a string, so still truthy) and shown as its error text
-        setFailed(id, describeSendFailure(status))
+        setFailed(id, describeSendFailure(status, failure.detail))
         return
       }
       setFailed(id, false)
