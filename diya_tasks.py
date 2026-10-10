@@ -14,7 +14,8 @@ Each call uses its own short-lived connection, as Store does; what must be true 
 write (BEGIN IMMEDIATE), so two callers cannot both pass the same check.
 """
 import contextlib
-from datetime import datetime
+import re
+from datetime import datetime, time
 
 import diya_db
 import diya_memory
@@ -77,6 +78,18 @@ def _tidy(text, what, limit):
         except diya_memory.InvalidFact as exc:
             raise InvalidTask(str(exc).replace("a fact", what, 1))
     return text
+
+
+_TODAY = re.compile(r"(?:by |due |on |for )?today")
+
+
+def _today_stamp(words, now):
+    """A task due "today", as a day: that day at nine, which only carries the date (a task due on a day is not late until the day
+    is over). diya_time reads a bare day as that day at 09:00, so "today" after nine o'clock reads as "already passed": right for a
+    reminder, which is for a moment, wrong for a task, which is for a day. None for any other words."""
+    if _TODAY.fullmatch(words.lower()):
+        return _stamp(datetime.combine(now.date(), time(9, 0)))
+    return None
 
 
 def says_a_time(words):
@@ -191,7 +204,7 @@ class Tasks:
             try:
                 due_ts = diya_time.parse_when(due, now).iso()
             except diya_time.NotUnderstood:
-                due_ts = None
+                due_ts = _today_stamp(due, now)
         key = diya_memory.text_key(content)
         with self._write() as conn:
             existing = conn.execute("SELECT id FROM tasks WHERE content_key = ? AND done = 0", (key,)).fetchone()

@@ -153,6 +153,27 @@ def test_a_due_phrase_that_cannot_be_read_is_kept_as_words_and_is_not_an_error(t
     assert task["due_at"] == words and task["due_ts"] is None
 
 
+@pytest.mark.parametrize("words", ["today", "Today", "by today", "due today", "on today", "for today", "  today  "])
+def test_a_task_due_today_is_due_on_the_day_even_after_nine_o_clock(tasks, words):
+    """diya_time reads a bare day as 09:00 on it, so "today" typed at 10:15 is "already passed" -- and a task due today was
+    kept as words that nothing could act on. A task is for a day, so today is the day."""
+    task = tasks.add("Pay the bill", words)
+    assert task["due_at"] == " ".join(words.split()) and task["due_ts"] == stamp(datetime(2026, 9, 23, 9, 0))
+    assert diya_tasks.describe_due(task) == "Wednesday 23 Sep 2026"
+    assert diya_tasks.is_overdue(task, datetime(2026, 9, 23, 23, 59, 59)) is False  # not late while the day lasts
+    assert diya_tasks.is_overdue(task, datetime(2026, 9, 24, 0, 0)) is True
+
+
+def test_today_before_nine_is_the_same_day_as_it_always_was(store):
+    early = Tasks(store, clock=lambda: datetime(2026, 9, 23, 7, 30))
+    assert early.add("Pay the bill", "today")["due_ts"] == stamp(datetime(2026, 9, 23, 9, 0))
+
+
+@pytest.mark.parametrize("words", ["today or tomorrow", "todays", "not today", "today at 9am", "yesterday", "by the end of today", "later today"])
+def test_only_plain_today_is_read_as_the_day_other_words_that_cannot_be_read_stay_words(tasks, words):
+    assert tasks.add("Pay the bill", words)["due_ts"] is None
+
+
 @pytest.mark.parametrize("due", [None, "", "   ", "\n"])
 def test_no_due_phrase_is_no_due_date(tasks, due):
     task = tasks.add("Call mum", due)
