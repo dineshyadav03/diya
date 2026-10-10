@@ -82,6 +82,14 @@ class Config:
     # /api/transcribe gets its own, larger allowance: audio uploads are legitimately much bigger
     # than a chat message. 25,000,000 bytes is a few minutes of compressed audio at typical bitrates.
     max_transcribe_bytes: int = 25_000_000
+    # How much of a chat is sent to the model (DIYA_HISTORY_CHARS): its newest messages, up to about this many characters (four characters are roughly
+    # one token). A whole thread used to be sent every turn, so on a CPU every reply got slower as a chat grew and, past the model's window, the oldest
+    # text was dropped silently. 24,000 is about 6,000 tokens, comfortably inside the 16,384-token window of the capped 4B model. 0 sends everything.
+    history_chars: int = 24_000
+    # How much of what was said since Dreaming last looked it reads in one pass (DIYA_DREAM_BATCH_CHARS): the person's messages from the checkpoint on,
+    # up to about this many characters (always at least one message). Before, a pass sent everything since its last one in a single prompt, so a long
+    # gap (a machine off for weeks) could ask for more than the model's window; now the rest simply waits for the next pass. 0 reads everything.
+    dream_batch_chars: int = 12_000
     ssl_certfile: str | None = None
     ssl_keyfile: str | None = None
     # Folders `list_files` may look inside, beyond the default folder (see default_files_root());
@@ -159,6 +167,10 @@ _STRING_SETTINGS = {
 # The settings whose default is a file or folder Diya writes about you: with DIYA_DATA_DIR set they default to the same name in that folder.
 _DATA_FILES = ("db_path", "profile_path", "dream_log_path", "dream_state_path", "dream_pending_path", "notify_log_path",
                "token_path", "connector_tokens_dir", "connectors_log_path")
+
+
+# The settings that are a size limit in characters, where 0 means "no limit": the setting, and what 0 means for it.
+_LIMIT_SETTINGS = {"history_chars": ("DIYA_HISTORY_CHARS", "everything"), "dream_batch_chars": ("DIYA_DREAM_BATCH_CHARS", "no cap")}
 
 
 def ensure_data_dir(config: "Config") -> None:
@@ -252,6 +264,16 @@ def load_config(env=None) -> Config:
             raise ConfigError(f"DIYA_MAX_BODY_BYTES must be an integer, got {max_body!r}") from None
         if values["max_body_bytes"] < 1:
             raise ConfigError(f"DIYA_MAX_BODY_BYTES must be at least 1, got {values['max_body_bytes']}")
+
+    for field, (name, zero_means) in _LIMIT_SETTINGS.items():
+        given = read(name)
+        if given is not None:
+            try:
+                values[field] = int(given)
+            except ValueError:
+                raise ConfigError(f"{name} must be an integer, got {given!r}") from None
+            if values[field] < 0:
+                raise ConfigError(f"{name} must be 0 ({zero_means}) or more, got {values[field]}")
 
     max_transcribe = read("DIYA_MAX_TRANSCRIBE_BYTES")
     if max_transcribe is not None:

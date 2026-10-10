@@ -542,3 +542,90 @@ def test_end_to_end_staged_run_stages_and_leaves_the_profile_alone(config, data,
     assert again.returncode == 0 and len(requests) == 1 and len(pending(config)) == 1
     assert pathlib.Path(config.dream_log_path).read_text(encoding="utf-8").endswith("Nothing new to dream about.\n")
 
+
+# --- how much one pass reads (DIYA_DREAM_BATCH_CHARS; audit finding F7) ----------------------------------------------
+
+def said(role, length, n=0):
+    return {"id": n, "thread_id": 1, "role": role, "content": str(n % 10) * length}
+
+
+def numbered(*messages):
+    return [{**m, "id": n} for n, m in enumerate(messages, start=1)]
+
+
+def test_a_pass_reads_the_first_messages_that_fit_and_leaves_the_rest_for_the_next():
+    messages = numbered(*[said("user", 100) for _ in range(10)])
+    assert [m["id"] for m in dreaming.first_batch(messages, 350)] == [1, 2, 3]  # 300 fits, a fourth would make 400
+    assert [m["id"] for m in dreaming.first_batch(messages, 400)] == [1, 2, 3, 4]  # the limit is a limit, not a target
+
+
+def test_a_message_that_does_not_fit_ends_the_pass_and_a_shorter_one_after_it_is_not_taken_in_its_place():
+    messages = numbered(said("user", 100), said("user", 500), said("user", 10))
+    assert [m["id"] for m in dreaming.first_batch(messages, 150)] == [1]  # a pass is a stretch of the conversation with no hole in it
+
+
+def test_a_pass_always_takes_the_first_message_of_the_persons_however_long():
+    messages = numbered(said("user", 50_000), said("user", 10))
+    assert [m["id"] for m in dreaming.first_batch(messages, 100)] == [1]
+
+
+def test_messages_before_the_first_of_the_persons_are_taken_so_the_pass_makes_progress():
+    messages = numbered(said("assistant", 5000), said("assistant", 5000), said("user", 100), said("user", 100))
+    assert [m["id"] for m in dreaming.first_batch(messages, 150)] == [1, 2, 3]
+
+
+def test_only_the_persons_own_words_count_toward_the_limit():
+    messages = numbered(said("user", 100), said("assistant", 10_000), said("user", 100))
+    assert [m["id"] for m in dreaming.first_batch(messages, 200)] == [1, 2, 3]
+
+
+def test_one_message_counts_for_no_more_than_what_is_read_of_it():
+    messages = numbered(said("user", 50_000), said("user", 50_000))
+    assert [m["id"] for m in dreaming.first_batch(messages, dreaming.DREAM_MESSAGE_CHARS * 2)] == [1, 2]
+    assert [m["id"] for m in dreaming.first_batch(messages, dreaming.DREAM_MESSAGE_CHARS * 2 - 1)] == [1]
+
+
+def test_zero_or_less_reads_everything_and_what_is_returned_is_a_new_list():
+    messages = numbered(*[said("user", 5000) for _ in range(5)])
+    assert dreaming.first_batch(messages, 0) == messages and dreaming.first_batch(messages, -1) == messages
+    assert dreaming.first_batch(messages, 0) is not messages and dreaming.first_batch([], 100) == []
+
+
+def test_a_pass_reads_a_long_message_only_as_far_as_the_limit(config):
+    seed(config, ("user", "I adopted a cat named Pixel. " + "and so on " * 2000 + "THE-END"))
+    d, client = dreamer(config, text_reply("- cat: Pixel"))
+    d.dream_cycle()
+    prompt = client.chat_calls[0]["messages"][0]["content"]
+    assert "I adopted a cat named Pixel." in prompt and "THE-END" not in prompt and len(prompt) < dreaming.DREAM_MESSAGE_CHARS + 1500
+
+
+def test_a_long_gap_is_worked_off_over_several_passes_and_nothing_is_skipped_or_read_twice(config):
+    config = dataclasses.replace(config, dream_batch_chars=250)
+    seed(config, *[("user", f"fact number {n} " + "x" * 80) for n in range(1, 8)])  # seven messages of about 95 characters
+    seen = []
+    for n in range(10):
+        d, client = dreamer(config, text_reply("NONE"))
+        d.dream_cycle()
+        if not client.chat_calls:
+            break
+        seen.append(client.chat_calls[0]["messages"][0]["content"])
+    assert len(seen) == 4  # 2 + 2 + 2 + 1
+    numbers = [int(part.split()[0]) for prompt in seen for part in prompt.split("fact number ")[1:]]
+    assert numbers == [1, 2, 3, 4, 5, 6, 7] and state(config) == {"last_message_id": 7}
+
+
+def test_a_staged_batch_is_the_capped_one_and_the_checkpoint_stops_where_it_does(config):
+    config = dataclasses.replace(config, dream_batch_chars=200)
+    seed(config, ("user", "a" * 90), ("assistant", "ok"), ("user", "b" * 90), ("user", "c" * 90))
+    dreamer(config, text_reply("- a fact"))[0].dream_cycle()
+    record = pending(config)[0]
+    assert (record["first_message_id"], record["last_message_id"]) == (1, 3) and state(config) == {"last_message_id": 3}
+
+
+def test_the_batch_limit_is_a_setting_and_a_wrong_one_is_refused():
+    assert diya_config.load_config({}).dream_batch_chars == 12_000
+    assert diya_config.load_config({"DIYA_DREAM_BATCH_CHARS": "3000"}).dream_batch_chars == 3000
+    assert diya_config.load_config({"DIYA_DREAM_BATCH_CHARS": "0"}).dream_batch_chars == 0
+    for bad in ("many", "1.5", "-1"):
+        with pytest.raises(diya_config.ConfigError, match="DIYA_DREAM_BATCH_CHARS"):
+            diya_config.load_config({"DIYA_DREAM_BATCH_CHARS": bad})

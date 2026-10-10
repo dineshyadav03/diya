@@ -418,3 +418,167 @@ def test_get_weather_prefers_the_most_populous_match(monkeypatch):
     fake_open_meteo(monkeypatch, [small, CHENNAI])
     out = diya.get_weather("Chennai")
     assert out.startswith("Chennai, Tamil Nadu, India: 30.0") and "Oregon" not in out
+
+
+# --- how much of a chat the model is sent (DIYA_HISTORY_CHARS) -------------------------------------------------------
+
+def chat(*lengths):
+    """A chat that alternates user and assistant, starting with the user, each message `length` characters of its own number."""
+    return [{"role": "user" if n % 2 == 0 else "assistant", "content": str(n % 10) * length} for n, length in enumerate(lengths)]
+
+
+def test_a_chat_that_fits_is_sent_whole():
+    messages = chat(100, 100, 100)
+    assert diya.trim_history(messages, 10_000) == messages
+
+
+def test_the_oldest_messages_are_the_ones_dropped():
+    messages = chat(1000, 1000, 1000, 1000, 1000)  # user, assistant, user, assistant, user
+    budget = 3 * (1000 + diya.HISTORY_MESSAGE_OVERHEAD)
+    assert diya.trim_history(messages, budget) == messages[2:]  # the last three fit exactly; the budget is a limit, not a target
+
+
+def test_a_chat_one_character_over_loses_the_oldest_message():
+    messages = chat(1000, 1000, 1000)
+    budget = 3 * (1000 + diya.HISTORY_MESSAGE_OVERHEAD)
+    assert diya.trim_history(messages, budget) == messages
+    assert diya.trim_history(messages, budget - 1) == messages[2:]  # the user message went, which left an answer without its question, so that went too
+
+
+def test_the_last_message_is_kept_however_long_it_is():
+    messages = chat(10, 10, 50_000)
+    assert diya.trim_history(messages, 1000) == messages[2:]
+
+
+def test_an_answer_left_at_the_start_without_its_question_is_dropped_too():
+    messages = chat(1000, 1000, 1000)  # user, assistant, user
+    budget = 2 * (1000 + diya.HISTORY_MESSAGE_OVERHEAD)  # room for the assistant message and the last user message only
+    assert diya.trim_history(messages, budget) == messages[2:]
+
+
+def test_the_message_that_would_not_fit_ends_the_search_so_an_older_short_one_does_not_come_back_in():
+    messages = chat(10, 5000, 10)  # a short message, a long one, the last
+    assert diya.trim_history(messages, 200) == messages[2:]  # not messages[0] + messages[2]: the chat is never left with a hole in it
+
+
+def test_a_message_costs_its_text_and_sixteen_characters():
+    messages = [{"role": "user", "content": "x" * 100} for _ in range(3)]
+    assert diya.HISTORY_MESSAGE_OVERHEAD == 16
+    assert diya.trim_history(messages, 2 * 116) == messages[1:] and diya.trim_history(messages, 2 * 116 - 1) == messages[2:]
+    assert diya.trim_history(messages, 3 * 116) == messages
+
+
+def test_every_answer_left_at_the_start_is_dropped_not_only_the_first():
+    messages = [{"role": "assistant", "content": "a"}, {"role": "assistant", "content": "b"}, {"role": "user", "content": "c"}]
+    assert diya.trim_history(messages, 1000) == messages[2:]
+
+
+def test_a_chat_that_ends_on_an_answer_keeps_it_though_nothing_else_fits():
+    messages = [{"role": "user", "content": "q" * 500}, {"role": "assistant", "content": "a" * 500}]
+    assert diya.trim_history(messages, 100) == messages[1:]
+
+
+def test_a_tools_result_left_at_the_start_without_its_call_is_dropped_too():
+    messages = [
+        {"role": "assistant", "content": None, "tool_calls": [{"id": "1"}]},
+        {"role": "tool", "content": "result", "tool_call_id": "1"},
+        {"role": "assistant", "content": "done"},
+        {"role": "user", "content": "thanks"},
+    ]
+    assert diya.trim_history(messages[1:], 1000) == messages[3:]  # a result with no call, then an answer to nothing, then the person's next message
+    assert diya.trim_history(messages, 1000) == messages[3:]  # nothing in it is the person's but the last: the rest opens on a call with no question
+
+
+def test_zero_or_less_sends_everything():
+    messages = chat(1000, 1000, 1000)
+    assert diya.trim_history(messages, 0) == messages and diya.trim_history(messages, -5) == messages
+
+
+def test_what_is_returned_is_a_new_list_and_the_messages_are_untouched():
+    messages = chat(100, 100)
+    assert diya.trim_history(messages, 0) is not messages and diya.trim_history(messages, 10_000) is not messages
+    assert messages == chat(100, 100)
+
+
+def test_an_empty_chat_and_a_message_with_no_text_are_fine():
+    assert diya.trim_history([], 100) == []
+    assert diya.trim_history([{"role": "user", "content": None}], 100) == [{"role": "user", "content": None}]
+
+
+def test_tool_messages_count_by_their_text_and_stay_with_the_trimmed_list():
+    messages = [{"role": "user", "content": "a" * 500}, {"role": "assistant", "content": None, "tool_calls": [{"id": "1"}]}, {"role": "tool", "content": "b" * 500}, {"role": "user", "content": "go"}]
+    assert diya.trim_history(messages, 100) == messages[3:]
+
+
+def test_asking_sends_the_model_only_the_newest_part_of_a_long_chat(config):
+    agent, client = make_agent(dataclasses.replace(config, history_chars=700), text_reply("ok"))
+    messages = chat(300, 300, 300, 300, 300)  # user, assistant, user, assistant, user
+    newest = messages[4]["content"]
+    agent.ask(messages)
+    sent = [m["content"] for m in client.chat_calls[0]["messages"] if m["role"] != "system"]
+    assert sent == [newest]  # room for two, which would open on an answer: the question stays alone
+
+
+def test_the_callers_list_is_cut_the_same_way_so_a_chat_held_in_memory_stops_growing(config):
+    agent, client = make_agent(dataclasses.replace(config, history_chars=700), text_reply("ok"), text_reply("ok"))
+    history = chat(300, 300, 300, 300, 300)
+    agent.ask(history)
+    assert [m["content"] for m in history] == [chat(300, 300, 300, 300, 300)[4]["content"]]
+    history += [{"role": "assistant", "content": "a" * 300}, {"role": "user", "content": "b" * 300}]
+    agent.ask(history)
+    assert [m["content"] for m in history] == ["b" * 300]  # room for the answer and the question, but the answer's own question was cut: it goes too
+
+
+def test_what_is_known_about_the_person_stays_and_does_not_count_against_the_chat(config, tmp_path):
+    (tmp_path / "agent_profile.txt").write_text("Likes guitar.\n")
+    agent, client = make_agent(dataclasses.replace(config, history_chars=700), text_reply("ok"))
+    history = agent.with_profile(chat(300, 300, 300))
+    newest = history[3]["content"]
+    assert history[0]["role"] == "system" and len(history) == 4
+    agent.ask(history)
+    sent = client.chat_calls[0]["messages"]
+    assert sent[0]["role"] == "system" and "Likes guitar." in sent[0]["content"] and [m["content"] for m in sent[1:] if m["role"] != "system"] == [newest]
+
+
+def test_every_leading_system_message_stays_whatever_the_limit(config):
+    agent, client = make_agent(dataclasses.replace(config, history_chars=100), text_reply("ok"))
+    messages = [{"role": "system", "content": "s" * 500}, {"role": "system", "content": "t" * 500}] + chat(300, 300, 300)
+    agent.ask(messages)
+    sent = client.chat_calls[0]["messages"]
+    assert [m["content"][0] for m in sent if m["role"] == "system"][:2] == ["s", "t"]
+    assert [m["role"] for m in messages].count("system") == 2
+
+
+def test_a_chat_that_fits_reaches_the_model_whole(config):
+    agent, client = make_agent(config, text_reply("ok"))
+    messages = chat(100, 100, 100)
+    agent.ask(messages)
+    assert [m["content"] for m in client.chat_calls[0]["messages"] if m["role"] != "system"] == [m["content"] for m in chat(100, 100, 100)]
+    assert len(messages) == 3
+
+
+def test_a_chat_with_no_limit_reaches_the_model_whole(config):
+    agent, client = make_agent(dataclasses.replace(config, history_chars=0), text_reply("ok"))
+    agent.ask(chat(50_000, 50_000, 50_000))
+    assert len([m for m in client.chat_calls[0]["messages"] if m["role"] != "system"]) == 3
+
+
+def test_the_terminal_chat_and_the_web_chat_both_ask_through_the_one_place_that_trims():
+    import inspect
+
+    assert "_within_window" in inspect.getsource(Agent.ask) and "trim_history" in inspect.getsource(Agent._within_window)
+
+
+def test_the_default_leaves_room_for_an_ordinary_chat_and_fits_the_small_models_window():
+    assert diya_config.load_config({}).history_chars == 24_000  # about 6,000 tokens; the capped 4B model's window is 16,384
+
+
+def test_the_history_limit_is_a_setting():
+    assert diya_config.load_config({"DIYA_HISTORY_CHARS": "5000"}).history_chars == 5000
+    assert diya_config.load_config({"DIYA_HISTORY_CHARS": " 0 "}).history_chars == 0
+
+
+@pytest.mark.parametrize("bad", ["abc", "12.5", "-1"])
+def test_a_history_limit_that_is_not_a_whole_number_of_zero_or_more_is_refused(bad):
+    with pytest.raises(diya_config.ConfigError, match="DIYA_HISTORY_CHARS"):
+        diya_config.load_config({"DIYA_HISTORY_CHARS": bad})

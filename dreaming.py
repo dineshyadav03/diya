@@ -12,6 +12,25 @@ import diya_db
 
 
 SOURCE_JUDGE_CHARS = 600  # how much of the person's message the privacy question is asked about
+DREAM_MESSAGE_CHARS = 4000  # how much of one message of the person's Dreaming reads: the rest of a very long one is not looked at
+
+
+def first_batch(messages, max_chars):
+    """The first of `messages` (oldest first) that Dreaming reads in one pass, as a new list: every message from the start up to the point
+    where the person's own messages come to `max_chars` (each counted at most DREAM_MESSAGE_CHARS), and always up to the first message of
+    the person's, however long, so a pass always makes progress. What is left waits for the next pass. `max_chars` 0 or less reads everything."""
+    if max_chars <= 0:
+        return list(messages)
+    taken, used, seen_user = [], 0, False
+    for message in messages:
+        if message["role"] == "user":
+            cost = min(len(message["content"]), DREAM_MESSAGE_CHARS)
+            if seen_user and used + cost > max_chars:
+                break
+            used += cost
+            seen_user = True
+        taken.append(message)
+    return taken
 
 
 def _is_message_id(value):
@@ -109,7 +128,7 @@ class Dreamer:
         same 'never loop itself' pattern as milestone4_watcher.py, same lesson applied from
         the start this time: don't crash or lose progress if Ollama isn't reachable."""
         last_id = self.load_last_dreamed_id()
-        new_messages = self.store.get_messages_since(last_id)
+        new_messages = first_batch(self.store.get_messages_since(last_id), self.config.dream_batch_chars)
 
         # Only the user's own statements teach us real facts -- assistant replies don't.
         user_messages = [m for m in new_messages if m["role"] == "user"]
@@ -143,7 +162,7 @@ class Dreamer:
         # valid" both silently dropped real facts in different ways -- a genuine small-model
         # reliability limit, not a wording problem. Code, not the model, is what reliably
         # preserves existing content: we only ever append, never ask for a full rewrite.
-        conversation_text = "\n".join(f"- {m['content']}" for m in user_messages)
+        conversation_text = "\n".join(f"- {m['content'][:DREAM_MESSAGE_CHARS]}" for m in user_messages)
 
         prompt = (
             "Below are things a user said recently. Extract any genuine NEW facts about their "
@@ -217,6 +236,16 @@ class Dreamer:
 
         return private
 
+    def _replace_judge(self, memory):
+        """`replaces(fact)` for the memory policy: the chat model's answer to "does this replace one of the facts already known?". The known facts
+        are read afresh for each question, so a fact accepted a moment ago in this same pass is one a later fact may replace."""
+        import diya_autonomy
+
+        def replaces(fact):
+            return diya_autonomy.replacement_of(self.client, self.config.model, memory.facts("accepted"), fact["text"])
+
+        return replaces
+
     def _finish_staged(self, new_facts, first_message_id, last_message_id):
         if not new_facts or new_facts.upper().startswith("NONE"):
             self.save_last_dreamed_id(last_message_id)
@@ -236,16 +265,6 @@ class Dreamer:
         try:
             self._append_pending(record)
         except Exception as exc:
-    def _replace_judge(self, memory):
-        """`replaces(fact)` for the memory policy: the chat model's answer to "does this replace one of the facts already known?". The known facts
-        are read afresh for each question, so a fact accepted a moment ago in this same pass is one a later fact may replace."""
-        import diya_autonomy
-
-        def replaces(fact):
-            return diya_autonomy.replacement_of(self.client, self.config.model, memory.facts("accepted"), fact["text"])
-
-        return replaces
-
             print(f"[error] Could not stage the new facts ({exc}). Checkpoint left unchanged; will retry next cycle.")
             return
         self.save_last_dreamed_id(last_message_id)

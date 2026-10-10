@@ -411,6 +411,29 @@ FACT_SHARE_HINT = (
 )
 
 
+HISTORY_MESSAGE_OVERHEAD = 16  # characters counted for each message beyond its text: its role and the way it is wrapped
+
+
+def trim_history(messages, max_chars):
+    """The newest of `messages` that fit in about `max_chars` characters, oldest first, as a new list (the caller's is left alone). The last message
+    is always kept, however long, since it is what is being asked. What would be left at the start without the message of the person's it belongs to
+    (an answer whose question was cut off, a tool's result whose call was) is dropped too, so the model never opens on a reply to something it cannot
+    see. `max_chars` 0 or less keeps everything."""
+    if max_chars <= 0:
+        return list(messages)
+    kept, used = [], 0
+    for message in reversed(messages):
+        cost = len(message.get("content") or "") + HISTORY_MESSAGE_OVERHEAD
+        if kept and used + cost > max_chars:
+            break
+        kept.append(message)
+        used += cost
+    kept.reverse()
+    while len(kept) > 1 and kept[0].get("role") != "user":
+        kept.pop(0)
+    return kept
+
+
 def _tool_arguments(raw):
     """The arguments of a tool call as a dict, or a ValueError that says what is wrong with them. A model that passes a tool
     nothing sends an empty string as often as `{}`, and both mean "no arguments"; anything else must be a JSON object."""
@@ -838,6 +861,7 @@ class Agent:
         ran before it (`thread_id`, `message_id`, the tools run so far); when it is over all of that is
         forgotten, so a later direct call is not judged by an old message.
         """
+        messages = self._within_window(messages)
         self._turn.user_text = _last_user_text(messages)
         self._turn.thread_id = thread_id
         self._turn.message_id = message_id
@@ -851,6 +875,19 @@ class Agent:
             self._turn.thread_id = None
             self._turn.message_id = None
             self._turn.reads = []
+
+    def _within_window(self, messages):
+        """Cut the oldest of the chat out of `messages`, in place, if it is too long to send (trim_history); a leading system message, which is
+        what the model knows about the person, always stays. In place because ask() already adds the tool turns to the caller's list, and a live
+        terminal chat keeps one list for hours: left alone it would only ever grow. Done here, where every way of asking arrives, so the web
+        chat and the terminal chat both get it."""
+        lead = 0
+        while lead < len(messages) and messages[lead].get("role") == "system":
+            lead += 1
+        rest = messages[lead:]
+        kept = trim_history(rest, self.config.history_chars)
+        del messages[lead:lead + len(rest) - len(kept)]  # what was kept is the end of what there was
+        return messages
 
     def _ask(self, messages):
         """The tool-calling loop behind ask().
