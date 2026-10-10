@@ -598,6 +598,70 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
   within five years (an opinion in that post, not evidence).
 - **Action:** none. Re-run the model bake-off (entry 19) when a small model with a better tool-calling record lands on Ollama.
 
+### 24. helix-foundry (HelixDB): "your company's data as one ontology, on your own computer" -- real, narrower than the post says
+
+- **Source:** the user's pasted post (an X post, "I just KILLED Palantir!"); checked 2026-10-10 against
+  https://github.com/HelixDB/helix-foundry and https://github.com/HelixDB/helix-db (read through page summaries, not the
+  code) and one web search, which found no coverage of helix-foundry itself.
+- **Noted:** 2026-10-10.
+- **What checked out:** the repo is real and MIT-licensed (621 stars, 86 forks, 44 open pull requests; only 2 commits
+  showed on the page I read, no last-commit date). The README describes a local, single-user workspace: connect sources
+  (Postgres, MySQL, Stripe, WorkOS, PostHog, files, APIs), get a suggested ontology (objects and relationships) held in
+  HelixDB, versioned Parquet snapshots, DuckDB running the queries, and an "Analyst" that answers questions with the SQL it
+  ran. It runs from Docker Compose, binds to 127.0.0.1, and defaults to a local model (qwen3:4b through Ollama), with
+  Claude or OpenAI as options. HelixDB itself is a Rust graph-plus-vector database, Apache-2.0 on its repo page (one
+  search listing said GPL v3; the repo page is the better source), about 6.2k stars, with an embedded mode.
+- **What did not check out:** the post says "s3-backed", but the README lists S3-compatible storage only as a place data is
+  read *from*, not where the ontology lives. "Killed Palantir" is the poster's framing: the README never mentions Palantir,
+  and says the tool is for one user with no accounts, so anyone who can reach the app controls every workspace -- the
+  opposite of the governed multi-user platform Foundry is sold as. It was built and validated on Apple-silicon macOS, CI
+  runs on Linux, Windows is untested, the first run downloads several GB, and the local model was benchmarked on 16 GB
+  machines. It pins HelixDB v0.0.6 while HelixDB's own repo describes a v3 generation; the pages I read do not explain why.
+- **Why it matters for Diya:** (a) one more local-first tool whose *default* is a 4B model on a 16 GB machine -- the same bet
+  Diya made, and a sign the pattern is spreading. (b) "Answers come with the query that produced them" is a verifiable-answer
+  habit worth noting; Diya's list and read tools already build their answers in code from its own tables rather than letting
+  the model write queries, which is the safer shape, but it does not show the owner where an answer came from. (c) Not
+  adoptable: it is a company-data tool, needs Docker plus a graph database plus DuckDB, and Windows is untested; person-tagged
+  memory in SQLite is the right size for one person's facts.
+- **Action:** none to build. Idea to keep, not commit to: an optional "where this came from" line on answers about the owner's
+  own data (which facts, reminders or tasks were read), in keeping with the auditability thesis (cross-cutting note 1).
+
+### 25. Truffle: who is behind it and what is (and is not) known -- searches of 2026-09-09 to 2026-10-05, written down 2026-10-10
+
+- **Source:** about thirty searches and page fetches made between 2026-09-09 and 2026-10-05 for the Truffle dossier work, never
+  recorded here until now: truffle.net, the older docs at docs.itsalltruffles.com, the github.com/deepshard organisation, a
+  FundersClub profile, the March 2024 Hacker News launch thread, and search-engine snippets. Several pages returned HTTP 403 and
+  were NOT read: truffle.net/press, docs.truffle.net, the G2 reviews page, the Medium launch post, and an eMarketer piece.
+- **Noted:** 2026-10-10 (from the saved results; nothing re-fetched today).
+- **What the sources say:**
+  - **Who:** Deepshard, Inc., doing business as Truffle, Los Angeles; its GitHub organisation says "We're building a personal
+    AI computer" (69 followers; the SDK repo has 23 stars). No source I fetched named the founders: the 2024 launch thread
+    remarked on exactly that. A search snippet gave a $1.78M seed round from July 2022 on one aggregator, which I could not
+    confirm and could not tie with certainty to this Truffle.
+  - **Do not confuse it with** Truffle AI (Y Combinator W25, Bengaluru, an API for putting agents inside software) or Truffle
+    Security ($25M Series B, November 2025, secret scanning). Both turn up first in searches; neither is this company.
+  - **Hardware:** per the 2024 launch thread, Truffle-1 is a Jetson AGX Orin 64 GB in a custom case -- 200 GB/s memory
+    bandwidth, 275 TOPS, 60 W -- claiming Mixtral at 22 tokens/s, $1,299 ($500 preorder). Commenters objected to the closed-source
+    compiler and noted the bare board costs $300-400 less. One snippet says orders opened and shipping began in January 2025 in a
+    run limited to 333 units, with 50 hand-delivered in the US; another mentions "$115/month". Those two are unconfirmed and
+    disagree with the $1,299 figure.
+  - **Software:** a Truffle app is a set of Python tools exposed through its SDK; the client picks one app per session and the
+    docs state there is "no cross-app context" once it has. The older docs list Gemma3-27B, Qwen-32B or Qwen-14B for the hardware
+    and DeepSeek R1 for the cloud.
+  - **Today's truffle.net:** "private, local exo-cortex", a sculptural shell with a light array, a companion app called Symphony,
+    nightly "Dreaming" -- and no price, specs, shipping status or reviews, so it still reads as stale (entry 1). Searches for its
+    "Conductor" and "Radiance" apps and a wake word found nothing.
+  - **Privacy:** its privacy policy, as relayed by a search, says Google data and tokens stay on the device, nothing goes to a
+    third-party cloud model, and nothing is used for training. That is a claim, not an audit. The only "controversy" results were
+    about Truffle Security's XSS Hunter, an unrelated company.
+- **Why it matters for Diya:** (a) the comparable's own hardware runs 14-32B models; Diya runs a 3-4B model on a CPU, one to two
+  orders of magnitude smaller, which is the honest limit on how far "feature parity" can stretch (see entry 19). (b) A closed
+  source, founder-opaque appliance leaves the auditability difference (cross-cutting note 1) intact. (c) "No cross-app context"
+  is a limit Diya does not have, since one agent holds all its tools -- at the cost, measured in the bake-off, that a small model
+  can confuse them.
+- **Action:** none to build. Keep public wording to "feature parity with what Truffle does, per the dossier", never its hardware,
+  its price or its shipping numbers, and do not cite the unconfirmed figures above.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,
