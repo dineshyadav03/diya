@@ -771,10 +771,11 @@ def test_the_message_is_asked_about_once_however_many_facts_came_from_it(tmp_pat
     record = {"timestamp": "t", "first_message_id": first, "last_message_id": first, "model": "m",
               "facts": ["- likes tea in the morning", "- plays badminton on Sundays"]}
     (tmp_path / "p.jsonl").write_text(json.dumps(record) + "\n", encoding="utf-8")
-    client = FakeClient([text_reply("OK")] * 5)
+    client = FakeClient([text_reply("OK")] * 3 + [text_reply("NONE")])
     dreaming.Dreamer(config, client=client).remember_on_its_own()
     questions = [c["messages"][0]["content"] for c in client.chat_calls]
-    assert len(questions) == 3 and sum("I like tea in the morning and I play badminton on Sundays" in q for q in questions) == 1  # fact, message, fact
+    # the first fact, the message, the second fact; then (the first being known by now) whether the second replaces it
+    assert len(questions) == 4 and sum("I like tea in the morning and I play badminton on Sundays" in q for q in questions) == 1
     assert {f["status"] for f in Memory(store).facts()} == {"accepted"}
 
 
@@ -798,3 +799,202 @@ def test_a_fact_with_no_source_message_is_judged_on_its_own_words_alone(world):
     private = calls_to("ok")
     auto.apply(memory, now=NOW, private=private)
     assert private.asked == ["likes tea in the morning"]
+
+
+# --- does the new fact replace one already known? (docs/AUTO_MEMORY_DESIGN.md, section 9) ---------------------------------
+
+def known_facts(*texts):
+    return [{"id": 100 + n, "text": text, "person": None} for n, text in enumerate(texts)]
+
+
+def says(*replies):
+    return FakeClient([text_reply(r) for r in replies])
+
+
+@pytest.mark.parametrize("answer, expected", [
+    ("2", auto.Replacement("replaces", 101)), ("2.", auto.Replacement("replaces", 101)), ("  2 \n", auto.Replacement("replaces", 101)),
+    ("1", auto.Replacement("replaces", 100)), ("3", auto.Replacement("replaces", 102)),
+    ("NONE", auto.Replacement("none", None)), ("none.", auto.Replacement("none", None)), ("**None**", auto.Replacement("none", None)),
+    ("0", auto.Replacement("unclear", None)), ("4", auto.Replacement("unclear", None)), ("-1", auto.Replacement("unclear", None)),
+    ("Fact 2", auto.Replacement("unclear", None)), ("maybe", auto.Replacement("unclear", None)), ("", auto.Replacement("unclear", None)),
+    ("2nd", auto.Replacement("unclear", None)),
+])
+def test_the_models_answer_is_a_known_fact_or_none_and_anything_else_is_unclear(answer, expected):
+    known = known_facts("lives in Delhi", "works as a teacher", "likes tea")
+    assert auto.replacement_of(says(answer), "m", known, "works as a nurse") == expected
+
+
+def test_an_answer_with_no_text_at_all_is_unclear_not_failed():
+    assert auto.replacement_of(FakeClient([text_reply(None)]), "m", known_facts("lives in Delhi"), "x") == auto.Replacement("unclear", None)
+
+
+def test_a_model_that_cannot_be_asked_is_failed_not_an_error():
+    known = known_facts("lives in Delhi")
+    assert auto.replacement_of(FakeClient(chat_error=ConnectionError("down")), "m", known, "x") == auto.Replacement("failed", None)
+    assert auto.replacement_of(FakeClient([]), "m", known, "x") == auto.Replacement("failed", None)
+
+
+def test_with_nothing_known_there_is_nothing_to_replace_and_the_model_is_not_asked():
+    client = says("1")
+    assert auto.replacement_of(client, "m", [], "works as a nurse") == auto.Replacement("none", None)
+    assert client.chat_calls == []
+
+
+def test_the_model_is_given_the_known_facts_numbered_from_one_and_the_new_sentence():
+    client = says("NONE")
+    known = known_facts("lives in Delhi", "works as a teacher")
+    known[1]["person"] = "Maya"
+    auto.replacement_of(client, "the-model", known, 'I "moved" to {Pune}')
+    call = client.chat_calls[0]
+    content = call["messages"][0]["content"]
+    assert call["model"] == "the-model" and call["options"] == {"temperature": 0, "max_tokens": 8} and len(call["messages"]) == 1
+    assert 'Known facts:\n1. lives in Delhi\n2. Maya: works as a teacher\n\nNew sentence: "I "moved" to {Pune}"\n\nAnswer with the number' in content
+
+
+def test_only_the_newest_known_facts_are_put_to_the_model_and_the_number_it_gives_counts_in_that_list():
+    known = known_facts(*[f"fact number {n}" for n in range(auto.MAX_KNOWN + 5)])
+    client = says("1")
+    got = auto.replacement_of(client, "m", known, "x")
+    listing = client.chat_calls[0]["messages"][0]["content"]
+    assert "1. fact number 5\n" in listing and "fact number 4\n" not in listing and f"{auto.MAX_KNOWN}. fact number {auto.MAX_KNOWN + 4}\n" in listing
+    assert got == auto.Replacement("replaces", known[5]["id"]) and auto.MAX_KNOWN == 80
+
+
+def test_the_replacement_prompt_is_the_one_that_was_measured():
+    """Frozen after twenty sentences were measured and before sixteen others were; change a word only together with new held-out sentences."""
+    import hashlib
+
+    assert hashlib.sha256(auto.REPLACE_PROMPT.encode()).hexdigest() == "ca28357d4ea1b20a1e985e782e62a131615f1fe40f2039bd63f8fc50dbbd0e94"
+
+
+def replaces_with(answers):
+    """A stand-in for the model's judgement that records what it was asked; `answers` maps a fact's text to a Replacement (the rest are none)."""
+    asked = []
+
+    def replaces(fact):
+        asked.append(fact["text"])
+        return answers.get(fact["text"], auto.Replacement("none", None))
+
+    replaces.asked = asked
+    return replaces
+
+
+def test_a_fact_that_replaces_a_known_one_waits_as_a_question_that_names_it(world):
+    _, memory, _ = world
+    old = memory.add_manual("works as a teacher", "api")
+    fid = stage(world, "I now work as a nurse", "works as a nurse")
+    report = auto.apply(memory, now=NOW, replaces=replaces_with({"works as a nurse": auto.Replacement("replaces", old)}))
+    got = memory.get(fid)
+    assert report == auto.Report(0, 1, 0, 0) and got["status"] == "candidate" and f"ask:conflict:replaces:{old}" in got["flags"]
+    assert memory.get(old)["status"] == "accepted"  # nothing is changed about the old one: the person decides
+
+
+def test_a_fact_the_model_could_not_place_is_asked_about_and_one_it_could_not_be_asked_is_asked_again_next_time(world):
+    _, memory, _ = world
+    unclear = stage(world, "I now work as a nurse", "works as a nurse")
+    failed = stage(world, "I cycle to work", "cycles to work")
+    auto.apply(memory, now=NOW, replaces=replaces_with({"works as a nurse": auto.Replacement("unclear", None), "cycles to work": auto.Replacement("failed", None)}))
+    assert "ask:conflict:replaces_unclear" in memory.get(unclear)["flags"] and "ask:doubt:replace_check_failed" in memory.get(failed)["flags"]
+    again = replaces_with({})
+    assert auto.apply(memory, now=NOW, replaces=again) == auto.Report(1, 1, 0, 0)  # the unclear one keeps waiting; the failed one goes through
+    assert again.asked == ["cycles to work"] and memory.get(failed)["status"] == "accepted" and memory.get(unclear)["status"] == "candidate"
+
+
+def test_what_was_judged_to_replace_something_keeps_waiting_and_a_later_none_does_not_undo_it(world):
+    _, memory, _ = world
+    old = memory.add_manual("works as a teacher", "api")
+    fid = stage(world, "I now work as a nurse", "works as a nurse")
+    auto.apply(memory, now=NOW, replaces=replaces_with({"works as a nurse": auto.Replacement("replaces", old)}))
+    again = replaces_with({})
+    assert auto.apply(memory, now=NOW, replaces=again) == auto.Report(0, 1, 0, 0)
+    assert again.asked == [] and memory.get(fid)["status"] == "candidate" and f"ask:conflict:replaces:{old}" in memory.get(fid)["flags"]
+
+
+def test_the_replacement_question_is_asked_after_the_privacy_one_and_only_of_what_passed_it(world):
+    _, memory, _ = world
+    stage(world, "I like tea in the morning", "likes tea in the morning")
+    stage(world, "I take metformin every morning", "takes metformin every morning")
+    stage(world, "my password is hunter2", "my password is hunter2")  # never
+    private = calls_to({"takes metformin every morning": "private"})
+    replaces = replaces_with({})
+    auto.apply(memory, now=NOW, private=private, replaces=replaces)
+    assert private.asked == ["likes tea in the morning", "takes metformin every morning"] and replaces.asked == ["likes tea in the morning"]
+
+
+def test_a_fact_the_daily_cap_holds_back_is_not_put_to_the_replacement_question(world):
+    _, memory, _ = world
+    for said, text in HOBBIES:
+        stage(world, said, text)
+    replaces = replaces_with({})
+    auto.apply(memory, now=NOW, limit=2, replaces=replaces)
+    assert len(replaces.asked) == 2
+
+
+def test_without_a_judgement_there_is_no_replacement_check(world):
+    _, memory, _ = world
+    memory.add_manual("works as a teacher", "api")
+    fid = stage(world, "I now work as a nurse", "works as a nurse")
+    assert auto.apply(memory, now=NOW) == auto.Report(1, 0, 0, 0) and memory.get(fid)["status"] == "accepted"
+
+
+def test_the_event_for_a_fact_held_back_as_a_replacement_records_who_flagged_it(world):
+    _, memory, _ = world
+    old = memory.add_manual("works as a teacher", "api")
+    fid = stage(world, "I now work as a nurse", "works as a nurse")
+    auto.apply(memory, now=NOW, replaces=replaces_with({"works as a nurse": auto.Replacement("replaces", old)}))
+    flagged = [e for e in events(memory, fid) if e[0] == "flagged"]
+    assert flagged and flagged[-1][1] == "auto"
+
+
+def test_the_page_says_which_fact_a_waiting_fact_may_replace(world):
+    _, memory, _ = world
+    old = memory.add_manual("works as a teacher", "api")
+    short = diya_memory.flag_short(f"ask:conflict:replaces:{old}")
+    long = diya_memory.flag_long(memory, f"ask:conflict:replaces:{old}")
+    assert short == f"may replace fact {old}; Diya will ask you"
+    assert f"replaces fact {old}: works as a teacher" in long and "not told to the model until you say yes" in long
+    assert diya_memory.flag_short("ask:conflict:replaces_unclear") == "may replace something known; Diya will ask you"
+    assert "could not say whether it replaces something already known" in diya_memory.flag_long(memory, "ask:conflict:replaces_unclear")
+    assert "replaces fact 9999" in diya_memory.flag_long(memory, "ask:conflict:replaces:9999")  # the fact is gone: said without it
+
+
+# --- in Dreaming's pass -----------------------------------------------------------------------------------------------
+
+def test_the_hook_puts_a_fact_to_the_chat_model_against_what_is_known_and_the_answer_decides(tmp_path):
+    config = dataclasses.replace(diya_config.load_config({}), db_path=str(tmp_path / "d.db"), dream_log_path=str(tmp_path / "l"), dream_state_path=str(tmp_path / "s"),
+                                 dream_pending_path=str(tmp_path / "p.jsonl"), profile_path=str(tmp_path / "pr"), auto_memory=True, model="the-chat-model",
+                                 privacy_model="the-judge")
+    store = Store(config.db_path)
+    old = Memory(store).add_manual("works as a teacher", "api")
+    first = store.add_message(store.create_thread(), "user", "I now work as a nurse")
+    (tmp_path / "p.jsonl").write_text(json.dumps({"timestamp": "t", "first_message_id": first, "last_message_id": first, "model": "m", "facts": ["- works as a nurse"]}) + "\n", encoding="utf-8")
+    client = FakeClient([text_reply("OK"), text_reply("OK"), text_reply("1")])
+    dreaming.Dreamer(config, client=client).remember_on_its_own()
+    assert [c["model"] for c in client.chat_calls] == ["the-judge", "the-judge", "the-chat-model"]
+    question = client.chat_calls[2]["messages"][0]["content"]
+    assert "1. works as a teacher" in question and 'New sentence: "works as a nurse"' in question
+    nurse = next(f for f in Memory(store).facts() if f["text"] == "works as a nurse")
+    assert nurse["status"] == "candidate" and f"ask:conflict:replaces:{old}" in nurse["flags"]
+
+
+def test_a_fact_accepted_a_moment_ago_in_the_same_pass_is_known_to_the_next_one(tmp_path):
+    config = dataclasses.replace(diya_config.load_config({}), db_path=str(tmp_path / "d.db"), dream_log_path=str(tmp_path / "l"), dream_state_path=str(tmp_path / "s"),
+                                 dream_pending_path=str(tmp_path / "p.jsonl"), profile_path=str(tmp_path / "pr"), auto_memory=True)
+    store = Store(config.db_path)
+    first = store.add_message(store.create_thread(), "user", "I changed jobs: first works as a teacher, then works as a nurse")
+    (tmp_path / "p.jsonl").write_text(json.dumps({"timestamp": "t", "first_message_id": first, "last_message_id": first, "model": "m",
+                                                  "facts": ["- works as a teacher", "- works as a nurse"]}) + "\n", encoding="utf-8")
+    client = FakeClient([text_reply("OK")] * 3 + [text_reply("1")])
+    dreaming.Dreamer(config, client=client).remember_on_its_own()
+    states = {f["text"]: f["status"] for f in Memory(store).facts()}
+    assert states == {"works as a teacher": "accepted", "works as a nurse": "candidate"}
+
+
+@pytest.mark.parametrize("verdict", ["private", "unsure"])
+def test_what_the_model_was_unsure_about_keeps_waiting_just_as_what_it_judged_private_does(world, verdict):
+    _, memory, _ = world
+    fid = stage(world, "I like tea in the morning", "likes tea in the morning")
+    auto.apply(memory, now=NOW, private=calls_to(verdict))
+    again = calls_to("ok")
+    assert auto.apply(memory, now=NOW, private=again) == auto.Report(0, 1, 0, 0)
+    assert again.asked == [] and memory.get(fid)["status"] == "candidate" and f"ask:sensitive:model_{verdict}" in memory.get(fid)["flags"]

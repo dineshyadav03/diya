@@ -83,9 +83,10 @@ def _accepted_by_policy(fact):
     return fact["status"] == "accepted" and fact["source"] != "manual"
 
 
-def score_message(message, message_id, facts, seed_status=None):
+def score_message(message, message_id, facts, seed_status=None, seed_id=None):
     """What one message led to, as a dict: its kind, what was made of it, and a verdict. Scored from the facts alone (each has its status, its
-    flags, its text and where it came from), so a saved run can be scored again by the rules as they are now (`rescore`)."""
+    flags, its text and where it came from), so a saved run can be scored again by the rules as they are now (`rescore`). `seed_status` is whether
+    the fact an update is meant to replace is still accepted, and `seed_id` is that fact's number."""
     mine = [f for f in facts if _source_id(f) == message_id]
     accepted = [f for f in mine if f["status"] == "accepted"]
     asked = [f for f in mine if _asked(f)]
@@ -119,8 +120,9 @@ def score_message(message, message_id, facts, seed_status=None):
     elif kind == "update":
         right = [f for f in accepted if all(word in f["text"].lower() for word in message["keywords"])]
         result["seed_still_accepted"] = seed_status
-        result["verdict"] = ("silent update (both kept)" if right and seed_status else "replaced" if right else "asked" if asked
-                             else "wrong fact" if accepted else "not extracted")
+        named = [f for f in asked if seed_id is not None and f"ask:conflict:replaces:{seed_id}" in f["flags"]]  # the question named the fact it replaces
+        result["verdict"] = ("silent update (both kept)" if right and seed_status else "replaced" if right else "asked, naming the old fact" if named
+                             else "asked" if asked else "wrong fact" if accepted else "not extracted")
     elif kind == "assistant":
         claimed = [f for f in facts if f["status"] == "accepted" and all(word in f["text"].lower() for word in message["claim"])]
         if claimed:
@@ -161,7 +163,8 @@ def rescore(saved, day):
     get the ids 1, 2, 3... in a fresh database, in order, which is how a fact's source is tied back to its message."""
     facts = saved["facts"]
     seeds = {name: next((f["status"] == "accepted" for f in facts if f["source"] == "manual" and f["text"] == seed_text(name)), False) for name in day["seeds"]}
-    results = [score_message(m, i, facts, seeds.get(m.get("seed"))) for i, m in enumerate(day["messages"], start=1)]
+    seed_ids = {name: number for number, name in enumerate(day["seeds"], start=1)}  # the seeds are the first facts of a fresh database
+    results = [score_message(m, i, facts, seeds.get(m.get("seed")), seed_ids.get(m.get("seed"))) for i, m in enumerate(day["messages"], start=1)]
     leaks = [f["text"] for f in facts if _accepted_by_policy(f) and (diya_autonomy.secret_kind(f["text"]) or diya_autonomy.sensitive_class(f["text"]))]
     return {**saved, "messages": results, "code_sensitive_accepted": leaks,
             "secrets_discarded": sum(f["text"] == diya_memory.SECRET_PLACEHOLDER for f in facts)}

@@ -183,7 +183,7 @@ class Dreamer:
 
             memory = diya_memory.Memory(self.store)
             ingested = diya_memory.ingest_queue(memory, self.config, actor="system")
-            done = diya_autonomy.apply(memory, private=self._privacy_judge())
+            done = diya_autonomy.apply(memory, private=self._privacy_judge(), replaces=self._replace_judge(memory))
             print(
                 f"Memory on its own: {done.remembered} remembered, {done.asked} to ask about, {done.never} not kept, "
                 f"{done.held} held (profile full); {ingested.new} newly taken in from the staged queue."
@@ -236,6 +236,16 @@ class Dreamer:
         try:
             self._append_pending(record)
         except Exception as exc:
+    def _replace_judge(self, memory):
+        """`replaces(fact)` for the memory policy: the chat model's answer to "does this replace one of the facts already known?". The known facts
+        are read afresh for each question, so a fact accepted a moment ago in this same pass is one a later fact may replace."""
+        import diya_autonomy
+
+        def replaces(fact):
+            return diya_autonomy.replacement_of(self.client, self.config.model, memory.facts("accepted"), fact["text"])
+
+        return replaces
+
             print(f"[error] Could not stage the new facts ({exc}). Checkpoint left unchanged; will retry next cycle.")
             return
         self.save_last_dreamed_id(last_message_id)

@@ -18,7 +18,7 @@ its event, as everything else there is.
 from __future__ import annotations
 
 import re
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 import diya_checks
 
@@ -179,6 +179,52 @@ def privacy_of(client, model, texts):
     return min((privacy_verdict(client, model, text) for text in texts), key=_CAUTIOUS_FIRST.index)
 
 
+# Remembering a new fact beside an old one it replaces ("works as a nurse" next to "works as a teacher") leaves the model told two things that
+# cannot both be true. The words checks only catch a near-copy ("similar"); a move to another city shares almost no words with the old address.
+# Measured on twenty sentences against eight known facts (docs/AUTO_MEMORY_DESIGN.md, section 9) and then, with the text below unchanged, on
+# sixteen more: the capped 4B model named the right fact 19 of 20 and 14 of 16 times, and its two mistakes were a new fact mistaken for a
+# replacement, which only costs a question. The 3B model missed a third, so this one is asked of the chat model. Anything but a number or NONE
+# is "unclear" and the person is asked: only a clear NONE lets a fact be remembered beside what is known. Frozen like the privacy question.
+REPLACE_PROMPT = (
+    "Below are facts already known about a person, numbered, and then one new sentence from the person. Decide whether the new sentence REPLACES or "
+    "CONTRADICTS one of the known facts, so that the two cannot both be true now (for example a move to another city, a new job, giving something up). "
+    "A sentence that only adds something new, or only mentions the same subject, does not replace anything.\n\n"
+    'Known facts:\n{known}\n\nNew sentence: "{text}"\n\nAnswer with the number of the fact it replaces, or NONE if it replaces none. Answer with one word.'
+)
+MAX_KNOWN = 80  # the newest accepted facts put to the model: enough for the whole profile budget, bounded so the question stays short
+
+
+class Replacement(NamedTuple):
+    answer: str  # "none", "replaces", "unclear" or "failed" (the model could not be asked)
+    fact_id: Optional[int]  # the fact it replaces, only when the answer is "replaces"
+
+
+def _known_line(fact):
+    return f"{fact['person']}: {fact['text']}" if fact.get("person") else fact["text"]
+
+
+def replacement_of(client, model, known, text):
+    """Which of the `known` facts (dicts with id and text, as `Memory.facts` gives them) the sentence `text` replaces: a Replacement. With nothing
+    known there is nothing to replace and the model is not asked. Only the newest MAX_KNOWN are put to it."""
+    known = known[-MAX_KNOWN:]
+    if not known:
+        return Replacement("none", None)
+    listing = "\n".join(f"{number}. {_known_line(fact)}" for number, fact in enumerate(known, start=1))
+    try:
+        reply = client.chat.completions.create(
+            model=model, temperature=0, max_tokens=8, messages=[{"role": "user", "content": REPLACE_PROMPT.format(known=listing, text=text)}]
+        )
+        words = (reply.choices[0].message.content or "").strip().split()
+    except Exception:  # noqa: BLE001 -- the model is down, slow or confused: the answer is "ask", not an error
+        return Replacement("failed", None)
+    first = words[0].strip(".,!:;\"'*") if words else ""
+    if first.upper() == "NONE":
+        return Replacement("none", None)
+    if first.isdigit() and 1 <= int(first) <= len(known):
+        return Replacement("replaces", known[int(first) - 1]["id"])
+    return Replacement("unclear", None)
+
+
 # ---- the decision -----------------------------------------------------------------------------------------------
 
 _NEVER_FLAGS = (
@@ -243,11 +289,13 @@ class Report(NamedTuple):
     held: int  # could not be accepted yet: the profile is full
 
 
-def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIMIT, actor="auto", private=None):
+def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIMIT, actor="auto", private=None, replaces=None):
     """Put every candidate in its lane and act on it, each change one transaction with its event (which records the lane and why).
     Idempotent: a second run over the same candidates changes nothing. `now` is an aware datetime, for tests; the caps and the circuit
     breaker look at the 24 hours before it. `private(fact)` is the model's judgement of a fact the words let through (privacy_of): asked
     only of a fact about to be remembered, and only "ok" lets it be; with none given there is no such check (the pure-policy tests).
+    `replaces(fact)` is the model's judgement of whether such a fact replaces one already known (replacement_of): asked after the privacy
+    check, of a fact that passed it, and only a clear "none" lets the fact be remembered; with none given there is no such check.
     Returns what was done."""
     import diya_memory
     from datetime import datetime, timedelta, timezone
@@ -275,6 +323,16 @@ def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIM
                     _mark_ask(memory, fact, KIND_DOUBT, "privacy_check_failed", actor)  # not sticky: asked again at the next run
                 else:
                     _mark_ask(memory, fact, KIND_SENSITIVE, f"model_{verdict}", actor)
+                asked += 1
+                continue
+            replacement = _replacement(fact, replaces)
+            if replacement.answer != "none":  # it may replace what is known, or the model could not say: the person decides
+                if replacement.answer == "failed":
+                    _mark_ask(memory, fact, KIND_DOUBT, "replace_check_failed", actor)  # not sticky: asked again at the next run
+                elif replacement.answer == "unclear":
+                    _mark_ask(memory, fact, KIND_CONFLICT, "replaces_unclear", actor)
+                else:
+                    _mark_ask(memory, fact, KIND_CONFLICT, f"replaces:{replacement.fact_id}", actor)
                 asked += 1
                 continue
             try:
@@ -310,6 +368,19 @@ def _privacy(fact, private):
         if flag.startswith("ask:sensitive:model_"):
             return flag.rpartition("model_")[2]
     return private(fact)
+
+
+def _replacement(fact, replaces):
+    """"none" if the fact replaces nothing known, as far as the model can say, else what it said. A fact that was already judged to replace
+    something (or judged unclear) keeps waiting for the person without being asked again; one the model could not be asked about is asked again."""
+    if replaces is None:
+        return Replacement("none", None)
+    for flag in fact["flags"]:
+        if flag.startswith("ask:conflict:replaces:"):
+            return Replacement("replaces", int(flag.rpartition(":")[2]))
+        if flag == "ask:conflict:replaces_unclear":
+            return Replacement("unclear", None)
+    return replaces(fact)
 
 
 def _clear_ask(memory, fact_id, actor):

@@ -945,7 +945,12 @@ def flag_short(flag):
     if name == "verifier" and arg in _VERIFIER_SHORT:
         return _VERIFIER_SHORT[arg]
     if name == "ask":
-        return f"Diya will ask you about it ({printable(arg.partition(':')[2] or arg.partition(':')[0])})"
+        reason = arg.partition(":")[2] or arg.partition(":")[0]
+        if reason.startswith("replaces:"):
+            return f"may replace fact {printable(reason.partition(':')[2])}; Diya will ask you"
+        if reason == "replaces_unclear":
+            return "may replace something known; Diya will ask you"
+        return f"Diya will ask you about it ({printable(reason)})"
     return _FLAG_SHORT.get(name) or printable(flag)
 
 
@@ -968,7 +973,17 @@ def flag_long(memory, flag):
                 "It shares the blind spots of the model that proposed the fact, so this is a hint, never evidence.")
     if name == "ask":
         kind, _, reason = arg.partition(":")
-        return (f"ask: the memory policy did not accept this on its own ({printable(reason or kind)}); Diya will ask you about it "
+        if reason.startswith("replaces:"):
+            try:
+                other = memory.get(int(reason.partition(":")[2]))
+                what = f"the model thinks it replaces fact {other['id']}: {printable(other['text'], 120)}"
+            except (ValueError, FactError):
+                what = f"the model thinks it replaces fact {printable(reason.partition(':')[2])}"
+        elif reason == "replaces_unclear":
+            what = "the model could not say whether it replaces something already known"
+        else:
+            what = printable(reason or kind)
+        return (f"ask: the memory policy did not accept this on its own ({what}); Diya will ask you about it "
                 "and it is not told to the model until you say yes")
     if name in ("duplicate", "similar", "previously_rejected"):
         verb = {"duplicate": "says the same as", "similar": "shares most of its words with",
