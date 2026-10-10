@@ -188,6 +188,45 @@ MIGRATIONS = (
         "CREATE UNIQUE INDEX IF NOT EXISTS tasks_one_open_per_key ON tasks (content_key) WHERE done = 0",
         "CREATE INDEX IF NOT EXISTS tasks_by_done ON tasks (done)",
     )),
+    # Migration 7 (docs/SCHEDULE_DESIGN.md, D1 and D5): reminders that repeat. A `reminder_series` row is the definition of a
+    # repeating reminder (its words, its rule as canonical text -- see diya_repeat -- and when it next falls); when that time
+    # comes it makes an ordinary row in `reminders` (carrying `series_id`), so nothing about due, told or done changes.
+    # `content_key` is the case-folded words, the identity used to refuse the same series twice. `schedule_events` is the
+    # append-only trail of everything that happens to a series or one of its reminders and who did it. Times are UTC text.
+    (7, (
+        """
+        CREATE TABLE IF NOT EXISTS reminder_series (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT NOT NULL,
+            content_key TEXT NOT NULL,
+            rule TEXT NOT NULL,
+            said TEXT,
+            next_ts TEXT,
+            paused INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1)),
+            ended INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0, 1)),
+            source TEXT NOT NULL CHECK (source IN ('chat', 'page')),
+            thread_id INTEGER,
+            message_id INTEGER,
+            created_at TEXT NOT NULL,
+            ended_at TEXT
+        )
+        """,
+        "CREATE UNIQUE INDEX IF NOT EXISTS series_one_active_per_key ON reminder_series (content_key, rule) WHERE ended = 0",
+        "ALTER TABLE reminders ADD COLUMN series_id INTEGER REFERENCES reminder_series(id)",
+        "CREATE INDEX IF NOT EXISTS reminders_by_series ON reminders (series_id) WHERE series_id IS NOT NULL",
+        """
+        CREATE TABLE IF NOT EXISTS schedule_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            series_id INTEGER,
+            reminder_id INTEGER,
+            event TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            at TEXT NOT NULL,
+            detail TEXT
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS schedule_events_by_series ON schedule_events (series_id)",
+    )),
 )
 
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored

@@ -3,6 +3,7 @@ import functools
 import json
 import os
 import pathlib
+import sqlite3
 import sys
 import threading
 import urllib.parse
@@ -20,6 +21,7 @@ import diya_connectors
 import diya_db
 import diya_intent
 import diya_memory
+import diya_schedule
 import diya_tasks
 import diya_time
 
@@ -427,6 +429,7 @@ class Agent:
         self._clock = clock or datetime.now  # a naive local datetime; a parameter so tests do not depend on today
         self._turn = threading.local()  # what the current ask() is answering, per thread
         self.tasks = diya_tasks.Tasks(self.store, clock=self._clock)  # the to-do list inside Diya (docs/TASKS_DESIGN.md)
+        self.schedule = diya_schedule.Schedule(self.store, clock=self._clock)  # reminders that repeat (docs/SCHEDULE_DESIGN.md)
         self._notes = None
         self._notes_lock = threading.Lock()
         self._profile_import_checked = False
@@ -594,9 +597,19 @@ class Agent:
             return diya_actions.refused_text(exc)
         return diya_actions.proposed_text(action, notes)
 
+    def make_due_repeats(self):
+        """Make the reminder for every repeating series whose time has come (docs/SCHEDULE_DESIGN.md, D3): done before anything
+        shows the reminders, so what is shown is current. A database that is busy or unreadable does not stop the listing."""
+        try:
+            return self.schedule.materialize()
+        except (sqlite3.Error, diya_schedule.ScheduleError):
+            return []
+
     def list_reminders(self):
+        self.make_due_repeats()
         rows = self.store.reminders("pending")
-        if not rows:
+        repeating = self.schedule.series("active")
+        if not rows and not repeating:
             return "No pending reminders."
         lines = []
         for row in rows:
@@ -607,6 +620,14 @@ class Agent:
             else:
                 when = ""
             lines.append(f"#{row['id']}: {row['content']}{when}")
+        if not rows:
+            lines.append("No pending reminders.")
+        if repeating:
+            lines.append("Repeating reminders:")
+            for series in repeating:
+                words = diya_schedule.describe(series)
+                state = " (paused)" if series["paused"] else f"; next {words['next']}" if words["next"] else ""
+                lines.append(f"repeat #{series['id']}: {series['content']} ({words['rule'].lower()}{state})")
         return "\n".join(lines)
 
     def add_task(self, content, due=None):

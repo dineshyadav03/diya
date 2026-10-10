@@ -49,9 +49,10 @@ def register(app, config, agent):
             return "no_time"
         return "due" if row["due_ts"] <= now else "upcoming"
 
-    def public(row, now):
+    def public(row, now, series=None):
         return {
             "id": row["id"],
+            "series": (series or {}).get(row["id"]),  # the repeating reminder it came from, if it came from one
             "content": printable(row["content"]),
             "said": printable(row["due_at"]) if row["due_at"] else None,
             "due": row["due_ts"],
@@ -61,11 +62,13 @@ def register(app, config, agent):
         }
 
     def listing():
+        agent.make_due_repeats()  # so a repeating reminder whose time has come is here, whoever looks first
         now = now_ts()
         rows = agent.store.reminders("pending")
         order = {state: n for n, state in enumerate(STATES)}
         rows.sort(key=lambda r: (order[classify(r, now)], r["due_ts"] or "", r["id"]))
-        items = [public(row, now) for row in rows]
+        series = agent.schedule.series_of([row["id"] for row in rows])
+        items = [public(row, now, series) for row in rows]
         return {"reminders": items, "counts": {state: sum(1 for i in items if i["state"] == state) for state in STATES}}
 
     @app.get("/api/reminders")

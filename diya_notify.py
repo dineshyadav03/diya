@@ -24,11 +24,13 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import os
+import sqlite3
 import subprocess
 import sys
 from datetime import datetime, timezone
 
 import diya_config
+import diya_schedule
 import diya_time
 from diya_db import Store
 from diya_memory import printable
@@ -93,8 +95,16 @@ def _words(reminder, show_text):
 def run_once(store, notify, now=None, show_text=True, dry_run=False, say=print):
     """One pass over the reminders that have come due and have not been told. `notify(title, body)` shows one
     notification or raises NotifyError; a reminder is recorded as told only after it did, so a failure is tried again
-    on the next pass. `say(line)` is told what happened (never a reminder's words unless `dry_run`)."""
-    now_ts = diya_time.iso_of_local(datetime.now() if now is None else now)
+    on the next pass. `say(line)` is told what happened (never a reminder's words unless `dry_run`). The pass starts by
+    making the reminder for every repeating series whose time has come (docs/SCHEDULE_DESIGN.md, D3), so a repeating reminder
+    fires with no one having opened the app; a dry run makes none, since making one is a record."""
+    now_local = datetime.now() if now is None else now
+    now_ts = diya_time.iso_of_local(now_local)
+    if not dry_run:  # making a repeating reminder is a record, and a dry run records nothing
+        try:
+            diya_schedule.Schedule(store, clock=lambda: now_local).materialize()
+        except (sqlite3.Error, diya_schedule.ScheduleError) as exc:
+            say(f"could not make the repeating reminders that are due: {printable(exc, 200)}")  # the ones already made are still told
     due = store.due_reminders(now_ts, unnotified_only=True)
     told = failed = 0
     singles, rest = (due, []) if len(due) <= MAX_NOTIFICATIONS else (due[: MAX_NOTIFICATIONS - 1], due[MAX_NOTIFICATIONS - 1:])

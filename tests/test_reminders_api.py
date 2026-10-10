@@ -110,7 +110,7 @@ def test_a_reminder_is_shown_with_the_time_in_words_and_the_persons_own_words(cl
     plain = store.add_reminder("water plants")
     by_id = {r["id"]: r for r in client.get("/api/reminders").json()["reminders"]}
     assert by_id[rid] == {"id": rid, "content": "call mum", "said": "Friday 5pm", "due": ts(days=2, hours=6.75),
-                          "due_text": "Friday 25 Sep 2026, 17:00", "state": "upcoming", "told": False}
+                          "due_text": "Friday 25 Sep 2026, 17:00", "state": "upcoming", "told": False, "series": None}
     assert (by_id[words_only]["due"], by_id[words_only]["due_text"], by_id[words_only]["said"]) == (None, None, "Friday 5pm")
     assert (by_id[plain]["said"], by_id[plain]["state"]) == (None, "no_time")
 
