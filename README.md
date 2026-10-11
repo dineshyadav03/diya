@@ -76,6 +76,14 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Facts it extracts wait in a review queue; nothing reaches the model unless you accept it.
   Review them on the **Memory** page of the UI, or with `python diya_review.py list`, `accept`, `reject` and `edit` (see [Dreaming](docs/dreaming.md)); `judge` asks the local model for an optional second opinion.
   The model is told the accepted facts, in every chat; your old `user_profile.txt` was imported once.
+- **Memory that remembers on its own is built and OFF** (`DIYA_AUTO_MEMORY`; [design and measurement](docs/AUTO_MEMORY_DESIGN.md)). If you turn it on, code decides what
+  to do with each fact (remember it, ask you, or never keep it: secrets are discarded and their text is not stored), the local model's own answer to "is this private?" and
+  "does this replace something I know?" can only add caution, every automatic fact is marked "Learned on its own" with an Undo on the Memory page, and three taken back in a
+  day pauses it. Measured on labelled days, with the 4B model extracting (`DIYA_MODEL=diya-chat`) and the 3B judging privacy (`DIYA_PRIVACY_MODEL=qwen2.5:3b`), none of the
+  things that must never happen did (a secret kept, an order or something only the assistant said accepted, a sensitive statement accepted): a small sample written by the
+  policy's author, so read the limits in the design before you decide. It asks about a good deal that is harmless; that is the price.
+- Long chats and long gaps are cut to what the model can read: `DIYA_HISTORY_CHARS` (24,000 characters of the newest messages sent each turn) and
+  `DIYA_DREAM_BATCH_CHARS` (12,000 characters of yours read per Dreaming pass); `0` removes either limit.
 - The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 5147 tests pass on Windows (as of 2026-10-11).
 
 ## Privacy, and where your data is kept
