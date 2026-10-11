@@ -298,6 +298,24 @@ MIGRATIONS = (
     (12, (
         "CREATE TABLE IF NOT EXISTS telegram_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     )),
+    # 13: what Diya said first (docs/PROACTIVE_DESIGN.md): one row for each message she wrote on her own, in the chat's own messages table (`message_id`) and here, with a `key` that is
+    # unique so the same good-morning is never said twice in a day. `seen_at` is when the person looked at it (it is then no longer waiting on the chat page) and `toasted_at` when the
+    # desktop notifier put it on the screen.
+    (13, (
+        """
+        CREATE TABLE IF NOT EXISTS proactive_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            key TEXT NOT NULL UNIQUE,
+            thread_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            seen_at TEXT,
+            toasted_at TEXT
+        )
+        """,
+    )),
 )
 
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored

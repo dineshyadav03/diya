@@ -1,6 +1,8 @@
 import hashlib
 import hmac
+import json
 import os
+import queue
 import secrets
 import sys
 import tempfile
@@ -10,7 +12,7 @@ import traceback
 import openai
 from fastapi import BackgroundTasks, FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 import diya
@@ -21,6 +23,7 @@ import diya_connections_api
 import diya_connector_tools
 import diya_intent
 import diya_memory_api
+import diya_proactive_api
 import diya_push_api
 import diya_questions_api
 import diya_reminders_api
@@ -230,6 +233,7 @@ class ChatRequest(BaseModel):
 
 # What a chat turn that could not be answered says, in words for the person (the page shows them under the message). They are fixed
 # text, never the exception's own: that goes to this program's console, where someone looking for the cause can read it.
+STREAM_PING_SECONDS = 10.0  # a streamed turn says "still working" this often, so a model that takes half a minute to load does not look like a dead connection
 MODEL_DID_NOT_ANSWER = "The model didn’t answer (is Ollama running?), so there is no reply. Your message was kept; try again."
 ANSWERING_FAILED = "Something went wrong while answering, so there is no reply. Your message was kept; try again. The details are in the API’s console."
 TRANSCRIPTION_FAILED = "That recording could not be turned into text. Try again, or type it. The details are in the API’s console."
@@ -358,8 +362,8 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
         finally:
             reading_for_facts.release()
 
-    @app.post("/api/chat")
-    def chat(req: ChatRequest, background: BackgroundTasks):
+    def start_turn(req):
+        """The part of a chat turn that comes before the model: the chat (a new one if none was named), the history, and the person's message saved. Returns (thread_id, history, message_id)."""
         thread_id = req.thread_id or agent.store.create_thread()
         saved = agent.store.get_messages(thread_id)
         # The same words, from the person, as the last message of this thread, which nothing answered: they are trying again
@@ -369,26 +373,94 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
         history = agent.with_profile([{"role": m["role"], "content": m["content"]} for m in earlier])
         message_id = saved[-1]["id"] if retry else agent.store.add_message(thread_id, "user", req.message)
         history.append({"role": "user", "content": req.message})
+        return thread_id, history, message_id
+
+    def end_turn(thread_id, message_id, req, answer):
+        """The part after the model: the answer saved, and whether memory will read the message (`reading`, which lets the page ask a little later what it learned)."""
+        agent.store.add_message(thread_id, "assistant", answer)
+        if config.auto_memory:
+            return diya_intent.is_worth_capturing(req.message) or diya_intent.forget_target(req.message) is not None
+        return False
+
+    def failure_of(exc):
+        """(status, the fixed words) for an exception out of agent.ask, and the trace left in the console."""
+        if isinstance(exc, openai.OpenAIError):  # nothing listening, a timeout, an error from Ollama itself
+            print(f"[chat] the model did not answer ({type(exc).__name__}: {exc})", file=sys.stderr)
+            return 503, MODEL_DID_NOT_ANSWER
+        print("[chat] answering failed:", file=sys.stderr)  # a defect here, not the model's doing: say so, and leave the trace where it can be read
+        traceback.print_exception(exc)
+        return 500, ANSWERING_FAILED
+
+    @app.post("/api/chat")
+    def chat(req: ChatRequest, background: BackgroundTasks):
+        thread_id, history, message_id = start_turn(req)
         try:
             answer, tools_called = agent.ask(history, thread_id=thread_id, message_id=message_id)
-        except openai.OpenAIError as exc:  # nothing listening, a timeout, an error from Ollama itself
-            print(f"[chat] the model did not answer ({type(exc).__name__}: {exc})", file=sys.stderr)
-            return JSONResponse({"detail": MODEL_DID_NOT_ANSWER, "thread_id": thread_id}, status_code=503)
-        except Exception:  # a defect here, not the model's doing: say so, and leave the trace where it can be read
-            print("[chat] answering failed:", file=sys.stderr)
-            traceback.print_exc()
-            return JSONResponse({"detail": ANSWERING_FAILED, "thread_id": thread_id}, status_code=500)
-        agent.store.add_message(thread_id, "assistant", answer)
-        reading = False
+        except Exception as exc:
+            status, detail = failure_of(exc)
+            return JSONResponse({"detail": detail, "thread_id": thread_id}, status_code=status)
+        reading = end_turn(thread_id, message_id, req, answer)
         if config.auto_memory:
             background.add_task(read_for_facts, message_id)  # runs after the response is on its way, never before it
-            reading = diya_intent.is_worth_capturing(req.message) or diya_intent.forget_target(req.message) is not None
         # `message_id` and `reading` let the page ask, a little later, what memory did with the message (GET /api/memory/learned)
         return {"thread_id": thread_id, "answer": answer, "tools_called": tools_called, "message_id": message_id, "reading": reading}
+
+    @app.post("/api/chat/stream")
+    def chat_stream(req: ChatRequest):
+        """The same turn as /api/chat, told as it happens (docs/STREAMING_DESIGN.md): one JSON object per line, `start` (the chat and the saved message), then `delta` pieces of the reply
+        (`reset` takes them back if they were a preface to a tool, `tool` says one is running, `wait` says it is still working), then `done` with exactly what /api/chat returns, or `error` with
+        the reason and the chat the message was kept in. What is wrong before the model is asked is an ordinary HTTP error. The turn runs in ONE thread of its own, because what a turn knows
+        about the message it is answering is kept per thread; the response only reads what that thread says."""
+        thread_id, history, message_id = start_turn(req)
+        events = queue.Queue()
+
+        def work():
+            try:
+                answer, tools_called = agent.ask(history, thread_id=thread_id, message_id=message_id, on_event=lambda kind, payload: events.put((kind, payload)))
+                reading = end_turn(thread_id, message_id, req, answer)
+            except Exception as exc:
+                events.put(("error", failure_of(exc)))
+                return
+            events.put(("done", {"thread_id": thread_id, "answer": answer, "tools_called": tools_called, "message_id": message_id, "reading": reading}))
+            if config.auto_memory:
+                read_for_facts(message_id)  # after the last line is on its way, as /api/chat's background task is
+
+        worker = threading.Thread(target=work, name="chat-turn", daemon=True)
+        worker.start()
+
+        def line(obj):
+            return json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n"
+
+        def lines():
+            yield line({"type": "start", "thread_id": thread_id, "message_id": message_id})
+            while True:
+                try:
+                    kind, payload = events.get(timeout=STREAM_PING_SECONDS)
+                except queue.Empty:
+                    if not worker.is_alive() and events.empty():  # the turn ended without a word: never leave the page waiting
+                        yield line({"type": "error", "status": 500, "detail": ANSWERING_FAILED, "thread_id": thread_id})
+                        return
+                    yield line({"type": "wait"})
+                    continue
+                if kind == "delta":
+                    yield line({"type": "delta", "text": payload})
+                elif kind == "reset":
+                    yield line({"type": "reset"})
+                elif kind == "tool":
+                    yield line({"type": "tool", "name": payload})
+                elif kind == "done":
+                    yield line({"type": "done", **payload})
+                    return
+                elif kind == "error":
+                    yield line({"type": "error", "status": payload[0], "detail": payload[1], "thread_id": thread_id})
+                    return
+
+        return StreamingResponse(lines(), media_type="application/x-ndjson", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
     # Reviewing what Dreaming staged (docs/STAGE2_DESIGN.md, unit 6): the same rules as diya_review.py.
     diya_memory_api.register(app, config, agent)
     diya_questions_api.register(app, config, agent)  # the questions Diya raises herself (docs/AUTO_MEMORY_DESIGN.md, D5 and unit A5)
+    diya_proactive_api.register(app, config, agent)  # what Diya wrote first (docs/PROACTIVE_DESIGN.md)
     diya_push_api.register(app, config, agent)  # telling the phone by Web Push, off unless DIYA_PUSH=1 (docs/PUSH_DESIGN.md, unit P2)
     diya_reminders_api.register(app, config, agent)
     diya_tasks_api.register(app, config, agent)  # the to-do list inside Diya (docs/TASKS_DESIGN.md, unit T2)

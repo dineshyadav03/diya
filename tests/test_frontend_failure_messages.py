@@ -154,7 +154,7 @@ def test_no_message_names_a_secret_or_an_address():
 def test_the_chat_page_reports_the_status_the_request_actually_got():
     source = CHAT.read_text(encoding="utf-8")
     assert re.search(r"import \{[^}]*\bdescribeSendFailure\b[^}]*\} from '\.\./lib/api-failure\.mjs'", source)
-    fetch_at = source.index("fetch('/api/chat'")
+    fetch_at = source.index("fetch('/api/chat/stream'")
     assert fetch_at < source.index("status = res.status") < source.index("if (!res.ok) {")  # noted before the check
     assert "setFailed(id, describeSendFailure(status, failure.detail))" in source
     assert "let status" in source and source.index("let status") < fetch_at  # visible to the catch below it
@@ -187,7 +187,8 @@ def test_the_microphone_says_why_a_recording_could_not_be_transcribed():
     assert fetch_at < source.index("status = res.status") < source.index("if (!res.ok) throw")
     assert "onSystemMessage(describeTranscribeFailure(status))" in source
     assert "let status" in source and source.index("let status") < fetch_at
-    assert "setMicDisabled(false)" in source[source.index("catch {"):source.index("return\n    }")]  # never stuck on "Transcribing..."
+    catch_at = source.index("catch {", fetch_at)
+    assert "setMicDisabled(false)" in source[catch_at:source.index("return\n    }", catch_at)]  # never stuck on "Transcribing..."
 
 
 def loading_a_saved_chat():
@@ -480,7 +481,7 @@ def test_reading_what_a_failed_chat_call_said(body, expected):
 def test_the_chat_page_keeps_the_chat_a_failed_message_was_saved_in_so_trying_again_goes_there():
     source = CHAT.read_text(encoding="utf-8")
     assert re.search(r"import \{[^}]*\breadFailure\b[^}]*\} from '\.\./lib/api-failure\.mjs'", source)
-    assert "let failure = {}" in source and source.index("let failure") < source.index("fetch('/api/chat'")
+    assert "let failure = {}" in source and source.index("let failure") < source.index("fetch('/api/chat/stream'")
     assert "failure = readFailure(await res.json().catch(() => null))" in source  # a body that is not JSON is no reason, not a crash
     catch = source[source.index("} catch {\n        // The server keeps a message"):source.index("setFailed(id, describeSendFailure(status, failure.detail))")]
     assert "if (failure.threadId !== undefined)" in catch

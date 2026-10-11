@@ -2,7 +2,9 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import Orb from '../components/Orb'
 import VoiceBar from '../components/VoiceBar'
+import { readChatStream } from '../lib/chat-stream.mjs'
 import { describeLoadFailure, describeSendFailure, readFailure } from '../lib/api-failure.mjs'
 import { describeActionFailure } from '../lib/api-failure.mjs'
 
@@ -26,6 +28,7 @@ const TOOL_LABELS = {
 // The questions Diya raises herself (docs/AUTO_MEMORY_DESIGN.md, D5 and unit A5), asked for when the chat opens and after each reply. They are built by code on the server
 // (the words and the answers each question offers come from the API), shown as cards at the top of the chat, and answered with one press.
 const QUESTIONS_AFTER_REPLY_MS = 20000
+const NOTES_EVERY_MS = 60000
 
 // What memory did with a message is looked up a few seconds after the reply, because memory reads the message once the reply is made (docs/AUTO_MEMORY_DESIGN.md,
 // D7 and unit A4). The page asks every few seconds, for at most about two minutes, and says nothing if nothing was learned.
@@ -69,6 +72,8 @@ export default function ChatPage() {
   // and the first client render agree -- same reason as the suppressHydrationWarning below.)
   const [speakOn, setSpeakOn] = useState(false)
   const [thinking, setThinking] = useState(false)
+  // The reply as far as it has been written, while it is being written (docs/STREAMING_DESIGN.md); '' when none is coming. It becomes an ordinary message when it is whole.
+  const [streamText, setStreamText] = useState('')
   const [speaking, setSpeaking] = useState(false)
   // True once we know whether there is a past thread to load, so the empty state
   // doesn't flash up for a moment before an existing conversation arrives.
@@ -91,6 +96,8 @@ export default function ChatPage() {
   const [answering, setAnswering] = useState(null)
   const [editing, setEditing] = useState(null)
   const [questionProblem, setQuestionProblem] = useState('')
+  // What Diya wrote first (docs/PROACTIVE_DESIGN.md) and the person has not looked at yet: shown as cards at the top, looked for when the page opens and once a minute while it is open.
+  const [notes, setNotes] = useState([])
   const logRef = useRef(null)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -104,6 +111,11 @@ export default function ChatPage() {
     if (threadId) loadThread(threadId)
     else setReady(true)
     loadQuestions()
+    loadNotes()
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') loadNotes()
+    }, NOTES_EVERY_MS)
+    return () => clearInterval(timer)
   }, [])
 
   // Fetch a saved chat's past messages. When that fails, say why and offer to try again: it used to
@@ -142,7 +154,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     logRef.current?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [messages])
+  }, [messages, streamText])
 
   // Messages get an id so a failed one can be found again (marked, retried) later.
   const nextIdRef = useRef(1)
@@ -153,6 +165,31 @@ export default function ChatPage() {
   }
   function setFailed(id, failed) {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, failed } : m)))
+  }
+
+  // What Diya wrote first. A failed look shows nothing: the messages are also in the chat they were written in, which History lists.
+  async function loadNotes() {
+    try {
+      const response = await fetch('/api/proactive')
+      const body = response.ok ? await response.json() : null
+      if (body && Array.isArray(body.messages)) setNotes(body.messages.filter((m) => Number.isInteger(m.id) && typeof m.text === 'string'))
+    } catch {
+      // nothing to show
+    }
+  }
+
+  async function markNotesSeen(ids) {
+    setNotes((shown) => shown.filter((m) => !ids.includes(m.id)))
+    try {
+      await fetch('/api/proactive/seen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) })
+    } catch {
+      // it will be offered again next time, which is the right way to fail
+    }
+  }
+
+  async function openNote(note) {
+    await markNotesSeen([note.id])
+    window.location.assign(`/?thread=${note.thread_id}`) // her message is in that chat; a reply goes on from it
   }
 
   // Ask what Diya wants to ask, and say which she has now put in front of the person (an unanswered question left for a day counts as ignored).
@@ -302,17 +339,37 @@ export default function ChatPage() {
       let status // stays undefined when the request never got an answer at all
       let failure = {} // what the server said was wrong, if it said (its reason, and the chat it kept the message in)
       try {
-        const res = await fetch('/api/chat', {
+        const request = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ thread_id: threadIdRef.current, message: text }),
-        })
+        }
+        let res = await fetch('/api/chat/stream', request)
+        if (res.status === 404) res = await fetch('/api/chat', request) // an API that has no streaming route yet (an older one still running): the whole reply at once
         status = res.status
         if (!res.ok) {
           failure = readFailure(await res.json().catch(() => null))
           throw new Error(`HTTP ${res.status}`)
         }
-        data = await res.json()
+        if ((res.headers.get('content-type') || '').includes('ndjson')) {
+          data = await readChatStream(res.body, {
+            onStart: (event) => {
+              // the chat the message is in is known from the first line, so a reply that fails half way still leaves the page knowing it
+              if (Number.isInteger(event.thread_id)) {
+                threadIdRef.current = event.thread_id
+                localStorage.setItem('diya_thread_id', event.thread_id)
+              }
+            },
+            onDelta: (piece) => setStreamText((shown) => shown + piece),
+            onReset: () => setStreamText(''),
+            onError: (event) => {
+              status = event.status
+              failure = readFailure({ detail: event.detail, thread_id: event.thread_id })
+            },
+          })
+        } else {
+          data = await res.json()
+        }
         if (typeof data.answer !== 'string') throw new Error('not a reply')
       } catch {
         // The server keeps a message it could not answer, in a chat this page may not have heard of yet (the first message of
@@ -321,6 +378,7 @@ export default function ChatPage() {
           threadIdRef.current = failure.threadId
           localStorage.setItem('diya_thread_id', failure.threadId)
         }
+        setStreamText('') // whatever had been written of a reply that did not finish is not shown as if it were one
         // the reason is stored on the message (a string, so still truthy) and shown as its error text
         setFailed(id, describeSendFailure(status, failure.detail))
         return
@@ -334,6 +392,7 @@ export default function ChatPage() {
       if (usedTools.length) {
         setMessages((prev) => [...prev, { id: nextIdRef.current++, role: 'tools', tools: usedTools }])
       }
+      setStreamText('')
       addMsg('assistant', data.answer)
       speak(data.answer)
       if (data.reading && Number.isInteger(data.message_id)) watchLearned(data.message_id)
@@ -392,6 +451,23 @@ export default function ChatPage() {
         </div>
       </div>
       <div id="log" ref={logRef}>
+        {notes.length > 0 && (
+          <section className="question-cards note-cards" aria-label="Messages from Diya">
+            {notes.map((note) => (
+              <div key={note.id} className="question-card note-card">
+                <p className="question-text">{note.text}</p>
+                <div className="question-actions">
+                  <button type="button" className="cta small" onClick={() => openNote(note)}>
+                    Reply
+                  </button>
+                  <button type="button" className="quiet-btn" onClick={() => markNotesSeen([note.id])}>
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
         {questions.length > 0 && (
           <section className="question-cards" aria-label="Questions from Diya">
             {questions.map((question) => (
@@ -522,11 +598,11 @@ export default function ChatPage() {
             </div>
           )
         })}
-        {thinking && (
-          <div className="msg assistant thinking-row" role="status" aria-label="Diya is working on it">
-            <span />
-            <span />
-            <span />
+        {streamText && <div className="msg assistant streaming">{streamText}</div>}
+        {((thinking && !streamText) || speaking) && (
+          <div className="msg assistant thinking-row" role="status" aria-label={thinking ? 'Diya is working on it' : 'Diya is speaking'}>
+            <Orb state={thinking ? 'thinking' : 'speaking'} />
+            <span className="thinking-text">{thinking ? 'Thinking…' : 'Speaking…'}</span>
           </div>
         )}
       </div>

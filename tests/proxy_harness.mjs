@@ -41,6 +41,8 @@ const ROUTES = {
   pushSubscribe: join(root, 'frontend', 'app', 'api', 'push', 'subscribe', 'route.js'),
   pushUnsubscribe: join(root, 'frontend', 'app', 'api', 'push', 'unsubscribe', 'route.js'),
   pushTest: join(root, 'frontend', 'app', 'api', 'push', 'test', 'route.js'),
+  proactive: join(root, 'frontend', 'app', 'api', 'proactive', 'route.js'),
+  proactiveSeen: join(root, 'frontend', 'app', 'api', 'proactive', 'seen', 'route.js'),
   reminders: join(root, 'frontend', 'app', 'api', 'reminders', 'route.js'),
   reminderDone: join(root, 'frontend', 'app', 'api', 'reminders', '[reminder_id]', 'done', 'route.js'),
   reminderSnooze: join(root, 'frontend', 'app', 'api', 'reminders', '[reminder_id]', 'snooze', 'route.js'),

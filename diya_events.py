@@ -136,8 +136,8 @@ def _waiting_actions(store, now_local):
         conn.close()
 
 
-def day_headline(store, now_local):
-    """The brief's own one-sentence headline for the local day of `now_local`, or None when nothing is due (there is then no "your day" to send)."""
+def day_brief(store, now_local):
+    """The brief (diya_brief.build) for the local day of `now_local`, built from the person's own reminders, tasks and repeating reminders."""
     import diya_brief
     import diya_schedule
     import diya_tasks
@@ -145,7 +145,12 @@ def day_headline(store, now_local):
     schedule = diya_schedule.Schedule(store, clock=lambda: now_local)
     reminders = store.reminders("pending")
     series_ids = schedule.series_of([row["id"] for row in reminders])
-    brief = diya_brief.build(now_local, reminders, diya_tasks.Tasks(store, clock=lambda: now_local).tasks("open"), schedule.series("active"), series_ids)
+    return diya_brief.build(now_local, reminders, diya_tasks.Tasks(store, clock=lambda: now_local).tasks("open"), schedule.series("active"), series_ids)
+
+
+def day_headline(store, now_local):
+    """The brief's own one-sentence headline for the local day of `now_local`, or None when nothing is due (there is then no "your day" to send)."""
+    brief = day_brief(store, now_local)
     return None if brief["headline"] == "Nothing is due today." else brief["headline"]
 
 

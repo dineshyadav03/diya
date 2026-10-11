@@ -100,8 +100,8 @@ loads, retry, voice recording, speaking replies), and the same class names on th
 ## 6. What needs the owner's yes
 
 - **Dark is xAI-like and light is Notion-like.** If one of them should be the only look, delete the other block of variables.
-- **The decorative libraries are gone.** The Hold-to-talk glow and the orb are not coming back unless asked for; the product's
-  state is shown in words and two quiet motions instead.
+- **The decorative libraries are gone.** The Hold-to-talk glow and the orb were not to come back unless asked for; the product's
+  state was shown in words and two quiet motions instead. **The owner asked (2026-10-11), and the orbs are back**, as plain CSS with no library (`docs/STREAMING_DESIGN.md`).
 - **The flame mark stays** (the one asset that is the product's own), shown at 24 px in the sidebar.
 
 ## 7. What was checked, and what was not

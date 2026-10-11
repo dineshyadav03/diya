@@ -137,7 +137,7 @@ def test_through_the_api_the_model_receives_the_accepted_fact_and_the_thread_nev
     agent = diya.Agent(config, client=model)
     client = TestClient(diya_web.create_app(config, agent, object()), base_url="https://localhost")
 
-    body = client.post("/api/chat", json={"message": "hi"}).json()
+    body = client.post("/api/chat", json={"message": "tell me a joke"}).json()
 
     assert model.chat_calls[0]["messages"][0] == {"role": "system", "content": HEADER + "- plays guitar"}
     assert "bank" not in str(model.chat_calls[0]["messages"])

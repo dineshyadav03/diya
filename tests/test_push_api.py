@@ -34,7 +34,7 @@ SUBJECT = "mailto:owner@example.invalid"
 def make_config(tmp_path, **changes):
     settings = dict(db_path=str(tmp_path / "d.db"), dream_log_path=str(tmp_path / "log"), dream_state_path=str(tmp_path / "state.json"),
                     dream_pending_path=str(tmp_path / "pending.jsonl"), profile_path=str(tmp_path / "profile.txt"), notify_log_path=str(tmp_path / "notify.log"),
-                    require_token=False, push=True, push_subject=SUBJECT, push_vapid_path=str(tmp_path / "push_vapid.json"))
+                    require_token=False, proactive=False, push=True, push_subject=SUBJECT, push_vapid_path=str(tmp_path / "push_vapid.json"))
     return dataclasses.replace(diya_config.load_config({}), **{**settings, **changes})
 
 

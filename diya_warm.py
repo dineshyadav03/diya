@@ -44,6 +44,14 @@ class KeepWarm:
         self._stop = threading.Event()
         self._was_up = None
         self.thread = None
+        self._primed = None  # the start of the system message that was read when priming: when it changes (a new fact, a new day) it has to be read again
+
+    def _prefix(self):
+        """The system message a chat starts with right now, or None if there is none or it cannot be built."""
+        try:
+            return self.agent.with_profile([])[0]["content"]
+        except Exception:  # noqa: BLE001
+            return None
 
     def _wait(self, seconds):
         """Wait, ending early if stopped; a test passes `sleep` to stand in for time."""
@@ -75,6 +83,7 @@ class KeepWarm:
             history = self.agent.with_profile([{"role": "user", "content": "hello"}])
             self.agent.client.chat.completions.create(
                 model=self.config.model, messages=self.agent._model_messages(history, False), tools=self.agent.tools, max_tokens=1)
+            self._primed = self._prefix()
             return True
         except Exception:  # noqa: BLE001 -- warming is a courtesy; the real chat reports its own failures
             return False
@@ -87,7 +96,8 @@ class KeepWarm:
             self._wait(RENEW_SECONDS)
             if self._stop.is_set():
                 break
-            self.renew()
+            if self.renew() and self._prefix() != self._primed:  # a new fact or a new day changes the start of every message: read it now, not in the middle of the next one
+                self.prime()
 
     def start(self):
         """Run in a background thread that never keeps the program alive. Returns the thread."""

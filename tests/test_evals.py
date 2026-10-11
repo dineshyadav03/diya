@@ -144,7 +144,7 @@ def test_an_eval_run_creates_no_threads(tmp_path):
 
 def test_the_eval_run_does_not_inject_the_users_profile(tmp_path):
     (tmp_path / "profile.txt").write_text("Plays guitar.")  # DIYA_PROFILE_PATH from conftest
-    case = {"name": "math", "prompt": "hi", "expected_tool": None, "expected_in_answer": []}
+    case = {"name": "math", "prompt": "what is two plus two", "expected_tool": None, "expected_in_answer": []}
     agent, client = eval_agent(tmp_path, text_reply("hello"))
     diya_evals.run_evals(agent, [case])
     assert [m["role"] for m in client.chat_calls[0]["messages"]] == ["user"]

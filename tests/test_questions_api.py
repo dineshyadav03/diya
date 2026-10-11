@@ -31,7 +31,7 @@ CREATED = "2026-10-11T03:30:00+00:00"
 def make_config(tmp_path, **changes):
     settings = dict(db_path=str(tmp_path / "d.db"), dream_log_path=str(tmp_path / "log"), dream_state_path=str(tmp_path / "state.json"),
                     dream_pending_path=str(tmp_path / "pending.jsonl"), profile_path=str(tmp_path / "profile.txt"), notify_log_path=str(tmp_path / "notify.log"),
-                    auto_memory=True, require_token=False)
+                    auto_memory=True, require_token=False, proactive=False)
     return dataclasses.replace(diya_config.load_config({}), **{**settings, **changes})
 
 

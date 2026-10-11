@@ -56,6 +56,10 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   morning. An optional desktop notifier (`diya_notify.py`) can tell you outside the app, but only once you schedule it yourself
   ([docs/reminders.md](docs/reminders.md)); nothing here schedules it for you.
   File listing is limited to `Documents/Diya` under your home folder, or the folders in `DIYA_FILES_ROOTS`.
+- **Diya writes first**: a good-morning with the day (08:30), an evening check-in when something is still open (19:00), a message when a reminder comes due and a hello after two quiet days, written in the chat itself
+  (cards at the top of the chat page) and put on the desktop by the notifier. Built in code from your own reminders and tasks, so nothing is invented; `DIYA_PROACTIVE=0` turns it off
+  ([docs/PROACTIVE_DESIGN.md](docs/PROACTIVE_DESIGN.md)). Replies appear word by word, with an orb while she thinks, and the chat model is kept loaded so "hey" is not slow
+  ([docs/SPEED_DESIGN.md](docs/SPEED_DESIGN.md), [docs/STREAMING_DESIGN.md](docs/STREAMING_DESIGN.md)).
 - **Telling your phone** (off; `DIYA_PUSH=1` and a contact address you choose in `DIYA_PUSH_SUBJECT`; `pip install ".[push]"`): the same pass of the notifier can send a Web Push when a
   reminder is due, a question is waiting, an action needs your approval, or (at a time you choose) your day is ready, to a device that tapped **Notify this device** on the Today page. By
   default the notification says only that something is waiting, never what; reminders are never held back at night, the rest are. [docs/PUSH_DESIGN.md](docs/PUSH_DESIGN.md) says what is

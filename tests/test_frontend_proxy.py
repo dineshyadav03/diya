@@ -428,10 +428,11 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
     for path in browser_files():
         targets += [m.group(2) for m in re.finditer(r"fetch\(\s*([`'\"])(.*?)\1", path.read_text(encoding="utf-8"))]
     assert sorted(targets) == sorted([
-        "/api/history/${threadId}", "/api/chat", "/api/threads", "/api/transcribe",
+        "/api/history/${threadId}", "/api/chat/stream", "/api/chat", "/api/threads", "/api/transcribe",  # the page asks for the streamed reply, and for the whole one from an API that has no stream route
         "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
         "/api/memory/${fact.id}/replace",  # the Memory page's "replace the old one" button
         "/api/questions", "/api/questions/seen", "/api/questions/${question.id}/answer",  # the chat's cards: the list, the note that they were shown, an answer
+        "/api/proactive", "/api/proactive/seen",  # the chat's cards for what Diya wrote first: the list, and that one was looked at
         "/api/memory/learned?message_id=${messageId}", "/api/memory/${item.id}/undo-replace", "/api/memory/${item.id}/${item.kind === 'forgot' ? 'restore' : 'retire'}",  # the chat's line under a reply
         "/api/reminders", "/api/reminders", "/api/reminders", "/api/reminders/${reminder.id}/done",  # the chat's due count, the page's list and add, and done
         "/api/tasks", "/api/tasks", "/api/tasks/${task.id}/done", "/api/tasks/${task.id}/reopen",  # the Tasks page: its list, add, done and put back
@@ -485,10 +486,11 @@ def proxy_route_files():
 def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_path):
     routes, proxies = api_routes(tmp_path), proxy_route_files()
     assert set(routes) == {
-        "/api/threads", "/api/history/{thread_id}", "/api/chat", "/api/transcribe",
+        "/api/threads", "/api/history/{thread_id}", "/api/chat", "/api/chat/stream", "/api/transcribe",
         "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/merge", "/api/memory/{fact_id}/{action}",
         "/api/memory/{fact_id}/replace", "/api/memory/{fact_id}/undo-replace", "/api/memory/learned",
         "/api/questions", "/api/questions/seen", "/api/questions/{question_id}/answer",
+        "/api/proactive", "/api/proactive/seen",
         "/api/push/status", "/api/push/key", "/api/push/subscribe", "/api/push/unsubscribe", "/api/push/test",
         "/api/reminders", "/api/reminders/{reminder_id}/done", "/api/reminders/{reminder_id}/snooze",
         "/api/today", "/api/scheduled", "/api/scheduled/{series_id}/pause", "/api/scheduled/{series_id}/resume",

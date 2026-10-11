@@ -103,6 +103,13 @@ class Config:
     push_day_at: str = ""  # DIYA_PUSH_DAY_AT: a time like "08:00" for the "your day is ready" message, or empty for none
     push_subject: str = ""  # DIYA_PUSH_SUBJECT
     push_vapid_path: str = "push_vapid.json"  # DIYA_PUSH_VAPID_PATH: the push key pair; the private half never leaves this file
+    # Diya writing first (diya_proactive.py, docs/PROACTIVE_DESIGN.md): a good-morning with the day, an evening check-in about what is still open, a message when a reminder comes due and a hello after a
+    # few quiet days, written in the chat itself (and put on the desktop) by the notifier. Built in code from the person's own reminders and tasks: nothing is invented. On by default: DIYA_PROACTIVE=0
+    # turns it all off, and the two times and the quiet hours are settings ("08:30", "19:00" or off; "22-07" or off).
+    proactive: bool = True  # DIYA_PROACTIVE
+    proactive_morning: str = "08:30"  # DIYA_PROACTIVE_MORNING
+    proactive_evening: str = "19:00"  # DIYA_PROACTIVE_EVENING
+    proactive_quiet: str = "22-07"  # DIYA_PROACTIVE_QUIET
     # Keeping the chat model loaded (diya_warm.py, docs/SPEED_DESIGN.md): Ollama unloads a model after five idle minutes, and loading it again plus reading the tools took about 20 seconds on
     # this computer's CPU, so the first message after a pause was slow even for "hey". While the API runs it asks Ollama, every few minutes, to keep the model for `keep_alive` more
     # (Ollama's own format: "30m", "2h", seconds, or -1 for always). DIYA_KEEP_WARM=0 turns it off and lets Ollama unload the model as usual (the model's memory, about 3 GB, is held while it is on).
@@ -182,6 +189,9 @@ _STRING_SETTINGS = {
     "push_vapid_path": "DIYA_PUSH_VAPID_PATH",
     "telegram_token_path": "DIYA_TELEGRAM_TOKEN_PATH",
     "keep_alive": "DIYA_KEEP_ALIVE",
+    "proactive_morning": "DIYA_PROACTIVE_MORNING",
+    "proactive_evening": "DIYA_PROACTIVE_EVENING",
+    "proactive_quiet": "DIYA_PROACTIVE_QUIET",
     "host": "DIYA_HOST",
     "token_path": "DIYA_TOKEN_PATH",
     "connector_tokens_dir": "DIYA_CONNECTOR_TOKENS_DIR",
@@ -259,7 +269,7 @@ def load_config(env=None) -> Config:
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
                         ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
-                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM")):
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag
@@ -341,7 +351,9 @@ def load_config(env=None) -> Config:
     if cert is not None:
         values["ssl_certfile"], values["ssl_keyfile"] = cert, key
 
-    for field, name, parse in (("push_quiet", "DIYA_PUSH_QUIET", diya_time.parse_quiet), ("push_day_at", "DIYA_PUSH_DAY_AT", diya_time.parse_day_at)):
+    for field, name, parse in (("push_quiet", "DIYA_PUSH_QUIET", diya_time.parse_quiet), ("push_day_at", "DIYA_PUSH_DAY_AT", diya_time.parse_day_at),
+                               ("proactive_quiet", "DIYA_PROACTIVE_QUIET", diya_time.parse_quiet), ("proactive_morning", "DIYA_PROACTIVE_MORNING", diya_time.parse_day_at),
+                               ("proactive_evening", "DIYA_PROACTIVE_EVENING", diya_time.parse_day_at)):
         if field in values:
             try:
                 parse(values[field])

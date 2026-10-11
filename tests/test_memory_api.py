@@ -523,11 +523,11 @@ def test_building_the_app_touches_no_store():
 def test_a_fact_accepted_in_the_page_is_told_to_the_model_on_the_very_next_message(client, memory, app_parts):
     _, _, model = app_parts
     fact_id = add_candidate(memory, "plays chess on Sundays")
-    client.post("/api/chat", json={"message": "hi"})
+    client.post("/api/chat", json={"message": "tell me a joke"})
     assert model.chat_calls[0]["messages"][0]["role"] == "user"  # a candidate is not told
 
     client.post(f"/api/memory/{fact_id}/accept")
-    client.post("/api/chat", json={"message": "hello again"})
+    client.post("/api/chat", json={"message": "tell me another"})
     assert model.chat_calls[1]["messages"][0] == {"role": "system", "content": "What you know about the user so far:\n- plays chess on Sundays"}
 
     client.post(f"/api/memory/{fact_id}/retire")

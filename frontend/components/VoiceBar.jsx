@@ -1,7 +1,11 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import Orb from './Orb'
 import { describeTranscribeFailure } from '../lib/api-failure.mjs'
+import { describeMicrophoneFailure, openMicrophone, watchLevel } from '../lib/microphone.mjs'
+
+const MIN_PRESS_MS = 400 // a press shorter than this is a tap, not a recording
 
 // The message box (docs/UI_DESIGN.md, D3): a text field, Hold to talk, Send, and a New chat that asks first. It was a drawing with a WebGL
 // ring, a voice-reactive glow and a liquid menu; it is a text box now, and what it shows of Diya working is words and one thin line.
@@ -18,6 +22,10 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
   const [confirming, setConfirming] = useState(false) // New chat has been pressed once and is asking
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
+  const pressedRef = useRef(false) // the button is held down (it can be let go of before the browser has finished opening the microphone)
+  const pressedAtRef = useRef(0)
+  const stopMeterRef = useRef(null)
+  const [level, setLevel] = useState(0) // how loud the microphone is, for the listening orb
   // The same test submit() uses, so Send is filled exactly when it would send (and not while nothing can be sent).
   const hasText = value.trim().length > 0 && !unavailable
 
@@ -29,28 +37,43 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
     onSend(trimmed)
   }
 
-  async function startRecording() {
+  async function startRecording(event) {
     if (unavailable) return
+    pressedRef.current = true
+    pressedAtRef.current = Date.now()
+    event?.currentTarget?.setPointerCapture?.(event.pointerId) // go on hearing the release even if the pointer drifts off the button
+    let mic
     try {
-      const mic = await navigator.mediaDevices.getUserMedia({ audio: true })
-      audioChunksRef.current = []
-      const mediaRecorder = new MediaRecorder(mic)
-      mediaRecorder.ondataavailable = (e) => audioChunksRef.current.push(e.data)
-      mediaRecorder.onstop = () => sendRecording(mediaRecorder)
-      mediaRecorder.start()
-      mediaRecorderRef.current = mediaRecorder
-      setRecording(true)
+      mic = await openMicrophone() // the default microphone, or, when that will not start, each real one in turn
     } catch (err) {
-      onSystemMessage('Microphone error: ' + err.message + ' -- did you allow mic access?')
+      pressedRef.current = false
+      onSystemMessage(describeMicrophoneFailure(err))
+      return
     }
+    if (!pressedRef.current) {
+      // let go while the browser was still opening it: nothing was said, so nothing is kept
+      mic.getTracks().forEach((t) => t.stop())
+      return
+    }
+    audioChunksRef.current = []
+    const mediaRecorder = new MediaRecorder(mic)
+    mediaRecorder.ondataavailable = (e) => audioChunksRef.current.push(e.data)
+    mediaRecorder.onstop = () => sendRecording(mediaRecorder)
+    mediaRecorder.start()
+    mediaRecorderRef.current = mediaRecorder
+    stopMeterRef.current = watchLevel(mic, setLevel)
+    setRecording(true)
   }
 
   function stopRecording() {
+    pressedRef.current = false
     const mediaRecorder = mediaRecorderRef.current
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop()
       mediaRecorder.stream.getTracks().forEach((t) => t.stop())
     }
+    stopMeterRef.current?.()
+    stopMeterRef.current = null
     setRecording(false)
   }
 
@@ -58,8 +81,10 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
     const mimeType = mediaRecorder.mimeType || 'audio/webm'
     const blob = new Blob(audioChunksRef.current, { type: mimeType })
 
-    const kb = (blob.size / 1024).toFixed(1)
-    onSystemMessage(`recorded ${kb} KB · ${mimeType}`)
+    if (Date.now() - pressedAtRef.current < MIN_PRESS_MS) {
+      onSystemMessage('Hold the mic button down while you speak, and let go when you are done.')
+      return
+    }
     if (blob.size < 1000) {
       onSystemMessage("that's suspiciously small -- the mic may not have actually captured audio")
     }
@@ -122,6 +147,7 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
         {/* Two real phases the old build gave zero feedback for -- capturing your voice, then Whisper turning it into text. */}
         {(recording || micDisabled) && (
           <div className="mic-status" role="status">
+            <Orb state={recording ? 'listening' : 'thinking'} level={recording ? level : 0} size={22} />
             {recording ? 'Listening...' : 'Transcribing...'}
           </div>
         )}
@@ -159,7 +185,9 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
               disabled={micDisabled || !!unavailable}
               onPointerDown={startRecording}
               onPointerUp={stopRecording}
+              onPointerCancel={stopRecording}
               onPointerLeave={stopRecording}
+              onContextMenu={(e) => e.preventDefault()}
               suppressHydrationWarning
             >
               <span className="mk-ico mk-ico-mic" />

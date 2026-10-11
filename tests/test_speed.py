@@ -216,3 +216,22 @@ def test_a_greeting_that_tries_to_call_a_tool_anyway_is_refused_by_the_tool_not_
     agent = diya.Agent(config, client=client)
     answer, tools_called = agent.ask(agent.with_profile([{"role": "user", "content": "hello"}]))
     assert answer == "Hello!" and client.chat_calls[1]["messages"][-1] == {"role": "tool", "tool_call_id": "call_1", "content": diya.REMINDER_NOT_ASKED}  # the reminder tool's own guard refuses an unasked reminder
+
+
+def test_when_the_start_of_the_system_message_changes_it_is_read_again_and_when_it_does_not_it_is_not(config):
+    import diya_memory
+
+    client = FakeClient([text_reply("x"), text_reply("y"), text_reply("z")])
+    agent = diya.Agent(config, client=client)
+    waits = []
+
+    def sleep(seconds):
+        waits.append(seconds)
+        if len(waits) == 1:
+            diya_memory.Memory(agent.store).add_manual("likes tea", "api")  # a new fact: every message now starts differently
+        if len(waits) == 3:
+            keeper.stop()
+
+    keeper = warm.KeepWarm(config, agent, post=Ollama().post, say=lambda line: None, sleep=sleep)
+    keeper.run()
+    assert len(client.chat_calls) == 2  # read at the start, and once more after the fact; the third renewal found nothing new to read

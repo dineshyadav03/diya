@@ -469,8 +469,13 @@ def test_a_message_costs_its_text_and_sixteen_characters():
 
 
 def test_every_answer_left_at_the_start_is_dropped_not_only_the_first():
-    messages = [{"role": "assistant", "content": "a"}, {"role": "assistant", "content": "b"}, {"role": "user", "content": "c"}]
-    assert diya.trim_history(messages, 1000) == messages[2:]
+    messages = [{"role": "user", "content": "q" * 500}, {"role": "assistant", "content": "a"}, {"role": "assistant", "content": "b"}, {"role": "user", "content": "c"}]
+    assert diya.trim_history(messages, 100) == messages[3:]  # the question was cut off the front, so the answers that were left at the start go with it
+
+
+def test_a_chat_that_begins_with_diya_speaking_keeps_what_she_said_when_nothing_was_cut():
+    messages = [{"role": "assistant", "content": "Good morning."}, {"role": "assistant", "content": "Evening check-in."}, {"role": "user", "content": "move it to five"}]
+    assert diya.trim_history(messages, 1000) == messages
 
 
 def test_a_chat_that_ends_on_an_answer_keeps_it_though_nothing_else_fits():

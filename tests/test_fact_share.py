@@ -88,7 +88,7 @@ def test_the_profile_is_merged_into_the_single_system_message(config):
     assert sent[0]["content"].startswith(diya.FACT_SHARE_PROMPT) and "likes tea" in sent[0]["content"]
 
 
-@pytest.mark.parametrize("text", NOT_FACTS[:-1])
+@pytest.mark.parametrize("text", [t for t in NOT_FACTS[:-1] if not diya_intent.is_small_talk(t)])  # a bare greeting or thank-you has its own turn now: tests/test_persona.py
 def test_every_other_turn_reaches_the_model_exactly_as_before(config, text):
     """Ordinary answers must stay ordinary: no instructions added, all tools offered."""
     agent, client = agent_with(config, text_reply("An ordinary answer."))

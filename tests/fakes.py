@@ -1,4 +1,5 @@
 """A scripted stand-in for the OpenAI-compatible client Ollama exposes -- no network, no model."""
+import re
 from types import SimpleNamespace
 
 
@@ -72,6 +73,25 @@ def keyword_embedding(text):
     return [float(w in lowered) for w in ("dentist", "guitar", "garden", "laptop")]
 
 
+def stream_of(reply):
+    """The chunks an OpenAI-style streaming call gives for a scripted reply: a text reply a word at a time; a tool call as its name first and its arguments in two pieces; and a last chunk
+    with no choices at all, as a usage chunk is."""
+    message = reply.choices[0].message
+
+    def chunk(content=None, tool_calls=None):
+        return SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=content, tool_calls=tool_calls))])
+
+    chunks = [chunk(content=piece) for piece in re.findall(r"\S+\s*", message.content or "")]
+    for index, call in enumerate(message.tool_calls or ()):
+        arguments = call.function.arguments
+        half = len(arguments) // 2
+        chunks.append(chunk(tool_calls=[SimpleNamespace(index=index, id=call.id, function=SimpleNamespace(name=call.function.name, arguments=""))]))
+        chunks.append(chunk(tool_calls=[SimpleNamespace(index=index, id=None, function=SimpleNamespace(name=None, arguments=arguments[:half]))]))
+        chunks.append(chunk(tool_calls=[SimpleNamespace(index=index, id=None, function=SimpleNamespace(name=None, arguments=arguments[half:]))]))
+    chunks.append(SimpleNamespace(choices=[]))
+    return chunks
+
+
 class FakeClient:
     """Replays `replies` in order for chat completions and records every call made."""
 
@@ -88,7 +108,8 @@ class FakeClient:
         if self._chat_error:
             raise self._chat_error
         self.chat_calls.append({"model": model, "messages": list(messages), "tools": tools, "options": options})
-        return self.replies.pop(0)
+        reply = self.replies.pop(0)
+        return iter(stream_of(reply)) if options.get("stream") else reply
 
     def _embed(self, model, input):
         if self._embed_error:

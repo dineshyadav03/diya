@@ -9,6 +9,7 @@ import threading
 import urllib.parse
 import uuid
 from datetime import datetime
+from types import SimpleNamespace
 
 import httpx
 from ddgs import DDGS
@@ -392,6 +393,21 @@ OWN_LIST_TOOLS = frozenset({"list_reminders", "list_tasks", "add_task"})
 # These instructions are sent ONLY on those turns. Sent on every turn they measurably halved the
 # length of ordinary answers (median ~100 -> ~50 words), and ordinary answers must stay exactly
 # as they were: on every other turn the request to the model is unchanged.
+# Who Diya is. Until now the model was given nothing but the list of what it knows about the person, so every "hey" got the model's own stock greeting ("Hello! How can I assist you today?"),
+# the same words every time. This is the one place the voice is set; the date is added where it is used, so the model also knows what day it is.
+PERSONA = (
+    "You are Diya, a private personal assistant that runs on the user's own computer. Talk like a warm, sharp friend who knows them: natural, brief, in your own words, never stiff or "
+    "corporate (never say \"How can I assist you today\"). Use what you know about them below, and never make up facts about them or their day. If you do not know something, say so plainly."
+)
+# Added only to a message that is just a greeting or a thank-you (diya_intent.is_small_talk): no tools are offered then, and the reply should be short and not the same twice.
+SMALL_TALK_PROMPT = (
+    "The user is only saying hello, thanks or goodbye. Reply in ONE short, plain, friendly sentence (two at most), different each time. It is {part} for them. Use their name if it is given "
+    "above. No scenery, no weather, no poetry, no emoji, nothing about yourself (you have no coffee, no window, no day), and nothing about them unless it is written above: never invent "
+    "anything. Do not list what you can do and do not offer to assist."
+)
+SMALL_TALK_TEMPERATURE = 0.9  # a little looser than the model's own 0.7, so a greeting is not the same words every time
+
+
 FACT_SHARE_PROMPT = (
     "The user is telling you something -- an appointment, a plan, a detail about their life -- and "
     "is asking for nothing. Reply with ONE short sentence: start with a brief acknowledgement (such "
@@ -429,9 +445,49 @@ def trim_history(messages, max_chars):
         kept.append(message)
         used += cost
     kept.reverse()
+    # A chat that really begins with Diya speaking (what she wrote first, docs/PROACTIVE_DESIGN.md) keeps her opening message, or the person's reply to it would reach the model with no
+    # sign of what it is a reply to. So what is left at the start is dropped only when the front was cut off (or it is a tool's call or result, which cannot open a chat), and once anything
+    # was dropped what follows it belongs to the same exchange and goes too.
+    cut = len(kept) < len(messages)
     while len(kept) > 1 and kept[0].get("role") != "user":
+        if not (cut or kept[0].get("role") == "tool" or kept[0].get("tool_calls")):
+            break
+        cut = True
         kept.pop(0)
     return kept
+
+
+def _read_stream(stream, on_event):
+    """Read a streamed model reply (OpenAI-style chunks), telling `on_event` each piece of text as it arrives, and return what a non-streamed call would have: `.choices[0].message` with the
+    whole `content` and the whole `tool_calls`. A tool call arrives in pieces, joined by its index; one that comes with text before it means the text was a preface, so the pieces already
+    told are taken back (`reset`). `history_form` is the same message as the plain dict the API accepts, because an object of this kind cannot be sent back to it."""
+    pieces, calls = [], {}
+    for chunk in stream:
+        if not getattr(chunk, "choices", None):
+            continue
+        delta = chunk.choices[0].delta
+        text = getattr(delta, "content", None)
+        if text:
+            pieces.append(text)
+            on_event("delta", text)
+        for part in getattr(delta, "tool_calls", None) or ():
+            index = part.index if isinstance(getattr(part, "index", None), int) else 0
+            slot = calls.setdefault(index, {"id": None, "name": "", "arguments": ""})
+            slot["id"] = slot["id"] or getattr(part, "id", None)
+            function = getattr(part, "function", None)
+            if function is not None:
+                slot["name"] += getattr(function, "name", None) or ""
+                slot["arguments"] += getattr(function, "arguments", None) or ""
+    content = "".join(pieces)
+    if calls and content:
+        on_event("reset", None)
+    made = [SimpleNamespace(id=slot["id"] or f"call_{index}", type="function", function=SimpleNamespace(name=slot["name"], arguments=slot["arguments"] or "{}"))
+            for index, slot in sorted(calls.items())]
+    history_form = {"role": "assistant", "content": content or None}
+    if made:
+        history_form["tool_calls"] = [{"id": call.id, "type": "function", "function": {"name": call.function.name, "arguments": call.function.arguments}} for call in made]
+    message = SimpleNamespace(content=content or None, tool_calls=made or None, history_form=history_form)
+    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
 
 def _tool_arguments(raw):
@@ -815,11 +871,14 @@ class Agent:
             self.ensure_profile_imported()
             self._profile_import_checked = True
         profile = diya_memory.Memory(self.store).render_for_model()
-        if profile:
-            return [{"role": "system", "content": f"What you know about the user so far:\n{profile}"}] + history
-        return history
+        now = self.now()
+        persona = f"{PERSONA} Today is {diya_time.DAY_NAMES[now.weekday()]} {now.day} {diya_time.MONTH_NAMES[now.month - 1]} {now.year}." if PERSONA else ""
+        known = f"What you know about the user so far:\n{profile}" if profile else ""
+        if not persona and not known:
+            return history
+        return [{"role": "system", "content": persona + ("\n\n" if persona and known else "") + known}] + history
 
-    def _model_messages(self, messages, fact_share):
+    def _model_messages(self, messages, fact_share, small_talk=False):
         """The conversation as the model sees it (the caller's list is left alone).
 
         Ordinary turns are passed through untouched. On a fact-share the fact-share instructions
@@ -827,6 +886,16 @@ class Agent:
         gets a single system message -- and a reminder is added to the last user message to keep
         the reply to one sentence."""
         out = list(messages)
+        if small_talk and not fact_share:
+            hour = self.now().hour
+            part = "late at night" if hour < 5 or hour >= 22 else "morning" if hour < 12 else "afternoon" if hour < 17 else "evening"
+            hint = SMALL_TALK_PROMPT.format(part=part)
+            first = out[0] if out else None
+            if isinstance(first, dict) and first.get("role") == "system":
+                out[0] = {"role": "system", "content": first["content"] + "\n\n" + hint}  # at the end, so what comes before it is the same as in every other turn
+            else:
+                out.insert(0, {"role": "system", "content": hint})
+            return out
         if not fact_share:
             return out
         first = out[0] if out else None
@@ -841,11 +910,15 @@ class Agent:
                 break
         return out
 
-    def _complete(self, messages, fact_share, tools):
-        kwargs = {"model": self.config.model, "messages": self._model_messages(messages, fact_share)}
+    def _complete(self, messages, fact_share, tools, on_event=None, small_talk=False):
+        kwargs = {"model": self.config.model, "messages": self._model_messages(messages, fact_share, small_talk)}
         if tools:
             kwargs["tools"] = tools
-        return self.client.chat.completions.create(**kwargs)
+        if small_talk and not fact_share:
+            kwargs["temperature"] = SMALL_TALK_TEMPERATURE
+        if on_event is None or fact_share:  # a fact-share's reply is shortened afterwards, so it cannot be shown as it is written: it is told whole, when it is done
+            return self.client.chat.completions.create(**kwargs)
+        return _read_stream(self.client.chat.completions.create(stream=True, **kwargs), on_event)
 
     @staticmethod
     def _final(content, fact_share):
@@ -853,8 +926,12 @@ class Agent:
         sentence; this is the backstop if the model elaborates anyway."""
         return diya_intent.shorten_ack(content) if fact_share else content
 
-    def ask(self, messages, *, thread_id=None, message_id=None):
+    def ask(self, messages, *, thread_id=None, message_id=None, on_event=None):
         """Returns (answer_text, tools_called) -- the tool list exists so evals can check routing.
+
+        With `on_event`, the answer is also told as it is written (docs/STREAMING_DESIGN.md): on_event("delta", text) for each piece of the reply, on_event("reset", None) if the text so far turned
+        out to be a preface to tool calls and should be thrown away, and on_event("tool", name) as each tool is about to run. It all happens in the calling thread, which matters: what a turn
+        knows about the message it is answering is kept per thread. The return value is the same, and is the answer to show: a streamed reply is complete when ask returns.
 
         While it runs, add_reminder knows what the person just said (see there), and a proposed action
         (docs/ACTIONS_DESIGN.md) knows which chat and which of the owner's messages it came from and which tools
@@ -868,7 +945,7 @@ class Agent:
         self._turn.reads = []
         self._turn.active = True
         try:
-            return self._ask(messages)
+            return self._ask(messages, on_event)
         finally:
             self._turn.active = False
             self._turn.user_text = None
@@ -889,7 +966,7 @@ class Agent:
         del messages[lead:lead + len(rest) - len(kept)]  # what was kept is the end of what there was
         return messages
 
-    def _ask(self, messages):
+    def _ask(self, messages, on_event=None):
         """The tool-calling loop behind ask().
 
         A clear fact-share ("my flight is on Friday at 6") is not a request: the model is called
@@ -899,10 +976,11 @@ class Agent:
         tools_called = []
         fact_share = diya_intent.is_fact_share(_last_user_text(messages))
         # A greeting or a thank-you cannot need a tool, and the tools' descriptions are about a thousand tokens the model would read first (docs/SPEED_DESIGN.md).
-        tools = None if fact_share or diya_intent.is_small_talk(_last_user_text(messages)) else self.tools
+        small_talk = not fact_share and diya_intent.is_small_talk(_last_user_text(messages))
+        tools = None if fact_share or small_talk else self.tools
         offered = frozenset(spec["function"]["name"] for spec in tools or ())
         for _ in range(MAX_TOOL_ROUNDS):
-            response = self._complete(messages, fact_share, tools)
+            response = self._complete(messages, fact_share, tools, on_event, small_talk)
             message = response.choices[0].message
 
             if not message.tool_calls:
@@ -914,13 +992,15 @@ class Agent:
                 retry = messages + [
                     {"role": "user", "content": "Please answer directly, in one short sentence."}
                 ]
-                retry_response = self._complete(retry, fact_share, tools)
+                retry_response = self._complete(retry, fact_share, tools, on_event, small_talk)
                 retry_content = retry_response.choices[0].message.content
                 return self._final(retry_content or "I didn't get a clear answer -- try rephrasing.", fact_share), tools_called
 
-            messages.append(message)
+            messages.append(getattr(message, "history_form", message))  # a streamed message is put back into the chat as the plain dict the API takes
             for call in message.tool_calls:
                 tools_called.append(call.function.name)
+                if on_event is not None:
+                    on_event("tool", str(call.function.name)[:60])
                 # Every call gets exactly one tool message back, whatever became of it: that is what the model's API
                 # expects, and a call the model got wrong is told so, in words it can act on, rather than ending the turn.
                 result = self._run_tool_call(call, offered)

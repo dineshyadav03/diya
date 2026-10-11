@@ -161,6 +161,23 @@ def tell_questions(store, notify, quiet, now=None, dry_run=False, say=print):
     return len(waiting), 0
 
 
+def tell_proactive(talker, notify, show_text, now_utc, say=print):
+    """Put what Diya wrote first on the desktop, once each: her first line (or just "Diya wrote to you." when the words are hidden), recorded as told only after the notification was shown.
+    Returns (messages told, notifications that could not be shown)."""
+    told = failed = 0
+    for message in talker.to_toast()[:MAX_NOTIFICATIONS]:
+        body = printable(message["text"].split("\n")[0], BODY_CHARS) if show_text else "Diya wrote to you."
+        try:
+            notify("Diya", body)
+        except NotifyError as exc:
+            failed += 1
+            say(f"could not tell about message {message['id']}: {exc}")
+            continue
+        talker.mark_toasted([message["id"]], now_utc)
+        told += 1
+    return told, failed
+
+
 def _log_line(config, line):
     """One line in the log, with the time. Ids and counts only: never a reminder's words."""
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -223,6 +240,24 @@ def main(argv=None, config=None, out=None, notify=None, now=None):
         except Exception as exc:  # the reminders were told; a question that cannot be looked at is tried again next time
             say(f"could not look at the questions: {printable(exc, 200)}")
             questions_failed = 1
+    wrote = wrote_told = wrote_failed = 0
+    if config.proactive:  # Diya writing first (docs/PROACTIVE_DESIGN.md): messages in the chat, then the desktop; a failure here never hides a reminder that was told
+        try:
+            import diya_events
+            import diya_proactive
+
+            now_local = datetime.now() if now is None else now
+            talker = diya_proactive.Proactive(Store(config.db_path), morning=diya_time.parse_day_at(config.proactive_morning), evening=diya_time.parse_day_at(config.proactive_evening),
+                                              quiet=diya_time.parse_quiet(config.proactive_quiet))
+            if args.dry_run:
+                for kind, _key, _text in talker.plan(now_local):
+                    say(f"would write: {kind}")
+            else:
+                wrote = len(talker.make(now_local))
+                wrote_told, wrote_failed = tell_proactive(talker, notify, config.notify_show_text, diya_events.utc_of_local(now_local), say)
+        except Exception as exc:  # whatever went wrong, the reminders were told: say what kind and try again next pass
+            say(f"could not write first: {printable(type(exc).__name__)}")
+            wrote_failed = 1
     pushed = push_failed = push_removed = 0
     if config.push:  # the phone, by Web Push (docs/PUSH_DESIGN.md): after the toast, and neither one hides or undoes the other
         import diya_push
@@ -242,6 +277,8 @@ def main(argv=None, config=None, out=None, notify=None, now=None):
         return EXIT_OK
     if questions_told or questions_failed:
         _log_line(config, f"{questions_told} questions told, {questions_failed} failed")
+    if wrote or wrote_told or wrote_failed:
+        _log_line(config, f"wrote first: {wrote} written, {wrote_told} told, {wrote_failed} failed")
     if pushed or push_failed or push_removed:
         _log_line(config, f"push: {pushed} sent, {push_failed} failed, {push_removed} removed")
     if report.due or report.failed:
@@ -249,8 +286,8 @@ def main(argv=None, config=None, out=None, notify=None, now=None):
         for line in lines:
             if line.startswith("could not"):
                 _log_line(config, printable(line.split(":", 1)[0]) + " (" + printable(line.split(":", 1)[-1].strip(), 120) + ")")
-    print(summary + (f"; {questions_told} questions told" if questions_told else "") + (f"; {pushed} pushed" if pushed else "") + ".", file=out)
-    return EXIT_SOME_FAILED if report.failed or questions_failed or push_failed else EXIT_OK
+    print(summary + (f"; {questions_told} questions told" if questions_told else "") + (f"; {pushed} pushed" if pushed else "") + (f"; {wrote} written first" if wrote else "") + ".", file=out)
+    return EXIT_SOME_FAILED if report.failed or questions_failed or push_failed or wrote_failed else EXIT_OK
 
 
 if __name__ == "__main__":
