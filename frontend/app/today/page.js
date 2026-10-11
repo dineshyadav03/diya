@@ -172,6 +172,18 @@ export default function TodayPage() {
                 )}
               </section>
 
+              {data.questions > 0 && (
+                <section aria-labelledby="today-questions">
+                  <h2 id="today-questions">
+                    Questions from Diya ({data.questions}) <Link href="/memory">Open Memory</Link>
+                  </h2>
+                  <p className="memory-dim">
+                    {data.questions === 1 ? 'One thing' : `${data.questions} things`} Diya learned from you {data.questions === 1 ? 'is' : 'are'} waiting for
+                    your yes or no. None of it is told to the model until you say yes.
+                  </p>
+                </section>
+              )}
+
               <section aria-labelledby="today-repeating">
                 <h2 id="today-repeating">
                   Coming from repeating reminders ({counts.repeating}) <Link href="/scheduled">Open Scheduled</Link>

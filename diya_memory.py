@@ -651,6 +651,11 @@ class Memory:
         with self._read() as conn:
             return conn.execute("SELECT COUNT(*) FROM fact_events WHERE event = ? AND actor = ? AND at >= ?", (event, actor, since)).fetchone()[0]
 
+    def questions_waiting(self):
+        """How many candidates the memory policy is waiting to ask the person about: the ones that carry its `ask:` flag. A number, never their
+        text, for the places that only say "there are questions" (the Today page)."""
+        return sum(1 for fact in self.facts("candidate") if any(flag.startswith(ASK_PREFIX) for flag in fact["flags"]))
+
     def accepting_actors(self):
         """Who accepted each fact that is accepted now: {fact id: actor} of its latest accepting event (accepted, added, imported or restored).
         One query for all of them, for the page that tells the person which facts Diya took on its own."""

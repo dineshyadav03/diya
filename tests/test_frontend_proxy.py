@@ -815,8 +815,8 @@ def test_the_today_route_works_end_to_end_through_the_ui_server_with_no_token_in
     (answer,) = through_the_ui(api, [call("today", "GET")])
     assert answer["status"] == 200
     body = json.loads(unb64(answer["bodyB64"]))
-    assert set(body) == {"date", "headline", "due_now", "later_today", "tasks_overdue", "tasks_today", "repeating", "counts"}
-    assert body["counts"]["no_time"] == 1
+    assert set(body) == {"date", "headline", "due_now", "later_today", "tasks_overdue", "tasks_today", "repeating", "counts", "questions"}
+    assert body["counts"]["no_time"] == 1 and body["questions"] == 0
 
 
 @needs_node

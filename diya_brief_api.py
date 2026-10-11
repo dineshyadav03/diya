@@ -1,7 +1,8 @@
 """The day over HTTP (docs/SCHEDULE_DESIGN.md, D8 and unit R5): the route behind the UI's Today page.
 
     GET /api/today     what is due now and later today, the tasks overdue or due today, and the repeating reminders that
-                       will make one next -- built in code from the owner's own rows (diya_brief.py), never written by a model
+                       will make one next -- built in code from the owner's own rows (diya_brief.py), never written by a model;
+                       and, as a bare number, how many things Diya has learned are waiting for the owner's yes or no
 
 GET only, and there is nothing to change here: acting on a reminder, a task or a repeating reminder is done on its own page.
 The route is behind the access token like the rest of the API. Reminders, tasks and repeating reminders come from the model as
@@ -11,7 +12,7 @@ is sent as a visible escape.
 from __future__ import annotations
 
 import diya_brief
-from diya_memory import printable
+from diya_memory import Memory, printable
 
 
 def _safe(value):
@@ -34,4 +35,6 @@ def register(app, config, agent):
         now = agent.now()
         reminders = agent.store.reminders("pending")
         series_ids = agent.schedule.series_of([row["id"] for row in reminders])
-        return _safe(diya_brief.build(now, reminders, agent.tasks.tasks("open"), agent.schedule.series("active"), series_ids))
+        brief = _safe(diya_brief.build(now, reminders, agent.tasks.tasks("open"), agent.schedule.series("active"), series_ids))
+        brief["questions"] = Memory(agent.store).questions_waiting()  # only the number: what the questions say is on the Memory page, not in the day
+        return brief
