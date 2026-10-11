@@ -438,6 +438,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/tasks", "/api/tasks", "/api/tasks/${task.id}/done", "/api/tasks/${task.id}/reopen",  # the Tasks page: its list, add, done and put back
         "/api/reminders/${reminder.id}/snooze",  # the Reminders page's push-back buttons
         "/api/scheduled", "/api/scheduled", "/api/scheduled/${series.id}/${action}",  # the Scheduled page: its list, add, and pause/resume/skip/stop
+        "/api/automations", "/api/automations", "/api/automations/${item.id}/${action}",  # the Automations page: its list, add, and pause/resume/run/delete
         "/api/today",  # the Today page
         "/api/push/status", "/api/push/key", "/api/push/subscribe", "/api/push/unsubscribe", "/api/push/test",  # its "Notify this device" control
         "/api/connections", "/api/connections/${connector.name}/connect", "/api/connections/${connector.name}/connect",
@@ -495,6 +496,8 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         "/api/reminders", "/api/reminders/{reminder_id}/done", "/api/reminders/{reminder_id}/snooze",
         "/api/today", "/api/scheduled", "/api/scheduled/{series_id}/pause", "/api/scheduled/{series_id}/resume",
         "/api/scheduled/{series_id}/skip", "/api/scheduled/{series_id}/stop",
+        "/api/automations", "/api/automations/{automation_id}/pause", "/api/automations/{automation_id}/resume", "/api/automations/{automation_id}/run",
+        "/api/automations/{automation_id}/delete",
         "/api/tasks", "/api/tasks/{task_id}/done", "/api/tasks/{task_id}/reopen",
         "/api/connections", "/api/connections/{name}/connect", "/api/connections/{name}/disconnect",
         "/api/actions", "/api/actions/{action_id}", "/api/actions/{action_id}/approve",
@@ -507,7 +510,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         assert "lib/proxy.mjs" in source and any(
             name in source
             for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardFactReplace(", "forwardFactUndoReplace(", "forwardLearned(", "forwardQuestionAnswer(", "forwardReminderDone(", "forwardConnection(",
-                         "forwardAction(", "forwardActionDecision(", "forwardTaskAction(", "forwardScheduledAction(", "forwardReminderSnooze(")
+                         "forwardAction(", "forwardActionDecision(", "forwardTaskAction(", "forwardScheduledAction(", "forwardAutomationAction(", "forwardReminderSnooze(")
         ), path
         assert "force-dynamic" in source, path  # never cached
 
@@ -958,6 +961,31 @@ def test_a_whole_number_series_id_is_forwarded_to_its_own_path_and_each_route_do
 def test_a_whole_number_reminder_id_is_forwarded_to_its_snooze_path(reminder_id):
     out = run_harness({"mode": "route", "env": {}, "calls": [call("reminderSnooze", "POST", params={"reminder_id": reminder_id})]})
     assert [(c["method"], c["url"]) for c in out["captured"]] == [("POST", f"/api/reminders/{reminder_id}/snooze")]
+
+
+# --- the automations page's routes (docs/AUTOMATIONS_DESIGN.md) -----------------------------------------
+
+AUTOMATION_ACTIONS = [("automationPause", "pause"), ("automationResume", "resume"), ("automationRun", "run"), ("automationDelete", "delete")]
+
+
+@needs_node
+def test_the_automation_routes_forward_to_their_own_path_and_method_with_the_token_and_nothing_else_of_the_browsers():
+    wanted = [("automations", "GET", None, "/api/automations"), ("automations", "POST", None, "/api/automations"),
+              *[(route, "POST", {"automation_id": "12"}, f"/api/automations/12/{action}") for route, action in AUTOMATION_ACTIONS]]
+    calls = [call(route, method, {"content-type": "application/json", "authorization": "Bearer from-the-browser", "cookie": "a=b"}, "{}" if method == "POST" else None, params)
+             for route, method, params, _ in wanted]
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": calls})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [(m, u) for _, m, _, u in wanted]
+    assert all(c["headers"]["authorization"] == f"Bearer {TOKEN}" and "cookie" not in c["headers"] for c in out["captured"])
+
+
+@needs_node
+@pytest.mark.parametrize("route", [route for route, _ in AUTOMATION_ACTIONS])
+def test_an_automation_id_that_is_not_a_whole_number_is_refused_before_anything_is_sent_and_get_is_not_answered(route):
+    refused = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call(route, "POST", params={"automation_id": bad}) for bad in BAD_IDS]})
+    assert [r["status"] for r in refused["results"]] == [404] * len(BAD_IDS) and refused["captured"] == []
+    wrong = run_harness({"mode": "route", "env": {}, "calls": [call(route, "GET", params={"automation_id": "1"})]})
+    assert wrong["results"] == [{"noHandler": True}] and wrong["captured"] == []
 
 
 # --- the actions page's routes (docs/ACTIONS_DESIGN.md, unit A3) ---------------------------------------

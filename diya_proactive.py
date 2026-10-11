@@ -115,9 +115,14 @@ class Proactive:
             conn.close()
         return self._rows("WHERE key = ?", (key,))[0]
 
+    def post(self, kind, key, text, now_local):
+        """Say something the person asked for (an automation's answer) in the chat now, whatever the hour: it is not one of the day's own messages, so the quiet hours and the daily cap are not
+        applied to it (they are Diya's manners when she speaks on her own; this was asked for). Returns the row, or None if this key was already said."""
+        return self._post(kind, key, text, diya_events.utc_of_local(now_local))
+
     def _made_today(self, now_local):
         since = _iso(datetime.combine(now_local.date(), time.min))
-        return sum(1 for row in self._rows("WHERE created_at >= ?", (since,)) if row["kind"] != "reminder")
+        return sum(1 for row in self._rows("WHERE created_at >= ?", (since,)) if row["kind"] not in ("reminder", "automation"))  # what was asked for does not use up what she says unasked
 
     # ---- making them ----
     def plan(self, now_local):

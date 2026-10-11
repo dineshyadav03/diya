@@ -316,6 +316,24 @@ MIGRATIONS = (
         )
         """,
     )),
+    # 14: things Diya does on a schedule, for the person (docs/AUTOMATIONS_DESIGN.md): what to do in the person's own words (`instruction`), when in their words (`words`) and as a rule
+    # (`rule`, diya_repeat's text form), whether it is `active` or `paused`, the next time it falls (`next_ts`, stored like every moment here, UTC), and how the last run went.
+    (14, (
+        """
+        CREATE TABLE IF NOT EXISTS automations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            instruction TEXT NOT NULL,
+            words TEXT NOT NULL,
+            rule TEXT NOT NULL,
+            state TEXT NOT NULL DEFAULT 'active' CHECK (state IN ('active', 'paused')),
+            next_ts TEXT NOT NULL,
+            last_run_at TEXT,
+            last_status TEXT,
+            runs INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+        """,
+    )),
 )
 
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored

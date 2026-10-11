@@ -161,6 +161,13 @@ def tell_questions(store, notify, quiet, now=None, dry_run=False, say=print):
     return len(waiting), 0
 
 
+def _make_agent(config):
+    """Diya's agent, made only when an automation is due: importing it and starting it are the slow part, and the notifier runs every few minutes for reminders that need none of it."""
+    import diya
+
+    return diya.Agent(config)
+
+
 def tell_proactive(talker, notify, show_text, now_utc, say=print):
     """Put what Diya wrote first on the desktop, once each: her first line (or just "Diya wrote to you." when the words are hidden), recorded as told only after the notification was shown.
     Returns (messages told, notifications that could not be shown)."""
@@ -240,6 +247,26 @@ def main(argv=None, config=None, out=None, notify=None, now=None):
         except Exception as exc:  # the reminders were told; a question that cannot be looked at is tried again next time
             say(f"could not look at the questions: {printable(exc, 200)}")
             questions_failed = 1
+    auto_ran = auto_told = auto_failed = 0
+    if config.automations:  # what the person asked to be done on a schedule (docs/AUTOMATIONS_DESIGN.md): at most one run a pass, its answer written in the chat and put on the desktop
+        try:
+            import diya_automations
+            import diya_events
+            import diya_proactive
+
+            now_local = datetime.now() if now is None else now
+            store = Store(config.db_path)
+            if args.dry_run:
+                for row in diya_automations.Automations(store, lambda: now_local).due(now_local)[:diya_automations.RUNS_PER_PASS]:
+                    say(f"would run: automation {row['id']}")
+            else:
+                talker = diya_proactive.Proactive(store, quiet=None)
+                auto_ran = diya_automations.run_due(store, lambda: _make_agent(config), talker, now_local, say)
+                if auto_ran:
+                    auto_told, auto_failed = tell_proactive(talker, notify, config.notify_show_text, diya_events.utc_of_local(now_local), say)
+        except Exception as exc:  # the reminders were told: say what kind and try again next pass
+            say(f"could not run automations: {printable(type(exc).__name__)}")
+            auto_failed = 1
     wrote = wrote_told = wrote_failed = 0
     if config.proactive:  # Diya writing first (docs/PROACTIVE_DESIGN.md): messages in the chat, then the desktop; a failure here never hides a reminder that was told
         try:
@@ -277,6 +304,8 @@ def main(argv=None, config=None, out=None, notify=None, now=None):
         return EXIT_OK
     if questions_told or questions_failed:
         _log_line(config, f"{questions_told} questions told, {questions_failed} failed")
+    if auto_ran or auto_told or auto_failed:
+        _log_line(config, f"automations: {auto_ran} run, {auto_told} told, {auto_failed} failed")
     if wrote or wrote_told or wrote_failed:
         _log_line(config, f"wrote first: {wrote} written, {wrote_told} told, {wrote_failed} failed")
     if pushed or push_failed or push_removed:
@@ -286,8 +315,8 @@ def main(argv=None, config=None, out=None, notify=None, now=None):
         for line in lines:
             if line.startswith("could not"):
                 _log_line(config, printable(line.split(":", 1)[0]) + " (" + printable(line.split(":", 1)[-1].strip(), 120) + ")")
-    print(summary + (f"; {questions_told} questions told" if questions_told else "") + (f"; {pushed} pushed" if pushed else "") + (f"; {wrote} written first" if wrote else "") + ".", file=out)
-    return EXIT_SOME_FAILED if report.failed or questions_failed or push_failed or wrote_failed else EXIT_OK
+    print(summary + (f"; {questions_told} questions told" if questions_told else "") + (f"; {pushed} pushed" if pushed else "") + (f"; {wrote} written first" if wrote else "") + (f"; {auto_ran} automations run" if auto_ran else "") + ".", file=out)
+    return EXIT_SOME_FAILED if report.failed or questions_failed or push_failed or wrote_failed or auto_failed else EXIT_OK
 
 
 if __name__ == "__main__":

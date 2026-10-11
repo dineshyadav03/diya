@@ -15,6 +15,7 @@ export const NAV = [
       { href: '/today', name: 'Today' },
       { href: '/reminders', name: 'Reminders', badge: 'due' },
       { href: '/scheduled', name: 'Scheduled' },
+      { href: '/automations', name: 'Automations' },
       { href: '/tasks', name: 'Tasks' },
     ],
   },

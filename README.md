@@ -60,6 +60,9 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   (cards at the top of the chat page) and put on the desktop by the notifier. Built in code from your own reminders and tasks, so nothing is invented; `DIYA_PROACTIVE=0` turns it off
   ([docs/PROACTIVE_DESIGN.md](docs/PROACTIVE_DESIGN.md)). Replies appear word by word, with an orb while she thinks, and the chat model is kept loaded so "hey" is not slow
   ([docs/SPEED_DESIGN.md](docs/SPEED_DESIGN.md), [docs/STREAMING_DESIGN.md](docs/STREAMING_DESIGN.md)).
+- **Automations**: say "every morning at 8am tell me the weather in Pune" (in the chat, or on the **Automations** page) and Diya does it on that schedule and writes you the answer in the chat. A run can
+  only read (the weather, the web, your notes, reminders and tasks), never save or send anything; it is made by code from your own words, not by the model; `DIYA_AUTOMATIONS=0` turns it off
+  ([docs/AUTOMATIONS_DESIGN.md](docs/AUTOMATIONS_DESIGN.md)).
 - **Telling your phone** (off; `DIYA_PUSH=1` and a contact address you choose in `DIYA_PUSH_SUBJECT`; `pip install ".[push]"`): the same pass of the notifier can send a Web Push when a
   reminder is due, a question is waiting, an action needs your approval, or (at a time you choose) your day is ready, to a device that tapped **Notify this device** on the Today page. By
   default the notification says only that something is waiting, never what; reminders are never held back at night, the rest are. [docs/PUSH_DESIGN.md](docs/PUSH_DESIGN.md) says what is

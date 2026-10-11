@@ -226,6 +226,15 @@ export async function forwardScheduledAction(request, context, action, options) 
   return forward(request, `/api/scheduled/${seriesId}/${action}`, options)
 }
 
+// The automations page's routes (docs/AUTOMATIONS_DESIGN.md). An automation's id is a whole number, and what is done to it is one of four
+// literals the caller passes (pause, resume, run, delete), never read from the URL; anything else is turned away here instead of being
+// pasted into the URL of the API request.
+export async function forwardAutomationAction(request, context, action, options) {
+  const { automation_id: automationId } = await context.params
+  if (!WHOLE_NUMBER.test(String(automationId))) return errorResponse(404, 'No such automation')
+  return forward(request, `/api/automations/${automationId}/${action}`, options)
+}
+
 // Pushing a pending reminder back (the Reminders page's snooze buttons): the id is a whole number, the body carries the
 // words for when.
 export async function forwardReminderSnooze(request, context, options) {

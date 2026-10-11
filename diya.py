@@ -16,6 +16,7 @@ from ddgs import DDGS
 from openai import OpenAI, OpenAIError
 
 import diya_actions
+import diya_automations
 import diya_config
 import diya_connector_tools
 import diya_connectors
@@ -406,6 +407,12 @@ SMALL_TALK_PROMPT = (
     "anything. Do not list what you can do and do not offer to assist."
 )
 SMALL_TALK_TEMPERATURE = 0.9  # a little looser than the model's own 0.7, so a greeting is not the same words every time
+# Added to an automation's run (Agent.briefing, docs/AUTOMATIONS_DESIGN.md): the person set this up earlier and is not there to answer, so no question back, and only what a tool found.
+BRIEFING_PROMPT = (
+    "The user set up this task earlier to run by itself on a schedule, and they are not waiting at the keyboard. Do the task now with the tools you have (they only read), then write the "
+    "message they will find in their chat: a few plain sentences, the facts you found first. Say only what a tool returned or what you know above; if a tool failed or found nothing, say "
+    "that plainly. Do not ask them a question and do not offer anything more."
+)
 
 
 FACT_SHARE_PROMPT = (
@@ -926,8 +933,23 @@ class Agent:
         sentence; this is the backstop if the model elaborates anyway."""
         return diya_intent.shorten_ack(content) if fact_share else content
 
-    def ask(self, messages, *, thread_id=None, message_id=None, on_event=None):
+    def briefing(self, instruction):
+        """The answer to an automation's instruction (docs/AUTOMATIONS_DESIGN.md), as the message to leave for the person. The model is offered only the tools that read
+        (diya_automations.READ_ONLY_TOOLS), and a call to any other is refused here as well, whatever the model asks for: a scheduled run reads the web, which is untrusted text, and can read
+        private things, so it must have no way to save, send or act. Nothing is added to any chat; the caller writes the answer."""
+        messages = self.with_profile([{"role": "user", "content": str(instruction)}])
+        if messages and messages[0].get("role") == "system":
+            messages[0] = {"role": "system", "content": messages[0]["content"] + "\n\n" + BRIEFING_PROMPT}
+        else:
+            messages.insert(0, {"role": "system", "content": BRIEFING_PROMPT})
+        answer, _tools = self.ask(messages, only_tools=diya_automations.READ_ONLY_TOOLS)
+        return answer
+
+    def ask(self, messages, *, thread_id=None, message_id=None, on_event=None, only_tools=None):
         """Returns (answer_text, tools_called) -- the tool list exists so evals can check routing.
+
+        `only_tools` (a collection of tool names) is for a run nobody is watching (briefing): only those tools are offered and a call to any other is refused, and the turn is never
+        taken for an automation to make, a fact-share or a greeting.
 
         With `on_event`, the answer is also told as it is written (docs/STREAMING_DESIGN.md): on_event("delta", text) for each piece of the reply, on_event("reset", None) if the text so far turned
         out to be a preface to tool calls and should be thrown away, and on_event("tool", name) as each tool is about to run. It all happens in the calling thread, which matters: what a turn
@@ -939,13 +961,17 @@ class Agent:
         forgotten, so a later direct call is not judged by an old message.
         """
         messages = self._within_window(messages)
+        if only_tools is None and self.config.automations:  # "every morning at 8am tell me the weather in Pune": made here, in code, and answered with a fixed sentence (diya_automations.from_chat)
+            said = diya_automations.from_chat(self.store, _last_user_text(messages), self._clock)
+            if said is not None:
+                return said, []
         self._turn.user_text = _last_user_text(messages)
         self._turn.thread_id = thread_id
         self._turn.message_id = message_id
         self._turn.reads = []
         self._turn.active = True
         try:
-            return self._ask(messages, on_event)
+            return self._ask(messages, on_event, only_tools)
         finally:
             self._turn.active = False
             self._turn.user_text = None
@@ -966,18 +992,20 @@ class Agent:
         del messages[lead:lead + len(rest) - len(kept)]  # what was kept is the end of what there was
         return messages
 
-    def _ask(self, messages, on_event=None):
+    def _ask(self, messages, on_event=None, only_tools=None):
         """The tool-calling loop behind ask().
 
         A clear fact-share ("my flight is on Friday at 6") is not a request: the model is called
         without tools (so it cannot save a reminder or search the web on its own initiative) and
         its reply is kept to one sentence. Everything else -- questions, requests, chat -- gets
-        the full toolkit and a normal answer."""
+        the full toolkit and a normal answer. A run with `only_tools` is always a request, and is offered only those."""
         tools_called = []
-        fact_share = diya_intent.is_fact_share(_last_user_text(messages))
+        fact_share = only_tools is None and diya_intent.is_fact_share(_last_user_text(messages))
         # A greeting or a thank-you cannot need a tool, and the tools' descriptions are about a thousand tokens the model would read first (docs/SPEED_DESIGN.md).
-        small_talk = not fact_share and diya_intent.is_small_talk(_last_user_text(messages))
+        small_talk = only_tools is None and not fact_share and diya_intent.is_small_talk(_last_user_text(messages))
         tools = None if fact_share or small_talk else self.tools
+        if only_tools is not None:
+            tools = [spec for spec in tools if spec["function"]["name"] in only_tools]
         offered = frozenset(spec["function"]["name"] for spec in tools or ())
         for _ in range(MAX_TOOL_ROUNDS):
             response = self._complete(messages, fact_share, tools, on_event, small_talk)
@@ -1003,19 +1031,19 @@ class Agent:
                     on_event("tool", str(call.function.name)[:60])
                 # Every call gets exactly one tool message back, whatever became of it: that is what the model's API
                 # expects, and a call the model got wrong is told so, in words it can act on, rather than ending the turn.
-                result = self._run_tool_call(call, offered)
+                result = self._run_tool_call(call, offered, strict=only_tools is not None)
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
 
         return "I couldn't finish that after several tool calls -- something's likely stuck. Try rephrasing.", tools_called
 
-    def _run_tool_call(self, call, offered):
+    def _run_tool_call(self, call, offered, strict=False):
         """What one tool call from the model comes to, as the text the model is told. A tool that does not exist, arguments that
         are not a JSON object, and a tool that fails are each reported to the model in words it can act on; none of them ends the
         turn, and the model's retries are bounded by MAX_TOOL_ROUNDS. A tool that exists but is not offered this turn (a
         connector that is not connected, a reminder nobody asked for) is refused by the tool itself, with its own explanation.
-        `offered` is only what the error for an unknown name lists."""
+        `offered` is only what the error for an unknown name lists, except when `strict` (a run nobody is watching): then a tool that was not offered is not run, however real it is."""
         name = call.function.name
-        if name not in self._functions:
+        if name not in self._functions or (strict and name not in offered):
             available = ", ".join(sorted(offered)) or "none"
             return f"Error: there is no tool called {str(name)[:60]!r}. The tools you can use now: {available}."
         if name not in self._proposal_tools and name not in OWN_LIST_TOOLS:

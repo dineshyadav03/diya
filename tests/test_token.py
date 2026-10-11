@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 
 import diya
 import diya_actions
+import diya_automations
 import diya_questions
 import diya_config
 import diya_web
@@ -86,6 +87,10 @@ def client_for(tmp_path, require=None):
     for words in ("every day", "every Monday", "every Friday", "every month on the 15th"):  # four repeating reminders, one for each thing the
         agent.schedule.create(f"seeded series {words}", words)  # routes do to one: 1 to pause, 2 (paused below) to resume, 3 to skip, 4 to stop
     agent.schedule.pause(2)
+    automations = diya_automations.Automations(agent.store, agent.now)
+    for words in ("every day at 8am", "every Monday at 8am", "every Friday at 8am", "every weekday at 8am"):  # four automations, for the same reason: 1 to pause, 2 (paused below) to resume, 3 to run now, 4 to delete
+        automations.create("tell me the weather", words)
+    automations.pause(2)
     agent.store.add_reminder("seeded timed reminder", "x", "2030-01-01T09:00:00Z")  # reminder 2: still pending when the snooze route runs, after 1 is done
     # and one connector, so /api/connections/demo/connect has something real to act on
     app = diya_web.create_app(config, agent, transcriber=object(), connectors=SEEDED_CONNECTORS)
@@ -123,6 +128,10 @@ def concrete_path(path):
            .replace("/api/scheduled/{series_id}/skip", "/api/scheduled/3/skip")
            .replace("/api/scheduled/{series_id}/stop", "/api/scheduled/4/stop")
            .replace("{series_id}", "1")
+           .replace("/api/automations/{automation_id}/resume", "/api/automations/2/resume")  # each change has its own seeded automation
+           .replace("/api/automations/{automation_id}/run", "/api/automations/3/run")
+           .replace("/api/automations/{automation_id}/delete", "/api/automations/4/delete")
+           .replace("{automation_id}", "1")
            .replace("{thread_id}", "1").replace("{fact_id}", "1").replace("{action}", "accept")
            .replace("{reminder_id}", "1").replace("{name}", "demo")
            .replace("/api/tasks/{task_id}/reopen", "/api/tasks/2/reopen").replace("{task_id}", "1")
@@ -168,6 +177,12 @@ ENDPOINTS = [
     ("POST", "/api/scheduled/2/resume", {}),
     ("POST", "/api/scheduled/3/skip", {}),
     ("POST", "/api/scheduled/4/stop", {}),
+    ("GET", "/api/automations", {}),
+    ("POST", "/api/automations", {"json": {"text": "every morning at 8am tell me the weather in Pune"}}),
+    ("POST", "/api/automations/1/pause", {}),
+    ("POST", "/api/automations/2/resume", {}),
+    ("POST", "/api/automations/3/run", {}),
+    ("POST", "/api/automations/4/delete", {}),
     ("GET", "/api/tasks", {}),
     ("POST", "/api/tasks", {"json": {"text": "buy milk", "when": "tomorrow"}}),
     ("POST", "/api/tasks/1/done", {}),

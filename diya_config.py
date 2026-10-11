@@ -110,6 +110,8 @@ class Config:
     proactive_morning: str = "08:30"  # DIYA_PROACTIVE_MORNING
     proactive_evening: str = "19:00"  # DIYA_PROACTIVE_EVENING
     proactive_quiet: str = "22-07"  # DIYA_PROACTIVE_QUIET
+    # Things Diya does on a schedule and writes the answer of (diya_automations.py, docs/AUTOMATIONS_DESIGN.md): off with DIYA_AUTOMATIONS=0 (nothing is made from the chat and none is run).
+    automations: bool = True  # DIYA_AUTOMATIONS
     # Keeping the chat model loaded (diya_warm.py, docs/SPEED_DESIGN.md): Ollama unloads a model after five idle minutes, and loading it again plus reading the tools took about 20 seconds on
     # this computer's CPU, so the first message after a pause was slow even for "hey". While the API runs it asks Ollama, every few minutes, to keep the model for `keep_alive` more
     # (Ollama's own format: "30m", "2h", seconds, or -1 for always). DIYA_KEEP_WARM=0 turns it off and lets Ollama unload the model as usual (the model's memory, about 3 GB, is held while it is on).
@@ -269,7 +271,7 @@ def load_config(env=None) -> Config:
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
                         ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
-                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE")):
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag
