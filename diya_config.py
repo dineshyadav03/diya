@@ -15,6 +15,8 @@ import ipaddress
 import os
 from dataclasses import dataclass
 
+import diya_time
+
 
 # Dreaming always stages: what it extracts goes to a review queue (dream_pending.jsonl) and never
 # to anything the model reads. DIYA_DREAM_PROFILE_MODE once offered "direct" too (append unreviewed
@@ -90,6 +92,8 @@ class Config:
     # up to about this many characters (always at least one message). Before, a pass sent everything since its last one in a single prompt, so a long
     # gap (a machine off for weeks) could ask for more than the model's window; now the rest simply waits for the next pass. 0 reads everything.
     dream_batch_chars: int = 12_000
+    # When the questions Diya raises herself are not shown or told (DIYA_QUESTIONS_QUIET): two hours like "22-07" (the start hour is quiet, the end hour is not), or "off".
+    questions_quiet: str = "22-07"
     ssl_certfile: str | None = None
     ssl_keyfile: str | None = None
     # Folders `list_files` may look inside, beyond the default folder (see default_files_root());
@@ -154,6 +158,7 @@ _STRING_SETTINGS = {
     "notify_log_path": "DIYA_NOTIFY_LOG_PATH",
     "whisper_model": "DIYA_WHISPER_MODEL",
     "privacy_model": "DIYA_PRIVACY_MODEL",
+    "questions_quiet": "DIYA_QUESTIONS_QUIET",
     "host": "DIYA_HOST",
     "token_path": "DIYA_TOKEN_PATH",
     "connector_tokens_dir": "DIYA_CONNECTOR_TOKENS_DIR",
@@ -200,6 +205,12 @@ def load_config(env=None) -> Config:
         for field in _DATA_FILES:
             if field not in values:  # a file's own setting still wins
                 values[field] = os.path.join(data_dir, Config.__dataclass_fields__[field].default)
+
+    if "questions_quiet" in values:
+        try:
+            diya_time.parse_quiet(values["questions_quiet"])
+        except ValueError as exc:
+            raise ConfigError(f"DIYA_QUESTIONS_QUIET: {exc}") from None
 
     port = read("DIYA_PORT")
     if port is not None:

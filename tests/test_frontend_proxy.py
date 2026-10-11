@@ -431,6 +431,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/history/${threadId}", "/api/chat", "/api/threads", "/api/transcribe",
         "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
         "/api/memory/${fact.id}/replace",  # the Memory page's "replace the old one" button
+        "/api/questions", "/api/questions/seen", "/api/questions/${question.id}/answer",  # the chat's cards: the list, the note that they were shown, an answer
         "/api/memory/learned?message_id=${messageId}", "/api/memory/${item.id}/undo-replace", "/api/memory/${item.id}/${item.kind === 'forgot' ? 'restore' : 'retire'}",  # the chat's line under a reply
         "/api/reminders", "/api/reminders", "/api/reminders", "/api/reminders/${reminder.id}/done",  # the chat's due count, the page's list and add, and done
         "/api/tasks", "/api/tasks", "/api/tasks/${task.id}/done", "/api/tasks/${task.id}/reopen",  # the Tasks page: its list, add, done and put back
@@ -486,6 +487,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         "/api/threads", "/api/history/{thread_id}", "/api/chat", "/api/transcribe",
         "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/merge", "/api/memory/{fact_id}/{action}",
         "/api/memory/{fact_id}/replace", "/api/memory/{fact_id}/undo-replace", "/api/memory/learned",
+        "/api/questions", "/api/questions/seen", "/api/questions/{question_id}/answer",
         "/api/reminders", "/api/reminders/{reminder_id}/done", "/api/reminders/{reminder_id}/snooze",
         "/api/today", "/api/scheduled", "/api/scheduled/{series_id}/pause", "/api/scheduled/{series_id}/resume",
         "/api/scheduled/{series_id}/skip", "/api/scheduled/{series_id}/stop",
@@ -500,7 +502,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         assert exported == methods, path
         assert "lib/proxy.mjs" in source and any(
             name in source
-            for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardFactReplace(", "forwardFactUndoReplace(", "forwardLearned(", "forwardReminderDone(", "forwardConnection(",
+            for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardFactReplace(", "forwardFactUndoReplace(", "forwardLearned(", "forwardQuestionAnswer(", "forwardReminderDone(", "forwardConnection(",
                          "forwardAction(", "forwardActionDecision(", "forwardTaskAction(", "forwardScheduledAction(", "forwardReminderSnooze(")
         ), path
         assert "force-dynamic" in source, path  # never cached
@@ -1146,3 +1148,59 @@ def test_the_two_routes_work_end_to_end_through_the_ui_server_and_the_api_refuse
     assert undone["status"] == 200 and json.loads(unb64(undone["bodyB64"]))["restored"]["id"] == old
     refused = through_the_ui(api, [call("memoryLearned", "GET", url="https://localhost:3000/api/memory/learned?message_id=1"), call("memoryUndoReplace", "POST", params={"fact_id": "1"})], token=None)
     assert [a["status"] for a in refused] == [401, 401]
+
+
+# --- the questions Diya raises herself (docs/AUTO_MEMORY_DESIGN.md, D5 and unit A5) ---------------------------------------------------
+
+QUESTION_CALLS = [
+    ("questions", "GET", None, "/api/questions"),
+    ("questionsSeen", "POST", None, "/api/questions/seen"),
+    ("questionAnswer", "POST", {"question_id": "12"}, "/api/questions/12/answer"),
+]
+
+
+@needs_node
+def test_the_question_routes_forward_to_their_own_path_and_method_with_the_token_and_nothing_else_of_the_browsers():
+    calls = [call(route, method, {"content-type": "application/json", "authorization": "Bearer from-the-browser", "cookie": "a=b"}, "{}" if method == "POST" else None, params)
+             for route, method, params, _ in QUESTION_CALLS]
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": calls})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [(m, u) for _, m, _, u in QUESTION_CALLS]
+    for captured in out["captured"]:
+        assert captured["headers"]["authorization"] == f"Bearer {TOKEN}" and "cookie" not in captured["headers"]
+    assert "from-the-browser" not in json.dumps(out["captured"])
+
+
+@needs_node
+def test_a_question_route_answers_only_the_method_the_api_route_does():
+    wrong = {"questions": "POST", "questionsSeen": "GET", "questionAnswer": "GET"}
+    out = run_harness({"mode": "route", "env": {}, "calls": [call(route, wrong[route], params={"question_id": "1"}) for route in wrong]})
+    assert out["results"] == [{"noHandler": True}] * len(wrong) and out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("question_id", ["abc", "1.5", "-1", "1e3", "", " 1", "1%2F2", "../1", "9" * 19, "0x10"])
+def test_a_question_id_that_is_not_a_whole_number_is_refused_before_anything_is_sent(question_id):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call("questionAnswer", "POST", params={"question_id": question_id})]})
+    assert [r["status"] for r in out["results"]] == [404] and out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("question_id", ["1", "12", "9" * 18])
+def test_a_whole_number_question_id_is_forwarded_with_the_body_the_browser_sent(question_id):
+    out = run_harness({"mode": "route", "env": {}, "calls": [call("questionAnswer", "POST", {"content-type": "application/json"}, '{"answer": "yes"}', {"question_id": question_id})]})
+    (captured,) = out["captured"]
+    assert captured["url"] == f"/api/questions/{question_id}/answer" and json.loads(unb64(captured["bodyB64"])) == {"answer": "yes"}
+
+
+@needs_node
+def test_the_question_routes_work_end_to_end_through_the_ui_server_and_the_api_refuses_them_without_the_token(api):
+    from diya_memory import Memory
+
+    memory = Memory(api.agent.store)
+    fact = memory.add_candidate("takes metformin", batch_first=1, batch_last=1, position=0, model="m", extracted_at="2026-01-01T00:00:00+00:00", raw="- x")
+    memory.set_flags(fact, ["ask:sensitive:model_private"], "system")
+    listed, seen = through_the_ui(api, [call("questions", "GET"), json_call("questionsSeen", {"ids": [1]})])
+    assert listed["status"] == 200 and json.loads(unb64(listed["bodyB64"])) == {"questions": []}  # automatic memory is off in this API: nothing is made
+    assert seen["status"] == 200
+    refused = through_the_ui(api, [call("questions", "GET"), json_call("questionsSeen", {"ids": [1]}), json_call_with("questionAnswer", {"answer": "yes"}, {"question_id": "1"})], token=None)
+    assert [a["status"] for a in refused] == [401, 401, 401]

@@ -239,6 +239,30 @@ MIGRATIONS = (
         )
         """,
     )),
+    # 9: the questions Diya raises herself (docs/AUTO_MEMORY_DESIGN.md, D5 and unit A5). One row for each fact and kind of question, ever (UNIQUE), so a fact is never
+    # asked about twice in the same way. `shown_at` starts the day after which an unanswered question counts as ignored, `wait_until` is the three days it then waits,
+    # `notified_at` is when the desktop notifier told the person there is a question (once). `detail` is JSON made by code: the fact a waiting fact may replace, the time
+    # an offer is for. Times are UTC text.
+    (9, (
+        """
+        CREATE TABLE IF NOT EXISTS memory_questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fact_id INTEGER NOT NULL,
+            kind TEXT NOT NULL CHECK (kind IN ('doubt', 'conflict', 'sensitive', 'stale', 'offer')),
+            state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'answered', 'dropped')),
+            created_at TEXT NOT NULL,
+            shown_at TEXT,
+            ignores INTEGER NOT NULL DEFAULT 0,
+            wait_until TEXT,
+            notified_at TEXT,
+            answered_at TEXT,
+            answer TEXT,
+            detail TEXT,
+            UNIQUE (fact_id, kind)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS memory_questions_by_state ON memory_questions (state)",
+    )),
 )
 
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored

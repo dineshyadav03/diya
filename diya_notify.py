@@ -138,6 +138,31 @@ def run_once(store, notify, now=None, show_text=True, dry_run=False, say=print):
     return Report(due=len(due), told=told, failed=failed)
 
 
+def tell_questions(store, notify, quiet, now=None, dry_run=False, say=print):
+    """Tell the person, once, that Diya has a question (docs/AUTO_MEMORY_DESIGN.md, D5 and unit A5): one notification that says only THAT, never what the question
+    is or what it is about (a notification can be seen by anyone passing the screen, and a question may be about something private). Only questions that may be
+    shown now (not in the quiet hours, not waiting after being ignored) and that have not been told about yet; each is told once, and recorded only after the
+    notification was shown, as with a reminder. Returns (questions told, notifications that could not be shown)."""
+    import diya_questions
+
+    now_local = datetime.now() if now is None else now
+    queue = diya_questions.Questions(store, quiet)
+    waiting = queue.unnotified(now_local)
+    if not waiting:
+        return 0, 0
+    body = "Diya has a question for you." if len(waiting) == 1 else f"Diya has {len(waiting)} questions for you."
+    if dry_run:
+        say(f"would tell: Diya | {body}")
+        return 0, 0
+    try:
+        notify("Diya", body)
+    except NotifyError as exc:
+        say(f"could not tell about {len(waiting)} questions: {exc}")
+        return 0, 1
+    queue.mark_notified([question["id"] for question in waiting], now_local)
+    return len(waiting), 0
+
+
 def _log_line(config, line):
     """One line in the log, with the time. Ids and counts only: never a reminder's words."""
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -193,17 +218,26 @@ def main(argv=None, config=None, out=None, notify=None, now=None):
         if not args.dry_run:
             _log_line(config, f"error: {printable(type(exc).__name__)}")
         return EXIT_UNUSABLE
+    questions_told = questions_failed = 0
+    if config.auto_memory:  # the questions exist only with automatic memory on
+        try:
+            questions_told, questions_failed = tell_questions(Store(config.db_path), notify, diya_time.parse_quiet(config.questions_quiet), now=now, dry_run=args.dry_run, say=say)
+        except Exception as exc:  # the reminders were told; a question that cannot be looked at is tried again next time
+            say(f"could not look at the questions: {printable(exc, 200)}")
+            questions_failed = 1
     summary = f"{report.due} due, {report.told} told, {report.failed} failed"
     if args.dry_run:
         print(f"Dry run: {summary}; nothing was told or recorded.", file=out)
         return EXIT_OK
+    if questions_told or questions_failed:
+        _log_line(config, f"{questions_told} questions told, {questions_failed} failed")
     if report.due or report.failed:
         _log_line(config, summary)
         for line in lines:
             if line.startswith("could not"):
                 _log_line(config, printable(line.split(":", 1)[0]) + " (" + printable(line.split(":", 1)[-1].strip(), 120) + ")")
-    print(summary + ".", file=out)
-    return EXIT_SOME_FAILED if report.failed else EXIT_OK
+    print(summary + (f"; {questions_told} questions told" if questions_told else "") + ".", file=out)
+    return EXIT_SOME_FAILED if report.failed or questions_failed else EXIT_OK
 
 
 if __name__ == "__main__":

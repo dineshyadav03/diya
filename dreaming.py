@@ -247,6 +247,7 @@ class Dreamer:
             self.store.mark_captured(message_id, new)
             if new:
                 self._put_in_lanes(memory)
+                self._refill_questions(memory)
             return new
         except Exception:  # noqa: BLE001 -- memory failing must never be what breaks a chat
             print(f"[capture] reading message {message_id} for facts failed:", file=sys.stderr)
@@ -283,6 +284,14 @@ class Dreamer:
         self.store.mark_captured(message_id, 0)
         return forgotten
 
+    def _refill_questions(self, memory):
+        """Let the questions Diya raises herself (diya_questions, unit A5) be made from what is waiting, what has gone stale and what is coming, at their pace.
+        Returns how many were made."""
+        import diya_questions
+        from datetime import datetime
+
+        return diya_questions.Questions(self.store).refill(memory, datetime.now())  # the quiet hours are about showing a question, not about making one
+
     def _put_in_lanes(self, memory):
         """Every candidate in its lane (diya_autonomy.apply), asking the models the policy asks. What it did, as diya_autonomy.Report."""
         import diya_autonomy
@@ -301,10 +310,12 @@ class Dreamer:
             memory = diya_memory.Memory(self.store)
             ingested = diya_memory.ingest_queue(memory, self.config, actor="system")
             done = self._put_in_lanes(memory)
+            questions = self._refill_questions(memory)
             print(
                 f"Memory on its own: {done.remembered} remembered, {done.asked} to ask about, {done.never} not kept, "
                 f"{done.held} held (profile full); {ingested.new} newly taken in from the staged queue"
-                + (f"; {done.replaced} replaced as corrections." if done.replaced else ".")
+                + (f"; {done.replaced} replaced as corrections" if done.replaced else "")
+                + (f"; {questions} new questions to put to you." if questions else ".")
             )
         except Exception as exc:  # noqa: BLE001 -- the log is where a headless run says what went wrong
             print(f"[error] Memory on its own failed ({exc}). Nothing was changed past what is above; will retry next cycle.")

@@ -91,6 +91,28 @@ class When:
         return describe_local(self.local)
 
 
+def parse_quiet(setting):
+    """The quiet hours as (start hour, end hour) from a setting like "22-07", or None for "off". Raises ValueError for anything else."""
+    text = (setting or "").strip().lower()
+    if text in ("", "off", "none", "no", "never"):
+        return None
+    found = re.fullmatch(r"(\d{1,2})\s*-\s*(\d{1,2})", text)
+    if not found:
+        raise ValueError(f"the quiet hours are two hours like 22-07, or off, not {setting!r}")
+    start, end = int(found.group(1)), int(found.group(2))
+    if not (0 <= start <= 23 and 0 <= end <= 23) or start == end:
+        raise ValueError(f"the quiet hours are two different hours from 0 to 23, not {setting!r}")
+    return start, end
+
+
+def is_quiet(now, quiet):
+    """Is the local time `now` inside the quiet hours? `quiet` is what parse_quiet gives; the start hour is quiet, the end hour is not."""
+    if quiet is None:
+        return False
+    start, end = quiet
+    return start <= now.hour < end if start < end else (now.hour >= start or now.hour < end)
+
+
 def describe_local(local):
     """A local wall-clock time in words, the same way every time and whatever the machine's language."""
     return f"{DAY_NAMES[local.weekday()]} {local.day} {MONTH_NAMES[local.month - 1]} {local.year}, {local:%H:%M}"

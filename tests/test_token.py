@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 
 import diya
 import diya_actions
+import diya_questions
 import diya_config
 import diya_web
 from diya_config import ConfigError, load_config
@@ -47,7 +48,7 @@ def client_for(tmp_path, require=None):
     """An app whose token file is <tmp_path>/token.hash. `require` is DIYA_REQUIRE_TOKEN's value;
     None leaves it unset, i.e. the real default (the token is required), so most tests here run the
     app exactly as a fresh install gets it."""
-    env = {"DIYA_TOKEN_PATH": str(tmp_path / "token.hash")}
+    env = {"DIYA_TOKEN_PATH": str(tmp_path / "token.hash"), "DIYA_AUTO_MEMORY": "1"}  # automatic memory on, so the questions routes have something to do
     if require is not None:
         env["DIYA_REQUIRE_TOKEN"] = require
     config = dataclasses.replace(
@@ -75,6 +76,9 @@ def client_for(tmp_path, require=None):
                          extracted_at="2026-01-01T00:00:00+00:00", raw="- seeded replacing candidate")
     memory.add_candidate("seeded correction", batch_first=1, batch_last=1, position=2, model="m", extracted_at="2026-01-01T00:00:00+00:00", raw="- seeded correction")
     memory.supersede(4, memory.add_manual("seeded corrected fact", "cli"), "auto")  # fact 4 replaced fact 5: /api/memory/4/undo-replace takes it back
+    asked = memory.add_candidate("seeded private fact", batch_first=1, batch_last=1, position=3, model="m", extracted_at="2026-01-01T00:00:00+00:00", raw="- seeded private fact")
+    memory.set_flags(asked, ["ask:sensitive:model_private"], "system")
+    diya_questions.Questions(agent.store).refill(memory, agent.now())  # question 1, about fact 6
     agent.store.add_reminder("seeded reminder")  # and one reminder (id 1), for the same reason
     agent.tasks.add("seeded task")  # and two tasks: an open one (id 1) to tick off, a finished one (id 2) to put back
     agent.tasks.complete(agent.tasks.add("seeded finished task")["id"])
@@ -98,7 +102,8 @@ OK = (200, 201)  # adding a fact answers 201
 
 def concrete_path(path):
     """A route's path with a real id and action in place of its parameters."""
-    return (path.replace("/api/memory/{fact_id}/undo-replace", "/api/memory/4/undo-replace")
+    return (path.replace("{question_id}", "1")
+           .replace("/api/memory/{fact_id}/undo-replace", "/api/memory/4/undo-replace")
            .replace("/api/memory/{fact_id}/replace", "/api/memory/3/replace")  # fact 1 is accepted by an earlier route; this one has its own pair
            .replace("/api/reminders/{reminder_id}/snooze", "/api/reminders/2/snooze")  # reminder 1 is done by an earlier route
            .replace("/api/scheduled/{series_id}/resume", "/api/scheduled/2/resume")  # each change has its own seeded repeating reminder
@@ -125,6 +130,9 @@ ENDPOINTS = [
     ("POST", "/api/memory/3/replace", {"json": {"old_id": 2}}),
     ("POST", "/api/memory/4/undo-replace", {}),
     ("GET", "/api/memory/learned", {"params": {"message_id": 1}}),
+    ("GET", "/api/questions", {}),
+    ("POST", "/api/questions/seen", {"json": {"ids": [1]}}),
+    ("POST", "/api/questions/1/answer", {"json": {"answer": "yes"}}),
     ("POST", "/api/memory/merge", {"json": {"from_name": "Maya", "into_name": "Mayah"}}),
     ("GET", "/api/connections", {}),
     ("POST", "/api/connections/demo/connect", {"json": {"token": "a-token"}}),

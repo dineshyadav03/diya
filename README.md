@@ -82,6 +82,9 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   day pauses it. Measured on labelled days, with the 4B model extracting (`DIYA_MODEL=diya-chat`) and the 3B judging privacy (`DIYA_PRIVACY_MODEL=qwen2.5:3b`), none of the
   things that must never happen did (a secret kept, an order or something only the assistant said accepted, a sensitive statement accepted): a small sample written by the
   policy's author, so read the limits in the design before you decide. It asks about a good deal that is harmless; that is the price.
+- With automatic memory on, Diya also asks: cards at the top of the chat for what it was unsure of, what may replace something it knew, what has gone out of date and what
+  is coming (an offer of a reminder), at most three at a time and two new a day, none between 22:00 and 07:00 (`DIYA_QUESTIONS_QUIET`, `off` for never); the desktop notifier says
+  only that there is a question. Nothing is accepted by silence.
 - Long chats and long gaps are cut to what the model can read: `DIYA_HISTORY_CHARS` (24,000 characters of the newest messages sent each turn) and
   `DIYA_DREAM_BATCH_CHARS` (12,000 characters of yours read per Dreaming pass); `0` removes either limit.
 - The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 5147 tests pass on Windows (as of 2026-10-11).

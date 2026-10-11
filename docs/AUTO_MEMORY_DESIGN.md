@@ -1,6 +1,6 @@
 # Memory that remembers on its own, and asks when it is unsure -- design spec
 
-> **Status (2026-10-11):** A1 to A4, A6 and A7 are built, tested and measured (sections 8 to 11); A5 is built in part (the Today count; see the table). Nothing here
+> **Status (2026-10-11):** A1 to A7 are all built, tested and (where a model is involved) measured (sections 8 to 12). Nothing here has been used on real data: the switch is off. Nothing here
 > changes what the model is told until the switch in section 7 (`DIYA_AUTO_MEMORY`) is turned on, and it is off. The owner's
 > instruction: "for memory the facts do not need to be accepted: the model can understand automatically, and if
 > it is wrong the user will say so and the memory will be modified. This has to be so proactive that no model out there is that
@@ -142,7 +142,7 @@ the replacement question), the smaller and more suspicious 3B judges privacy.
 | A2 | **Applied to what Dreaming stages** (built): after Dreaming's own pass, `Dreamer.remember_on_its_own()` takes in what is staged and puts every candidate through `apply`. Behind `DIYA_AUTO_MEMORY`, off until A6. | `dreaming.py`, `diya_config.py` |
 | A3 | **Corrections** (built, sections 9 and 11): `Memory.supersede`, the page's "Replace the old one" button, correction words plus the model's answer replacing without a question, `Memory.undo_replace`, "forget that ..." and "forget everything about ...", and the line under the reply with Undo. | `diya_memory.py`, `diya_memory_api.py`, `diya_intent.py`, `dreaming.py`, `diya_autonomy.py`, frontend |
 | A4 | **Live capture** (built, section 10): `Dreamer.capture_message` after the reply, a table of what was read (migration 8), the scheduled pass leaving that out, and (automatic memory on) leaving out messages that only ask. | `dreaming.py`, `diya_intent.py`, `diya_db.py`, `diya_memory.py`, `diya_web.py` |
-| A5 | **Questions.** Built: the Today page says how many are waiting (a bare number, no model text) and links to the Memory page, where they are listed with their reasons in plain words. Not built: the queue table, the triggers other than doubt, conflict and sensitive, the pacing limits, the chat banner, the notifier line. | `diya_memory.py`, `diya_brief_api.py`, frontend |
+| A5 | **Questions** (built, section 12): the queue (migration 9), five kinds, the pace and the quiet hours, cards at the top of the chat, one desktop notification that says only that there is a question, the Today count. | `diya_questions.py`, `diya_questions_api.py`, `diya_db.py`, `diya_notify.py`, `dreaming.py`, frontend |
 | A6 | **Measurement** (built, section 8) on labelled messages with the real models (`python diya_autonomy_bench.py`): how often a wrong fact is remembered, how often a right one is asked, whether any secret or instruction was kept (must be zero), question volume. Then the switch. | `diya_autonomy_bench.py`, `tests/labelled_autonomy.py`, `tests/labelled_autonomy_bench.py` |
 | A7 | **The Memory page** (built, first part): what Diya took on its own is marked and can be undone, and the state of automatic memory (on or off, today's count, the breaker) is shown. The questions are A5. | frontend, `diya_memory_api.py` |
 
@@ -363,3 +363,34 @@ held-out rounds, now including a new item, **a known fact wrongly replaced** (a 
 already asked about them (updates talk about jobs and homes). Plain facts remembered 58%, 58% and 75%, none lost. The honest limits: the list of correction words was
 written looking at these very updates, so they say the rule does what it was written to do and not how it will do on other phrasings; the sample of updates is 21;
 and a correction the person meant but did not word as one is asked, not replaced (the safe direction).
+
+## 12. Questions Diya raises herself (D5, unit A5)
+
+**What it is.** The facts memory will not decide alone wait on the Memory page, all of them. This is the part that goes TO the person, at a pace that helps and does not nag, in
+words made by code (`diya_questions.py`, migration 9 `memory_questions`). Nothing in it is written by a model: a question's words come from the fact's own text through
+`diya_memory.printable` (cut at 160 characters), and the day in a stale question or an offer is read from the fact's words by `diya_time`, or there is no such question.
+
+**Five kinds.** *doubt* (the checks or the model could not be sure), *sensitive* (it looks private), *conflict* (it may replace a known fact; "Replace it" does what the Memory
+page's button does), *stale* (something remembered whose day has gone: "You told me ... Is that still true?"; no longer true retires it), and *offer* (something remembered
+that is going to happen: "... Want a reminder at Friday 16 Oct 2026, 14:00?"; yes makes an ordinary reminder, an hour before when a time was said and at 09:00 when only a day
+was). A fact has a day only if it names an event (an appointment, a flight, an exam, a call...), is not a habit ("every Monday", "usually", "weekdays"), and its day is one
+`diya_time` will commit to: "next Friday", "next week", "the 14th" and a bare "at 5" are none, and a day that a word such as "next", "after" or "until" changes is not read as the day
+that follows it.
+
+**The pace.** At most three open at once; at most two new in any 24 hours; none shown between 22:00 and 07:00 (`DIYA_QUESTIONS_QUIET`, "22-07" by default, "off" for never; the start
+hour is quiet and the end hour is not); a question shown and left for a day waits three days, and is dropped the second time, its fact left exactly as it was: never accepted by
+silence. A fact is never asked about twice in the same way (the table is unique on the fact and the kind), and a question whose fact was dealt with some other way (accepted on
+the Memory page, forgotten, deleted) is closed at the next look.
+
+**Where it shows.** Cards at the top of the chat when it opens and twenty seconds after each reply (`GET /api/questions`, in the chat page), each with the answers the question
+offers as buttons, "Edit it" for a doubt; and one desktop notification, once, that says only THAT there is a question ("Diya has a question for you.", or how many), never what it
+is about, and never in the quiet hours (the desktop notifier, for which the owner's `DIYA_AUTO_MEMORY` must be on in its own environment). The Today page counts what is waiting,
+as before, and links to the Memory page. Questions are made by the scheduled Dreaming pass, by a message read live, and whenever the cards are asked for.
+
+**Verified** by tests of every rule above, 180 mutants of the code (177 caught; three are equivalent: a condition SQLite's NULL already satisfies, and a guard re-added that the
+code no longer needs), and a look in a real browser against a throwaway API and database (two cards, one answered, the other left). Mutation found one real fault on the way: "after
+Friday at 3pm" was read as today at 3pm, because the day was skipped and the rest of the sentence still parsed; a day changed by a modifier word now means no day at all.
+
+**Honest limits.** The reading of days is deliberately timid, so many facts that are about the future get no offer and no stale question; a habit written without a habit word
+("plays badminton on Sunday") has no event word and is left alone, but "has a class on Sunday" would be read as one event. Nothing here has been used on the owner's real
+facts: automatic memory is off, so no question has ever been made on real data. The Today page shows a count, not the cards themselves.

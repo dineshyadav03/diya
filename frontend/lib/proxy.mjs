@@ -141,6 +141,14 @@ export async function forwardFactAction(request, context, options) {
   return forward(request, `/api/memory/${factId}/${action}`, options)
 }
 
+// The questions Diya raises herself (docs/AUTO_MEMORY_DESIGN.md, D5 and unit A5): the list and the "shown" note have fixed paths; an answer is for one question, whose
+// id must be a whole number and is the only thing taken from the URL.
+export async function forwardQuestionAnswer(request, context, options) {
+  const { question_id: questionId } = await context.params
+  if (!WHOLE_NUMBER.test(String(questionId))) return errorResponse(404, 'No such question')
+  return forward(request, `/api/questions/${questionId}/answer`, options)
+}
+
 // What memory did with one message (docs/AUTO_MEMORY_DESIGN.md, D7): the chat asks a little after a reply. The message id must be a whole number; it is the one
 // piece of the query string that is passed on, and only after it has been checked.
 export async function forwardLearned(request, options) {

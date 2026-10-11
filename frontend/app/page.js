@@ -23,6 +23,10 @@ const TOOL_LABELS = {
   list_files: 'listed files',
 }
 
+// The questions Diya raises herself (docs/AUTO_MEMORY_DESIGN.md, D5 and unit A5), asked for when the chat opens and after each reply. They are built by code on the server
+// (the words and the answers each question offers come from the API), shown as cards at the top of the chat, and answered with one press.
+const QUESTIONS_AFTER_REPLY_MS = 20000
+
 // What memory did with a message is looked up a few seconds after the reply, because memory reads the message once the reply is made (docs/AUTO_MEMORY_DESIGN.md,
 // D7 and unit A4). The page asks every few seconds, for at most about two minutes, and says nothing if nothing was learned.
 const LEARNED_EVERY_MS = 3000
@@ -82,6 +86,11 @@ export default function ChatPage() {
   const threadIdRef = useRef(null)
   // Which chat the page is showing: a look at what memory learned that finishes after the chat was changed must not be added to the new one.
   const chatEpochRef = useRef(0)
+  // The questions Diya has for the person right now, and the answer being sent (a question id) or the one being typed (an edit).
+  const [questions, setQuestions] = useState([])
+  const [answering, setAnswering] = useState(null)
+  const [editing, setEditing] = useState(null)
+  const [questionProblem, setQuestionProblem] = useState('')
   const logRef = useRef(null)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -94,6 +103,7 @@ export default function ChatPage() {
     // If opened from History, load and show that thread's real past messages.
     if (threadId) loadThread(threadId)
     else setReady(true)
+    loadQuestions()
   }, [])
 
   // Fetch a saved chat's past messages. When that fails, say why and offer to try again: it used to
@@ -143,6 +153,53 @@ export default function ChatPage() {
   }
   function setFailed(id, failed) {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, failed } : m)))
+  }
+
+  // Ask what Diya wants to ask, and say which she has now put in front of the person (an unanswered question left for a day counts as ignored).
+  // A failed look shows nothing: this is a courtesy and the Memory page has everything.
+  async function loadQuestions() {
+    try {
+      const response = await fetch('/api/questions')
+      if (!response.ok) return
+      const body = await response.json()
+      if (!body || !Array.isArray(body.questions)) return
+      setQuestions(body.questions)
+      if (body.questions.length) {
+        fetch('/api/questions/seen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: body.questions.map((question) => question.id) }),
+        }).catch(() => undefined)
+      }
+    } catch {
+      // nothing to show
+    }
+  }
+
+  async function answerQuestion(question, answer, text) {
+    setAnswering(question.id)
+    setQuestionProblem('')
+    let response
+    try {
+      response = await fetch(`/api/questions/${question.id}/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(text === undefined ? { answer } : { answer, text }),
+      })
+    } catch {
+      setQuestionProblem(describeActionFailure())
+      setAnswering(null)
+      return
+    }
+    if (!response.ok) {
+      const detail = await response.json().catch(() => null)
+      setQuestionProblem(describeActionFailure(response.status, detail?.detail))
+      setAnswering(null)
+      return
+    }
+    setEditing(null)
+    setAnswering(null)
+    await loadQuestions()
   }
 
   // Ask, a few seconds at a time, what memory made of one message, and put one quiet line under the reply when it made something. A failed look is
@@ -280,6 +337,7 @@ export default function ChatPage() {
       addMsg('assistant', data.answer)
       speak(data.answer)
       if (data.reading && Number.isInteger(data.message_id)) watchLearned(data.message_id)
+      setTimeout(loadQuestions, QUESTIONS_AFTER_REPLY_MS) // what that message made may be a question; memory has had time to read it by then
     } finally {
       setThinking(false)
     }
@@ -334,6 +392,60 @@ export default function ChatPage() {
         </div>
       </div>
       <div id="log" ref={logRef}>
+        {questions.length > 0 && (
+          <section className="question-cards" aria-label="Questions from Diya">
+            {questions.map((question) => (
+              <div key={question.id} className="question-card">
+                <p className="question-text">{question.text}</p>
+                {editing && editing.id === question.id ? (
+                  <form
+                    className="question-edit"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      answerQuestion(question, 'edit', editing.text)
+                    }}
+                  >
+                    <label className="memory-sr" htmlFor={`question-edit-${question.id}`}>
+                      Reword it
+                    </label>
+                    <input
+                      id={`question-edit-${question.id}`}
+                      className="memory-input"
+                      value={editing.text}
+                      onChange={(event) => setEditing({ id: question.id, text: event.target.value })}
+                      autoFocus
+                    />
+                    <button type="submit" className="cta small" disabled={answering === question.id || !editing.text.trim()}>
+                      Save
+                    </button>
+                    <button type="button" className="quiet-btn" onClick={() => setEditing(null)}>
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <div className="question-actions">
+                    {question.options.map((option) => (
+                      <button
+                        key={option.answer}
+                        type="button"
+                        className={option.answer === 'yes' ? 'cta small' : 'quiet-btn'}
+                        disabled={answering === question.id}
+                        onClick={() => (option.answer === 'edit' ? setEditing({ id: question.id, text: '' }) : answerQuestion(question, option.answer))}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {questionProblem && (
+              <p className="learned-problem" role="alert">
+                {questionProblem}
+              </p>
+            )}
+          </section>
+        )}
         {ready && messages.length === 0 && !thinking && (loadProblem ? (
           <div className="empty-state" role="alert">
             <img src="/diya-flame.svg" alt="" className="empty-mark" />
