@@ -132,8 +132,10 @@ def score_message(message, message_id, facts, seed_status=None, seed_id=None):
     return result
 
 
-def run_day(model, day, workdir, client=None, privacy_model=""):
-    """One labelled day through the real extraction and the real policy; returns the day's results."""
+def run_day(model, day, workdir, client=None, privacy_model="", live=False):
+    """One labelled day through the real extraction and the real policy; returns the day's results. With `live`, each message is first read
+    the way the chat reads it the moment it is said (Dreamer.capture_message: one message at a time, only the ones worth it), and then the
+    scheduled pass reads what was left, as it would half an hour later."""
     config = build_config(model, workdir, privacy_model)
     store = diya_db.Store(config.db_path)
     memory = diya_memory.Memory(store)
@@ -143,15 +145,22 @@ def run_day(model, day, workdir, client=None, privacy_model=""):
     dreamer = dreaming.Dreamer(config, client=client)
     log = io.StringIO()
     started = time.time()
+    read_live = 0
+    if live:
+        for message_id, message in zip(ids, day["messages"]):
+            if message["kind"] != "assistant":
+                with contextlib.redirect_stdout(log):
+                    read_live += dreamer.capture_message(message_id) is not None
     with contextlib.redirect_stdout(log):
         dreamer.dream_cycle()
     seconds = round(time.time() - started, 1)
     with contextlib.redirect_stdout(log):
         dreamer.remember_on_its_own()
-    staged = os.path.exists(config.dream_pending_path) and os.path.getsize(config.dream_pending_path) > 0
+    staged = (os.path.exists(config.dream_pending_path) and os.path.getsize(config.dream_pending_path) > 0) or read_live > 0
     facts = memory.facts()
     saved = {
-        "model": model, "privacy_model": privacy_model or model, "extraction_seconds": seconds, "staged": staged, "log": log.getvalue().strip().splitlines()[-4:],
+        "model": model, "privacy_model": privacy_model or model, "live": live, "read_live": read_live, "extraction_seconds": seconds, "staged": staged,
+        "log": log.getvalue().strip().splitlines()[-4:],
         "facts": [{"text": f["text"], "status": f["status"], "person": f["person"], "flags": f["flags"], "source": f["source"]} for f in facts],
         "integrity_problems": memory.verify_integrity(),
     }
@@ -194,10 +203,10 @@ def summarise(days):
     }
 
 
-def report(model, days, out=print, privacy_model="", held_out=False):
+def report(model, days, out=print, privacy_model="", held_out=False, live=False):
     s = summarise(days)
     judge = "" if privacy_model in ("", model) else f", privacy asked of {privacy_model}"
-    out(f"\n=== {model}{judge}: {s['messages']} messages in {s['days']} days{' (HELD OUT)' if held_out else ''} (extraction {s['seconds']:.0f} s in all) ===")
+    out(f"\n=== {model}{judge}: {s['messages']} messages in {s['days']} days{' (HELD OUT)' if held_out else ''}{' (READ LIVE)' if live else ''} (extraction {s['seconds']:.0f} s in all) ===")
     if s["not_staged_days"]:
         out(f"  WARNING: on {s['not_staged_days']} day(s) nothing was staged (the model did not answer, or said there was nothing): those messages count as 'lost' or 'not extracted'.")
     out("  MUST BE ZERO:")
@@ -244,20 +253,20 @@ def write(path, results, tries=5, pause=0.2):
             time.sleep(pause)
 
 
-def load_checkpoint(path, model, runs, privacy_model=""):
+def load_checkpoint(path, model, runs, privacy_model="", live=False):
     try:
         with open(path, encoding="utf-8") as f:
             saved = json.load(f)
     except (OSError, ValueError):
         return []
-    same = all(isinstance(r, dict) and r.get("model") == model and r.get("privacy_model", model) == (privacy_model or model) and r.get("run", 0) < runs
+    same = all(isinstance(r, dict) and r.get("model") == model and r.get("privacy_model", model) == (privacy_model or model) and r.get("live", False) == live and r.get("run", 0) < runs
                for r in saved) if isinstance(saved, list) else False
     return saved if same else []
 
 
-def run_model(model, runs, limit_days, out_path=None, resume=False, client=None, out=print, privacy_model="", held_out=False, round_number=0):
+def run_model(model, runs, limit_days, out_path=None, resume=False, client=None, out=print, privacy_model="", held_out=False, round_number=0, live=False):
     days = held_out_days(round_number) if held_out else DAYS
-    done = load_checkpoint(out_path, model, runs, privacy_model) if out_path and resume else []
+    done = load_checkpoint(out_path, model, runs, privacy_model, live) if out_path and resume else []
     finished = {(r["run"], r["day"]) for r in done}
     results = list(done)
     for run in range(runs):
@@ -265,7 +274,7 @@ def run_model(model, runs, limit_days, out_path=None, resume=False, client=None,
             if (run, index) in finished:
                 continue
             with tempfile.TemporaryDirectory(prefix="diya_autonomy_bench_") as workdir:
-                result = run_day(model, day, workdir, client=client() if callable(client) else client, privacy_model=privacy_model)
+                result = run_day(model, day, workdir, client=client() if callable(client) else client, privacy_model=privacy_model, live=live)
             result.update(run=run, day=index)
             results.append(result)
             if out_path:
@@ -282,7 +291,7 @@ def rescore_file(path, held_out=False, out=print, round_number=0):
     rescored = [rescore(day, days[day["day"]]) for day in saved]
     for model, privacy in sorted({(d["model"], d.get("privacy_model", d["model"])) for d in rescored}):
         mine = [d for d in rescored if d["model"] == model and d.get("privacy_model", d["model"]) == privacy]
-        report(model, mine, out=out, privacy_model=privacy, held_out=held_out)
+        report(model, mine, out=out, privacy_model=privacy, held_out=held_out, live=all(d.get("live") for d in mine))
     return rescored
 
 
@@ -294,6 +303,7 @@ def main(argv=None, out=print, client=None):
     parser.add_argument("--privacy-model", default="", help="the model that answers \"is this private?\" (default: the same model)")
     parser.add_argument("--held-out", action="store_true", help="the held-out days instead (written after the privacy question was frozen; see the labels file)")
     parser.add_argument("--round", type=int, default=0, help="with --held-out: only the days of this round (1 or 2); 0 is all")
+    parser.add_argument("--live", action="store_true", help="read each message the way the chat does the moment it is said, then run the scheduled pass for the rest")
     parser.add_argument("--out", default=None, help="also write every result to this JSON file, after each day")
     parser.add_argument("--resume", action="store_true", help="carry on after the results already saved in --out")
     parser.add_argument("--rescore", default=None, metavar="FILE", help="do not run anything: report a saved results file again, scored by today's rules")
@@ -302,8 +312,8 @@ def main(argv=None, out=print, client=None):
         rescored = rescore_file(args.rescore, held_out=args.held_out, out=out, round_number=args.round)
         return 0 if not any(any(summarise([d])["zero"].values()) for d in rescored) else 1
     model = args.model or diya_config.load_config().model
-    results = run_model(model, args.runs, args.days, args.out, args.resume, client=client, out=out, privacy_model=args.privacy_model, held_out=args.held_out, round_number=args.round)
-    report(model, results, out=out, privacy_model=args.privacy_model or model, held_out=args.held_out)
+    results = run_model(model, args.runs, args.days, args.out, args.resume, client=client, out=out, privacy_model=args.privacy_model, held_out=args.held_out, round_number=args.round, live=args.live)
+    report(model, results, out=out, privacy_model=args.privacy_model or model, held_out=args.held_out, live=args.live)
     summary = summarise(results)
     return 0 if not any(summary["zero"].values()) and not summary["integrity"] else 1
 

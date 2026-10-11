@@ -372,3 +372,71 @@ def test_a_saved_day_is_scored_with_the_seeds_numbered_from_one_in_the_order_the
         return bench.rescore(saved, day)["messages"][7]
 
     assert scored(1)["verdict"] == "asked, naming the old fact" and scored(2)["verdict"] == "asked"
+
+
+# --- reading each message the way the chat does (unit A4) ---------------------------------------------------------------------
+
+def live_run(day_index, tmp_path, **lists):
+    folder = tmp_path / f"live-{len(list(tmp_path.glob('live-*')))}"
+    folder.mkdir()
+    from fakes import ByQuestionClient
+
+    client = ByQuestionClient(**lists)
+    return bench.run_day("scripted", DAYS[day_index], str(folder), client=client, live=True), client
+
+
+def test_a_live_day_reads_each_worthy_message_on_its_own_and_the_scheduled_pass_reads_the_rest(tmp_path):
+    # day 0: "I live in Pune and I love the weather here in winter." is a first-person statement; "hey, good morning" is not
+    result, client = live_run(0, tmp_path, extraction=["- lives in Pune"] + ["NONE"] * 20)
+    assert result["live"] is True and result["read_live"] >= 1 and result["staged"] is True
+    extraction_prompts = [c["messages"][0]["content"] for c in client.asked("extraction")]
+    assert any(p.rstrip().endswith("- I live in Pune and I love the weather here in winter.") for p in extraction_prompts)  # read on its own, one message
+    assert any("hey, good morning" in p for p in extraction_prompts)  # left for the scheduled pass, which reads what is left together
+
+
+def test_a_live_day_is_scored_by_the_same_rules_as_any_other(tmp_path):
+    result, _ = live_run(0, tmp_path, extraction=["- lives in Pune"] + ["NONE"] * 20)
+    assert result["messages"][0]["kind"] == "plain" and result["messages"][0]["verdict"] in ("remembered", "asked")
+
+
+def test_a_day_that_is_not_live_says_so_and_reads_nothing_live(tmp_path):
+    result = run(0, "- lives in Pune", tmp_path)
+    assert result["live"] is False and result["read_live"] == 0
+
+
+def test_results_saved_for_a_live_run_are_not_resumed_as_a_plain_one_or_the_other_way_round(tmp_path):
+    saved = str(tmp_path / "results.json")
+    bench.run_model("one", 1, 1, out_path=saved, client=scripted("- lives in Pune"), out=lambda *a: None)
+    assert bench.load_checkpoint(saved, "one", 1) != [] and bench.load_checkpoint(saved, "one", 1, live=True) == []
+    from fakes import ByQuestionClient
+
+    bench.run_model("two", 1, 1, out_path=str(tmp_path / "live.json"), client=lambda: ByQuestionClient(extraction=["NONE"] * 20), out=lambda *a: None, live=True)
+    assert bench.load_checkpoint(str(tmp_path / "live.json"), "two", 1, live=True) != [] and bench.load_checkpoint(str(tmp_path / "live.json"), "two", 1) == []
+
+
+def test_the_report_says_when_a_run_was_read_live(tmp_path):
+    result, _ = live_run(0, tmp_path, extraction=["NONE"] * 20)
+    lines = []
+    bench.report("m", [result], out=lines.append, live=True)
+    assert "(READ LIVE)" in lines[0]
+    lines = []
+    bench.report("m", [result], out=lines.append)
+    assert "(READ LIVE)" not in lines[0]
+
+
+def test_a_saved_live_file_is_reported_as_live_again_when_rescored(tmp_path):
+    result, _ = live_run(0, tmp_path, extraction=["NONE"] * 20)
+    saved = tmp_path / "saved.json"
+    result.update(run=0, day=0)
+    saved.write_text(json.dumps([result]), encoding="utf-8")
+    lines = []
+    bench.rescore_file(str(saved), out=lines.append)
+    assert any("(READ LIVE)" in line for line in lines)
+
+
+def test_the_command_line_has_a_live_flag(tmp_path):
+    from fakes import ByQuestionClient
+
+    lines = []
+    code = bench.main(["--model", "m", "--days", "1", "--live"], out=lines.append, client=lambda: ByQuestionClient(extraction=["NONE"] * 20))
+    assert any("(READ LIVE)" in line for line in lines) and code in (0, 1)
