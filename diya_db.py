@@ -293,6 +293,11 @@ MIGRATIONS = (
         )
         """,
     )),
+    # 12: the Telegram bridge's own small notes (docs/TELEGRAM_DESIGN.md, section 3): the paired owner's id, the last update handled, the thread its messages go in, and, while pairing,
+    # the hash of the one-time code, when it expires and how many wrong guesses it has had. The bot token is NOT here: it is in its own file.
+    (12, (
+        "CREATE TABLE IF NOT EXISTS telegram_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    )),
 )
 
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored

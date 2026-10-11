@@ -102,6 +102,9 @@ class Config:
     push_day_at: str = ""  # DIYA_PUSH_DAY_AT: a time like "08:00" for the "your day is ready" message, or empty for none
     push_subject: str = ""  # DIYA_PUSH_SUBJECT
     push_vapid_path: str = "push_vapid.json"  # DIYA_PUSH_VAPID_PATH: the push key pair; the private half never leaves this file
+    # Talking to Diya from Telegram (docs/TELEGRAM_DESIGN.md). OFF until the owner turns it on, and then it needs a bot token the owner made themselves, kept in its own file.
+    telegram: bool = False  # DIYA_TELEGRAM
+    telegram_token_path: str = "telegram.token"  # DIYA_TELEGRAM_TOKEN_PATH
     ssl_certfile: str | None = None
     ssl_keyfile: str | None = None
     # Folders `list_files` may look inside, beyond the default folder (see default_files_root());
@@ -171,6 +174,7 @@ _STRING_SETTINGS = {
     "push_day_at": "DIYA_PUSH_DAY_AT",
     "push_subject": "DIYA_PUSH_SUBJECT",
     "push_vapid_path": "DIYA_PUSH_VAPID_PATH",
+    "telegram_token_path": "DIYA_TELEGRAM_TOKEN_PATH",
     "host": "DIYA_HOST",
     "token_path": "DIYA_TOKEN_PATH",
     "connector_tokens_dir": "DIYA_CONNECTOR_TOKENS_DIR",
@@ -183,7 +187,7 @@ _STRING_SETTINGS = {
 
 # The settings whose default is a file or folder Diya writes about you: with DIYA_DATA_DIR set they default to the same name in that folder.
 _DATA_FILES = ("db_path", "profile_path", "dream_log_path", "dream_state_path", "dream_pending_path", "notify_log_path",
-               "token_path", "connector_tokens_dir", "connectors_log_path", "push_vapid_path")
+               "token_path", "connector_tokens_dir", "connectors_log_path", "push_vapid_path", "telegram_token_path")
 
 
 # The settings that are a size limit in characters, where 0 means "no limit": the setting, and what 0 means for it.
@@ -248,7 +252,7 @@ def load_config(env=None) -> Config:
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
                         ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
-                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT")):
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag

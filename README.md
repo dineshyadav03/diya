@@ -60,6 +60,9 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   reminder is due, a question is waiting, an action needs your approval, or (at a time you choose) your day is ready, to a device that tapped **Notify this device** on the Today page. By
   default the notification says only that something is waiting, never what; reminders are never held back at night, the rest are. [docs/PUSH_DESIGN.md](docs/PUSH_DESIGN.md) says what is
   and is not verified: nothing has been sent to a real push service.
+- **Talking to Diya from Telegram** (off; `DIYA_TELEGRAM=1`, a bot you make yourself, `python diya_telegram.py --set-token`, then `--pair`): only the one paired owner, in a private chat, in plain
+  text, is answered, by the same code as the chat; everything else is dropped, and nothing can be approved from it. What you type and what Diya answers pass through Telegram, which can read both.
+  [docs/TELEGRAM_DESIGN.md](docs/TELEGRAM_DESIGN.md); never tried against the real service.
 - **Repeating reminders**: say "remind me every Monday at 9am to take out the bins". The repeat is read in code from your own words
   (every day, every weekday, every Monday and Thursday, every month on the 15th, every 2 weeks; no time means 09:00, and Diya says
   so), and each time one falls it becomes an ordinary reminder. The **Scheduled** page lists them, and pauses, resumes, skips the
