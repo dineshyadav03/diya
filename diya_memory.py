@@ -938,11 +938,6 @@ def profile_lines_not_in_memory(memory, config):
 # ---- showing facts to a person (the command line and the web UI share these) ---------------------
 
 
-def printable(text, limit=None):
-    """`text` as one line that is safe to show: whitespace of every kind becomes a single space, and
-    every control, invisible or direction-changing character is shown as a visible escape (a backslash,
-    u and four hex digits) instead of being passed on. Cut to `limit` characters, with an ellipsis, if
-    given. Everything read back from the database that a person is shown goes through this: it is model
 def replaced_fact_id(flags):
     """The number of the fact a waiting fact may replace, from the memory policy's flag (ask:conflict:replaces:<id>), or None."""
     for flag in flags:
@@ -951,6 +946,11 @@ def replaced_fact_id(flags):
     return None
 
 
+def printable(text, limit=None):
+    """`text` as one line that is safe to show: whitespace of every kind becomes a single space, and
+    every control, invisible or direction-changing character is shown as a visible escape (a backslash,
+    u and four hex digits) instead of being passed on. Cut to `limit` characters, with an ellipsis, if
+    given. Everything read back from the database that a person is shown goes through this: it is model
     output, or something someone typed or pasted, and it must not be able to rewrite what a screen says."""
     text = " ".join(str(text).split())
     if limit is not None and len(text) > limit:
@@ -979,6 +979,19 @@ _FLAG_SHORT = {
 }
 
 
+# What the memory policy's reasons mean, in a few words (the rest, such as the class of a sensitive statement, are shown as they are).
+_ASK_REASONS = {
+    "model_private": "the model thinks it is private",
+    "model_unsure": "the model was not sure it is safe to keep",
+    "privacy_check_failed": "the privacy check could not run",
+    "replace_check_failed": "the check for an older fact it replaces could not run",
+    "ungrounded": "few of its words are in what you said",
+    "daily_cap": "the daily limit for automatic facts was reached",
+    "breaker_open": "automatic memory is paused",
+    "memory_full": "memory is full",
+}
+
+
 def flag_short(flag):
     """A flag in a few words, for a list."""
     name, _, arg = flag.partition(":")
@@ -998,7 +1011,7 @@ def flag_short(flag):
             return f"may replace fact {printable(reason.partition(':')[2])}; Diya will ask you"
         if reason == "replaces_unclear":
             return "may replace something known; Diya will ask you"
-        return f"Diya will ask you about it ({printable(reason)})"
+        return f"Diya will ask you about it ({_ASK_REASONS.get(reason) or printable(reason)})"
     return _FLAG_SHORT.get(name) or printable(flag)
 
 
@@ -1030,7 +1043,7 @@ def flag_long(memory, flag):
         elif reason == "replaces_unclear":
             what = "the model could not say whether it replaces something already known"
         else:
-            what = printable(reason or kind)
+            what = _ASK_REASONS.get(reason) or printable(reason or kind)
         return (f"ask: the memory policy did not accept this on its own ({what}); Diya will ask you about it "
                 "and it is not told to the model until you say yes")
     if name in ("duplicate", "similar", "previously_rejected"):

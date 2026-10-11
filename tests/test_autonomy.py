@@ -998,3 +998,25 @@ def test_what_the_model_was_unsure_about_keeps_waiting_just_as_what_it_judged_pr
     again = calls_to("ok")
     assert auto.apply(memory, now=NOW, private=again) == auto.Report(0, 1, 0, 0)
     assert again.asked == [] and memory.get(fid)["status"] == "candidate" and f"ask:sensitive:model_{verdict}" in memory.get(fid)["flags"]
+
+
+@pytest.mark.parametrize("flag, words", [
+    ("ask:sensitive:model_private", "the model thinks it is private"),
+    ("ask:sensitive:model_unsure", "the model was not sure it is safe to keep"),
+    ("ask:doubt:privacy_check_failed", "the privacy check could not run"),
+    ("ask:doubt:replace_check_failed", "the check for an older fact it replaces could not run"),
+    ("ask:doubt:ungrounded", "few of its words are in what you said"),
+    ("ask:doubt:daily_cap", "the daily limit for automatic facts was reached"),
+    ("ask:doubt:breaker_open", "automatic memory is paused"),
+    ("ask:doubt:memory_full", "memory is full"),
+])
+def test_the_policys_reasons_read_as_plain_words_on_the_page(world, flag, words):
+    _, memory, _ = world
+    assert diya_memory.flag_short(flag) == f"Diya will ask you about it ({words})"
+    assert f"({words}); Diya will ask you about it" in diya_memory.flag_long(memory, flag)
+
+
+def test_a_reason_with_no_plain_words_is_shown_as_it_is_and_made_safe():
+    assert diya_memory.flag_short("ask:sensitive:health") == "Diya will ask you about it (health)"
+    assert diya_memory.flag_short("ask:doubt:verifier:unclear") == "Diya will ask you about it (verifier:unclear)"
+    assert chr(27) not in diya_memory.flag_short("ask:sensitive:" + chr(27) + "[31m")
