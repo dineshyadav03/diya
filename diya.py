@@ -898,7 +898,8 @@ class Agent:
         the full toolkit and a normal answer."""
         tools_called = []
         fact_share = diya_intent.is_fact_share(_last_user_text(messages))
-        tools = None if fact_share else self.tools
+        # A greeting or a thank-you cannot need a tool, and the tools' descriptions are about a thousand tokens the model would read first (docs/SPEED_DESIGN.md).
+        tools = None if fact_share or diya_intent.is_small_talk(_last_user_text(messages)) else self.tools
         offered = frozenset(spec["function"]["name"] for spec in tools or ())
         for _ in range(MAX_TOOL_ROUNDS):
             response = self._complete(messages, fact_share, tools)

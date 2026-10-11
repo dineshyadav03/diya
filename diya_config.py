@@ -13,6 +13,7 @@ from __future__ import annotations
 import glob
 import ipaddress
 import os
+import re
 from dataclasses import dataclass
 
 import diya_time
@@ -102,6 +103,11 @@ class Config:
     push_day_at: str = ""  # DIYA_PUSH_DAY_AT: a time like "08:00" for the "your day is ready" message, or empty for none
     push_subject: str = ""  # DIYA_PUSH_SUBJECT
     push_vapid_path: str = "push_vapid.json"  # DIYA_PUSH_VAPID_PATH: the push key pair; the private half never leaves this file
+    # Keeping the chat model loaded (diya_warm.py, docs/SPEED_DESIGN.md): Ollama unloads a model after five idle minutes, and loading it again plus reading the tools took about 20 seconds on
+    # this computer's CPU, so the first message after a pause was slow even for "hey". While the API runs it asks Ollama, every few minutes, to keep the model for `keep_alive` more
+    # (Ollama's own format: "30m", "2h", seconds, or -1 for always). DIYA_KEEP_WARM=0 turns it off and lets Ollama unload the model as usual (the model's memory, about 3 GB, is held while it is on).
+    keep_warm: bool = True  # DIYA_KEEP_WARM
+    keep_alive: str = "30m"  # DIYA_KEEP_ALIVE
     # Talking to Diya from Telegram (docs/TELEGRAM_DESIGN.md). OFF until the owner turns it on, and then it needs a bot token the owner made themselves, kept in its own file.
     telegram: bool = False  # DIYA_TELEGRAM
     telegram_token_path: str = "telegram.token"  # DIYA_TELEGRAM_TOKEN_PATH
@@ -175,6 +181,7 @@ _STRING_SETTINGS = {
     "push_subject": "DIYA_PUSH_SUBJECT",
     "push_vapid_path": "DIYA_PUSH_VAPID_PATH",
     "telegram_token_path": "DIYA_TELEGRAM_TOKEN_PATH",
+    "keep_alive": "DIYA_KEEP_ALIVE",
     "host": "DIYA_HOST",
     "token_path": "DIYA_TOKEN_PATH",
     "connector_tokens_dir": "DIYA_CONNECTOR_TOKENS_DIR",
@@ -252,7 +259,7 @@ def load_config(env=None) -> Config:
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
                         ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
-                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM")):
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag
@@ -340,6 +347,8 @@ def load_config(env=None) -> Config:
                 parse(values[field])
             except ValueError as exc:
                 raise ConfigError(f"{name}: {exc}") from None
+    if "keep_alive" in values and not re.fullmatch(r"-1|\d+[smh]?", values["keep_alive"]):
+        raise ConfigError(f"DIYA_KEEP_ALIVE must be a time like 30m, 2h or 600 (seconds), or -1 for always, got {values['keep_alive']!r}")
     if values.get("push"):
         subject = values.get("push_subject", "")
         is_mailto = subject.startswith("mailto:") and "@" in subject[len("mailto:"):]

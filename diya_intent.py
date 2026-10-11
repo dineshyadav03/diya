@@ -101,6 +101,32 @@ def is_fact_share(text):
     return _has_specifics(text)
 
 
+# A greeting, a thank-you, a goodbye or "how are you" and nothing else (docs/SPEED_DESIGN.md). Such a message cannot need a tool, and the eight tools' descriptions are about 1,000 tokens that the
+# model must read before it may answer "hey": about 13 seconds of the 20 the first message after a pause took on this computer's CPU. Deliberately narrow, like is_fact_share: a message that is
+# anything more (a name, a question, a number, "yes" or "ok", which may be the answer to an offer that needs a tool) is not small talk, and missing one only means the tools are offered as before.
+_GREETING = r"(?:hi+|hey+|hello+|hiya|howdy|yo|sup|good\s+(?:morning|afternoon|evening|night)|gm|gn)"
+_VOCATIVE = r"(?:there|diya|buddy|friend|again|everyone|all)"
+_THANKS = r"(?:thanks?|thank\s+you|thx|ty|cheers|much\s+appreciated)(?:\s+(?:so\s+much|a\s+lot|very\s+much|diya))?"
+_GOODBYE = r"(?:bye+|goodbye|good\s+bye|see\s+(?:you|ya)(?:\s+(?:later|soon|tomorrow))?|ttyl|cya|later)"
+_HOW_ARE_YOU = r"(?:how\s+are\s+(?:you|u)(?:\s+(?:doing|today))?|how'?s\s+it\s+going|how\s+do\s+you\s+do|what'?s\s+up|wass?up|how\s+have\s+you\s+been)"
+_SMALL_TALK = re.compile(
+    rf"(?:{_GREETING}(?:\s+{_VOCATIVE})*|{_THANKS}|{_GOODBYE})?\s*(?:{_HOW_ARE_YOU})?(?:\s+{_VOCATIVE})?",
+    re.IGNORECASE,
+)
+MAX_SMALL_TALK_CHARS = 40
+
+
+def is_small_talk(text):
+    """True only for a greeting, thanks, goodbye or "how are you" (or a greeting followed by one), with nothing else in the message."""
+    if not isinstance(text, str):
+        return False
+    words = re.sub(r"[^\w\s']", " ", text.replace("’", "'")).strip()  # punctuation and emoji go; an apostrophe stays ("how's")
+    words = re.sub(r"\s+", " ", words).strip("' ")
+    if not words or len(text) > MAX_SMALL_TALK_CHARS:
+        return False
+    return _SMALL_TALK.fullmatch(words) is not None
+
+
 # A first-person word anywhere in a message: the person is saying something about themselves, however else the message is shaped.
 _SAYS_SOMETHING_OF_ME = re.compile(r"\b(?:i|i'm|i've|i'll|i'd|my|we|we're|we've|our)\b", re.IGNORECASE)
 

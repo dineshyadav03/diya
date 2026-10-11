@@ -448,6 +448,10 @@ def main():
         print(line)
     transcriber = WhisperTranscriber(config.whisper_model)
     transcriber.warm_up()
+    if config.keep_warm:  # load the chat model now and keep it loaded, so the first message is not the slow one (docs/SPEED_DESIGN.md)
+        import diya_warm
+
+        diya_warm.KeepWarm(config, agent).start()
 
     if config.lan:
         print(f"Diya's API is in LAN mode: listening on {config.host}:{config.port}, "
