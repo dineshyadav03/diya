@@ -786,7 +786,7 @@ def test_install_runs_the_constant_script_with_the_paths_in_the_environment(tmp_
     code = run.install(repo=str(tmp_path / "r e p o"), with_jobs=False, run=ps, platform="win32", out=shown.append)
     argv, kwargs = ps.calls[0]
     assert code == run.EXIT_OK and argv[:5] == ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"] and argv[-1] == run.INSTALL_SCRIPT
-    assert kwargs["env"]["DIYA_RUN_DIR"] == str(tmp_path / "r e p o") and kwargs["env"]["DIYA_RUN_WITH_JOBS"] == "0" and kwargs["env"]["DIYA_RUN_PYTHONW"].lower().endswith(".exe")
+    assert kwargs["env"]["DIYA_RUN_DIR"] == str(tmp_path / "r e p o") and kwargs["env"]["DIYA_RUN_WITH_JOBS"] == "0" and os.path.isfile(kwargs["env"]["DIYA_RUN_PYTHONW"])  # pythonw.exe on Windows when it is there, else the running Python: a file either way
     assert str(tmp_path) not in run.INSTALL_SCRIPT and "registered: Diya_Run" in shown and any("--uninstall" in line for line in shown)
 
 
