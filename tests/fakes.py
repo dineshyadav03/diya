@@ -95,3 +95,37 @@ class FakeClient:
             raise self._embed_error
         self.embed_calls.append({"model": model, "input": input})
         return SimpleNamespace(data=[SimpleNamespace(embedding=keyword_embedding(input))])
+
+
+class ByQuestionClient(FakeClient):
+    """A scripted stand-in for the model that answers each KIND of question from its own list, whatever order they arrive in: the extraction prompt
+    Dreaming and live capture send (`extraction`), "is this private?" (`privacy`, OK to every one unless a list is given), "does this replace a
+    known fact?" (`replace`, NONE to every one) and everything else, an ordinary chat turn (`chat`, "Noted." to every one). A list that runs
+    out is a model that cannot answer: the call raises, as an unreachable model does."""
+
+    def __init__(self, extraction=(), privacy=None, replace=None, chat=None):
+        super().__init__()
+        self.lists = {
+            "extraction": [text_reply(r) for r in extraction],
+            "privacy": [text_reply("OK")] * 40 if privacy is None else [text_reply(r) for r in privacy],
+            "replace": [text_reply("NONE")] * 40 if replace is None else [text_reply(r) for r in replace],
+            "chat": [text_reply("Noted.")] * 40 if chat is None else [text_reply(r) for r in chat],
+        }
+
+    def kind_of(self, messages):
+        first = messages[0]["content"] if messages and isinstance(messages[0].get("content"), str) else ""
+        if first.startswith("You are a privacy filter"):
+            return "privacy"
+        if "Known facts:" in first and first.startswith("Below are facts already known"):
+            return "replace"
+        if first.startswith("Below are things a user said recently"):
+            return "extraction"
+        return "chat"
+
+    def _create(self, model, messages, tools=None, **options):
+        self.chat_calls.append({"model": model, "messages": list(messages), "tools": tools, "options": options, "kind": self.kind_of(messages)})
+        return self.lists[self.kind_of(messages)].pop(0)
+
+    def asked(self, kind):
+        """The calls of one kind, in order."""
+        return [call for call in self.chat_calls if call["kind"] == kind]

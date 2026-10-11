@@ -101,6 +101,42 @@ def is_fact_share(text):
     return _has_specifics(text)
 
 
+# A first-person word anywhere in a message: the person is saying something about themselves, however else the message is shaped.
+_SAYS_SOMETHING_OF_ME = re.compile(r"\b(?:i|i'm|i've|i'll|i'd|my|we|we're|we've|our)\b", re.IGNORECASE)
+
+
+def only_asks(text):
+    """True if the message only asks or tells Diya something and says nothing in the first person: a question, or a request, with no "I", "my" or
+    "we" in it ("what's a good name for a kitten?", "remind me what a monad is"). There is nothing about the person in it for memory to read, and
+    measured (docs/AUTO_MEMORY_DESIGN.md, section 10) a model handed only such messages invents a fact from them. A message that mixes a statement
+    about someone else with a question ("Maya got a new job, any gift ideas?") is read as only asking too, and its fact is not taken in live: the
+    price of the rule, said here so it is chosen and not found."""
+    if not isinstance(text, str):
+        return False
+    text = text.strip().replace("\u2019", "'")
+    if not text:
+        return True
+    asks = "?" in text or _REQUEST_START.match(text) is not None or _REQUEST_ANYWHERE.search(text) is not None
+    return asks and _SAYS_SOMETHING_OF_ME.search(text) is None
+
+
+def is_worth_capturing(text):
+    """True if memory should read this message for facts the moment it is said (docs/AUTO_MEMORY_DESIGN.md, unit A4): a first-person statement (or
+    "remember that ..."), short, not a question, not a request, a reminder or a task. Stricter than it needs to be on purpose: what it lets by is read
+    by the model at once, and everything else is still read by the scheduled Dreaming pass within the half hour. A negative is fine here ("I don't like
+    spicy food" is a fact), unlike in is_fact_share, which also decides whether a reply is shortened."""
+    if not isinstance(text, str):
+        return False
+    text = text.strip().replace("\u2019", "'")
+    if not text or len(text) > MAX_CHARS or "?" in text:
+        return False
+    if not (_FIRST_PERSON.match(text) or _KEEP_THIS.match(text)):
+        return False
+    if _REQUEST_ANYWHERE.search(text) or _REMINDER_REQUEST.search(text) or is_task_request(text):
+        return False
+    return True
+
+
 def shorten_ack(reply):
     """Keep an acknowledgement to a sentence. Used as a last resort on fact-shares: the prompt
     and the missing tools should already have produced a short reply."""

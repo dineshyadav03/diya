@@ -228,6 +228,17 @@ MIGRATIONS = (
         """,
         "CREATE INDEX IF NOT EXISTS schedule_events_by_series ON schedule_events (series_id)",
     )),
+    # 8: the messages memory took in the moment they were said (docs/AUTO_MEMORY_DESIGN.md, D7 and unit A4): one row for each message that
+    # was read for facts live, so the scheduled Dreaming pass does not read it a second time. `facts` is how many candidates it made.
+    (8, (
+        """
+        CREATE TABLE IF NOT EXISTS memory_captures (
+            message_id INTEGER PRIMARY KEY,
+            at TEXT NOT NULL,
+            facts INTEGER NOT NULL
+        )
+        """,
+    )),
 )
 
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored
@@ -476,6 +487,26 @@ class Store:
         ).fetchall()
         conn.close()
         return [{"id": r[0], "thread_id": r[1], "role": r[2], "content": r[3]} for r in rows]
+
+    def captured_message_ids(self, ids):
+        """Which of the message `ids` memory has already taken in live (a set). Read-only."""
+        ids = list(ids)
+        found = set()
+        conn = self.connect()
+        for start in range(0, len(ids), 500):  # in pieces, so a long list never meets SQLite's limit on the number of values
+            chunk = ids[start:start + 500]
+            marks = ",".join("?" * len(chunk))  # only question marks, built here: nothing from outside is put in the text of the query
+            found.update(row[0] for row in conn.execute(f"SELECT message_id FROM memory_captures WHERE message_id IN ({marks})", chunk))
+        conn.close()
+        return found
+
+    def mark_captured(self, message_id, facts):
+        """Record that memory took message `message_id` in live and made `facts` candidates from it. Marking it twice changes nothing."""
+        conn = self.connect()
+        conn.execute("INSERT OR IGNORE INTO memory_captures (message_id, at, facts) VALUES (?, ?, ?)",
+                     (message_id, datetime.now(timezone.utc).isoformat(), facts))
+        conn.commit()
+        conn.close()
 
     def get_messages_since(self, message_id):
         """All messages across every thread with id > message_id, oldest first."""

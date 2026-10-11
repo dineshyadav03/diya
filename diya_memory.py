@@ -873,27 +873,41 @@ def ingest_queue(memory, config, actor="cli"):
             continue
         model = record.get("model") if isinstance(record.get("model"), str) else ""
         staged_at = record.get("timestamp") if isinstance(record.get("timestamp"), str) else ""
-        for position, line in enumerate(lines):  # a skipped line still takes its position: slots never shift
-            stripped, person = extract_person_tag(line)
-            fact = normalise_fact(stripped)
-            if fact is None:
-                skipped += 1
-                continue
-            if person is not None:
-                try:
-                    check_person_name(person)
-                except InvalidFact:
-                    person = None  # an unusable tag is dropped; the fact itself is not lost over it
-            created = memory.add_candidate(
-                fact.text, batch_first=record["first_message_id"], batch_last=record["last_message_id"],
-                position=position, model=model, extracted_at=staged_at, raw=line, flags=fact.flags, actor=actor,
-                person=person,
-            )
-            if created is None:
-                already += 1
-            else:
-                new += 1
+        made, seen, left_out = ingest_lines(
+            memory, lines, first_message_id=record["first_message_id"], last_message_id=record["last_message_id"],
+            model=model, staged_at=staged_at, actor=actor,
+        )
+        new, already, skipped = new + made, already + seen, skipped + left_out
     return IngestReport(records, bad_records, new, already, skipped)
+
+
+def ingest_lines(memory, lines, *, first_message_id, last_message_id, model, staged_at, actor, position_base=0):
+    """Record each of `lines` (what the model wrote, one fact to a line) as a candidate taken from the messages `first_message_id` to
+    `last_message_id`; returns (new, already recorded, left out). Each fact's slot is (first message, `position_base` + its place in
+    `lines`), so recording the same lines twice is harmless, and a skipped line still takes its place: slots never shift. Live capture
+    (unit A4) passes a `position_base` that Dreaming's own slots never reach, so a message read live and the batch Dreaming later starts at
+    that same message cannot take each other's slots."""
+    new = already = skipped = 0
+    for position, line in enumerate(lines):
+        stripped, person = extract_person_tag(line)
+        fact = normalise_fact(stripped)
+        if fact is None:
+            skipped += 1
+            continue
+        if person is not None:
+            try:
+                check_person_name(person)
+            except InvalidFact:
+                person = None  # an unusable tag is dropped; the fact itself is not lost over it
+        created = memory.add_candidate(
+            fact.text, batch_first=first_message_id, batch_last=last_message_id, position=position_base + position,
+            model=model, extracted_at=staged_at, raw=line, flags=fact.flags, actor=actor, person=person,
+        )
+        if created is None:
+            already += 1
+        else:
+            new += 1
+    return new, already, skipped
 
 
 def import_legacy_profile(memory, config, actor="import"):

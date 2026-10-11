@@ -9,10 +9,25 @@ from openai import OpenAI
 
 import diya_config
 import diya_db
+import diya_intent
 
 
 SOURCE_JUDGE_CHARS = 600  # how much of the person's message the privacy question is asked about
 DREAM_MESSAGE_CHARS = 4000  # how much of one message of the person's Dreaming reads: the rest of a very long one is not looked at
+LIVE_POSITION_BASE = 1000  # where the slots of facts read live start: far above any batch's own (a batch is capped well below a thousand facts)
+
+EXTRACTION_PROMPT = (
+    "Below are things a user said recently. Extract any genuine NEW facts about their "
+    "real life -- preferences, ongoing situations, people/pets/things mentioned, tasks. "
+    "IGNORE casual greetings, small talk, test messages, and anything with no real "
+    "personal content ('hey', 'quick check', trivia questions, etc.). Return ONLY the "
+    "new facts as short bullet points, one per line, nothing else. If a fact is about a "
+    "specific person the user named -- not the user themselves -- end that line with the "
+    "person's name in square brackets, exactly as the user wrote it, for example "
+    "'- sister Maya is visiting in May [Maya]'. Leave the brackets off a fact that is "
+    "about the user, or names no particular person. If there are no genuine new facts, "
+    "return exactly: NONE\n\n"
+)
 
 
 def first_batch(messages, max_chars):
@@ -137,6 +152,19 @@ class Dreamer:
             print("Nothing new to dream about.")
             return
 
+        # What memory already read the moment it was said (unit A4) is not read a second time; and with automatic memory on, a message that only
+        # asks Diya something is not read at all (diya_intent.only_asks: handed only such messages the model invents facts from them). If that was
+        # everything, the pass is over and the checkpoint moves on, or one such message at the start of a batch would hold up all that follows it.
+        left_out = self.store.captured_message_ids([m["id"] for m in user_messages])
+        if self.config.auto_memory:
+            left_out |= {m["id"] for m in user_messages if diya_intent.only_asks(m["content"])}
+        if left_out:
+            user_messages = [m for m in user_messages if m["id"] not in left_out]
+            if not user_messages:
+                self.save_last_dreamed_id(new_messages[-1]["id"])
+                print("Everything new was already read live, or only asks something.")
+                return
+
         first_message_id, last_message_id = new_messages[0]["id"], new_messages[-1]["id"]
 
         # A batch always starts at the first message after the checkpoint, and batches never
@@ -162,33 +190,65 @@ class Dreamer:
         # valid" both silently dropped real facts in different ways -- a genuine small-model
         # reliability limit, not a wording problem. Code, not the model, is what reliably
         # preserves existing content: we only ever append, never ask for a full rewrite.
-        conversation_text = "\n".join(f"- {m['content'][:DREAM_MESSAGE_CHARS]}" for m in user_messages)
-
-        prompt = (
-            "Below are things a user said recently. Extract any genuine NEW facts about their "
-            "real life -- preferences, ongoing situations, people/pets/things mentioned, tasks. "
-            "IGNORE casual greetings, small talk, test messages, and anything with no real "
-            "personal content ('hey', 'quick check', trivia questions, etc.). Return ONLY the "
-            "new facts as short bullet points, one per line, nothing else. If a fact is about a "
-            "specific person the user named -- not the user themselves -- end that line with the "
-            "person's name in square brackets, exactly as the user wrote it, for example "
-            "'- sister Maya is visiting in May [Maya]'. Leave the brackets off a fact that is "
-            "about the user, or names no particular person. If there are no genuine new facts, "
-            "return exactly: NONE\n\n"
-            f"{conversation_text}"
-        )
-
         try:
-            response = self.client.chat.completions.create(
-                model=self.config.model,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            response = self._ask_for_facts([m["content"] for m in user_messages])
         except Exception as exc:
             print(f"[error] Could not reach the model ({exc}). Will retry next cycle.")
             return
 
         new_facts = response.choices[0].message.content.strip()
         self._finish_staged(new_facts, first_message_id, last_message_id)
+
+    def _ask_for_facts(self, texts):
+        """The model's answer to "what new facts are in these messages of the person's?" (`texts`, oldest first, each read only to
+        DREAM_MESSAGE_CHARS). Raises what the client raises."""
+        conversation_text = "\n".join(f"- {text[:DREAM_MESSAGE_CHARS]}" for text in texts)
+        return self.client.chat.completions.create(
+            model=self.config.model,
+            messages=[{"role": "user", "content": EXTRACTION_PROMPT + conversation_text}],
+        )
+
+    def capture_message(self, message_id):
+        """Read ONE message of the person's for facts the moment it is said and put what it finds in its lanes, without waiting for the scheduled
+        pass (docs/AUTO_MEMORY_DESIGN.md, D7 and unit A4). Only with DIYA_AUTO_MEMORY on, only for a message worth reading live
+        (diya_intent.is_worth_capturing), and only once: the message is marked, so the scheduled pass does not read it again. If the model cannot be
+        asked the message is NOT marked and the scheduled pass reads it as it always would. Returns how many candidates it made, or None if it
+        did nothing. Never raises: a failure is written where the API's console can show it."""
+        if not self.config.auto_memory:
+            return None
+        try:
+            import diya_memory
+
+            if self.store.captured_message_ids([message_id]):
+                return None
+            found = [m for m in self.store.get_messages_between(message_id, message_id) if m["role"] == "user"]
+            if not found or not diya_intent.is_worth_capturing(found[0]["content"]):
+                return None
+            try:
+                answer = (self._ask_for_facts([found[0]["content"]]).choices[0].message.content or "").strip()
+            except Exception as exc:  # noqa: BLE001 -- the model is down or busy: leave the message to the scheduled pass
+                print(f"[capture] could not ask the model ({exc}); the scheduled pass will read message {message_id}.", file=sys.stderr)
+                return None
+            lines = [] if not answer or answer.upper().startswith("NONE") else [line.strip() for line in answer.split("\n") if line.strip()]
+            memory = diya_memory.Memory(self.store)
+            new, _, _ = diya_memory.ingest_lines(
+                memory, lines, first_message_id=message_id, last_message_id=message_id, model=self.config.model,
+                staged_at=datetime.now(timezone.utc).isoformat(), actor="system", position_base=LIVE_POSITION_BASE,
+            )
+            self.store.mark_captured(message_id, new)
+            if new:
+                self._put_in_lanes(memory)
+            return new
+        except Exception:  # noqa: BLE001 -- memory failing must never be what breaks a chat
+            print(f"[capture] reading message {message_id} for facts failed:", file=sys.stderr)
+            traceback.print_exc()
+            return None
+
+    def _put_in_lanes(self, memory):
+        """Every candidate in its lane (diya_autonomy.apply), asking the models the policy asks. What it did, as diya_autonomy.Report."""
+        import diya_autonomy
+
+        return diya_autonomy.apply(memory, private=self._privacy_judge(), replaces=self._replace_judge(memory))
 
     def remember_on_its_own(self):
         """When DIYA_AUTO_MEMORY is on, carry what is staged into the store and put every candidate in its lane (diya_autonomy.apply):
@@ -197,12 +257,11 @@ class Dreamer:
         if not self.config.auto_memory:
             return
         try:
-            import diya_autonomy
             import diya_memory
 
             memory = diya_memory.Memory(self.store)
             ingested = diya_memory.ingest_queue(memory, self.config, actor="system")
-            done = diya_autonomy.apply(memory, private=self._privacy_judge(), replaces=self._replace_judge(memory))
+            done = self._put_in_lanes(memory)
             print(
                 f"Memory on its own: {done.remembered} remembered, {done.asked} to ask about, {done.never} not kept, "
                 f"{done.held} held (profile full); {ingested.new} newly taken in from the staged queue."

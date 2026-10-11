@@ -8,7 +8,7 @@ import threading
 import traceback
 
 import openai
-from fastapi import FastAPI, File, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
@@ -337,8 +337,26 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
 
         return {"text": text}
 
+    reading_for_facts = threading.Lock()
+
+    def read_for_facts(message_id):
+        """After a reply has been sent: let memory read the person's message for facts at once (docs/AUTO_MEMORY_DESIGN.md, unit A4). One at a time,
+        and a message that finds one already running is skipped, not queued: the scheduled Dreaming pass reads it within the half hour, and a chat
+        must never wait behind this. Only asked for with automatic memory on (and capture_message itself does nothing without it)."""
+        if not reading_for_facts.acquire(blocking=False):
+            return
+        try:
+            import dreaming
+
+            dreaming.Dreamer(config, client=agent.client, store=agent.store).capture_message(message_id)
+        except Exception:  # capture_message does not raise; if something outside it does, the chat is long since answered and must stay so
+            print("[capture] reading for facts failed:", file=sys.stderr)
+            traceback.print_exc()
+        finally:
+            reading_for_facts.release()
+
     @app.post("/api/chat")
-    def chat(req: ChatRequest):
+    def chat(req: ChatRequest, background: BackgroundTasks):
         thread_id = req.thread_id or agent.store.create_thread()
         saved = agent.store.get_messages(thread_id)
         # The same words, from the person, as the last message of this thread, which nothing answered: they are trying again
@@ -358,6 +376,8 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
             traceback.print_exc()
             return JSONResponse({"detail": ANSWERING_FAILED, "thread_id": thread_id}, status_code=500)
         agent.store.add_message(thread_id, "assistant", answer)
+        if config.auto_memory:
+            background.add_task(read_for_facts, message_id)  # runs after the response is on its way, never before it
         return {"thread_id": thread_id, "answer": answer, "tools_called": tools_called}
 
     # Reviewing what Dreaming staged (docs/STAGE2_DESIGN.md, unit 6): the same rules as diya_review.py.

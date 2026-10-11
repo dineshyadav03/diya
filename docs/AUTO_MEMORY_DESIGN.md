@@ -1,6 +1,7 @@
 # Memory that remembers on its own, and asks when it is unsure -- design spec
 
-> **Status (2026-10-10):** A1, A2, A6 and A7 are built, tested and measured (sections 8 and 9); A3, A4 and A5 are not. Nothing here
+> **Status (2026-10-11):** A1, A2, A4, A6 and A7 are built, tested and measured (sections 8, 9 and 10); A3 and A5 are built in part (the one-press
+> replacement and the Today count); their other parts are not. Nothing here
 > changes what the model is told until the switch in section 7 (`DIYA_AUTO_MEMORY`) is turned on, and it is off. The owner's
 > instruction: "for memory the facts do not need to be accepted: the model can understand automatically, and if
 > it is wrong the user will say so and the memory will be modified. This has to be so proactive that no model out there is that
@@ -140,9 +141,9 @@ the replacement question), the smaller and more suspicious 3B judges privacy.
 |---|---|---|
 | A1 | **The policy** (built). `diya_autonomy.py`: the secret and sensitive detectors, `decide`, and `apply`; the `auto` actor, `Memory.discard_secret`, `count_events` and `taken_back_count` (the daily cap and the breaker are counted from the existing event trail, so no migration was needed); the trail records the lane and the reasons. Since then: the privacy question (`privacy_verdict`, `privacy_of`) and the replacement question (`replacement_of`), both asked inside `apply`, both fail-closed (sections 8 and 9). The `memory_questions` table moves to A5 and live capture's tables to A4. | `diya_autonomy.py` (new), `diya_memory.py` |
 | A2 | **Applied to what Dreaming stages** (built): after Dreaming's own pass, `Dreamer.remember_on_its_own()` takes in what is staged and puts every candidate through `apply`. Behind `DIYA_AUTO_MEMORY`, off until A6. | `dreaming.py`, `diya_config.py` |
-| A3 | **Corrections**: `Memory.supersede`, the correction detector, the reply line with Undo. | `diya_memory.py`, `diya_intent.py`, `diya.py` |
-| A4 | **Live capture**: background extraction after a fact-shaped message, the same lanes. | `diya.py`, `diya_autonomy.py` |
-| A5 | **Questions**: the queue, the triggers, the limits, the API, the chat message, the Today card, the notifier line. | `diya_questions.py` (new), `diya_memory_api.py`, frontend |
+| A3 | **Corrections.** Built: `Memory.supersede` (accept the waiting fact and retire the one it replaces, in one transaction), `POST /api/memory/{id}/replace`, and the page's "Replace the old one" button, answering the question the replacement check (section 9) leaves. Not built: the correction detector ("no, I live in Pune" recognised as such) and the reply line with Undo. | `diya_memory.py`, `diya_memory_api.py`, frontend |
+| A4 | **Live capture** (built, section 10): `Dreamer.capture_message` after the reply, a table of what was read (migration 8), the scheduled pass leaving that out, and (automatic memory on) leaving out messages that only ask. | `dreaming.py`, `diya_intent.py`, `diya_db.py`, `diya_memory.py`, `diya_web.py` |
+| A5 | **Questions.** Built: the Today page says how many are waiting (a bare number, no model text) and links to the Memory page, where they are listed with their reasons in plain words. Not built: the queue table, the triggers other than doubt, conflict and sensitive, the pacing limits, the chat banner, the notifier line. | `diya_memory.py`, `diya_brief_api.py`, frontend |
 | A6 | **Measurement** (built, section 8) on labelled messages with the real models (`python diya_autonomy_bench.py`): how often a wrong fact is remembered, how often a right one is asked, whether any secret or instruction was kept (must be zero), question volume. Then the switch. | `diya_autonomy_bench.py`, `tests/labelled_autonomy.py`, `tests/labelled_autonomy_bench.py` |
 | A7 | **The Memory page** (built, first part): what Diya took on its own is marked and can be undone, and the state of automatic memory (on or off, today's count, the breaker) is shown. The questions are A5. | frontend, `diya_memory_api.py` |
 
@@ -278,6 +279,62 @@ already asked (updates talk about jobs and homes, which the suspicious 3B flags)
 the 19 of 20 and 14 of 16 above. One dev-day message ("I live in Pune and I love the weather here in winter") is labelled a plain fact
 but contradicts that day's seeded "lives in Delhi"; it is scored as asked, and it should be.
 
-**What is not built.** Applying a replacement (retire the old fact and accept the new in one transaction, with the Memory page's one
-button) is unit A3. Today the person answers by accepting the new fact (both stay) or retiring the old one (the new one can then be
-accepted), as before.
+**Answering it.** The Memory page shows the waiting fact with "It may replace: ..." and one press, "Replace the old one" (`Memory.supersede`, unit A3): the waiting fact is accepted and the old one retired in one transaction, the old one can be remembered again, and the trail says which fact replaced which. "Keep both" is the ordinary accept, and Reject says no. What is not built is recognising a correction as such when it is said in the chat ("no, I live in Pune").
+
+## 10. Reading a message the moment it is said (unit A4)
+
+**What it does.** With `DIYA_AUTO_MEMORY` on, once the chat has sent its reply, the same message is read for facts at once, instead of waiting up
+to half an hour for the scheduled Dreaming pass (`Dreamer.capture_message`, called from the chat route as a background task, so the reply never
+waits for it). The model is asked the same extraction question Dreaming asks (`EXTRACTION_PROMPT`, now one text for both), about this one message;
+what it finds goes through exactly the lanes and the two questions of sections 8 and 9. The person's words are the only source (D2): the message
+read is the person's own, taken from the database by its number.
+
+**Which messages.** `diya_intent.is_worth_capturing`: a short first-person statement ("I live in Pune", "my sister Maya is visiting in May",
+"remember that ..."), never a question, a request, a reminder or a task, at most 400 characters. It is stricter than it needs to be on purpose:
+what it lets by is read by the model at once, and everything else is still read by the scheduled pass. A negative is fine ("I don't like spicy
+food" is a fact).
+
+**Once, one at a time, and never in the way.**
+- Each message read is recorded (migration 8, `memory_captures`): the scheduled pass leaves it out, and a message is never read twice.
+- If the model cannot be asked, the message is not recorded, and the scheduled pass reads it as it always would.
+- One read at a time: a message that finds one running is skipped, not queued (the scheduled pass has it within the half hour), and the chat
+  never waits behind it. On a CPU a read takes some seconds to tens of seconds, during which the next reply shares the model with it; that is a
+  real cost of "so proactive", said here and not hidden.
+- Nothing in it can raise into a chat: a failure is written to the API's console and the message is left for the scheduled pass.
+- Its facts take slots of their own (from 1000 up), so a message read live and a Dreaming batch that starts at that same message cannot take
+  each other's.
+- The checkpoint cannot be held up: a batch that is nothing but messages read live moves it on.
+
+**A rule that measurement forced** (the second part of the measurement below): with live reading, the scheduled pass is left with the messages
+that were *not* worth reading live, mostly questions and requests, and a model handed only those invents a fact from them ("has a kitten named
+in mind", "Diwali is approaching"). So, with automatic memory on, the scheduled pass leaves out a message that only asks or tells Diya something
+and says nothing in the first person (`diya_intent.only_asks`). The price, stated as chosen: a fact about someone else mixed into such a question
+("Maya got a new job, any gift ideas?") is not taken in; the person can add it, or say it as a statement. Off, the scheduled pass reads every
+message as it always did.
+
+**Measured** (the real models: `diya-chat` extracting, `qwen2.5:3b` judging privacy; each day three times; every message read live the way the chat
+reads it, then the scheduled pass for the rest, as it would be half an hour later; `python diya_autonomy_bench.py --live`):
+
+| | zero-tolerance list | plain facts remembered / asked / lost | sensitive statements asked | small talk with a fact invented |
+|---|---|---|---|---|
+| dev (24 days), before the rule above | all 0 | 40 of 72 (56%) / 29 / 0 | 54 of 54 | 5 of 39 |
+| round 1 (6 days) | all 0 | 15 of 24 (62%) / 9 / 0 | 24 of 24 | 2 of 6 |
+| round 2 (6 days) | all 0 | 21 of 24 (88%) / 3 / 0 | 21 of 21 | **6 of 6** |
+| dev, with the rule | all 0 | 41 of 72 (57%) / 28 / 0 | 54 of 54 | **0 of 39** |
+| round 1, with the rule | all 0 | 15 of 24 (62%) / 9 / 0 | 24 of 24 | 1 of 6 |
+| round 2, with the rule | all 0 | 21 of 24 (88%) / 3 / 0 | 21 of 21 | **0 of 6** |
+
+Read against section 8.3 (the same days read only by the scheduled pass: 50% of the plain facts remembered on dev, 38% and 79% on the held-out
+rounds, with 4, 6 and 0 lost): reading each message alone loses none of them, and remembers more, because it is one fact in one message instead
+of many at once. The fixed-labels caveats of section 8 apply unchanged, and one more: the rule above was made after seeing round 2's small talk
+(6 of 6), so its effect is shown on the same days that showed the problem; round 1's single remaining invention is the honest remainder.
+
+**An end-to-end look** (not a measurement): through the real chat route, in a throwaway database, with the real models, "I live in Lisbon and
+I work as a baker" with "works as a teacher" already known left "works as a baker" waiting with a question that named the teacher fact, and a
+medicine waiting as private; a question ("what is the capital of France?") read nothing. Harmless statements about a pet and a city were also
+asked about: the 3B judge's suspicion again (section 8.3), which is the price of the zero-tolerance list.
+
+**What is not built.** The one quiet line in the chat reply ("Noted: ... Undo"): reading happens after the reply, so the line would have to arrive
+afterwards; today the Memory page's feed (A7) and the Today page's count (A5, first part) are where the person sees it. Correction by saying so
+("no, I live in Pune") as a recognised kind of message: a waiting fact that may replace an old one has its one-press button (A3), but nothing yet
+recognises a correction as such. The rest of A5 (pacing limits, the chat banner, a line in the desktop notifier).
