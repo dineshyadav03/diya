@@ -34,6 +34,12 @@ before `npm run dev`, or put `DIYA_TOKEN=<token>` in `frontend/.env.local` (giti
 kept, so a lost token can't be shown again: start the API once with `--rotate-token`.
 `DIYA_REQUIRE_TOKEN=0` turns the requirement off. Details in [docs/lan.md](docs/lan.md).
 
+Instead of the two terminals, `python diya_run.py` checks first (Ollama, the models, the certificate, Node), then starts whichever of the API and the UI is
+not already answering, waits for each, and keeps them up (Ctrl+C or `python diya_run.py --stop` stops only what it started). `--check` and `--status` start
+nothing. A new access token is shown on the terminal and never written to its logs; `--save-token` saves it to `frontend/.env.local`. `--install` registers
+it to run at logon (and, with `--with-jobs`, the notifier and Dreaming if they are missing); nothing registers on its own. See
+[docs/ONE_COMMAND_DESIGN.md](docs/ONE_COMMAND_DESIGN.md) for what it does not do.
+
 `pyproject.toml` pins every direct dependency to an exact version. `requirements.lock` pins the
 full dependency tree with hashes; `pip install --require-hashes -r requirements.lock` is the most
 reproducible install, proved in a fresh virtualenv against the full test suite. It is resolved for

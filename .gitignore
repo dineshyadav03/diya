@@ -21,6 +21,10 @@ notify_log.txt
 proactive_context.txt
 connector_tokens/
 connectors_log.txt
+# diya_run.py: the API's and the UI's logs, and the notes it leaves for --status and --stop (they go in the data folder when there is one)
+/logs/
+diya_run.json
+diya_run.stop
 
 # --- Dependencies and build output ---
 node_modules/

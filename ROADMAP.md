@@ -315,8 +315,8 @@ Remaining:
    to see the day (built: the Today page); (2) things that come back without being asked (built: repeating reminders and snooze, with
    the notifier the owner has still to schedule); (3) reach: a phone channel, designed on its own under the rules of `RESEARCH.md`
    entry 17 (a message is the owner's only if it is from the paired owner, approvals never by chat); (4) one command that starts the
-   API, the UI and the notifier together. (3) and (4) each need their own design and the owner's yes. **Both are now designed (2026-10-11),
-   not built:** [`docs/PHONE_CHANNEL_DESIGN.md`](docs/PHONE_CHANNEL_DESIGN.md) (reach, tell and talk are three different things; the rules a
+   API, the UI and the notifier together. (3) and (4) each need their own design and the owner's yes. **Both are designed (2026-10-11); (4) is built
+   (`diya_run.py`, same day, see `docs/ONE_COMMAND_DESIGN.md` section 8), (3) is not:** [`docs/PHONE_CHANNEL_DESIGN.md`](docs/PHONE_CHANNEL_DESIGN.md) (reach, tell and talk are three different things; the rules a
    channel must keep; a VPN, then Web Push, and a chat app only if the owner accepts the words passing through a third party) and
    [`docs/ONE_COMMAND_DESIGN.md`](docs/ONE_COMMAND_DESIGN.md) (`python diya_run.py`: checks, start, supervise, never print the token, never
    register anything on its own). Each ends with what needs the owner's yes.

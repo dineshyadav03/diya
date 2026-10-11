@@ -1,9 +1,11 @@
-# One command that starts Diya: design spec (nothing here is built; it needs the owner's yes)
+# One command that starts Diya: design spec and what was built (units O1 and O2)
 
-> **Status (2026-10-11):** designed only. It is point 4 of the daily-driver list (`ROADMAP.md`, item 6; `docs/SCHEDULE_DESIGN.md` D9). Today a day
-> with Diya starts with three things done by hand: `python diya_web.py` in one terminal, `npm run dev` (with `DIYA_TOKEN` in the environment or in
-> `frontend/.env.local`) in another, and, once, registering the notifier and Dreaming as scheduled tasks. This document says what one command
-> would do, what it must not do, what is hard about it on this machine, and what the owner has to decide.
+> **Status (2026-10-11):** O1 and O2 are built (`diya_run.py`, `tests/test_run.py`); section 8 says what was built and where it differs from this
+> design. It is point 4 of the daily-driver list (`ROADMAP.md`, item 6; `docs/SCHEDULE_DESIGN.md` D9). Nothing has been registered on this
+> computer: `--install` was written and tested against a stand-in PowerShell only, and is for the owner to run (section 8). O3 (a production build
+> behind a TLS proxy) was not built. Before this, a day with Diya started with three things done by hand: `python diya_web.py` in one terminal,
+> `npm run dev` (with `DIYA_TOKEN` in the environment or in `frontend/.env.local`) in another, and, once, registering the notifier and Dreaming as
+> scheduled tasks. This document says what one command does, what it must not do, what is hard about it on this machine, and what was decided.
 
 ## 1. The problem, concretely
 
@@ -80,3 +82,61 @@
 It does not make Diya reachable from anywhere else (`docs/PHONE_CHANNEL_DESIGN.md` is that), does not restart the computer's other programs, does not
 keep running if the person logs out, and does not replace the scheduled tasks: Dreaming and the notifier stay separate short jobs, because that
 is what lets one fail without taking the API with it.
+
+## 8. As built (2026-10-11)
+
+**The command.** `python diya_run.py` with no flag checks, starts what is not already answering (the API first, the UI second), waits for each to answer, and
+keeps them up until Ctrl+C or `python diya_run.py --stop`. Flags: `--check` (what is wrong, nothing started), `--status`, `--stop`, `--save-token`, `--lan`,
+`--install` (with `--with-jobs`), `--uninstall`. Exit codes: 0 fine, 1 something failed, 2 something must be fixed first (or a bad flag).
+
+**Differences from the design above, each on purpose:**
+
+- **No new `/api/health` route.** Section 5 planned an unauthenticated health route. Adding one is a new open door on an API whose point is that nothing
+  is open. The launcher instead sends a request with no token to `/api/threads`: an API that is up REFUSES it (401), and that refusal is the proof (a
+  200 counts too, for a setup with tokens off). Nothing about the person is asked for or answered. The UI is "up" when its sign-in page answers at all.
+- **Both or neither.** If one child fails five times in a row inside 30 seconds each, the launcher stops what it started and exits with a failure and
+  the name of the log, rather than keep half of Diya alive quietly. The wait before a restart is 2, 4, 8, 16 seconds (the design said 1, 2, 4 and up
+  to 60; the cap of 60 is still in the code but five quick failures end it first); a child that ran 30 seconds or longer starts the count again.
+- **Status and stop use a heartbeat note, not process numbers.** The launcher writes `diya_run.json` in the data folder every two seconds (also while
+  it waits, which can take minutes the first time the speech model loads). `--status` calls a launcher alive if the note is under ten seconds old;
+  `--stop` leaves a note (`diya_run.stop`) that the launcher looks for. `--stop` never kills a process itself: a process number can be reused, and
+  the one thing this command must never do is stop something it did not start. With no live launcher, `--stop` says so and does nothing.
+- **The token is held back from the log, and saved only when asked.** The API prints a NEW token once, on the line after a one-line banner. The
+  launcher shows that line on the terminal and writes a stand-in line to the log instead; with `--save-token` it writes `DIYA_TOKEN=...` to
+  `frontend/.env.local` (replacing only that line) and says so, without printing it; if that file cannot be written it prints the token once so it
+  is not lost. It is never put on a command line, and the UI is started with no token argument (it reads its own `.env.local`). The one thing
+  the launcher cannot protect is a token the owner already put in an environment variable: children inherit the launcher's environment, as they
+  would from the owner's own terminal (that is how `DIYA_AUTO_MEMORY` and the other settings reach the API).
+- **Logs** are `logs/api.log` and `logs/ui.log` in the data folder (or the repo folder when there is none; both are gitignored), 1 MB each, the last
+  three kept.
+- **`--install`** runs one constant PowerShell script; the repo folder, the `pythonw.exe` path and "with jobs or not" reach it as environment
+  variables, never inside its text. It registers only what is missing (a task that exists is left exactly as it is): `Diya_Run` at logon with no
+  time limit, and with `--with-jobs` also `Diya_Notify` (every 5 minutes, 5 minute limit) and `Diya_Dreaming` (every 30 minutes, 15 minute limit).
+  `--uninstall` removes `Diya_Run` and only that. The two job tasks were never removed by this command and still are not.
+- **The UI server is the development server** (`node tools/next-tls.mjs dev`, the same script as `npm run dev`; `--lan` adds what `npm run dev:lan`
+  adds, and that script insists on a passcode itself).
+
+**What the owner runs, and in what order** (nothing was run on this computer):
+
+```
+python diya_run.py --check            # says what, if anything, is wrong
+python diya_run.py                    # starts what is not already running (their own API and UI on 8080 and 3000 are left alone)
+python diya_run.py --install          # only if they want it at every logon; add --with-jobs to register the notifier and Dreaming if missing
+```
+
+**Verified** by 116 tests with nothing started (the process starter, the probes, the clock and PowerShell are stand-ins: start order, restart waits
+and give-up, the heartbeat, stopping, the log, that no log line or command line holds the token, the install script's constant text); by a mutation
+run of 273 changes to the code (273 caught; a first run caught 257 of 274, and the 17 that survived were either missing tests, now written, or code
+that did nothing: log rotation removed the oldest file by hand when moving onto it already overwrites it, so that was deleted, and the heartbeat file
+was opened with a line-ending setting for a file that never contains a line ending); and by a real run of the API half on throwaway ports
+(8097, a scratch data folder, the UI's answer supplied by the test so the owner's `frontend/.next` was never touched): it started the API, saw the
+refused request that proves it is up, wrote a heartbeat, started the API again with a new process number after the API's process was killed,
+stopped on a `--stop` note started from the same data folder, left the port closed and the notes removed, left the owner's servers on 8080 and 3000
+answering throughout, and the new token the scratch API printed reached the terminal and not the log. Look-only flags (`--status`, `--check`,
+`--stop`) were also run against the owner's real servers; they started and changed nothing.
+
+**Honest limits.** The UI half of the launcher was never started for real: a second development server in the same `frontend` folder would fight the
+owner's over `.next`, so it is covered only by the stand-in tests and by the fact that the command is the one in `package.json` (a test pins that).
+Nothing has run through a real logon. `--install` and `--uninstall` have never run against a real Task Scheduler: the PowerShell text is checked as
+text (and its registering-only-what-is-missing rule is a line of that text), not executed. The first start after a reboot can wait minutes for the API
+(it loads the speech model), which the launcher allows for (180 seconds) but which this run did not time.
