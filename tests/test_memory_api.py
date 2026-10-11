@@ -121,7 +121,7 @@ def test_the_list_carries_status_flags_in_words_and_the_size_used(client, memory
 def test_the_list_sends_only_what_a_list_needs(client, memory):
     add_candidate(memory, "likes tea")
     (fact,) = client.get("/api/memory").json()["facts"]
-    assert set(fact) == {"id", "text", "status", "source", "person", "flags", "created_at", "by"}  # not the staged line, the model or the history
+    assert set(fact) == {"id", "text", "status", "source", "person", "flags", "created_at", "by", "replaces"}  # not the staged line, the model or the history
 
 
 def test_a_fact_named_by_dreaming_carries_its_person_a_self_fact_carries_none(client, memory):

@@ -593,6 +593,41 @@ class Memory:
             conn.execute("UPDATE facts SET status = ? WHERE id = ?", (becomes, fact_id))
             self._event(conn, fact_id, ACTION_EVENT[action], actor, now, json.dumps(detail, sort_keys=True) if detail is not None else None)
 
+    def supersede(self, new_id, old_id, actor):
+        """The person's answer to "this replaces that": the candidate `new_id` is accepted and the accepted fact `old_id` retired, both or neither
+        (one transaction). The old fact's event says which fact replaced it and the new one's says which it replaced, so the trail and the page can
+        show it, and the retiring is the usual one, so the old fact can be remembered again. The new fact's `ask:` flag is cleared, as accepting it
+        would. Raises FactError, and writes nothing, if the facts are the same one, `new_id` is not a candidate, `old_id` is not accepted, an accepted
+        fact already says what the new one does, or the profile has no room (the room the old one frees counts)."""
+        _check_actor(actor)
+        if new_id == old_id:
+            raise IllegalTransition("a fact cannot replace itself")
+        with self._write() as conn:
+            found = {}
+            for fact_id in (new_id, old_id):
+                row = conn.execute(
+                    "SELECT f.status, f.text, f.flags, p.name FROM facts f LEFT JOIN people p ON p.id = f.person_id WHERE f.id = ?", (fact_id,)
+                ).fetchone()
+                if row is None:
+                    raise UnknownFact(f"there is no fact {fact_id}")
+                found[fact_id] = row
+            if found[new_id][0] != "candidate":
+                raise IllegalTransition(f"fact {new_id} is {found[new_id][0]}; only a candidate can replace another fact")
+            if found[old_id][0] != "accepted":
+                raise IllegalTransition(f"fact {old_id} is {found[old_id][0]}; only an accepted fact can be replaced")
+            now = _now()
+            conn.execute("UPDATE facts SET status = 'retired' WHERE id = ?", (old_id,))
+            self._event(conn, old_id, "retired", actor, now, json.dumps({"replaced_by": new_id}, sort_keys=True))
+            _, text, flags, person = found[new_id]
+            self._check_room(conn, new_id, text, person, enforce_fact_length=True)  # after the old one is retired: the room it frees is room
+            flags = json.loads(flags)
+            kept = [flag for flag in flags if not flag.startswith(ASK_PREFIX)]
+            if kept != flags:
+                conn.execute("UPDATE facts SET flags = ? WHERE id = ?", (json.dumps(kept), new_id))
+                self._event(conn, new_id, "flagged", actor, now, json.dumps({"from": flags, "to": kept}))
+            conn.execute("UPDATE facts SET status = 'accepted' WHERE id = ?", (new_id,))
+            self._event(conn, new_id, "accepted", actor, now, json.dumps({"replaces": old_id}, sort_keys=True))
+
     def discard_secret(self, fact_id, kind, actor):
         """Reject a candidate that is, or names, a secret, and do not keep what it said: its text and the line it came from are replaced,
         and the event records only that a secret of this `kind` was not kept (never the secret). Only a candidate can be discarded."""
@@ -903,6 +938,14 @@ def printable(text, limit=None):
     every control, invisible or direction-changing character is shown as a visible escape (a backslash,
     u and four hex digits) instead of being passed on. Cut to `limit` characters, with an ellipsis, if
     given. Everything read back from the database that a person is shown goes through this: it is model
+def replaced_fact_id(flags):
+    """The number of the fact a waiting fact may replace, from the memory policy's flag (ask:conflict:replaces:<id>), or None."""
+    for flag in flags:
+        if flag.startswith(ASK_PREFIX + "conflict:replaces:") and flag.rpartition(":")[2].isdigit():
+            return int(flag.rpartition(":")[2])
+    return None
+
+
     output, or something someone typed or pasted, and it must not be able to rewrite what a screen says."""
     text = " ".join(str(text).split())
     if limit is not None and len(text) > limit:

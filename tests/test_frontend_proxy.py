@@ -430,6 +430,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
     assert sorted(targets) == sorted([
         "/api/history/${threadId}", "/api/chat", "/api/threads", "/api/transcribe",
         "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
+        "/api/memory/${fact.id}/replace",  # the Memory page's "replace the old one" button
         "/api/reminders", "/api/reminders", "/api/reminders", "/api/reminders/${reminder.id}/done",  # the chat's due count, the page's list and add, and done
         "/api/tasks", "/api/tasks", "/api/tasks/${task.id}/done", "/api/tasks/${task.id}/reopen",  # the Tasks page: its list, add, done and put back
         "/api/reminders/${reminder.id}/snooze",  # the Reminders page's push-back buttons
@@ -483,6 +484,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
     assert set(routes) == {
         "/api/threads", "/api/history/{thread_id}", "/api/chat", "/api/transcribe",
         "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/merge", "/api/memory/{fact_id}/{action}",
+        "/api/memory/{fact_id}/replace",
         "/api/reminders", "/api/reminders/{reminder_id}/done", "/api/reminders/{reminder_id}/snooze",
         "/api/today", "/api/scheduled", "/api/scheduled/{series_id}/pause", "/api/scheduled/{series_id}/resume",
         "/api/scheduled/{series_id}/skip", "/api/scheduled/{series_id}/stop",
@@ -497,7 +499,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         assert exported == methods, path
         assert "lib/proxy.mjs" in source and any(
             name in source
-            for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardReminderDone(", "forwardConnection(",
+            for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardFactReplace(", "forwardReminderDone(", "forwardConnection(",
                          "forwardAction(", "forwardActionDecision(", "forwardTaskAction(", "forwardScheduledAction(", "forwardReminderSnooze(")
         ), path
         assert "force-dynamic" in source, path  # never cached
@@ -597,6 +599,59 @@ def test_an_action_the_api_does_not_have_is_refused_before_anything_is_sent(acti
 def test_every_real_action_on_a_whole_number_fact_is_forwarded_to_its_own_path(action, fact_id):
     out = run_harness({"mode": "route", "env": {}, "calls": [call("memoryAction", "POST", params={"fact_id": fact_id, "action": action})]})
     assert [(c["method"], c["url"]) for c in out["captured"]] == [("POST", f"/api/memory/{fact_id}/{action}")]
+
+
+# --- "this replaces that" (docs/AUTO_MEMORY_DESIGN.md, unit A3) ------------------------------------------------
+
+@needs_node
+def test_the_replace_route_works_end_to_end_through_the_ui_server_with_no_token_in_the_browser(api):
+    from diya_memory import Memory
+
+    memory = Memory(api.agent.store)
+    old = memory.add_manual("works as a teacher", "api")
+    new = memory.add_candidate("works as a nurse", batch_first=1, batch_last=1, position=0, model="m",
+                               extracted_at="2026-01-01T00:00:00+00:00", raw="- works as a nurse")
+    (answer,) = through_the_ui(api, [json_call_with("memoryReplace", {"old_id": old}, {"fact_id": str(new)})])
+    body = json.loads(unb64(answer["bodyB64"]))
+    assert answer["status"] == 200 and body["fact"]["status"] == "accepted" and body["replaced"]["status"] == "retired"
+    assert memory.accepted_texts() == ["works as a nurse"]
+
+
+@needs_node
+def test_the_api_refuses_the_replace_route_without_the_token_and_nothing_is_written(api):
+    from diya_memory import Memory
+
+    memory = Memory(api.agent.store)
+    old = memory.add_manual("works as a teacher", "api")
+    new = memory.add_candidate("works as a nurse", batch_first=1, batch_last=1, position=0, model="m",
+                               extracted_at="2026-01-01T00:00:00+00:00", raw="- works as a nurse")
+    (answer,) = through_the_ui(api, [json_call_with("memoryReplace", {"old_id": old}, {"fact_id": str(new)})], token=None)
+    assert answer["status"] == 401
+    assert memory.get(new)["status"] == "candidate" and memory.get(old)["status"] == "accepted"
+
+
+@needs_node
+@pytest.mark.parametrize("fact_id", ["1", "12", "9" * 18])
+def test_a_replace_on_a_whole_number_fact_is_forwarded_to_its_own_path_with_the_token_and_the_body(fact_id):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [
+        call("memoryReplace", "POST", {"content-type": "application/json", "cookie": "a=b"}, '{"old_id": 3}', {"fact_id": fact_id})]})
+    (captured,) = out["captured"]
+    assert (captured["method"], captured["url"]) == ("POST", f"/api/memory/{fact_id}/replace")
+    assert captured["headers"]["authorization"] == f"Bearer {TOKEN}" and "cookie" not in captured["headers"]
+    assert json.loads(unb64(captured["bodyB64"])) == {"old_id": 3}  # the body the browser sent goes through as it is
+
+
+@needs_node
+@pytest.mark.parametrize("fact_id", ["abc", "1.5", "-1", "1e3", "", " 1", "1%2F2", "../1", "1/../2", "9" * 19, "0x10"])
+def test_a_replace_on_something_that_is_not_a_whole_number_is_refused_before_anything_is_sent(fact_id):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call("memoryReplace", "POST", params={"fact_id": fact_id})]})
+    assert [r["status"] for r in out["results"]] == [404] and out["captured"] == []
+
+
+@needs_node
+def test_the_replace_route_answers_only_a_post():
+    out = run_harness({"mode": "route", "env": {}, "calls": [call("memoryReplace", "GET", params={"fact_id": "1"})]})
+    assert out["results"] == [{"noHandler": True}] and out["captured"] == []
 
 
 # --- the reminders page's routes (docs/PROACTIVITY_DESIGN.md, unit P3) -----------------------------

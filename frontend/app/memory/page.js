@@ -198,6 +198,19 @@ export default function MemoryPage() {
     return true
   }
 
+  // "This replaces that": accept the waiting fact and retire the accepted one, together (the API does both or neither).
+  const replace = (fact, old) =>
+    settle(
+      () =>
+        fetch(`/api/memory/${fact.id}/replace`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ old_id: old.id }),
+        }),
+      String(fact.id),
+      () => 'Replaced. Diya will use the new fact from the next message, and the old one is under Forgotten if you want it back.',
+    )
+
   const decide = (fact, action, note) =>
     settle(() => fetch(`/api/memory/${fact.id}/${action}`, { method: 'POST' }), String(fact.id), () => note)
 
@@ -248,6 +261,8 @@ export default function MemoryPage() {
   const rejected = withStatus('rejected')
   const retired = withStatus('retired')
   const summary = data ? data.summary : null
+  // The accepted fact a waiting one may replace, if the API says so and that fact is still accepted.
+  const replacedBy = (fact) => (fact.replaces ? accepted.find((other) => other.id === fact.replaces) : undefined)
 
   // A plain function that returns the row, NOT a component: a component defined here would be a new type on
   // every render and would remount the edit box (and drop its focus) at every keystroke.
@@ -281,6 +296,11 @@ export default function MemoryPage() {
         {fact.person && !hidePerson && <p className="memory-person-tag">About {fact.person}</p>}
         {fact.by === 'auto' && <p className="memory-auto-tag">Learned on its own</p>}
         <Flags flags={fact.flags} />
+        {fact.status === 'candidate' && replacedBy(fact) && (
+          <p className="memory-replaces">
+            It may replace: <q>{replacedBy(fact).text}</q>
+          </p>
+        )}
         {!isEditing && (
           <div className="memory-actions">
             {actions({ fact, isBusy })}
@@ -362,7 +382,8 @@ export default function MemoryPage() {
                     {candidates.map((fact) =>
                       factRow(fact, ({ isBusy }) => (
                         <>
-                          {button('Accept', 'memory-btn--primary', () => decide(fact, 'accept', 'Accepted. Diya will know it from the next message.'), isBusy, fact)}
+                          {replacedBy(fact) && button('Replace the old one', 'memory-btn--primary', () => replace(fact, replacedBy(fact)), isBusy, fact)}
+                          {button(replacedBy(fact) ? 'Keep both' : 'Accept', replacedBy(fact) ? '' : 'memory-btn--primary', () => decide(fact, 'accept', 'Accepted. Diya will know it from the next message.'), isBusy, fact)}
                           {button('Edit', '', () => setEditing({ id: fact.id, text: fact.text }), isBusy, fact)}
                           {button('Reject', 'memory-btn--danger', () => decide(fact, 'reject', 'Rejected.'), isBusy, fact)}
                         </>

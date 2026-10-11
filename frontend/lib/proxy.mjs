@@ -141,6 +141,14 @@ export async function forwardFactAction(request, context, options) {
   return forward(request, `/api/memory/${factId}/${action}`, options)
 }
 
+// "This replaces that" (docs/AUTO_MEMORY_DESIGN.md, unit A3) has its own route, like the other things done to a fact that are not one of the plain
+// actions: it takes a body naming the other fact. The id must be a whole number; the body is the API's to check.
+export async function forwardFactReplace(request, context, options) {
+  const { fact_id: factId } = await context.params
+  if (!WHOLE_NUMBER.test(String(factId))) return errorResponse(404, 'No such fact')
+  return forward(request, `/api/memory/${factId}/replace`, options)
+}
+
 // The reminders page's routes (docs/PROACTIVITY_DESIGN.md, unit P3). A reminder id is a whole number; anything else
 // is turned away here instead of being pasted into the URL of the API request.
 export async function forwardReminderDone(request, context, options) {

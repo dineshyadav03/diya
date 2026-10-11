@@ -5,6 +5,7 @@ memory page. The rules are diya_memory's, the same ones the command line applies
     GET  /api/memory/{id}             one fact: its flags in words, the messages it came from, its history
     POST /api/memory/ingest           copy newly staged facts in as candidates and check them
     POST /api/memory/add              {"text": ...}  a fact typed by the person; it goes in already accepted
+    POST /api/memory/{id}/replace     {"old_id": ...}  accept this waiting fact and retire the accepted one it replaces, together
     POST /api/memory/{id}/{action}    accept | reject | reopen | retire | restore, or edit with {"text": ...}
     POST /api/memory/merge            {"from_name": ..., "into_name": ...|null}  move a person's facts onto
                                        another name, or back to no one in particular (null); never automatic,
@@ -55,6 +56,10 @@ _STATUS = ((UnknownFact, 404), (UnknownPerson, 404), (IllegalTransition, 409), (
 
 class TextBody(BaseModel):
     text: str
+
+
+class ReplaceBody(BaseModel):
+    old_id: int
 
 
 class MergeBody(BaseModel):
@@ -111,6 +116,8 @@ def register(app, config, agent):
             "person": printable(fact["person"]) if fact["person"] is not None else None,
             "flags": [{"code": printable(flag), "label": diya_memory.flag_short(flag)} for flag in fact["flags"]],
             "created_at": printable(fact["created_at"]),
+            # the accepted fact a waiting one may replace (the memory policy's question), so the page can offer to replace it
+            "replaces": diya_memory.replaced_fact_id(fact["flags"]) if fact["status"] == "candidate" else None,
             # who accepted it: "auto" for what Diya took on its own, "you" for what a person accepted, typed or imported; None until accepted
             "by": None if fact["id"] not in actors else "auto" if actors[fact["id"]] == "auto" else "you",
         }
@@ -186,6 +193,18 @@ def register(app, config, agent):
         except FactError as exc:
             raise _refusal(exc)
         return {"moved": moved, "people": memory.people()}
+
+    @app.post("/api/memory/{fact_id}/replace")
+    def replace(fact_id: int, body: ReplaceBody):
+        _check_id(fact_id)
+        _check_id(body.old_id)
+        memory = Memory(agent.store)
+        try:
+            memory.supersede(fact_id, body.old_id, "api")
+        except FactError as exc:
+            raise _refusal(exc)
+        memory.run_checks("api")
+        return {"fact": public(memory.get(fact_id)), "replaced": public(memory.get(body.old_id)), "summary": summary(memory)}
 
     @app.post("/api/memory/{fact_id}/{action}")
     def decide(fact_id: int, action: str, body: TextBody | None = None):
