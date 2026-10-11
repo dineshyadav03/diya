@@ -76,7 +76,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
 - Facts it extracts wait in a review queue; nothing reaches the model unless you accept it.
   Review them on the **Memory** page of the UI, or with `python diya_review.py list`, `accept`, `reject` and `edit` (see [Dreaming](docs/dreaming.md)); `judge` asks the local model for an optional second opinion.
   The model is told the accepted facts, in every chat; your old `user_profile.txt` was imported once.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 4738 tests pass on Windows (as of 2026-10-10).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 5147 tests pass on Windows (as of 2026-10-11).
 
 ## Privacy, and where your data is kept
 
