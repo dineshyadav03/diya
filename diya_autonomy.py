@@ -287,15 +287,19 @@ class Report(NamedTuple):
     asked: int  # left as candidates, with a question to come
     never: int  # rejected (secrets discarded without their text)
     held: int  # could not be accepted yet: the profile is full
+    replaced: int = 0  # accepted in place of a known fact, because the person was correcting it (and the model said which)
 
 
-def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIMIT, actor="auto", private=None, replaces=None):
+def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIMIT, actor="auto", private=None, replaces=None, corrects=None):
     """Put every candidate in its lane and act on it, each change one transaction with its event (which records the lane and why).
     Idempotent: a second run over the same candidates changes nothing. `now` is an aware datetime, for tests; the caps and the circuit
     breaker look at the 24 hours before it. `private(fact)` is the model's judgement of a fact the words let through (privacy_of): asked
     only of a fact about to be remembered, and only "ok" lets it be; with none given there is no such check (the pure-policy tests).
     `replaces(fact)` is the model's judgement of whether such a fact replaces one already known (replacement_of): asked after the privacy
     check, of a fact that passed it, and only a clear "none" lets the fact be remembered; with none given there is no such check.
+    `corrects(fact)` says whether the person's own words were correcting something (diya_intent.is_correction on the message the fact came from): when
+    it is true AND the model named the fact the new one replaces, the new fact replaces it at once (Memory.supersede, by `actor`) instead of waiting as a
+    question; either alone still asks. The replacement counts toward the daily limit, and is the person's to undo.
     Returns what was done."""
     import diya_memory
     from datetime import datetime, timedelta, timezone
@@ -305,7 +309,7 @@ def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIM
     memory.run_checks("system")  # flags are advisory input to the lanes, so they must be current
     recent = memory.count_events("accepted", actor, since)
     breaker_open = memory.taken_back_count(since) >= breaker_limit
-    remembered = asked = never = held = 0
+    remembered = asked = never = held = replaced = 0
     for fact in memory.facts("candidate"):
         decision = decide(fact, auto_recent=recent, breaker_open=breaker_open, limit=limit)
         detail = {"lane": decision.lane, "reasons": list(decision.reasons)}
@@ -332,6 +336,10 @@ def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIM
                 elif replacement.answer == "unclear":
                     _mark_ask(memory, fact, KIND_CONFLICT, "replaces_unclear", actor)
                 else:
+                    if corrects is not None and corrects(fact) and _replace_now(memory, fact, replacement.fact_id, actor):
+                        replaced += 1
+                        recent += 1
+                        continue
                     _mark_ask(memory, fact, KIND_CONFLICT, f"replaces:{replacement.fact_id}", actor)
                 asked += 1
                 continue
@@ -355,7 +363,19 @@ def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIM
         else:
             _mark_ask(memory, fact, decision.kind, decision.reasons[0], actor)
             asked += 1
-    return Report(remembered, asked, never, held)
+    return Report(remembered, asked, never, held, replaced)
+
+
+def _replace_now(memory, fact, old_id, actor):
+    """Replace the known fact `old_id` with `fact` as a correction (Memory.supersede). False, with nothing changed, if it cannot be done (the old fact is
+    no longer accepted, an accepted fact already says the same, no room): the fact then waits as a question like any other."""
+    import diya_memory
+
+    try:
+        memory.supersede(fact["id"], old_id, actor, why={"lane": LANE_REMEMBER, "reasons": ["correction"]})
+    except diya_memory.FactError:
+        return False
+    return True
 
 
 def _privacy(fact, private):

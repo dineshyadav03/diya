@@ -120,6 +120,59 @@ def only_asks(text):
     return asks and _SAYS_SOMETHING_OF_ME.search(text) is None
 
 
+# ---- is the person correcting something Diya knows? (docs/AUTO_MEMORY_DESIGN.md, D4 and unit A3) ----
+#
+# A correction is what lets a fact replace the one it contradicts WITHOUT a question: the model has said which known fact the new one replaces, and the person's
+# own words say they are changing something ("no, I live in Pune", "I no longer drink tea", "I moved", "that's wrong"). Both are needed; either alone only asks.
+# A short list of the ways people say it, in code: missing an unusual phrasing is the safe direction (the person is asked instead).
+_CORRECTION = re.compile(
+    r"^\s*(?:no|nope|nah)\b[\s,.!:;-]"
+    r"|\bactually\b"
+    r"|\bthat(?:'s| is)\s+(?:wrong|not\s+(?:right|true|correct)|incorrect|outdated|old)\b"
+    r"|\b(?:not|isn't|aren't|don't|doesn't|didn't)\b[^.!?;]*\b(?:any\s?more|any\s?longer)\b"
+    r"|\bany\s?more\b|\bno\s+longer\b|\bnot\s+any\s?longer\b"
+    r"|\b(?:stopped|quit|gave\s+up|sold|moved|switched|changed|left)\b"
+    r"|\bused\s+to\b"
+    r"|\bnow\s+(?:work|works|live|lives|use|uses|drive|drives|have|has|ride|rides|study|studies|go|goes|am|play|plays|prefer|prefers)\b"
+    r"|\bis\s+gone\b",
+    re.IGNORECASE,
+)
+
+
+def is_correction(text):
+    """True if the message reads as the person changing something already said ("no, I live in Pune", "I no longer drink tea", "I moved flats",
+    "that's wrong"). Words only: it is one half of the test for replacing a known fact without asking, the other being the model's answer to which
+    fact the new one replaces. Not a question."""
+    if not isinstance(text, str):
+        return False
+    text = text.strip().replace("\u2019", "'")
+    return bool(text) and "?" not in text and _CORRECTION.search(text) is not None
+
+
+# ---- "forget that I said ..." and "forget everything about Maya" ----
+_FORGET = re.compile(r"^\s*(?:please\s+)?(?:forget|stop\s+remembering|delete)\s+(?:about\s+|that\s+|what\s+i\s+(?:said|told\s+you)\s+(?:about\s+)?)?(.+?)\s*[.!]?\s*$", re.IGNORECASE)
+_FORGET_PERSON = re.compile(r"^(?:everything|anything|all|what\s+you\s+know)\s+(?:about|on|of)\s+(.+)$", re.IGNORECASE)
+
+
+def forget_target(text):
+    """What the person asked Diya to forget, or None if the message is not that: ("person", "Maya") for "forget everything about Maya", ("fact", "I like
+    tea") for "forget that I like tea". Only the words are read here; whether anything matches is for the memory to say. A question is not an order."""
+    if not isinstance(text, str):
+        return None
+    text = text.strip().replace("\u2019", "'")
+    if not text or "?" in text or len(text) > MAX_CHARS:
+        return None
+    found = _FORGET.match(text)
+    if not found:
+        return None
+    what = found.group(1).strip()
+    person = _FORGET_PERSON.match(what)
+    if person:
+        name = person.group(1).strip(" .!")
+        return ("person", name) if name and len(name.split()) <= 4 else None
+    return ("fact", what) if what else None
+
+
 def is_worth_capturing(text):
     """True if memory should read this message for facts the moment it is said (docs/AUTO_MEMORY_DESIGN.md, unit A4): a first-person statement (or
     "remember that ..."), short, not a question, not a request, a reminder or a task. Stricter than it needs to be on purpose: what it lets by is read
@@ -130,7 +183,8 @@ def is_worth_capturing(text):
     text = text.strip().replace("\u2019", "'")
     if not text or len(text) > MAX_CHARS or "?" in text:
         return False
-    if not (_FIRST_PERSON.match(text) or _KEEP_THIS.match(text)):
+    # A correction often starts with something else ("no, I live in Pune", "actually I work at a bank"): it is read if it says something about the person
+    if not (_FIRST_PERSON.match(text) or _KEEP_THIS.match(text) or (is_correction(text) and _SAYS_SOMETHING_OF_ME.search(text))):
         return False
     if _REQUEST_ANYWHERE.search(text) or _REMINDER_REQUEST.search(text) or is_task_request(text):
         return False

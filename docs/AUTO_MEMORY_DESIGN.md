@@ -1,7 +1,6 @@
 # Memory that remembers on its own, and asks when it is unsure -- design spec
 
-> **Status (2026-10-11):** A1, A2, A4, A6 and A7 are built, tested and measured (sections 8, 9 and 10); A3 and A5 are built in part (the one-press
-> replacement and the Today count); their other parts are not. Nothing here
+> **Status (2026-10-11):** A1 to A4, A6 and A7 are built, tested and measured (sections 8 to 11); A5 is built in part (the Today count; see the table). Nothing here
 > changes what the model is told until the switch in section 7 (`DIYA_AUTO_MEMORY`) is turned on, and it is off. The owner's
 > instruction: "for memory the facts do not need to be accepted: the model can understand automatically, and if
 > it is wrong the user will say so and the memory will be modified. This has to be so proactive that no model out there is that
@@ -141,7 +140,7 @@ the replacement question), the smaller and more suspicious 3B judges privacy.
 |---|---|---|
 | A1 | **The policy** (built). `diya_autonomy.py`: the secret and sensitive detectors, `decide`, and `apply`; the `auto` actor, `Memory.discard_secret`, `count_events` and `taken_back_count` (the daily cap and the breaker are counted from the existing event trail, so no migration was needed); the trail records the lane and the reasons. Since then: the privacy question (`privacy_verdict`, `privacy_of`) and the replacement question (`replacement_of`), both asked inside `apply`, both fail-closed (sections 8 and 9). The `memory_questions` table moves to A5 and live capture's tables to A4. | `diya_autonomy.py` (new), `diya_memory.py` |
 | A2 | **Applied to what Dreaming stages** (built): after Dreaming's own pass, `Dreamer.remember_on_its_own()` takes in what is staged and puts every candidate through `apply`. Behind `DIYA_AUTO_MEMORY`, off until A6. | `dreaming.py`, `diya_config.py` |
-| A3 | **Corrections.** Built: `Memory.supersede` (accept the waiting fact and retire the one it replaces, in one transaction), `POST /api/memory/{id}/replace`, and the page's "Replace the old one" button, answering the question the replacement check (section 9) leaves. Not built: the correction detector ("no, I live in Pune" recognised as such) and the reply line with Undo. | `diya_memory.py`, `diya_memory_api.py`, frontend |
+| A3 | **Corrections** (built, sections 9 and 11): `Memory.supersede`, the page's "Replace the old one" button, correction words plus the model's answer replacing without a question, `Memory.undo_replace`, "forget that ..." and "forget everything about ...", and the line under the reply with Undo. | `diya_memory.py`, `diya_memory_api.py`, `diya_intent.py`, `dreaming.py`, `diya_autonomy.py`, frontend |
 | A4 | **Live capture** (built, section 10): `Dreamer.capture_message` after the reply, a table of what was read (migration 8), the scheduled pass leaving that out, and (automatic memory on) leaving out messages that only ask. | `dreaming.py`, `diya_intent.py`, `diya_db.py`, `diya_memory.py`, `diya_web.py` |
 | A5 | **Questions.** Built: the Today page says how many are waiting (a bare number, no model text) and links to the Memory page, where they are listed with their reasons in plain words. Not built: the queue table, the triggers other than doubt, conflict and sensitive, the pacing limits, the chat banner, the notifier line. | `diya_memory.py`, `diya_brief_api.py`, frontend |
 | A6 | **Measurement** (built, section 8) on labelled messages with the real models (`python diya_autonomy_bench.py`): how often a wrong fact is remembered, how often a right one is asked, whether any secret or instruction was kept (must be zero), question volume. Then the switch. | `diya_autonomy_bench.py`, `tests/labelled_autonomy.py`, `tests/labelled_autonomy_bench.py` |
@@ -334,7 +333,33 @@ I work as a baker" with "works as a teacher" already known left "works as a bake
 medicine waiting as private; a question ("what is the capital of France?") read nothing. Harmless statements about a pet and a city were also
 asked about: the 3B judge's suspicion again (section 8.3), which is the price of the zero-tolerance list.
 
-**What is not built.** The one quiet line in the chat reply ("Noted: ... Undo"): reading happens after the reply, so the line would have to arrive
-afterwards; today the Memory page's feed (A7) and the Today page's count (A5, first part) are where the person sees it. Correction by saying so
-("no, I live in Pune") as a recognised kind of message: a waiting fact that may replace an old one has its one-press button (A3), but nothing yet
-recognises a correction as such. The rest of A5 (pacing limits, the chat banner, a line in the desktop notifier).
+**What is not built** (when this section was written): the one quiet line under the chat reply, and correction by saying so; both are section 11. The rest of A5
+(pacing limits, the chat cards, a line in the desktop notifier) is section 12.
+
+## 11. Saying so: corrections, forgetting, and the line under a reply (D4 and D7; units A3 and A4)
+
+**A correction replaces what is known without a question, when two things are both true.** The person's own words are changing something (`diya_intent.is_correction`:
+"no, I live in Pune", "I no longer drink tea", "I moved flats", "I now work as a nurse", "that's wrong", "I quit", "I used to"; a question is never one), AND the
+model, asked which known fact the new one replaces (section 9), named one. Either alone still asks. The new fact then replaces the old in one transaction
+(`Memory.supersede`, by `auto`, with `{"lane": "remember", "reasons": ["correction"]}` in the trail), counts toward the daily limit, and is the person's to undo.
+Everything before it still applies: a private correction ("no, I now take sertraline") is asked about, not replaced, and the breaker and the daily limit turn a
+replacement into a question like any other fact.
+
+**Taking it back is one act too** (`Memory.undo_replace`): the new fact is retired and the old one remembered again, both or neither; refused, with nothing
+changed, if the old fact would now be a repeat or no longer fits (the label a named person's fact carries counts). The person doing it counts for the circuit breaker.
+
+**"Forget that I like tea" and "forget everything about Maya"** are read in code (`diya_intent.forget_target`) and carried out without asking the model:
+a person is matched by name, as a whole word, among the people Diya knows; a fact is matched by the share of the words said that the fact holds (at least 0.6) and
+only when one fact stands 0.2 above the next, so "forget that" never retires the wrong thing, and nothing is retired when it is not clear which is meant. Forgetting
+here is retiring: nothing is deleted, the trail stays, and the fact can be remembered again.
+
+**The line under the reply** says what memory did with the message, a few seconds after the reply (the chat asks every 3 seconds for about two minutes, and says
+nothing if nothing was learned): "Noted: ...", "Updated: ... Was: ...", "Forgot: ...", each with Undo; for a fact left waiting only that something is waiting, with a
+link to the Memory page, and never its words (it may be private); for a secret only that one was not kept. What the person has since undone is no longer said.
+
+**Measured** (the real models, every message read live, three runs of every day; `python diya_autonomy_bench.py --live`): the zero-tolerance list is 0 on dev and both
+held-out rounds, now including a new item, **a known fact wrongly replaced** (a fact that stopped being accepted when nothing in the day was meant to replace it):
+0 on all three. Updates replaced on their own: 3 of 12 (dev), 3 of 3 (round 1), 3 of 6 (round 2); the rest were asked, mostly because the privacy question had
+already asked about them (updates talk about jobs and homes). Plain facts remembered 58%, 58% and 75%, none lost. The honest limits: the list of correction words was
+written looking at these very updates, so they say the rule does what it was written to do and not how it will do on other phrasings; the sample of updates is 21;
+and a correction the person meant but did not word as one is asked, not replaced (the safe direction).

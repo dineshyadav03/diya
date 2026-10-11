@@ -5,7 +5,9 @@ memory page. The rules are diya_memory's, the same ones the command line applies
     GET  /api/memory/{id}             one fact: its flags in words, the messages it came from, its history
     POST /api/memory/ingest           copy newly staged facts in as candidates and check them
     POST /api/memory/add              {"text": ...}  a fact typed by the person; it goes in already accepted
+    GET  /api/memory/learned?message_id=N   what memory did with one message of the person's, and whether it is still being read
     POST /api/memory/{id}/replace     {"old_id": ...}  accept this waiting fact and retire the accepted one it replaces, together
+    POST /api/memory/{id}/undo-replace   take a correction back: retire this fact and remember the one it replaced again, together
     POST /api/memory/{id}/{action}    accept | reject | reopen | retire | restore, or edit with {"text": ...}
     POST /api/memory/merge            {"from_name": ..., "into_name": ...|null}  move a person's facts onto
                                        another name, or back to no one in particular (null); never automatic,
@@ -30,6 +32,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 import diya_autonomy
+import diya_intent
 import diya_memory
 from diya_memory import (
     BudgetExceeded,
@@ -128,6 +131,30 @@ def register(app, config, agent):
         actors = memory.accepting_actors()
         return {"summary": summary(memory), "facts": [public(fact, actors) for fact in memory.facts()]}
 
+    def will_be_read(message_id):
+        """Is this message of the person's still going to be read for facts (automatic memory on, a message worth reading or a request to forget,
+        not read yet)? Then the chat keeps asking; once it has been read, or if it never will be, it stops."""
+        if not config.auto_memory:
+            return False
+        found = [m for m in agent.store.get_messages_between(message_id, message_id) if m["role"] == "user"]
+        if not found or agent.store.captured_message_ids([message_id]):
+            return False
+        return diya_intent.is_worth_capturing(found[0]["content"]) or diya_intent.forget_target(found[0]["content"]) is not None
+
+    @app.get("/api/memory/learned")
+    def learned(message_id: int):
+        _check_id(message_id)
+        items = []
+        for item in Memory(agent.store).learned_from(message_id):
+            shown = {"kind": item["kind"], "id": item["id"]}
+            for key in ("text", "old_text"):
+                if key in item:
+                    shown[key] = printable(item[key])
+            if "old_id" in item:
+                shown["old_id"] = item["old_id"]
+            items.append(shown)
+        return {"reading": will_be_read(message_id), "items": items}
+
     @app.get("/api/memory/{fact_id}")
     def show(fact_id: int):
         _check_id(fact_id)
@@ -205,6 +232,17 @@ def register(app, config, agent):
             raise _refusal(exc)
         memory.run_checks("api")
         return {"fact": public(memory.get(fact_id)), "replaced": public(memory.get(body.old_id)), "summary": summary(memory)}
+
+    @app.post("/api/memory/{fact_id}/undo-replace")
+    def undo_replace(fact_id: int):
+        _check_id(fact_id)
+        memory = Memory(agent.store)
+        try:
+            old_id = memory.undo_replace(fact_id, "api")
+        except FactError as exc:
+            raise _refusal(exc)
+        memory.run_checks("api")
+        return {"fact": public(memory.get(fact_id)), "restored": public(memory.get(old_id)), "summary": summary(memory)}
 
     @app.post("/api/memory/{fact_id}/{action}")
     def decide(fact_id: int, action: str, body: TextBody | None = None):

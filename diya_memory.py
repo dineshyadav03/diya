@@ -35,6 +35,7 @@ STATUSES = ("candidate", "accepted", "rejected", "retired")
 SOURCES = ("dreaming", "legacy_profile", "manual")
 ACTORS = ("cli", "api", "import", "system", "auto")  # "auto": decided by code under the memory policy (diya_autonomy.py), not by a person
 ASK_PREFIX = "ask:"  # the flag the memory policy leaves on a candidate it is going to ask about: ask:<kind>:<reason> (docs/AUTO_MEMORY_DESIGN.md)
+FLAG_SOURCE_PREFIX = "source_message:"  # the flag the checks leave naming the person's message a fact best matches (diya_checks.FLAG_SOURCE_MESSAGE)
 SECRET_PLACEHOLDER = "(not kept: it looked like a secret)"  # what stands in for the text of a fact that was a secret
 
 # action -> (the status a fact must be in, the status it ends up in)
@@ -593,12 +594,13 @@ class Memory:
             conn.execute("UPDATE facts SET status = ? WHERE id = ?", (becomes, fact_id))
             self._event(conn, fact_id, ACTION_EVENT[action], actor, now, json.dumps(detail, sort_keys=True) if detail is not None else None)
 
-    def supersede(self, new_id, old_id, actor):
+    def supersede(self, new_id, old_id, actor, why=None):
         """The person's answer to "this replaces that": the candidate `new_id` is accepted and the accepted fact `old_id` retired, both or neither
         (one transaction). The old fact's event says which fact replaced it and the new one's says which it replaced, so the trail and the page can
         show it, and the retiring is the usual one, so the old fact can be remembered again. The new fact's `ask:` flag is cleared, as accepting it
         would. Raises FactError, and writes nothing, if the facts are the same one, `new_id` is not a candidate, `old_id` is not accepted, an accepted
-        fact already says what the new one does, or the profile has no room (the room the old one frees counts)."""
+        fact already says what the new one does, or the profile has no room (the room the old one frees counts). `why` (a dict) is added to the new
+        fact's event: the memory policy says it was a correction said in the person's own words."""
         _check_actor(actor)
         if new_id == old_id:
             raise IllegalTransition("a fact cannot replace itself")
@@ -626,23 +628,59 @@ class Memory:
                 conn.execute("UPDATE facts SET flags = ? WHERE id = ?", (json.dumps(kept), new_id))
                 self._event(conn, new_id, "flagged", actor, now, json.dumps({"from": flags, "to": kept}))
             conn.execute("UPDATE facts SET status = 'accepted' WHERE id = ?", (new_id,))
-            self._event(conn, new_id, "accepted", actor, now, json.dumps({"replaces": old_id}, sort_keys=True))
+            self._event(conn, new_id, "accepted", actor, now, json.dumps({**(why or {}), "replaces": old_id}, sort_keys=True))
+
+    def replaced(self, new_id):
+        """The id of the fact that `new_id` replaced (by `supersede`) and that is still retired for it, or None. Read from the trail: the old fact's
+        retiring says which fact replaced it."""
+        with self._read() as conn:
+            row = conn.execute(
+                "SELECT e.fact_id FROM fact_events e JOIN facts f ON f.id = e.fact_id WHERE e.event = 'retired' AND f.status = 'retired'"
+                " AND json_extract(e.detail, '$.replaced_by') = ? ORDER BY e.id DESC LIMIT 1", (new_id,),
+            ).fetchone()
+        return None if row is None else row[0]
+
+    def undo_replace(self, new_id, actor):
+        """Take a replacement back as one act: the fact `new_id` (accepted) is retired and the fact it replaced is remembered again, both or neither.
+        Raises FactError, and writes nothing, if `new_id` replaced nothing that is still retired, is not accepted, or the old fact can no longer be
+        accepted (an accepted fact says the same, or there is no room). Returns the id of the fact that is remembered again."""
+        _check_actor(actor)
+        old_id = self.replaced(new_id)
+        if old_id is None:
+            raise IllegalTransition(f"fact {new_id} did not replace anything that can be brought back")
+        with self._write() as conn:
+            statuses = {fid: conn.execute("SELECT status, text, p.name FROM facts f LEFT JOIN people p ON p.id = f.person_id WHERE f.id = ?", (fid,)).fetchone()
+                        for fid in (new_id, old_id)}
+            if statuses[new_id] is None or statuses[new_id][0] != "accepted":
+                raise IllegalTransition(f"fact {new_id} is not accepted, so there is nothing to take back")
+            if statuses[old_id][0] != "retired":
+                raise IllegalTransition(f"fact {old_id} is {statuses[old_id][0]}; only a retired fact can be remembered again")
+            now = _now()
+            conn.execute("UPDATE facts SET status = 'retired' WHERE id = ?", (new_id,))
+            self._event(conn, new_id, "retired", actor, now, json.dumps({"undid": True, "brought_back": old_id}, sort_keys=True))
+            _, text, person = statuses[old_id]
+            self._check_room(conn, old_id, text, person, enforce_fact_length=False)
+            conn.execute("UPDATE facts SET status = 'accepted' WHERE id = ?", (old_id,))
+            self._event(conn, old_id, "restored", actor, now, json.dumps({"undid": new_id}, sort_keys=True))
+        return old_id
 
     def discard_secret(self, fact_id, kind, actor):
         """Reject a candidate that is, or names, a secret, and do not keep what it said: its text and the line it came from are replaced,
-        and the event records only that a secret of this `kind` was not kept (never the secret). Only a candidate can be discarded."""
+        and the event records only that a secret of this `kind` was not kept (never the secret). Only a candidate can be discarded. The number of the
+        person's own message it came from stays (a number says nothing of what was in it), so the line under the reply can say a secret was not kept."""
         _check_actor(actor)
         if not isinstance(kind, str) or not re.fullmatch(r"[a-z]{2,20}", kind):
             raise InvalidFact("a secret's kind is a short lower-case word")
         with self._write() as conn:
-            row = conn.execute("SELECT status FROM facts WHERE id = ?", (fact_id,)).fetchone()
+            row = conn.execute("SELECT status, flags FROM facts WHERE id = ?", (fact_id,)).fetchone()
             if row is None:
                 raise UnknownFact(f"there is no fact {fact_id}")
             if row[0] != "candidate":
                 raise IllegalTransition(f"fact {fact_id} is {row[0]}; only a candidate can be discarded as a secret")
+            source = [flag for flag in json.loads(row[1]) if flag.startswith(FLAG_SOURCE_PREFIX) and flag[len(FLAG_SOURCE_PREFIX):].isdigit()]
             conn.execute(
-                "UPDATE facts SET status = 'rejected', text = ?, text_key = ?, raw = NULL, flags = '[]' WHERE id = ?",
-                (SECRET_PLACEHOLDER, text_key(SECRET_PLACEHOLDER), fact_id),
+                "UPDATE facts SET status = 'rejected', text = ?, text_key = ?, raw = NULL, flags = ? WHERE id = ?",
+                (SECRET_PLACEHOLDER, text_key(SECRET_PLACEHOLDER), json.dumps(source), fact_id),
             )
             self._event(conn, fact_id, "rejected", actor, _now(), json.dumps({"lane": "never", "reasons": [f"secret:{kind}"], "kept": False}, sort_keys=True))
 
@@ -655,6 +693,36 @@ class Memory:
         """How many candidates the memory policy is waiting to ask the person about: the ones that carry its `ask:` flag. A number, never their
         text, for the places that only say "there are questions" (the Today page)."""
         return sum(1 for fact in self.facts("candidate") if any(flag.startswith(ASK_PREFIX) for flag in fact["flags"]))
+
+    def learned_from(self, message_id):
+        """What memory did with one message of the person's, for the quiet line under the reply (docs/AUTO_MEMORY_DESIGN.md, D7): a list, oldest first, of
+        {"kind": ..., "id": the fact's number, ...} with kind "remembered" (accepted on its own; "text"), "replaced" (a correction: "text", "old_id",
+        "old_text"), "asked" (left waiting for the person: no text, so what may be private is never put in a line), "not_kept" (a secret, discarded) or
+        "forgot" (retired because the person asked: "text"). Only what is still true is listed: a fact the person has since undone is not."""
+        items = []
+        with self._read() as conn:
+            rows = conn.execute(
+                _FACT_SELECT + " WHERE EXISTS (SELECT 1 FROM json_each(f.flags) WHERE value = ?) ORDER BY f.id", (f"source_message:{message_id}",)
+            ).fetchall()
+            forgot = conn.execute(
+                "SELECT e.fact_id FROM fact_events e JOIN facts f ON f.id = e.fact_id WHERE e.event = 'retired' AND e.actor = 'auto' AND f.status = 'retired'"
+                " AND json_extract(e.detail, '$.lane') = 'forget' AND json_extract(e.detail, '$.message') = ? ORDER BY e.id", (message_id,),
+            ).fetchall()
+        actors = self.accepting_actors()
+        for fact in map(_fact, rows):
+            if fact["status"] == "accepted" and actors.get(fact["id"]) == "auto":
+                old_id = self.replaced(fact["id"])
+                if old_id is None:
+                    items.append({"kind": "remembered", "id": fact["id"], "text": fact["text"]})
+                else:
+                    items.append({"kind": "replaced", "id": fact["id"], "text": fact["text"], "old_id": old_id, "old_text": self.get(old_id)["text"]})
+            elif fact["status"] == "candidate" and any(flag.startswith(ASK_PREFIX) for flag in fact["flags"]):
+                items.append({"kind": "asked", "id": fact["id"]})
+            elif fact["status"] == "rejected" and fact["text"] == SECRET_PLACEHOLDER:
+                items.append({"kind": "not_kept", "id": fact["id"]})
+        for (fact_id,) in forgot:
+            items.append({"kind": "forgot", "id": fact_id, "text": self.get(fact_id)["text"]})
+        return items
 
     def accepting_actors(self):
         """Who accepted each fact that is accepted now: {fact id: actor} of its latest accepting event (accepted, added, imported or restored).

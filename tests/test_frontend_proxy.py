@@ -431,6 +431,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/history/${threadId}", "/api/chat", "/api/threads", "/api/transcribe",
         "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
         "/api/memory/${fact.id}/replace",  # the Memory page's "replace the old one" button
+        "/api/memory/learned?message_id=${messageId}", "/api/memory/${item.id}/undo-replace", "/api/memory/${item.id}/${item.kind === 'forgot' ? 'restore' : 'retire'}",  # the chat's line under a reply
         "/api/reminders", "/api/reminders", "/api/reminders", "/api/reminders/${reminder.id}/done",  # the chat's due count, the page's list and add, and done
         "/api/tasks", "/api/tasks", "/api/tasks/${task.id}/done", "/api/tasks/${task.id}/reopen",  # the Tasks page: its list, add, done and put back
         "/api/reminders/${reminder.id}/snooze",  # the Reminders page's push-back buttons
@@ -484,7 +485,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
     assert set(routes) == {
         "/api/threads", "/api/history/{thread_id}", "/api/chat", "/api/transcribe",
         "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/merge", "/api/memory/{fact_id}/{action}",
-        "/api/memory/{fact_id}/replace",
+        "/api/memory/{fact_id}/replace", "/api/memory/{fact_id}/undo-replace", "/api/memory/learned",
         "/api/reminders", "/api/reminders/{reminder_id}/done", "/api/reminders/{reminder_id}/snooze",
         "/api/today", "/api/scheduled", "/api/scheduled/{series_id}/pause", "/api/scheduled/{series_id}/resume",
         "/api/scheduled/{series_id}/skip", "/api/scheduled/{series_id}/stop",
@@ -499,7 +500,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         assert exported == methods, path
         assert "lib/proxy.mjs" in source and any(
             name in source
-            for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardFactReplace(", "forwardReminderDone(", "forwardConnection(",
+            for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardFactReplace(", "forwardFactUndoReplace(", "forwardLearned(", "forwardReminderDone(", "forwardConnection(",
                          "forwardAction(", "forwardActionDecision(", "forwardTaskAction(", "forwardScheduledAction(", "forwardReminderSnooze(")
         ), path
         assert "force-dynamic" in source, path  # never cached
@@ -1075,3 +1076,73 @@ def test_a_whole_number_action_id_is_forwarded_to_its_own_decision_path(route, d
 def test_a_whole_number_action_id_is_forwarded_to_its_own_path_for_the_read():
     out = run_harness({"mode": "route", "env": {}, "calls": [call("action", "GET", params={"action_id": "7"})]})
     assert [(c["method"], c["url"]) for c in out["captured"]] == [("GET", "/api/actions/7")]
+
+
+# --- what memory did with a message, and taking a correction back (docs/AUTO_MEMORY_DESIGN.md, D4 and D7) ---------------------------
+
+@needs_node
+@pytest.mark.parametrize("message_id", ["1", "12", "9" * 18])
+def test_the_learned_route_forwards_a_whole_number_message_id_with_the_token_and_nothing_of_the_browsers(message_id):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [
+        call("memoryLearned", "GET", {"authorization": "Bearer from-the-browser", "cookie": "a=b"}, None, None, f"https://localhost:3000/api/memory/learned?message_id={message_id}")]})
+    (captured,) = out["captured"]
+    assert (captured["method"], captured["url"]) == ("GET", f"/api/memory/learned?message_id={message_id}")
+    assert captured["headers"]["authorization"] == f"Bearer {TOKEN}" and "cookie" not in captured["headers"] and "from-the-browser" not in json.dumps(captured)
+
+
+@needs_node
+@pytest.mark.parametrize("query", ["", "?message_id=", "?message_id=abc", "?message_id=1.5", "?message_id=-1", "?message_id=1e3", "?message_id=1%2F2", "?message_id=" + "9" * 19, "?other=1"])
+def test_a_message_id_that_is_not_a_whole_number_is_refused_before_anything_is_sent(query):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call("memoryLearned", "GET", None, None, None, "https://localhost:3000/api/memory/learned" + query)]})
+    assert [r["status"] for r in out["results"]] == [404] and out["captured"] == []
+
+
+@needs_node
+def test_nothing_else_of_the_query_string_is_passed_on_to_the_api():
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [
+        call("memoryLearned", "GET", None, None, None, "https://localhost:3000/api/memory/learned?message_id=7&evil=../../x")]})
+    assert [c["url"] for c in out["captured"]] == ["/api/memory/learned?message_id=7"]
+
+
+@needs_node
+def test_the_learned_route_answers_only_a_get():
+    out = run_harness({"mode": "route", "env": {}, "calls": [call("memoryLearned", "POST", None, "{}", None, "https://localhost:3000/api/memory/learned?message_id=1")]})
+    assert out["results"] == [{"noHandler": True}] and out["captured"] == []
+
+
+@needs_node
+@pytest.mark.parametrize("fact_id", ["1", "12", "9" * 18])
+def test_the_undo_route_forwards_to_its_own_path_with_the_token(fact_id):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call("memoryUndoReplace", "POST", {"cookie": "a=b"}, None, {"fact_id": fact_id})]})
+    (captured,) = out["captured"]
+    assert (captured["method"], captured["url"]) == ("POST", f"/api/memory/{fact_id}/undo-replace")
+    assert captured["headers"]["authorization"] == f"Bearer {TOKEN}" and "cookie" not in captured["headers"]
+
+
+@needs_node
+@pytest.mark.parametrize("fact_id", ["abc", "1.5", "-1", "1e3", "", " 1", "1%2F2", "../1", "9" * 19, "0x10"])
+def test_the_undo_route_refuses_what_is_not_a_whole_number_fact_before_anything_is_sent(fact_id):
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call("memoryUndoReplace", "POST", params={"fact_id": fact_id})]})
+    assert [r["status"] for r in out["results"]] == [404] and out["captured"] == []
+
+
+@needs_node
+def test_the_undo_route_answers_only_a_post():
+    out = run_harness({"mode": "route", "env": {}, "calls": [call("memoryUndoReplace", "GET", params={"fact_id": "1"})]})
+    assert out["results"] == [{"noHandler": True}] and out["captured"] == []
+
+
+@needs_node
+def test_the_two_routes_work_end_to_end_through_the_ui_server_and_the_api_refuses_them_without_the_token(api):
+    from diya_memory import Memory
+
+    memory = Memory(api.agent.store)
+    old = memory.add_manual("works as a teacher", "api")
+    new = memory.add_candidate("works as a nurse", batch_first=1, batch_last=1, position=0, model="m", extracted_at="2026-01-01T00:00:00+00:00", raw="- x")
+    memory.supersede(new, old, "auto")
+    learned, undone = through_the_ui(api, [call("memoryLearned", "GET", url="https://localhost:3000/api/memory/learned?message_id=1"),
+                                           call("memoryUndoReplace", "POST", params={"fact_id": str(new)})])
+    assert learned["status"] == 200 and json.loads(unb64(learned["bodyB64"])) == {"reading": False, "items": []}
+    assert undone["status"] == 200 and json.loads(unb64(undone["bodyB64"]))["restored"]["id"] == old
+    refused = through_the_ui(api, [call("memoryLearned", "GET", url="https://localhost:3000/api/memory/learned?message_id=1"), call("memoryUndoReplace", "POST", params={"fact_id": "1"})], token=None)
+    assert [a["status"] for a in refused] == [401, 401]

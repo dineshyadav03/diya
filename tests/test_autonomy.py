@@ -247,7 +247,8 @@ def test_a_secret_is_rejected_and_its_text_is_nowhere_in_the_database_afterwards
     fid = stage(world, f"my password is {secret}", f"my password is {secret}")
     assert auto.apply(memory, now=NOW) == auto.Report(0, 0, 1, 0)
     got = memory.get(fid)
-    assert got["status"] == "rejected" and got["text"] == diya_memory.SECRET_PLACEHOLDER and got["raw"] is None and got["flags"] == []
+    assert got["status"] == "rejected" and got["text"] == diya_memory.SECRET_PLACEHOLDER and got["raw"] is None
+    assert got["flags"] == [f for f in got["flags"] if f.startswith("source_message:")]  # only the number of the person's own message stays
     assert events(memory, fid)[-1] == ("rejected", "auto", {"kept": False, "lane": "never", "reasons": ["secret:password"]})
     conn = sqlite3.connect(store.path)
     try:
@@ -966,7 +967,7 @@ def test_the_hook_puts_a_fact_to_the_chat_model_against_what_is_known_and_the_an
                                  privacy_model="the-judge")
     store = Store(config.db_path)
     old = Memory(store).add_manual("works as a teacher", "api")
-    first = store.add_message(store.create_thread(), "user", "I now work as a nurse")
+    first = store.add_message(store.create_thread(), "user", "I work as a nurse")
     (tmp_path / "p.jsonl").write_text(json.dumps({"timestamp": "t", "first_message_id": first, "last_message_id": first, "model": "m", "facts": ["- works as a nurse"]}) + "\n", encoding="utf-8")
     client = FakeClient([text_reply("OK"), text_reply("OK"), text_reply("1")])
     dreaming.Dreamer(config, client=client).remember_on_its_own()
@@ -981,7 +982,7 @@ def test_a_fact_accepted_a_moment_ago_in_the_same_pass_is_known_to_the_next_one(
     config = dataclasses.replace(diya_config.load_config({}), db_path=str(tmp_path / "d.db"), dream_log_path=str(tmp_path / "l"), dream_state_path=str(tmp_path / "s"),
                                  dream_pending_path=str(tmp_path / "p.jsonl"), profile_path=str(tmp_path / "pr"), auto_memory=True)
     store = Store(config.db_path)
-    first = store.add_message(store.create_thread(), "user", "I changed jobs: first works as a teacher, then works as a nurse")
+    first = store.add_message(store.create_thread(), "user", "first works as a teacher, then works as a nurse")
     (tmp_path / "p.jsonl").write_text(json.dumps({"timestamp": "t", "first_message_id": first, "last_message_id": first, "model": "m",
                                                   "facts": ["- works as a teacher", "- works as a nurse"]}) + "\n", encoding="utf-8")
     client = FakeClient([text_reply("OK")] * 3 + [text_reply("1")])

@@ -440,3 +440,33 @@ def test_the_command_line_has_a_live_flag(tmp_path):
     lines = []
     code = bench.main(["--model", "m", "--days", "1", "--live"], out=lines.append, client=lambda: ByQuestionClient(extraction=["NONE"] * 20))
     assert any("(READ LIVE)" in line for line in lines) and code in (0, 1)
+
+
+# --- a known fact that something replaced when nothing in the day was meant to ---------------------------------------------------
+
+def seeded_facts(home_status, job_status):
+    return [made("lives in Delhi with two cats", status=home_status, source="manual"), made("works as a teacher at a school", status=job_status, source="manual")]
+
+
+def test_a_known_fact_that_the_days_own_update_replaced_is_not_a_wrong_replacement():
+    rescored = bench.rescore({"facts": seeded_facts("retired", "accepted")}, DAYS[0])  # day 0 has an update meant for the home
+    assert rescored["wrongly_replaced"] == [] and bench.summarise([{**rescored, "facts": [], "staged": True, "integrity_problems": [], "secrets_discarded": 0, "extraction_seconds": 0}])["zero"]["known fact wrongly replaced"] == 0
+
+
+def test_a_known_fact_that_no_update_in_the_day_was_meant_for_but_was_replaced_is_counted_and_makes_the_run_not_clean():
+    rescored = bench.rescore({"facts": seeded_facts("retired", "retired")}, DAYS[0])  # nothing in day 0 is about the job
+    assert rescored["wrongly_replaced"] == ["job"]
+    day = {**rescored, "staged": True, "integrity_problems": [], "secrets_discarded": 0, "extraction_seconds": 0}
+    assert bench.summarise([day])["zero"]["known fact wrongly replaced"] == 1
+    lines = []
+    bench.report("m", [day], out=lines.append)
+    assert any("known fact wrongly replaced" in line and line.rstrip().endswith("1") for line in lines) and any("NOT CLEAN" in line for line in lines)
+
+
+def test_a_known_fact_that_is_still_known_is_never_a_wrong_replacement():
+    assert bench.rescore({"facts": seeded_facts("accepted", "accepted")}, DAYS[0])["wrongly_replaced"] == []
+    assert bench.rescore({"facts": []}, DAYS[2])["wrongly_replaced"] == []  # a day with no known facts has none to lose
+
+
+def test_the_zero_list_has_the_new_item_last():
+    assert bench.NEVER_HAPPEN[-1] == "known fact wrongly replaced"

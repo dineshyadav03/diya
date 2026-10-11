@@ -1,12 +1,14 @@
 import contextlib
 import json
 import os
+import re
 import sys
 import traceback
 from datetime import datetime, timezone
 
 from openai import OpenAI
 
+import diya_checks
 import diya_config
 import diya_db
 import diya_intent
@@ -14,6 +16,8 @@ import diya_intent
 
 SOURCE_JUDGE_CHARS = 600  # how much of the person's message the privacy question is asked about
 DREAM_MESSAGE_CHARS = 4000  # how much of one message of the person's Dreaming reads: the rest of a very long one is not looked at
+FORGET_MATCH_MIN = 0.6  # the share of the words of a "forget that ..." that a fact must contain, at least, to be taken as what is meant
+FORGET_MATCH_MARGIN = 0.2  # and how far the best fact must stand above the next, or it is not clear which is meant and nothing is forgotten
 LIVE_POSITION_BASE = 1000  # where the slots of facts read live start: far above any batch's own (a batch is capped well below a thousand facts)
 
 EXTRACTION_PROMPT = (
@@ -222,7 +226,12 @@ class Dreamer:
             if self.store.captured_message_ids([message_id]):
                 return None
             found = [m for m in self.store.get_messages_between(message_id, message_id) if m["role"] == "user"]
-            if not found or not diya_intent.is_worth_capturing(found[0]["content"]):
+            if not found:
+                return None
+            target = diya_intent.forget_target(found[0]["content"])
+            if target is not None:
+                return self._forget(message_id, target)
+            if not diya_intent.is_worth_capturing(found[0]["content"]):
                 return None
             try:
                 answer = (self._ask_for_facts([found[0]["content"]]).choices[0].message.content or "").strip()
@@ -244,11 +253,41 @@ class Dreamer:
             traceback.print_exc()
             return None
 
+    def _forget(self, message_id, target):
+        """The person asked Diya to forget ("forget that I like tea", "forget everything about Maya"): retire the accepted facts that match, which is
+        what forgetting is here (nothing is deleted: the trail stays and a retired fact can be remembered again). A person is matched by name, anywhere in
+        what was said; a fact by the words it shares with what was said, and only when one fact stands clearly above the rest, so that "forget that" never
+        retires the wrong thing. Marks the message read. Returns how many facts were retired (0 when nothing matched)."""
+        import diya_memory
+
+        memory = diya_memory.Memory(self.store)
+        kind, what = target
+        accepted = memory.facts("accepted")
+        if kind == "person":
+            names = {fact["person"] for fact in accepted if fact["person"]}
+            named = {name for name in names if re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", what, re.IGNORECASE)}
+            chosen = [fact for fact in accepted if fact["person"] in named]
+        else:
+            wanted = diya_checks.content_words(what)
+            ranked = sorted(((len(wanted & diya_checks.content_words(fact["text"])) / len(wanted) if wanted else 0.0, fact) for fact in accepted),
+                            key=lambda pair: pair[0], reverse=True)
+            clear = ranked and ranked[0][0] >= FORGET_MATCH_MIN and (len(ranked) == 1 or ranked[0][0] - ranked[1][0] >= FORGET_MATCH_MARGIN)
+            chosen = [ranked[0][1]] if clear else []
+        forgotten = 0
+        for fact in chosen:
+            try:
+                memory.decide(fact["id"], "retire", "auto", {"lane": "forget", "reasons": [f"asked_to_forget:{kind}"], "message": message_id})
+                forgotten += 1
+            except diya_memory.FactError:
+                pass  # it was retired a moment ago by someone else: nothing to do
+        self.store.mark_captured(message_id, 0)
+        return forgotten
+
     def _put_in_lanes(self, memory):
         """Every candidate in its lane (diya_autonomy.apply), asking the models the policy asks. What it did, as diya_autonomy.Report."""
         import diya_autonomy
 
-        return diya_autonomy.apply(memory, private=self._privacy_judge(), replaces=self._replace_judge(memory))
+        return diya_autonomy.apply(memory, private=self._privacy_judge(), replaces=self._replace_judge(memory), corrects=self._correction_judge())
 
     def remember_on_its_own(self):
         """When DIYA_AUTO_MEMORY is on, carry what is staged into the store and put every candidate in its lane (diya_autonomy.apply):
@@ -264,7 +303,8 @@ class Dreamer:
             done = self._put_in_lanes(memory)
             print(
                 f"Memory on its own: {done.remembered} remembered, {done.asked} to ask about, {done.never} not kept, "
-                f"{done.held} held (profile full); {ingested.new} newly taken in from the staged queue."
+                f"{done.held} held (profile full); {ingested.new} newly taken in from the staged queue"
+                + (f"; {done.replaced} replaced as corrections." if done.replaced else ".")
             )
         except Exception as exc:  # noqa: BLE001 -- the log is where a headless run says what went wrong
             print(f"[error] Memory on its own failed ({exc}). Nothing was changed past what is above; will retry next cycle.")
@@ -277,23 +317,29 @@ class Dreamer:
         judge = self.config.privacy_model or self.config.model
         asked = {}
 
-        def sources(fact):
-            texts = []
-            for flag in fact["flags"]:
-                name, _, value = flag.partition(":")
-                if name == "source_message" and value.isdigit():
-                    texts += [m["content"][:SOURCE_JUDGE_CHARS] for m in self.store.get_messages_between(int(value), int(value)) if m["role"] == "user"]
-            return texts
-
         def private(fact):
             verdicts = [diya_autonomy.privacy_of(self.client, judge, [fact["text"]])]
-            for text in sources(fact):
+            for text in self._source_texts(fact):
                 if text not in asked:
                     asked[text] = diya_autonomy.privacy_of(self.client, judge, [text])
                 verdicts.append(asked[text])
             return min(verdicts, key=diya_autonomy._CAUTIOUS_FIRST.index)
 
         return private
+
+    def _source_texts(self, fact):
+        """The person's own messages `fact` was taken from (what the checks recorded as its source), each cut to SOURCE_JUDGE_CHARS."""
+        texts = []
+        for flag in fact["flags"]:
+            name, _, value = flag.partition(":")
+            if name == "source_message" and value.isdigit():
+                texts += [m["content"][:SOURCE_JUDGE_CHARS] for m in self.store.get_messages_between(int(value), int(value)) if m["role"] == "user"]
+        return texts
+
+    def _correction_judge(self):
+        """`corrects(fact)` for the memory policy: did the person's own message that the fact came from read as a correction (diya_intent.is_correction)?
+        Words only, no model; the policy needs this AND the model's answer to which known fact the new one replaces."""
+        return lambda fact: any(diya_intent.is_correction(text) for text in self._source_texts(fact))
 
     def _replace_judge(self, memory):
         """`replaces(fact)` for the memory policy: the chat model's answer to "does this replace one of the facts already known?". The known facts

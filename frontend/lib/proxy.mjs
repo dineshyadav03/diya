@@ -141,6 +141,21 @@ export async function forwardFactAction(request, context, options) {
   return forward(request, `/api/memory/${factId}/${action}`, options)
 }
 
+// What memory did with one message (docs/AUTO_MEMORY_DESIGN.md, D7): the chat asks a little after a reply. The message id must be a whole number; it is the one
+// piece of the query string that is passed on, and only after it has been checked.
+export async function forwardLearned(request, options) {
+  const messageId = new URL(request.url).searchParams.get('message_id') || ''
+  if (!WHOLE_NUMBER.test(messageId)) return errorResponse(404, 'No such message')
+  return forward(request, `/api/memory/learned?message_id=${messageId}`, options)
+}
+
+// Taking a correction back as one act (unit A3): retire the new fact and remember the old one again. The id must be a whole number.
+export async function forwardFactUndoReplace(request, context, options) {
+  const { fact_id: factId } = await context.params
+  if (!WHOLE_NUMBER.test(String(factId))) return errorResponse(404, 'No such fact')
+  return forward(request, `/api/memory/${factId}/undo-replace`, options)
+}
+
 // "This replaces that" (docs/AUTO_MEMORY_DESIGN.md, unit A3) has its own route, like the other things done to a fact that are not one of the plain
 // actions: it takes a body naming the other fact. The id must be a whole number; the body is the API's to check.
 export async function forwardFactReplace(request, context, options) {

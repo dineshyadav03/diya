@@ -19,6 +19,7 @@ import diya_brief_api
 import diya_config
 import diya_connections_api
 import diya_connector_tools
+import diya_intent
 import diya_memory_api
 import diya_reminders_api
 import diya_schedule_api
@@ -376,9 +377,12 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
             traceback.print_exc()
             return JSONResponse({"detail": ANSWERING_FAILED, "thread_id": thread_id}, status_code=500)
         agent.store.add_message(thread_id, "assistant", answer)
+        reading = False
         if config.auto_memory:
             background.add_task(read_for_facts, message_id)  # runs after the response is on its way, never before it
-        return {"thread_id": thread_id, "answer": answer, "tools_called": tools_called}
+            reading = diya_intent.is_worth_capturing(req.message) or diya_intent.forget_target(req.message) is not None
+        # `message_id` and `reading` let the page ask, a little later, what memory did with the message (GET /api/memory/learned)
+        return {"thread_id": thread_id, "answer": answer, "tools_called": tools_called, "message_id": message_id, "reading": reading}
 
     # Reviewing what Dreaming staged (docs/STAGE2_DESIGN.md, unit 6): the same rules as diya_review.py.
     diya_memory_api.register(app, config, agent)

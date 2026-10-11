@@ -31,6 +31,8 @@ const ROUTES = {
   memoryFact: join(root, 'frontend', 'app', 'api', 'memory', '[fact_id]', 'route.js'),
   memoryAction: join(root, 'frontend', 'app', 'api', 'memory', '[fact_id]', '[action]', 'route.js'),
   memoryReplace: join(root, 'frontend', 'app', 'api', 'memory', '[fact_id]', 'replace', 'route.js'),
+  memoryUndoReplace: join(root, 'frontend', 'app', 'api', 'memory', '[fact_id]', 'undo-replace', 'route.js'),
+  memoryLearned: join(root, 'frontend', 'app', 'api', 'memory', 'learned', 'route.js'),
   reminders: join(root, 'frontend', 'app', 'api', 'reminders', 'route.js'),
   reminderDone: join(root, 'frontend', 'app', 'api', 'reminders', '[reminder_id]', 'done', 'route.js'),
   reminderSnooze: join(root, 'frontend', 'app', 'api', 'reminders', '[reminder_id]', 'snooze', 'route.js'),

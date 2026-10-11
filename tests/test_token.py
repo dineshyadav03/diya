@@ -73,6 +73,8 @@ def client_for(tmp_path, require=None):
     memory.add_manual("seeded accepted fact", "cli")  # fact 2, accepted, and fact 3, waiting: the replace route has its own pair, as accept has fact 1
     memory.add_candidate("seeded replacing candidate", batch_first=1, batch_last=1, position=1, model="m",
                          extracted_at="2026-01-01T00:00:00+00:00", raw="- seeded replacing candidate")
+    memory.add_candidate("seeded correction", batch_first=1, batch_last=1, position=2, model="m", extracted_at="2026-01-01T00:00:00+00:00", raw="- seeded correction")
+    memory.supersede(4, memory.add_manual("seeded corrected fact", "cli"), "auto")  # fact 4 replaced fact 5: /api/memory/4/undo-replace takes it back
     agent.store.add_reminder("seeded reminder")  # and one reminder (id 1), for the same reason
     agent.tasks.add("seeded task")  # and two tasks: an open one (id 1) to tick off, a finished one (id 2) to put back
     agent.tasks.complete(agent.tasks.add("seeded finished task")["id"])
@@ -96,7 +98,8 @@ OK = (200, 201)  # adding a fact answers 201
 
 def concrete_path(path):
     """A route's path with a real id and action in place of its parameters."""
-    return (path.replace("/api/memory/{fact_id}/replace", "/api/memory/3/replace")  # fact 1 is accepted by an earlier route; this one has its own pair
+    return (path.replace("/api/memory/{fact_id}/undo-replace", "/api/memory/4/undo-replace")
+           .replace("/api/memory/{fact_id}/replace", "/api/memory/3/replace")  # fact 1 is accepted by an earlier route; this one has its own pair
            .replace("/api/reminders/{reminder_id}/snooze", "/api/reminders/2/snooze")  # reminder 1 is done by an earlier route
            .replace("/api/scheduled/{series_id}/resume", "/api/scheduled/2/resume")  # each change has its own seeded repeating reminder
            .replace("/api/scheduled/{series_id}/skip", "/api/scheduled/3/skip")
@@ -120,6 +123,8 @@ ENDPOINTS = [
     ("POST", "/api/memory/add", {"json": {"text": "a typed fact"}}),
     ("POST", "/api/memory/1/accept", {}),
     ("POST", "/api/memory/3/replace", {"json": {"old_id": 2}}),
+    ("POST", "/api/memory/4/undo-replace", {}),
+    ("GET", "/api/memory/learned", {"params": {"message_id": 1}}),
     ("POST", "/api/memory/merge", {"json": {"from_name": "Maya", "into_name": "Mayah"}}),
     ("GET", "/api/connections", {}),
     ("POST", "/api/connections/demo/connect", {"json": {"token": "a-token"}}),

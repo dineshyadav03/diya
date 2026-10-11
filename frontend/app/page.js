@@ -1,8 +1,10 @@
 'use client'
 
 import { Fragment, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import VoiceBar from '../components/VoiceBar'
 import { describeLoadFailure, describeSendFailure, readFailure } from '../lib/api-failure.mjs'
+import { describeActionFailure } from '../lib/api-failure.mjs'
 
 // Every /api/... call below is same-origin: this app's own route handlers (app/api) forward it to
 // the Python API and attach the access token on the server. The browser never holds the token.
@@ -19,6 +21,29 @@ const TOOL_LABELS = {
   add_task: 'added a task',
   list_tasks: 'checked your tasks',
   list_files: 'listed files',
+}
+
+// What memory did with a message is looked up a few seconds after the reply, because memory reads the message once the reply is made (docs/AUTO_MEMORY_DESIGN.md,
+// D7 and unit A4). The page asks every few seconds, for at most about two minutes, and says nothing if nothing was learned.
+const LEARNED_EVERY_MS = 3000
+const LEARNED_GIVE_UP_AFTER = 40
+
+// The words of one thing memory did, and what undoing it is. The text of something left waiting is never in the line (the API does not send it): it may be private.
+function describeLearned(item) {
+  switch (item.kind) {
+    case 'remembered':
+      return `Noted: ${item.text}.`
+    case 'replaced':
+      return `Updated: ${item.text}. Was: ${item.old_text}.`
+    case 'forgot':
+      return `Forgot: ${item.text}.`
+    case 'asked':
+      return 'I wasn’t sure about something you said, so it is waiting for you on the Memory page.'
+    case 'not_kept':
+      return 'I did not keep something that looked like a secret.'
+    default:
+      return ''
+  }
 }
 
 let cachedVoices = []
@@ -55,6 +80,8 @@ export default function ChatPage() {
   // that has since been started over.
   const loadSeqRef = useRef(0)
   const threadIdRef = useRef(null)
+  // Which chat the page is showing: a look at what memory learned that finishes after the chat was changed must not be added to the new one.
+  const chatEpochRef = useRef(0)
   const logRef = useRef(null)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -74,6 +101,7 @@ export default function ChatPage() {
   function loadThread(threadId) {
     let status // stays undefined when the request never got an answer at all
     const seq = ++loadSeqRef.current
+    chatEpochRef.current += 1
     const stale = () => seq !== loadSeqRef.current
     setLoadProblem('')
     setLoadingChat(true)
@@ -115,6 +143,54 @@ export default function ChatPage() {
   }
   function setFailed(id, failed) {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, failed } : m)))
+  }
+
+  // Ask, a few seconds at a time, what memory made of one message, and put one quiet line under the reply when it made something. A failed look is
+  // dropped without a word: this is a courtesy, and the Memory page has everything.
+  async function watchLearned(messageId) {
+    const epoch = chatEpochRef.current
+    for (let attempt = 0; attempt < LEARNED_GIVE_UP_AFTER; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, LEARNED_EVERY_MS))
+      if (epoch !== chatEpochRef.current) return
+      let body
+      try {
+        const response = await fetch(`/api/memory/learned?message_id=${messageId}`)
+        if (!response.ok) return
+        body = await response.json()
+      } catch {
+        return
+      }
+      if (!body || !Array.isArray(body.items)) return
+      if (body.reading) continue
+      if (body.items.length && epoch === chatEpochRef.current) {
+        setMessages((prev) => [...prev, { id: nextIdRef.current++, role: 'learned', items: body.items.map((item) => ({ ...item })) }])
+      }
+      return
+    }
+  }
+
+  // Take one of those things back: a correction as one act, anything else the ordinary way (retire what was remembered, restore what was forgotten).
+  async function undoLearned(messageKey, index) {
+    const message = messages.find((m) => m.id === messageKey)
+    const item = message?.items[index]
+    if (!item || item.undone) return
+    const mark = (changes) =>
+      setMessages((prev) => prev.map((m) => (m.id === messageKey ? { ...m, items: m.items.map((it, i) => (i === index ? { ...it, ...changes } : it)) } : m)))
+    mark({ busy: true, problem: '' })
+    let response
+    try {
+      if (item.kind === 'replaced') response = await fetch(`/api/memory/${item.id}/undo-replace`, { method: 'POST' })
+      else response = await fetch(`/api/memory/${item.id}/${item.kind === 'forgot' ? 'restore' : 'retire'}`, { method: 'POST' })
+    } catch {
+      mark({ busy: false, problem: describeActionFailure() })
+      return
+    }
+    if (!response.ok) {
+      const detail = await response.json().catch(() => null)
+      mark({ busy: false, problem: describeActionFailure(response.status, detail?.detail) })
+      return
+    }
+    mark({ busy: false, undone: true })
   }
 
   // `force` is for an explicit click ("Test voice"), which should always speak.
@@ -203,6 +279,7 @@ export default function ChatPage() {
       }
       addMsg('assistant', data.answer)
       speak(data.answer)
+      if (data.reading && Number.isInteger(data.message_id)) watchLearned(data.message_id)
     } finally {
       setThinking(false)
     }
@@ -226,6 +303,7 @@ export default function ChatPage() {
     localStorage.removeItem('diya_thread_id')
     window.history.replaceState(null, '', '/')
     loadSeqRef.current += 1 // whatever load is still in flight is for the chat being left
+    chatEpochRef.current += 1
     setLoadProblem('') // starting over is the way out of a chat that wouldn't open
     setLoadingChat(false)
     setReady(true)
@@ -280,6 +358,32 @@ export default function ChatPage() {
                   <span key={name} className="tool-recap-item">
                     {TOOL_LABELS[name]}
                   </span>
+                ))}
+              </div>
+            )
+          }
+          if (m.role === 'learned') {
+            return (
+              <div key={m.id ?? 'h' + i} className="msg system learned-note" aria-label="What Diya learned from your message">
+                {m.items.map((item, index) => (
+                  <p key={`${item.kind}-${item.id}`} className="learned-line">
+                    <span>{item.undone ? 'Undone.' : describeLearned(item)}</span>
+                    {!item.undone && (item.kind === 'remembered' || item.kind === 'replaced' || item.kind === 'forgot') && (
+                      <button type="button" className="learned-undo" disabled={item.busy} onClick={() => undoLearned(m.id, index)}>
+                        Undo
+                      </button>
+                    )}
+                    {!item.undone && item.kind === 'asked' && (
+                      <Link href="/memory" className="learned-undo">
+                        Open Memory
+                      </Link>
+                    )}
+                    {item.problem && (
+                      <span className="learned-problem" role="alert">
+                        {item.problem}
+                      </span>
+                    )}
+                  </p>
                 ))}
               </div>
             )

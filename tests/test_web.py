@@ -105,7 +105,7 @@ def test_threads_and_history_come_from_the_agents_own_store(config):
 def test_chat_without_a_thread_creates_one_and_saves_both_messages(config):
     client, agent, model, _ = build(config, text_reply("Four."))
     body = client.post("/api/chat", json={"message": "2+2?"}).json()
-    assert body == {"thread_id": 1, "answer": "Four.", "tools_called": []}
+    assert body == {"thread_id": 1, "answer": "Four.", "tools_called": [], "message_id": 1, "reading": False}  # memory is off: nothing is being read
     assert agent.store.get_history(1) == [
         {"role": "user", "content": "2+2?"},
         {"role": "assistant", "content": "Four."},
@@ -207,7 +207,7 @@ def failing_then(config, *replies):
 def test_trying_again_after_a_failed_turn_uses_the_message_that_is_already_there(config):
     client, agent, model, failed = failing_then(config, text_reply("Hi!"))
     body = client.post("/api/chat", json={"thread_id": failed["thread_id"], "message": "hello?"}).json()
-    assert body == {"thread_id": failed["thread_id"], "answer": "Hi!", "tools_called": []}
+    assert body == {"thread_id": failed["thread_id"], "answer": "Hi!", "tools_called": [], "message_id": 1, "reading": False}
     assert agent.store.get_history(failed["thread_id"]) == [{"role": "user", "content": "hello?"}, {"role": "assistant", "content": "Hi!"}]
     assert [m["content"] for m in model.chat_calls[0]["messages"]] == ["hello?"]  # the model is asked once, not shown the message twice
 

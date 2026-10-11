@@ -270,7 +270,7 @@ def test_every_way_of_saying_nothing_is_nothing(world, answer):
 def test_a_fact_that_may_replace_what_is_known_waits_as_a_question(world):
     _, store, _ = world
     old = Memory(store).add_manual("works as a teacher", "api")
-    message = said(world, "I now work as a nurse at a hospital")
+    message = said(world, "I work as a nurse at a hospital")
     client = ByQuestionClient(extraction=["- works as a nurse at a hospital"], replace=["1"])
     dreamer(world, client).capture_message(message)
     (fact,) = [f for f in Memory(store).facts() if f["source"] == "dreaming"]
