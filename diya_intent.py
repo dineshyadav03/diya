@@ -127,6 +127,26 @@ def is_small_talk(text):
     return _SMALL_TALK.fullmatch(words) is not None
 
 
+# A question about something the person did ("when did I buy the guitar strings?", "did I call the bank?", "have I paid the rent yet?", "what have I finished?"). Whether and when they did it can only be
+# answered from what they ticked off, so such a question is given the done reminders and tasks (diya.Agent._done_note) instead of being left to the model to remember to ask for them: measured, a
+# 4B model asked "when did i buy new guitar" searched the notes and answered about barre chords.
+_DONE_QUESTION = re.compile(
+    r"\bwhen\s+(?:did|was)\s+i\b"
+    r"|^\W*(?:(?:and|so|also|hey|diya)[\s,]+)*(?:did|have|had)\s+i\s+(?:already\s+|ever\s+|actually\s+|finally\s+)?\w+"
+    r"|^\W*(?:and\s+|so\s+)?what\s+(?:did|have)\s+i\s+(?:already\s+|actually\s+)?(?:done|do|finish\w*|complet\w*|bought|buy|got|get|tick\w*|paid|pay)\b"
+    r"|\b(?:reminders?|tasks?|things)\s+(?:have\s+)?i(?:'ve)?\s+(?:already\s+)?(?:done|completed|finished|ticked)\b",
+    re.IGNORECASE,
+)
+MAX_DONE_QUESTION_CHARS = 200
+
+
+def is_done_question(text):
+    """True for a question about something the person did or has not yet done, in the patterns above. Deliberately narrow: a miss only means the model answers as it always did."""
+    if not isinstance(text, str) or len(text) > MAX_DONE_QUESTION_CHARS:
+        return False
+    return _DONE_QUESTION.search(text.replace("’", "'")) is not None
+
+
 # A first-person word anywhere in a message: the person is saying something about themselves, however else the message is shaped.
 _SAYS_SOMETHING_OF_ME = re.compile(r"\b(?:i|i'm|i've|i'll|i'd|my|we|we're|we've|our)\b", re.IGNORECASE)
 

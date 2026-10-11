@@ -252,3 +252,21 @@ Each is its own commit, tested and mutation-checked, with a real-browser check f
 snooze and recurrence wait), D8 (that the brief waits), and D9 guard 1 (a change to an existing tool). The
 recommendations above are being followed as written, on the owner's instruction to continue through the roadmap;
 D5's registration is the one step this work will not take on their behalf.
+
+## Reminders that were done (2026-10-11)
+
+**What went wrong.** The owner ticked "buy new guitar strings" off on the Reminders page, then asked in the chat "when did i buy new guitar". Diya answered that she had no record of it and that they "probably
+haven't bought them yet". Two causes, both real: a tick kept only `done = 1`, with no time, and the model could only read the *pending* list, so a done reminder was invisible to it; and a stale accepted
+fact ("Remember to buy new guitar strings before the weekend") said the opposite.
+
+**What changed.** A tick now keeps when (`reminders.done_at`, migration 15). `list_reminders` takes `state` (`pending`, the default and exactly what it was; `done`; `all`). Because a 4B model did not reliably
+ask for the done list (measured: it asked in 1 of 4 tries for "did I buy the guitar strings?", and for "when did i buy new guitar" it searched the notes and answered about barre chords), the choice is made in
+code like the other checks in `diya_intent.py`: a question about something the person did (`is_done_question`: "when did I ...", "did I ...", "have I ... yet", "what have I finished") is given the reminders and
+tasks they ticked off, as a note at the END of the system message (so the cached start of the message is unchanged), and only when there is something ticked off. A reminder a repeating series closed unticked is
+not told as something they did. An automation's run never gets it.
+
+**Measured, real model, throwaway database with the same fact and the same done reminder:** the guitar questions were answered correctly 14 of 14 times (with the time when it was kept; "marked done but the time
+was not kept" when it was not), and "did I call the bank?" said there was no record 4 of 4. A reminder ticked off before this change has no time and says so: that is what the owner's guitar reminder will answer.
+
+**Not done.** The stale fact stays accepted: a done reminder does not retire a fact that mirrors it (that needs the owner's say, on the Memory page; auto-retiring a fact would break the rule that a wrong fact
+must not change silently). "What do I need to do?" can therefore still mention the old guitar-strings fact.

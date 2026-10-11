@@ -334,6 +334,12 @@ MIGRATIONS = (
         )
         """,
     )),
+    # 15: when a reminder was ticked off (docs/PROACTIVITY_DESIGN.md, "Reminders that were done"). Until now `done` was all that was kept, so "when did I buy the guitar strings?" could not be answered by
+    # anything: the reminder was marked done and then forgotten. Stored like every other moment here (UTC, ...Z). A reminder done before this has none, and says so; so does one that a repeating
+    # series closed when the next came, which was never ticked off.
+    (15, (
+        "ALTER TABLE reminders ADD COLUMN done_at TEXT",
+    )),
 )
 
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored
@@ -501,14 +507,25 @@ class Store:
         conn.close()
         return rows
 
-    def complete_reminder(self, reminder_id):
-        """Mark a reminder done. Returns True if this call did it, False if it was already done or is not there."""
+    def complete_reminder(self, reminder_id, at=None):
+        """Mark a reminder done, and when (`at` is UTC text like 2026-09-25T11:30:00Z; now if not given). Returns True if this call did it, False if it was already done or is not there."""
+        if at is not None and not (isinstance(at, str) and MOMENT.fullmatch(at)):
+            raise ValueError(f"at must look like 2026-09-25T11:30:00Z, got {at!r}")
         conn = self.connect()
-        cur = conn.execute("UPDATE reminders SET done = 1 WHERE id = ? AND done = 0", (reminder_id,))
+        cur = conn.execute("UPDATE reminders SET done = 1, done_at = ? WHERE id = ? AND done = 0",
+                           (at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), reminder_id))
         conn.commit()
         changed = cur.rowcount > 0
         conn.close()
         return changed
+
+    def done_reminders(self, limit=20):
+        """The reminders already done, newest first (the ones with no recorded time last), as dicts: id, content, due_at, due_ts, done_at, series_id. `done_at` is None for one done before the
+        time was kept, and for one a repeating series closed when the next came (it has a `series_id`)."""
+        conn = self.connect()
+        rows = conn.execute("SELECT id, content, due_at, due_ts, done_at, series_id FROM reminders WHERE done = 1 ORDER BY done_at IS NULL, done_at DESC, id DESC LIMIT ?", (int(limit),)).fetchall()
+        conn.close()
+        return [dict(zip(("id", "content", "due_at", "due_ts", "done_at", "series_id"), row)) for row in rows]
 
     def create_thread(self, title=None):
         conn = self.connect()

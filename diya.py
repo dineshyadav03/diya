@@ -295,10 +295,15 @@ TOOLS = [
         "function": {
             "name": "list_reminders",
             "description": (
-                "List the user's current pending reminders. Use whenever the user asks what "
-                "they need to do or what they're supposed to remember."
+                "List the user's reminders. By default the pending ones: use whenever the user asks what "
+                "they need to do or what they're supposed to remember. For the reminders they already finished or "
+                "ticked off, pass state 'done': use it whenever they ask if or when they did, bought or finished something."
             ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {"state": {"type": "string", "enum": ["pending", "done", "all"], "description": "pending (the default), done, or all"}},
+                "required": [],
+            },
         },
     },
     {
@@ -407,6 +412,13 @@ SMALL_TALK_PROMPT = (
     "anything. Do not list what you can do and do not offer to assist."
 )
 SMALL_TALK_TEMPERATURE = 0.9  # a little looser than the model's own 0.7, so a greeting is not the same words every time
+# Added to a question about something the person did (diya_intent.is_done_question) when there are reminders or tasks they ticked off: the only record of what they did.
+DONE_NOTE_PROMPT = (
+    "The user is asking about something they did. Below is everything they have ticked off, most recent first; it is the only record there is of what they did. If one of these is what they mean, "
+    "say plainly that they did it and when, using the time given; if the time was not kept, say it was marked done but when was not kept. Never say they have not done it, or that you have no "
+    "record of it, when it is listed here. A note that says to remember or buy something is old and does not mean it is still to do. If nothing below matches, say you have no record of it."
+)
+MAX_DONE_SHOWN = 15  # how many ticked-off reminders, and how many tasks, a question about what they did is given
 # Added to an automation's run (Agent.briefing, docs/AUTOMATIONS_DESIGN.md): the person set this up earlier and is not there to answer, so no question back, and only what a tool found.
 BRIEFING_PROMPT = (
     "The user set up this task earlier to run by itself on a schedule, and they are not waiting at the keyboard. Do the task now with the tools you have (they only read), then write the "
@@ -767,7 +779,52 @@ class Agent:
         except (sqlite3.Error, diya_schedule.ScheduleError):
             return []
 
-    def list_reminders(self):
+    def list_reminders(self, state="pending"):
+        """The reminders as the model is told them: the pending ones (and the repeating ones), by default; `state` "done" is the ones already ticked off, with when (docs/PROACTIVITY_DESIGN.md,
+        "Reminders that were done"); "all" is both."""
+        if state not in ("pending", "done", "all"):
+            return f"Error: state must be pending, done or all, not {str(state)[:30]!r}."
+        if state == "done":
+            return self._done_reminders_text()
+        if state == "all":
+            return self._pending_reminders_text() + "\n\n" + self._done_reminders_text()
+        return self._pending_reminders_text()
+
+    def _done_note(self, text):
+        """For a question about something the person did: what they have ticked off, as a note for the model (DONE_NOTE_PROMPT and the list), or None if the question is not that kind or nothing has been
+        ticked off. A reminder a repeating series closed unticked is not "done by them" and is left out. A store that cannot be read is no reason to fail the chat."""
+        if not diya_intent.is_done_question(text):
+            return None
+        try:
+            lines = []
+            for row in self.store.done_reminders(MAX_DONE_SHOWN):
+                if row["done_at"]:
+                    lines.append(f"- reminder: {row['content']} (marked done {diya_time.describe_local(diya_time.local_from_iso(row['done_at']))})")
+                elif not row["series_id"]:
+                    lines.append(f"- reminder: {row['content']} (marked done; when was not kept)")
+            for task in self.tasks.tasks("done", limit=MAX_DONE_SHOWN):
+                when = f"done {diya_time.describe_local(diya_time.local_from_iso(task['completed_at']))}" if task["completed_at"] else "done; when was not kept"
+                lines.append(f"- task: {task['content']} ({when})")
+        except (sqlite3.Error, ValueError):
+            return None
+        return DONE_NOTE_PROMPT + "\n" + "\n".join(lines) if lines else None
+
+    def _done_reminders_text(self):
+        rows = self.store.done_reminders()
+        if not rows:
+            return "No reminders have been marked done."
+        lines = ["Reminders already done (the most recent first):"]
+        for row in rows:
+            if row["done_at"]:
+                how = f"marked done {diya_time.describe_local(diya_time.local_from_iso(row['done_at']))}"
+            elif row["series_id"]:
+                how = "closed without being ticked off, because the next one of a repeating reminder came"
+            else:
+                how = "marked done, but the time it was done was not kept"
+            lines.append(f"#{row['id']}: {row['content']} ({how})")
+        return "\n".join(lines)
+
+    def _pending_reminders_text(self):
         self.make_due_repeats()
         rows = self.store.reminders("pending")
         repeating = self.schedule.series("active")
@@ -904,6 +961,13 @@ class Agent:
                 out.insert(0, {"role": "system", "content": hint})
             return out
         if not fact_share:
+            note = getattr(self._turn, "note", None)  # what a question about something they did is given (ask() sets it); None outside a turn
+            if note:
+                first = out[0] if out else None
+                if isinstance(first, dict) and first.get("role") == "system":
+                    out[0] = {"role": "system", "content": first["content"] + "\n\n" + note}  # at the end, so what comes before it is the same as in every other turn
+                else:
+                    out.insert(0, {"role": "system", "content": note})
             return out
         first = out[0] if out else None
         if isinstance(first, dict) and first.get("role") == "system":
@@ -969,11 +1033,13 @@ class Agent:
         self._turn.thread_id = thread_id
         self._turn.message_id = message_id
         self._turn.reads = []
+        self._turn.note = self._done_note(self._turn.user_text) if only_tools is None else None
         self._turn.active = True
         try:
             return self._ask(messages, on_event, only_tools)
         finally:
             self._turn.active = False
+            self._turn.note = None
             self._turn.user_text = None
             self._turn.thread_id = None
             self._turn.message_id = None
