@@ -105,6 +105,17 @@ def parse_quiet(setting):
     return start, end
 
 
+def parse_day_at(setting):
+    """(hour, minute) from a setting like "08:00", or None for "" or "off". Raises ValueError for anything else."""
+    text = (setting or "").strip().lower()
+    if text in ("", "off", "none", "no", "never"):
+        return None
+    found = re.fullmatch(r"(\d{1,2}):(\d{2})", text)
+    if not found or int(found.group(1)) > 23 or int(found.group(2)) > 59:
+        raise ValueError(f"the time of day is like 08:00, or off, not {setting!r}")
+    return int(found.group(1)), int(found.group(2))
+
+
 def is_quiet(now, quiet):
     """Is the local time `now` inside the quiet hours? `quiet` is what parse_quiet gives; the start hour is quiet, the end hour is not."""
     if quiet is None:

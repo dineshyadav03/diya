@@ -100,3 +100,25 @@ merely knows an allowed `Host`, is refused with a 401, docs pages included. `DIY
 the explicit opt-out for anyone who deliberately wants the old unauthenticated API (the token is still
 generated, so turning the requirement back on needs nothing new); with it, use LAN mode only on a
 network you trust, and set `DIYA_REQUIRE_TOKEN=0` for the UI too if you want its startup hint gone.
+
+## Away from home Wi-Fi: a VPN, not an open port (unit P1 of docs/PHONE_CHANNEL_DESIGN.md)
+
+The UI is for this computer, or for devices on its own network. To use Diya from a phone on mobile data, put the phone and this computer on the same private
+network with a **VPN**. Do not forward a port on the router to port 3000 or 8080: a forwarded port makes the passcode the only thing between the internet and
+a program that holds your reminders, notes and (soon) what it remembers about you, and the development server it runs on is not built to face the internet.
+
+What a VPN does and does not do:
+
+- **It is the encryption.** Between the phone and this computer the VPN carries everything, so what the browser sends over it is protected on the way; the
+  passcode (see above) decides who may use Diya once they are on the VPN. The passcode does not make plain HTTP safe, and it is not a reason to skip the VPN.
+- **Any device on the VPN can reach the UI.** Keep that list short: the phone, this computer, nothing else. A VPN that is shared with other people or with a
+  smart TV is a network where the passcode is again the only gate.
+- **The certificate still matters.** The phone must trust the mkcert certificate (the steps above), and the name it opens must be one the certificate was made
+  for and that is in `DIYA_ALLOWED_HOSTS`: for a VPN that is the computer's name or address *on the VPN*, which is not the one on the home network. Make the
+  certificate again with that name (`mkcert localhost 127.0.0.1 ::1 <the VPN name>`), keep exactly one pair in the folder, and restart both servers.
+- **Which VPN is yours to choose.** A WireGuard-based one (Tailscale, or the one built into many routers) is the usual shape: the computer and the phone
+  each join, nothing is opened to the internet, and the traffic between them is encrypted end to end. Tailscale needs an account with an identity provider and its
+  coordination service learns that the devices exist; a router's own WireGuard needs no account but is only as good as the router. Nothing in Diya installs,
+  configures or depends on either. Check the current setup instructions of whichever you pick: they change, and this page does not repeat them.
+
+Nothing here was run: it is a description of what is safe, written before anyone set a VPN up.

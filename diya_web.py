@@ -21,6 +21,7 @@ import diya_connections_api
 import diya_connector_tools
 import diya_intent
 import diya_memory_api
+import diya_push_api
 import diya_questions_api
 import diya_reminders_api
 import diya_schedule_api
@@ -388,6 +389,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     # Reviewing what Dreaming staged (docs/STAGE2_DESIGN.md, unit 6): the same rules as diya_review.py.
     diya_memory_api.register(app, config, agent)
     diya_questions_api.register(app, config, agent)  # the questions Diya raises herself (docs/AUTO_MEMORY_DESIGN.md, D5 and unit A5)
+    diya_push_api.register(app, config, agent)  # telling the phone by Web Push, off unless DIYA_PUSH=1 (docs/PUSH_DESIGN.md, unit P2)
     diya_reminders_api.register(app, config, agent)
     diya_tasks_api.register(app, config, agent)  # the to-do list inside Diya (docs/TASKS_DESIGN.md, unit T2)
     diya_schedule_api.register(app, config, agent)  # repeating reminders and snooze (docs/SCHEDULE_DESIGN.md, unit R4)

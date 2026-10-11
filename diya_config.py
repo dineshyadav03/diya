@@ -94,6 +94,14 @@ class Config:
     dream_batch_chars: int = 12_000
     # When the questions Diya raises herself are not shown or told (DIYA_QUESTIONS_QUIET): two hours like "22-07" (the start hour is quiet, the end hour is not), or "off".
     questions_quiet: str = "22-07"
+    # Telling the phone by Web Push (docs/PUSH_DESIGN.md). OFF until the owner turns it on (DIYA_PUSH=1), and then it needs DIYA_PUSH_SUBJECT: the contact (a mailto: or https:
+    # address) the push service may use if this server misbehaves, which is the one thing about the owner that is sent to it, so it is theirs to choose and is never guessed.
+    push: bool = False  # DIYA_PUSH
+    push_show_text: bool = False  # DIYA_PUSH_SHOW_TEXT: the words of a reminder in the notification (a lock screen can be read); off shows "A reminder is due"
+    push_quiet: str = "22-07"  # DIYA_PUSH_QUIET: like DIYA_QUESTIONS_QUIET; reminders are never held back by it
+    push_day_at: str = ""  # DIYA_PUSH_DAY_AT: a time like "08:00" for the "your day is ready" message, or empty for none
+    push_subject: str = ""  # DIYA_PUSH_SUBJECT
+    push_vapid_path: str = "push_vapid.json"  # DIYA_PUSH_VAPID_PATH: the push key pair; the private half never leaves this file
     ssl_certfile: str | None = None
     ssl_keyfile: str | None = None
     # Folders `list_files` may look inside, beyond the default folder (see default_files_root());
@@ -159,6 +167,10 @@ _STRING_SETTINGS = {
     "whisper_model": "DIYA_WHISPER_MODEL",
     "privacy_model": "DIYA_PRIVACY_MODEL",
     "questions_quiet": "DIYA_QUESTIONS_QUIET",
+    "push_quiet": "DIYA_PUSH_QUIET",
+    "push_day_at": "DIYA_PUSH_DAY_AT",
+    "push_subject": "DIYA_PUSH_SUBJECT",
+    "push_vapid_path": "DIYA_PUSH_VAPID_PATH",
     "host": "DIYA_HOST",
     "token_path": "DIYA_TOKEN_PATH",
     "connector_tokens_dir": "DIYA_CONNECTOR_TOKENS_DIR",
@@ -171,7 +183,7 @@ _STRING_SETTINGS = {
 
 # The settings whose default is a file or folder Diya writes about you: with DIYA_DATA_DIR set they default to the same name in that folder.
 _DATA_FILES = ("db_path", "profile_path", "dream_log_path", "dream_state_path", "dream_pending_path", "notify_log_path",
-               "token_path", "connector_tokens_dir", "connectors_log_path")
+               "token_path", "connector_tokens_dir", "connectors_log_path", "push_vapid_path")
 
 
 # The settings that are a size limit in characters, where 0 means "no limit": the setting, and what 0 means for it.
@@ -235,7 +247,8 @@ def load_config(env=None) -> Config:
     if read_flag("DIYA_LAN"):
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
-                        ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY")):
+                        ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag
@@ -316,6 +329,20 @@ def load_config(env=None) -> Config:
         raise ConfigError("DIYA_SSL_CERT and DIYA_SSL_KEY must be set together")
     if cert is not None:
         values["ssl_certfile"], values["ssl_keyfile"] = cert, key
+
+    for field, name, parse in (("push_quiet", "DIYA_PUSH_QUIET", diya_time.parse_quiet), ("push_day_at", "DIYA_PUSH_DAY_AT", diya_time.parse_day_at)):
+        if field in values:
+            try:
+                parse(values[field])
+            except ValueError as exc:
+                raise ConfigError(f"{name}: {exc}") from None
+    if values.get("push"):
+        subject = values.get("push_subject", "")
+        is_mailto = subject.startswith("mailto:") and "@" in subject[len("mailto:"):]
+        is_https = subject.startswith("https://") and len(subject) > len("https://")
+        if not (is_mailto or is_https):
+            raise ConfigError("DIYA_PUSH=1 needs DIYA_PUSH_SUBJECT: a mailto: or https: address the push service may contact if this server misbehaves "
+                              "(for example mailto:you@example.com). It is the one thing about you that is sent to the push service, so Diya does not choose it")
 
     return Config(**values)
 

@@ -299,3 +299,21 @@ def test_the_reasons_read_as_sentences_to_the_model():
     assert both == "the time you gave includes '4pm', which the user did not say, and leaves out '3pm', which they did"
     assert diya_time.disagreement("", "call mum tomorrow") == "you gave no time, but the user's message mentions 'tomorrow'"
     assert diya_time.disagreement("friday", "call mum on friday at 3pm and at 4pm") is None  # two times said: not held to either
+
+
+# --- the time of the day message (docs/PUSH_DESIGN.md): parse_day_at ---------------------------------------------------------------
+
+@pytest.mark.parametrize("setting, expected", [("08:00", (8, 0)), ("8:05", (8, 5)), (" 23:59 ", (23, 59)), ("0:00", (0, 0)), ("00:00", (0, 0)), ("12:30", (12, 30)), ("09:45", (9, 45))])
+def test_the_time_of_the_day_message_is_hour_then_minute(setting, expected):
+    assert diya_time.parse_day_at(setting) == expected
+
+
+@pytest.mark.parametrize("setting", ["", "off", "OFF", "none", "no", "never", None, "  "])
+def test_no_time_means_no_day_message(setting):
+    assert diya_time.parse_day_at(setting) is None
+
+
+@pytest.mark.parametrize("setting", ["24:00", "08:60", "8am", "08", "08:5", "008:00", "08:000", "08:00:00", "-1:00", "ab:cd", "8.30", "8 :30", "nine", "99:99"])
+def test_a_time_of_the_day_that_is_not_one_is_refused(setting):
+    with pytest.raises(ValueError, match="08:00"):
+        diya_time.parse_day_at(setting)

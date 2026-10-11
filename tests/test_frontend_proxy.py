@@ -438,6 +438,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/reminders/${reminder.id}/snooze",  # the Reminders page's push-back buttons
         "/api/scheduled", "/api/scheduled", "/api/scheduled/${series.id}/${action}",  # the Scheduled page: its list, add, and pause/resume/skip/stop
         "/api/today",  # the Today page
+        "/api/push/status", "/api/push/key", "/api/push/subscribe", "/api/push/unsubscribe", "/api/push/test",  # its "Notify this device" control
         "/api/connections", "/api/connections/${connector.name}/connect", "/api/connections/${connector.name}/connect",
         "/api/connections/${connector.name}/disconnect",  # the token-kind form and the oauth-kind button both post here
         "/api/actions", "/api/actions",  # the chat header's waiting count, and the Actions page's list
@@ -488,6 +489,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/merge", "/api/memory/{fact_id}/{action}",
         "/api/memory/{fact_id}/replace", "/api/memory/{fact_id}/undo-replace", "/api/memory/learned",
         "/api/questions", "/api/questions/seen", "/api/questions/{question_id}/answer",
+        "/api/push/status", "/api/push/key", "/api/push/subscribe", "/api/push/unsubscribe", "/api/push/test",
         "/api/reminders", "/api/reminders/{reminder_id}/done", "/api/reminders/{reminder_id}/snooze",
         "/api/today", "/api/scheduled", "/api/scheduled/{series_id}/pause", "/api/scheduled/{series_id}/resume",
         "/api/scheduled/{series_id}/skip", "/api/scheduled/{series_id}/stop",
@@ -1204,3 +1206,54 @@ def test_the_question_routes_work_end_to_end_through_the_ui_server_and_the_api_r
     assert seen["status"] == 200
     refused = through_the_ui(api, [call("questions", "GET"), json_call("questionsSeen", {"ids": [1]}), json_call_with("questionAnswer", {"answer": "yes"}, {"question_id": "1"})], token=None)
     assert [a["status"] for a in refused] == [401, 401, 401]
+
+
+# --- telling the phone by Web Push (docs/PUSH_DESIGN.md, unit P2) -------------------------------------------------------------------
+
+PUSH_CALLS = [
+    ("pushStatus", "GET", "/api/push/status"),
+    ("pushKey", "GET", "/api/push/key"),
+    ("pushSubscribe", "POST", "/api/push/subscribe"),
+    ("pushUnsubscribe", "POST", "/api/push/unsubscribe"),
+    ("pushTest", "POST", "/api/push/test"),
+]
+
+
+@needs_node
+def test_the_push_routes_forward_to_their_own_path_and_method_with_the_token_and_nothing_else_of_the_browsers():
+    calls = [call(route, method, {"content-type": "application/json", "authorization": "Bearer from-the-browser", "cookie": "a=b"}, "{}" if method == "POST" else None)
+             for route, method, _ in PUSH_CALLS]
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": calls})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [(m, u) for _, m, u in PUSH_CALLS]
+    for captured in out["captured"]:
+        assert captured["headers"]["authorization"] == f"Bearer {TOKEN}" and "cookie" not in captured["headers"]
+    assert "from-the-browser" not in json.dumps(out["captured"])
+
+
+@needs_node
+def test_a_push_route_answers_only_the_method_the_api_route_does():
+    wrong = {"pushStatus": "POST", "pushKey": "POST", "pushSubscribe": "GET", "pushUnsubscribe": "GET", "pushTest": "GET"}
+    out = run_harness({"mode": "route", "env": {}, "calls": [call(route, wrong[route]) for route in wrong]})
+    assert out["results"] == [{"noHandler": True}] * len(wrong) and out["captured"] == []
+
+
+@needs_node
+def test_a_subscription_is_forwarded_whole_to_the_api():
+    body = json.dumps({"endpoint": "https://push.example.net/x", "keys": {"p256dh": "a", "auth": "b"}})
+    out = run_harness({"mode": "route", "env": {}, "calls": [call("pushSubscribe", "POST", {"content-type": "application/json"}, body)]})
+    (captured,) = out["captured"]
+    assert captured["url"] == "/api/push/subscribe" and unb64(captured["bodyB64"]) == body.encode()
+
+
+def test_the_service_worker_shows_what_it_is_sent_and_opens_the_app_and_nothing_else():
+    source = (FRONTEND / "public" / "sw.js").read_text(encoding="utf-8")
+    assert "fetch(" not in source and "XMLHttpRequest" not in source and "importScripts" not in source and "caches." not in source and "indexedDB" not in source
+    assert source.count("openWindow(") == 1 and "openWindow('/')" in source and "data.url" not in source and "data.href" not in source
+    assert "showNotification(title, { body, tag," in source and "addEventListener('push'" in source and "addEventListener('notificationclick'" in source
+
+
+def test_the_notify_control_names_no_token_or_address_and_asks_for_permission_only_when_the_button_is_pressed():
+    source = (FRONTEND / "components" / "NotifyDevice.jsx").read_text(encoding="utf-8")
+    assert source.count("requestPermission(") == 1 and source.index("async function turnOn") < source.index("requestPermission(")
+    for forbidden in ("DIYA_TOKEN", "Bearer", "localhost", "127.0.0.1", "localStorage", "sessionStorage"):
+        assert forbidden not in source

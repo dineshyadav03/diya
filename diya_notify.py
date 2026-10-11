@@ -30,13 +30,15 @@ import sys
 from datetime import datetime, timezone
 
 import diya_config
+import diya_events
 import diya_schedule
 import diya_time
 from diya_db import Store
 from diya_memory import printable
 
-MAX_NOTIFICATIONS = 5  # in one pass: the first four one by one, then one that stands for the rest
-TITLE_CHARS, BODY_CHARS = 60, 200
+# What is worth saying, and in which words, is decided once for every channel, in diya_events.py (docs/PUSH_DESIGN.md, section 2); these names stay here for this module's own users.
+MAX_NOTIFICATIONS = diya_events.MAX_NOTIFICATIONS
+TITLE_CHARS, BODY_CHARS = diya_events.TITLE_CHARS, diya_events.BODY_CHARS
 TIMEOUT_SECONDS = 20
 EXIT_OK, EXIT_SOME_FAILED, EXIT_UNUSABLE = 0, 1, 2
 
@@ -85,11 +87,7 @@ def notify_windows(title, body):
         raise NotifyError(printable(f"powershell exited with {done.returncode}: {done.stderr.strip()}", 300))
 
 
-def _words(reminder, show_text):
-    if not show_text:
-        return "Diya", "A reminder is due"
-    when = reminder["due_ts"] and diya_time.describe_local(diya_time.local_from_iso(reminder["due_ts"]))
-    return printable(f"Diya: {when}" if when else "Diya reminder", TITLE_CHARS), printable(reminder["content"], BODY_CHARS)
+_words = diya_events.reminder_words
 
 
 def run_once(store, notify, now=None, show_text=True, dry_run=False, say=print):
@@ -107,7 +105,7 @@ def run_once(store, notify, now=None, show_text=True, dry_run=False, say=print):
             say(f"could not make the repeating reminders that are due: {printable(exc, 200)}")  # the ones already made are still told
     due = store.due_reminders(now_ts, unnotified_only=True)
     told = failed = 0
-    singles, rest = (due, []) if len(due) <= MAX_NOTIFICATIONS else (due[: MAX_NOTIFICATIONS - 1], due[MAX_NOTIFICATIONS - 1:])
+    singles, rest = diya_events.split_flood(due)
     for reminder in singles:
         title, body = _words(reminder, show_text)
         if dry_run:
@@ -122,7 +120,7 @@ def run_once(store, notify, now=None, show_text=True, dry_run=False, say=print):
         store.mark_notified(reminder["id"])
         told += 1
     if rest:
-        title, body = "Diya", f"{len(rest)} more reminders are due. Open the Reminders page to see them."
+        title, body = diya_events.more_words(len(rest))
         if dry_run:
             say(f"would tell: {title} | {body}")
         else:
@@ -150,12 +148,12 @@ def tell_questions(store, notify, quiet, now=None, dry_run=False, say=print):
     waiting = queue.unnotified(now_local)
     if not waiting:
         return 0, 0
-    body = "Diya has a question for you." if len(waiting) == 1 else f"Diya has {len(waiting)} questions for you."
+    title, body = diya_events.question_words(len(waiting))
     if dry_run:
-        say(f"would tell: Diya | {body}")
+        say(f"would tell: {title} | {body}")
         return 0, 0
     try:
-        notify("Diya", body)
+        notify(title, body)
     except NotifyError as exc:
         say(f"could not tell about {len(waiting)} questions: {exc}")
         return 0, 1
@@ -225,19 +223,34 @@ def main(argv=None, config=None, out=None, notify=None, now=None):
         except Exception as exc:  # the reminders were told; a question that cannot be looked at is tried again next time
             say(f"could not look at the questions: {printable(exc, 200)}")
             questions_failed = 1
+    pushed = push_failed = push_removed = 0
+    if config.push:  # the phone, by Web Push (docs/PUSH_DESIGN.md): after the toast, and neither one hides or undoes the other
+        import diya_push
+
+        try:
+            push_report = diya_push.deliver(Store(config.db_path), config, now, dry_run=args.dry_run, say=say)
+            pushed, push_failed, push_removed = push_report.sent, push_report.failed, push_report.removed
+        except diya_push.PushError as exc:
+            say(f"could not push: {printable(exc, 200)}")
+            push_failed = 1
+        except Exception as exc:  # whatever else went wrong, the reminders were told: say what kind and try again next pass
+            say(f"could not push: {printable(type(exc).__name__)}")
+            push_failed = 1
     summary = f"{report.due} due, {report.told} told, {report.failed} failed"
     if args.dry_run:
         print(f"Dry run: {summary}; nothing was told or recorded.", file=out)
         return EXIT_OK
     if questions_told or questions_failed:
         _log_line(config, f"{questions_told} questions told, {questions_failed} failed")
+    if pushed or push_failed or push_removed:
+        _log_line(config, f"push: {pushed} sent, {push_failed} failed, {push_removed} removed")
     if report.due or report.failed:
         _log_line(config, summary)
         for line in lines:
             if line.startswith("could not"):
                 _log_line(config, printable(line.split(":", 1)[0]) + " (" + printable(line.split(":", 1)[-1].strip(), 120) + ")")
-    print(summary + (f"; {questions_told} questions told" if questions_told else "") + ".", file=out)
-    return EXIT_SOME_FAILED if report.failed or questions_failed else EXIT_OK
+    print(summary + (f"; {questions_told} questions told" if questions_told else "") + (f"; {pushed} pushed" if pushed else "") + ".", file=out)
+    return EXIT_SOME_FAILED if report.failed or questions_failed or push_failed else EXIT_OK
 
 
 if __name__ == "__main__":

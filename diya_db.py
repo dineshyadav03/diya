@@ -263,6 +263,36 @@ MIGRATIONS = (
         """,
         "CREATE INDEX IF NOT EXISTS memory_questions_by_state ON memory_questions (state)",
     )),
+    # 10: who has been told what, on a channel other than the desktop toast (docs/PUSH_DESIGN.md, section 3). One row for each channel and event key, ever (UNIQUE), recorded only
+    # after the channel ACCEPTED the message. `batch` is the first key of the message the row was part of ("3 more reminders" is one message and three rows), so a rate limit
+    # counts messages and not events. Times are UTC text.
+    (10, (
+        """
+        CREATE TABLE IF NOT EXISTS event_deliveries (
+            channel TEXT NOT NULL,
+            key TEXT NOT NULL,
+            batch TEXT NOT NULL,
+            sent_at TEXT NOT NULL,
+            PRIMARY KEY (channel, key)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS event_deliveries_by_time ON event_deliveries (channel, sent_at)",
+    )),
+    # 11: the devices that asked to be told by Web Push (docs/PUSH_DESIGN.md, section 4). `endpoint` is a bearer URL for pushing to that device: it is never returned by any route
+    # and never logged. `failures` counts consecutive refusals of Diya's request; at five the subscription is removed.
+    (11, (
+        """
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            endpoint TEXT NOT NULL UNIQUE,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            last_ok_at TEXT,
+            failures INTEGER NOT NULL DEFAULT 0
+        )
+        """,
+    )),
 )
 
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored

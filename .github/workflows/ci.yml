@@ -20,7 +20,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: pip install ".[dev]"
+        run: pip install ".[dev,push]"
 
       - name: Run tests
         run: python -m pytest

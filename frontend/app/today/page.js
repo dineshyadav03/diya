@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import NotifyDevice from '../../components/NotifyDevice'
 import { describeLoadFailure } from '../../lib/api-failure.mjs'
 
 // The day at a glance (docs/SCHEDULE_DESIGN.md, D8 and unit R5). Nothing here is written by a model: it is the owner's own
@@ -229,6 +230,7 @@ export default function TodayPage() {
               )}
             </>
           )}
+          <NotifyDevice />
         </div>
       </main>
   )

@@ -40,15 +40,15 @@ def test_the_middleware_is_at_the_root_of_the_frontend_and_hands_everything_to_t
 def test_the_matcher_covers_every_page_and_route_but_only_the_framework_s_static_files():
     pattern = matcher()
     for path in ["/", "/tasks", "/memory", "/login", "/session", "/api/chat", "/api/memory/3/accept", "/_next/webpack-hmr", "/__nextjs_original-stack-frame",
-                 "/_next/data/x.json", "/apple-touch-icon.png", "/robots.txt"]:
-        assert pattern.match(path), path  # the guard decides these
+                 "/_next/data/x.json", "/apple-touch-icon.png", "/robots.txt", "/sw.js"]:
+        assert pattern.match(path), path  # the guard decides these (the service worker for notifications is in the public folder but is not one of the leftovers below)
     for path in ["/_next/static/chunks/main.js", "/_next/image", "/favicon.ico", "/icons/icon-192.png", "/diya-flame.svg"]:
         assert not pattern.match(path), path  # nothing private is in these, and the sign-in page needs them
 
 
 def test_what_the_matcher_leaves_out_is_what_the_app_ships_publicly_and_nothing_else():
     public = sorted(p.name for p in (FRONTEND / "public").iterdir())
-    assert public == ["diya-flame.svg", "icons"]  # a new file here is public: this says so when one appears
+    assert public == ["diya-flame.svg", "icons", "sw.js"]  # a new file here is in the folder the app ships; this says so when one appears (sw.js is guarded: see the matcher test above)
     assert {p.suffix for p in (FRONTEND / "public" / "icons").iterdir()} <= {".png", ".svg", ".ico"}
 
 

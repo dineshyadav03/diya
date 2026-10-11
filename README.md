@@ -56,6 +56,10 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   morning. An optional desktop notifier (`diya_notify.py`) can tell you outside the app, but only once you schedule it yourself
   ([docs/reminders.md](docs/reminders.md)); nothing here schedules it for you.
   File listing is limited to `Documents/Diya` under your home folder, or the folders in `DIYA_FILES_ROOTS`.
+- **Telling your phone** (off; `DIYA_PUSH=1` and a contact address you choose in `DIYA_PUSH_SUBJECT`; `pip install ".[push]"`): the same pass of the notifier can send a Web Push when a
+  reminder is due, a question is waiting, an action needs your approval, or (at a time you choose) your day is ready, to a device that tapped **Notify this device** on the Today page. By
+  default the notification says only that something is waiting, never what; reminders are never held back at night, the rest are. [docs/PUSH_DESIGN.md](docs/PUSH_DESIGN.md) says what is
+  and is not verified: nothing has been sent to a real push service.
 - **Repeating reminders**: say "remind me every Monday at 9am to take out the bins". The repeat is read in code from your own words
   (every day, every weekday, every Monday and Thursday, every month on the 15th, every 2 weeks; no time means 09:00, and Diya says
   so), and each time one falls it becomes an ordinary reminder. The **Scheduled** page lists them, and pauses, resumes, skips the

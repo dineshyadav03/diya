@@ -25,6 +25,9 @@ connectors_log.txt
 /logs/
 diya_run.json
 diya_run.stop
+# The Telegram bot token (diya_telegram.py --set-token) and the web push key pair (diya_push.py): secrets, never in git
+telegram.token
+push_vapid.json
 
 # --- Dependencies and build output ---
 node_modules/

@@ -48,7 +48,8 @@ def client_for(tmp_path, require=None):
     """An app whose token file is <tmp_path>/token.hash. `require` is DIYA_REQUIRE_TOKEN's value;
     None leaves it unset, i.e. the real default (the token is required), so most tests here run the
     app exactly as a fresh install gets it."""
-    env = {"DIYA_TOKEN_PATH": str(tmp_path / "token.hash"), "DIYA_AUTO_MEMORY": "1"}  # automatic memory on, so the questions routes have something to do
+    env = {"DIYA_TOKEN_PATH": str(tmp_path / "token.hash"), "DIYA_AUTO_MEMORY": "1",  # automatic memory on, so the questions routes have something to do
+           "DIYA_PUSH": "1", "DIYA_PUSH_SUBJECT": "mailto:owner@example.invalid", "DIYA_PUSH_VAPID_PATH": str(tmp_path / "push_vapid.json")}  # push on, so its routes have something to do
     if require is not None:
         env["DIYA_REQUIRE_TOKEN"] = require
     config = dataclasses.replace(
@@ -99,6 +100,18 @@ def token(tmp_path):
 
 OK = (200, 201)  # adding a fact answers 201
 
+try:
+    import cryptography  # noqa: F401
+
+    HAVE_PUSH_CRYPTO = True
+except ImportError:
+    HAVE_PUSH_CRYPTO = False
+
+
+def ok_for(path):
+    """What a request with the right token may answer. Web Push needs the optional cryptography package: without it every push route but /status answers 409 and says why."""
+    return OK + ((409,) if path.startswith("/api/push/") and path != "/api/push/status" and not HAVE_PUSH_CRYPTO else ())
+
 
 def concrete_path(path):
     """A route's path with a real id and action in place of its parameters."""
@@ -130,6 +143,11 @@ ENDPOINTS = [
     ("POST", "/api/memory/3/replace", {"json": {"old_id": 2}}),
     ("POST", "/api/memory/4/undo-replace", {}),
     ("GET", "/api/memory/learned", {"params": {"message_id": 1}}),
+    ("GET", "/api/push/status", {}),
+    ("GET", "/api/push/key", {}),
+    ("POST", "/api/push/subscribe", {"json": {"endpoint": "https://push.example.net/x", "keys": {"p256dh": "BHWzP57ucQUw-GkWFPkyinO37P4_r74PT8OyPenqMhqCaqhl2l2XdabTBjww1fCxe4Utha3nmjvURrnkNpgp0dI", "auth": "MDEyMzQ1Njc4OWFiY2RlZg"}}}),
+    ("POST", "/api/push/unsubscribe", {"json": {"endpoint": "https://push.example.net/x"}}),
+    ("POST", "/api/push/test", {}),
     ("GET", "/api/questions", {}),
     ("POST", "/api/questions/seen", {"json": {"ids": [1]}}),
     ("POST", "/api/questions/1/answer", {"json": {"answer": "yes"}}),
@@ -255,7 +273,7 @@ def test_more_than_one_authorization_header_is_refused_even_if_one_is_right(tmp_
 def test_the_right_token_succeeds_and_no_token_does_not_on_every_route(tmp_path, token, method, path, kwargs):
     client, _ = client_for(tmp_path)
     assert client.request(method, path, **kwargs).status_code == 401
-    assert client.request(method, path, headers=auth(token), **kwargs).status_code in OK
+    assert client.request(method, path, headers=auth(token), **kwargs).status_code in ok_for(path)
 
 
 def test_the_endpoint_list_above_covers_every_route_the_app_has(tmp_path, token):
@@ -332,14 +350,14 @@ def test_a_fresh_install_requires_the_token_on_every_route(tmp_path, token):
     client, _ = client_for(tmp_path)  # DIYA_REQUIRE_TOKEN unset: the default
     for method, path, kwargs in ENDPOINTS:
         assert client.request(method, path, **kwargs).status_code == 401, (method, path)
-        assert client.request(method, path, headers=auth(token), **kwargs).status_code in OK, (method, path)
+        assert client.request(method, path, headers=auth(token), **kwargs).status_code in ok_for(path), (method, path)
 
 
 @pytest.mark.parametrize("require", ["0", "false", "off", "no"])
 def test_the_explicit_opt_out_means_no_route_asks_for_a_token(tmp_path, require):
     client, app = client_for(tmp_path, require=require)
     for method, path, kwargs in ENDPOINTS:
-        assert client.request(method, path, **kwargs).status_code in OK, (method, path)
+        assert client.request(method, path, **kwargs).status_code in ok_for(path), (method, path)
     # and a header that would be wrong if it were checked is simply ignored
     assert client.get("/api/threads", headers=auth("not-a-token")).status_code == 200
 
