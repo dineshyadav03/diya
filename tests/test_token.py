@@ -115,7 +115,8 @@ except ImportError:
 
 def ok_for(path):
     """What a request with the right token may answer. Web Push needs the optional cryptography package: without it every push route but /status answers 409 and says why."""
-    return OK + ((409,) if path.startswith("/api/push/") and path != "/api/push/status" and not HAVE_PUSH_CRYPTO else ())
+    # The rename route has no chat to rename here (a seeded chat would break every test that expects the app to have made none): "there is no chat 1" is the route answering, past the token.
+    return OK + ((409,) if path.startswith("/api/push/") and path != "/api/push/status" and not HAVE_PUSH_CRYPTO else ()) + ((404,) if path == "/api/threads/1/rename" else ())
 
 
 def concrete_path(path):
@@ -128,6 +129,7 @@ def concrete_path(path):
            .replace("/api/scheduled/{series_id}/skip", "/api/scheduled/3/skip")
            .replace("/api/scheduled/{series_id}/stop", "/api/scheduled/4/stop")
            .replace("{series_id}", "1")
+           .replace("/api/threads/{thread_id}/rename", "/api/threads/1/rename")
            .replace("/api/automations/{automation_id}/resume", "/api/automations/2/resume")  # each change has its own seeded automation
            .replace("/api/automations/{automation_id}/run", "/api/automations/3/run")
            .replace("/api/automations/{automation_id}/delete", "/api/automations/4/delete")
@@ -143,6 +145,8 @@ def concrete_path(path):
 # Every route the app has today, with a request that succeeds once it is past the token layer.
 ENDPOINTS = [
     ("GET", "/api/threads", {}),
+    ("GET", "/api/threads/search", {"params": {"q": "seeded"}}),
+    ("POST", "/api/threads/1/rename", {"json": {"title": "A name"}}),
     ("GET", "/api/history/1", {}),
     ("GET", "/api/memory", {}),
     ("GET", "/api/memory/1", {}),

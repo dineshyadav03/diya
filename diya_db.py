@@ -342,6 +342,21 @@ MIGRATIONS = (
     )),
 )
 
+MAX_THREAD_TITLE = 80  # the longest name a chat can be given
+MAX_SEARCH_CHARS = 100  # the longest search that is looked for
+SNIPPET_BEFORE, SNIPPET_AFTER = 40, 90  # how much of a message is shown around what was found
+
+
+def _around(text, query):
+    """A short piece of `text` around the first place `query` is in it (ignoring case), with … where it was cut: what a search result shows."""
+    flat = " ".join(str(text).split())
+    at = flat.lower().find(query.lower())
+    if at < 0:
+        return flat[:SNIPPET_BEFORE + SNIPPET_AFTER] + ("…" if len(flat) > SNIPPET_BEFORE + SNIPPET_AFTER else "")
+    start, end = max(0, at - SNIPPET_BEFORE), min(len(flat), at + len(query) + SNIPPET_AFTER)
+    return ("…" if start else "") + flat[start:end] + ("…" if end < len(flat) else "")
+
+
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored
 REMINDER_FIELDS = ("id", "content", "due_at", "due_ts", "done", "created_at", "notified_at")
 
@@ -573,21 +588,54 @@ class Store:
         return rows
 
     def list_threads_with_preview(self):
-        """Newest first, with a snippet of the first real message so threads are recognizable
-        (titles are always blank right now -- nothing ever sets one)."""
+        """Newest first, each with what to call it in a list: the name the person gave it (set_thread_title), or else a snippet of the first
+        real message so threads are recognizable (a thread has no name until one is given)."""
         conn = self.connect()
         rows = conn.execute(
             """
             SELECT t.id, t.created_at,
-                   (SELECT content FROM messages m
+                   COALESCE(NULLIF(t.title, ''), (SELECT content FROM messages m
                     WHERE m.thread_id = t.id AND m.role = 'user'
-                    ORDER BY m.id LIMIT 1) AS preview
+                    ORDER BY m.id LIMIT 1)) AS preview
             FROM threads t
             ORDER BY t.id DESC
             """
         ).fetchall()
         conn.close()
         return [{"id": r[0], "created_at": r[1], "preview": r[2] or "(empty thread)"} for r in rows]
+
+    def set_thread_title(self, thread_id, title):
+        """Give a chat a name, or take it back with an empty one (the list then shows the first message again). Returns True if the chat exists."""
+        title = " ".join(str(title or "").split())[:MAX_THREAD_TITLE] or None
+        conn = self.connect()
+        cur = conn.execute("UPDATE threads SET title = ? WHERE id = ?", (title, thread_id))
+        conn.commit()
+        changed = cur.rowcount > 0
+        conn.close()
+        return changed
+
+    def search_threads(self, query, limit=30):
+        """The chats with a message (or a name) that contains `query`, newest first, as dicts: id, created_at, preview (as in list_threads_with_preview) and `match`, a short piece of the
+        newest message that contains it. Case is ignored for plain English letters; `%` and `_` are only themselves. Nothing is changed."""
+        query = " ".join(str(query or "").split())[:MAX_SEARCH_CHARS]
+        if len(query) < 2:
+            return []
+        like = "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        conn = self.connect()
+        rows = conn.execute(
+            """
+            SELECT t.id, t.created_at,
+                   COALESCE(NULLIF(t.title, ''), (SELECT content FROM messages m WHERE m.thread_id = t.id AND m.role = 'user' ORDER BY m.id LIMIT 1)) AS preview,
+                   (SELECT content FROM messages m WHERE m.thread_id = t.id AND m.role IN ('user', 'assistant') AND m.content LIKE ? ESCAPE '\\' ORDER BY m.id DESC LIMIT 1) AS found
+            FROM threads t
+            WHERE t.title LIKE ? ESCAPE '\\'
+               OR EXISTS (SELECT 1 FROM messages m WHERE m.thread_id = t.id AND m.role IN ('user', 'assistant') AND m.content LIKE ? ESCAPE '\\')
+            ORDER BY t.id DESC LIMIT ?
+            """,
+            (like, like, like, int(limit)),
+        ).fetchall()
+        conn.close()
+        return [{"id": r[0], "created_at": r[1], "preview": r[2] or "(empty thread)", "match": _around(r[3] or r[2] or "", query)} for r in rows]
 
     def get_messages_between(self, first_id, last_id):
         """All messages across every thread with first_id <= id <= last_id (both ends included), oldest

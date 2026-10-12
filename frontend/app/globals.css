@@ -308,6 +308,11 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .thread:hover { border-color: var(--border-strong); background: var(--surface-hover); }
 .thread .preview { font-size: 15px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .thread .date { font-size: 13px; color: var(--text-dim); }
+.history-inner > .memory-add { margin-bottom: 12px; }
+.thread-row { display: flex; gap: 8px; align-items: flex-start; }
+.thread-row .thread { flex: 1; min-width: 0; }
+.thread-row > .memory-btn { flex-shrink: 0; margin-top: 8px; }
+.thread-row > .memory-add { flex: 1; margin-bottom: 8px; }
 .thread-skeleton {
   height: 62px; margin-bottom: 8px; border-radius: var(--r-md); border: 1px solid var(--border);
   background: linear-gradient(90deg, var(--surface) 0%, var(--surface-hover) 50%, var(--surface) 100%);

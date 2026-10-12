@@ -170,7 +170,7 @@ def test_a_retry_clears_the_stored_reason():
 
 def test_the_history_page_says_why_the_list_could_not_be_loaded():
     source = HISTORY.read_text(encoding="utf-8")
-    assert re.search(r"import \{ describeLoadFailure \} from '\.\./\.\./lib/api-failure\.mjs'", source)
+    assert re.search(r"import \{ (?:describeActionFailure, )?describeLoadFailure \} from '\.\./\.\./lib/api-failure\.mjs'", source)  # the page also renames chats, which says why a rename failed
     assert "setProblem(describeLoadFailure(status))" in source
     assert "if (!r.ok) return couldNotLoad(r.status)" in source  # the status of a refused request is passed on
     assert ".catch(() => couldNotLoad())" in source  # no answer at all

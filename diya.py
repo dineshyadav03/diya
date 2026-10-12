@@ -560,6 +560,7 @@ class Agent:
         self.tasks = diya_tasks.Tasks(self.store, clock=self._clock)  # the to-do list inside Diya (docs/TASKS_DESIGN.md)
         self.schedule = diya_schedule.Schedule(self.store, clock=self._clock)  # reminders that repeat (docs/SCHEDULE_DESIGN.md)
         self._notes = None
+        self._notes_signature = None  # what the notes folder held when the index was built (Agent.notes)
         self._notes_lock = threading.Lock()
         self._profile_import_checked = False
         self._functions = {
@@ -626,12 +627,32 @@ class Agent:
     # ---- memory (Milestone 3): an in-memory index of the notes folder ----
     @property
     def notes(self):
+        """The index of the notes folder. Built on first use, and built again when the folder has changed since (a note added, edited or removed), so a note written today is found
+        today and not after the next restart; unchanged, it costs a look at the folder's file list."""
         with self._notes_lock:
-            if self._notes is None:
-                self._notes = self._build_notes()
+            signature = self._notes_files()
+            if self._notes is None or signature != self._notes_signature:
+                old, client = self._notes, getattr(self, "_notes_client", None)
+                self._notes = self._build_notes(signature)  # if this raises, the old index and its signature stay as they were
+                self._notes_signature = signature
+                if old is not None and client is not None:
+                    try:
+                        client.delete_collection(old.name)  # Chroma keeps every collection for the life of the process
+                    except Exception:  # noqa: BLE001 -- tidying up must never fail a search
+                        pass
             return self._notes
 
-    def _build_notes(self):
+    def _notes_files(self):
+        """What is in the notes folder, as (name, modified, size) for each file: the signature that says whether the index is out of date. A sub-folder is not a note."""
+        found = []
+        for name in sorted(os.listdir(self.config.notes_dir)):
+            path = os.path.join(self.config.notes_dir, name)
+            if os.path.isfile(path):
+                info = os.stat(path)
+                found.append((name, info.st_mtime_ns, info.st_size))
+        return tuple(found)
+
+    def _build_notes(self, signature=None):
         import chromadb  # heavy; only needed once notes are actually searched
         from chromadb.config import Settings
 
@@ -640,7 +661,8 @@ class Agent:
         # Chroma reports anonymous usage events unless told not to; nothing here is meant to leave the computer.
         client = chromadb.Client(Settings(anonymized_telemetry=False))
         notes = client.create_collection(f"notes-{uuid.uuid4().hex[:12]}")
-        for filename in os.listdir(self.config.notes_dir):
+        self._notes_client = client
+        for filename in [entry[0] for entry in (signature if signature is not None else self._notes_files())]:
             # UTF-8 explicitly, not the platform default (cp1252 on Windows), which turned any
             # non-ASCII note into mojibake; 'replace' so one stray byte can't stop startup.
             with open(os.path.join(self.config.notes_dir, filename), encoding="utf-8", errors="replace") as f:
@@ -659,7 +681,10 @@ class Agent:
 
     # ---- the tools that need state ----
     def search_notes(self, query):
-        result = self.notes.query(query_embeddings=[self.embed(query)], n_results=1)
+        notes = self.notes
+        if notes.count() == 0:
+            return "There are no notes to search."
+        result = notes.query(query_embeddings=[self.embed(query)], n_results=1)
         return result["documents"][0][0]
 
     def add_reminder(self, content, due_at=None, repeat=None):

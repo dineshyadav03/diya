@@ -52,6 +52,8 @@ const ROUTES = {
   scheduledResume: join(root, 'frontend', 'app', 'api', 'scheduled', '[series_id]', 'resume', 'route.js'),
   scheduledSkip: join(root, 'frontend', 'app', 'api', 'scheduled', '[series_id]', 'skip', 'route.js'),
   scheduledStop: join(root, 'frontend', 'app', 'api', 'scheduled', '[series_id]', 'stop', 'route.js'),
+  threadSearch: join(root, 'frontend', 'app', 'api', 'threads', 'search', 'route.js'),
+  threadRename: join(root, 'frontend', 'app', 'api', 'threads', '[thread_id]', 'rename', 'route.js'),
   automations: join(root, 'frontend', 'app', 'api', 'automations', 'route.js'),
   automationPause: join(root, 'frontend', 'app', 'api', 'automations', '[automation_id]', 'pause', 'route.js'),
   automationResume: join(root, 'frontend', 'app', 'api', 'automations', '[automation_id]', 'resume', 'route.js'),

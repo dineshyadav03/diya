@@ -60,6 +60,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   (cards at the top of the chat page) and put on the desktop by the notifier. Built in code from your own reminders and tasks, so nothing is invented; `DIYA_PROACTIVE=0` turns it off
   ([docs/PROACTIVE_DESIGN.md](docs/PROACTIVE_DESIGN.md)). Replies appear word by word, with an orb while she thinks, and the chat model is kept loaded so "hey" is not slow
   ([docs/SPEED_DESIGN.md](docs/SPEED_DESIGN.md), [docs/STREAMING_DESIGN.md](docs/STREAMING_DESIGN.md)).
+- **Past chats**: a search box on the History page looks inside every chat (not just the first message) and shows the piece that matched; each chat has a Rename button. New notes you put in the notes folder are found without a restart.
 - **Automations**: say "every morning at 8am tell me the weather in Pune" (in the chat, or on the **Automations** page) and Diya does it on that schedule and writes you the answer in the chat. A run can
   only read (the weather, the web, your notes, reminders and tasks), never save or send anything; it is made by code from your own words, not by the model; `DIYA_AUTOMATIONS=0` turns it off
   ([docs/AUTOMATIONS_DESIGN.md](docs/AUTOMATIONS_DESIGN.md)).

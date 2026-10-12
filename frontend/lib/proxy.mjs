@@ -122,6 +122,21 @@ export async function forwardHistory(request, context, options) {
   return forward(request, `/api/history/${threadId}`, options)
 }
 
+// The History page's search box and Rename buttons. The search words are the one piece of the query string that is passed on, re-encoded and cut to what the API accepts;
+// a chat id must be a whole number.
+const MAX_SEARCH = 100
+
+export async function forwardThreadSearch(request, options) {
+  const q = (new URL(request.url).searchParams.get('q') || '').slice(0, MAX_SEARCH)
+  return forward(request, `/api/threads/search?q=${encodeURIComponent(q)}`, options)
+}
+
+export async function forwardThreadRename(request, context, options) {
+  const { thread_id: threadId } = await context.params
+  if (!/^[0-9]{1,18}$/.test(String(threadId))) return errorResponse(404, 'No such thread')
+  return forward(request, `/api/threads/${threadId}/rename`, options)
+}
+
 // The memory page's routes (docs/STAGE2_DESIGN.md, unit 6). A fact id is a whole number and an action is
 // one of a fixed few; anything else -- a path, a query, an encoded slash, an action the API doesn't have --
 // is turned away here instead of being pasted into the URL of the API request.

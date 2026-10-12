@@ -30,6 +30,7 @@ import diya_questions_api
 import diya_reminders_api
 import diya_schedule_api
 import diya_tasks_api
+import diya_threads_api
 
 
 # ---- the per-install access token (docs/STAGE1_DESIGN.md section 3) ----
@@ -463,6 +464,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     diya_questions_api.register(app, config, agent)  # the questions Diya raises herself (docs/AUTO_MEMORY_DESIGN.md, D5 and unit A5)
     diya_proactive_api.register(app, config, agent)  # what Diya wrote first (docs/PROACTIVE_DESIGN.md)
     diya_automations_api.register(app, config, agent)  # what Diya does on a schedule for the person (docs/AUTOMATIONS_DESIGN.md)
+    diya_threads_api.register(app, config, agent)  # searching and naming past chats
     diya_push_api.register(app, config, agent)  # telling the phone by Web Push, off unless DIYA_PUSH=1 (docs/PUSH_DESIGN.md, unit P2)
     diya_reminders_api.register(app, config, agent)
     diya_tasks_api.register(app, config, agent)  # the to-do list inside Diya (docs/TASKS_DESIGN.md, unit T2)

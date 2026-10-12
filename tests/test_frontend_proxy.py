@@ -428,7 +428,8 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
     for path in browser_files():
         targets += [m.group(2) for m in re.finditer(r"fetch\(\s*([`'\"])(.*?)\1", path.read_text(encoding="utf-8"))]
     assert sorted(targets) == sorted([
-        "/api/history/${threadId}", "/api/chat/stream", "/api/chat", "/api/threads", "/api/transcribe",  # the page asks for the streamed reply, and for the whole one from an API that has no stream route
+        "/api/history/${threadId}", "/api/chat/stream", "/api/chat", "/api/threads", "/api/transcribe",
+        "/api/threads/search?q=${encodeURIComponent(words)}", "/api/threads/${thread.id}/rename",  # the History page: search inside the chats, and give one a name  # the page asks for the streamed reply, and for the whole one from an API that has no stream route
         "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
         "/api/memory/${fact.id}/replace",  # the Memory page's "replace the old one" button
         "/api/questions", "/api/questions/seen", "/api/questions/${question.id}/answer",  # the chat's cards: the list, the note that they were shown, an answer
@@ -487,7 +488,7 @@ def proxy_route_files():
 def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_path):
     routes, proxies = api_routes(tmp_path), proxy_route_files()
     assert set(routes) == {
-        "/api/threads", "/api/history/{thread_id}", "/api/chat", "/api/chat/stream", "/api/transcribe",
+        "/api/threads", "/api/threads/search", "/api/threads/{thread_id}/rename", "/api/history/{thread_id}", "/api/chat", "/api/chat/stream", "/api/transcribe",
         "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/merge", "/api/memory/{fact_id}/{action}",
         "/api/memory/{fact_id}/replace", "/api/memory/{fact_id}/undo-replace", "/api/memory/learned",
         "/api/questions", "/api/questions/seen", "/api/questions/{question_id}/answer",
@@ -510,7 +511,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         assert "lib/proxy.mjs" in source and any(
             name in source
             for name in ("forward(", "forwardHistory(", "forwardFact(", "forwardFactAction(", "forwardFactReplace(", "forwardFactUndoReplace(", "forwardLearned(", "forwardQuestionAnswer(", "forwardReminderDone(", "forwardConnection(",
-                         "forwardAction(", "forwardActionDecision(", "forwardTaskAction(", "forwardScheduledAction(", "forwardAutomationAction(", "forwardReminderSnooze(")
+                         "forwardAction(", "forwardActionDecision(", "forwardTaskAction(", "forwardScheduledAction(", "forwardAutomationAction(", "forwardReminderSnooze(", "forwardThreadSearch(", "forwardThreadRename(")
         ), path
         assert "force-dynamic" in source, path  # never cached
 
