@@ -2,7 +2,7 @@
 
 This document describes what Diya is meant to be and what it is today. The install and run steps are
 in the [README](README.md); the Stage 0 work list is in [ROADMAP.md](ROADMAP.md). It is rewritten
-when the state changes, not appended to. Last checked against the code on 2026-09-21.
+when the state changes, not appended to. Last checked against the code on 2026-10-12.
 Market and technical context is kept in [RESEARCH.md](RESEARCH.md).
 
 ## Promise
@@ -24,12 +24,12 @@ describes a commercial local-first assistant. Diya is a one-person project; the 
 | Area | Status |
 |---|---|
 | Local inference | Done. Ollama, `qwen2.5:3b` for chat by default (on the owner's computer `diya-chat`, `qwen3:4b-instruct` with its context capped; see `docs/MODEL_BENCHMARK.md`), `nomic-embed-text` for embeddings, via the OpenAI-compatible API. |
-| Tools | Eight, in `diya.py`: `search_notes`, `web_search`, `get_weather`, `add_reminder`, `list_reminders`, `add_task`, `list_tasks`, `list_files` (plus a connector's tools while it is connected). `add_reminder` saves nothing unless the message asked for a reminder, reads the time (and a repeat) itself and refuses a time the model changed; `add_task` is the same shape for the to-do list kept inside Diya (docs/TASKS_DESIGN.md) and the model has no tool that closes, edits or deletes a task. Loop capped at 8 rounds; network tools time out after 5 s. `list_files` only lists inside `DIYA_FILES_ROOTS` (default `Documents/Diya`); `get_weather` only reaches the hosts in `DIYA_TOOL_ALLOWED_HOSTS` (default: the two Open-Meteo hosts). No MCP app store. |
-| Conversations | Done. Threads and messages in SQLite, a history page, reopening a thread. Not built: renaming, search. |
-| Notes memory | Partial. `search_notes` searches `sample_notes/` (or `DIYA_NOTES_DIR`) through an in-memory Chroma index rebuilt at each start. No ingestion beyond that folder. |
+| Tools | Eight, in `diya.py`: `search_notes`, `web_search`, `get_weather`, `add_reminder`, `list_reminders` (pending by default, or the ones already ticked off), `add_task`, `list_tasks`, `list_files` (plus a connector's tools while it is connected). `add_reminder` saves nothing unless the message asked for a reminder, reads the time (and a repeat) itself and refuses a time the model changed; `add_task` is the same shape for the to-do list kept inside Diya (docs/TASKS_DESIGN.md) and the model has no tool that closes, edits or deletes a task. Loop capped at 8 rounds; network tools time out after 5 s. `list_files` only lists inside `DIYA_FILES_ROOTS` (default `Documents/Diya`); `get_weather` only reaches the hosts in `DIYA_TOOL_ALLOWED_HOSTS` (default: the two Open-Meteo hosts). No MCP app store. |
+| Conversations | Done. Threads and messages in SQLite, a history page with a search box that looks inside every chat (ignoring case, showing the piece that matched), a Rename button on each chat, and reopening a thread. |
+| Notes memory | Partial. `search_notes` searches `sample_notes/` (or `DIYA_NOTES_DIR`) through an in-memory Chroma index, built on first use and built again whenever a note is added, edited or removed (no restart needed). No ingestion beyond that folder. |
 | Long-term memory | Done for the loop, at small scale: Dreaming stages candidate facts, `diya_review.py` reviews them, and the model is told the accepted ones (see below). Reviewed on the command line or on the UI's Memory page, with an optional second opinion from the model (`judge`, advisory only). Not built: finding facts by relevance. **Memory that remembers on its own** ([`docs/AUTO_MEMORY_DESIGN.md`](docs/AUTO_MEMORY_DESIGN.md)) is built and measured but **off** (`DIYA_AUTO_MEMORY`): code puts each candidate in a lane (remember, ask, never), the model's own answer to "is this private?" and "does this replace something known?" can only add caution, every automatic fact is marked and can be undone on the Memory page, and a waiting fact that may replace an old one has a one-press "Replace the old one". It is turned on only by the owner, after reading the measurement. |
-| Proactivity | Reminders have real due times and can repeat (every day, every weekday, every Monday, every month on the 15th, every 2 weeks), read in code from the person's own words (`docs/SCHEDULE_DESIGN.md`). The UI's Reminders page shows what is due, with snooze buttons; the Scheduled page lists, pauses, skips and stops repeating reminders and says in plain words what happened; the Today page shows the day, built in code from the owner's own reminders and tasks with no model text. Each refreshes once a minute while open. The optional desktop notifier (`diya_notify.py`, unit P4) tells you outside the app, but only once the owner schedules it; nothing schedules it. Dreaming runs on a schedule. The notes watcher is a Phase 1 script and is not connected to the assistant. |
-| Client | Done for the web. A Next.js UI with chat, history, hold-to-talk voice input and optional spoken replies, in a light and a dark theme that were checked for contrast (`docs/UI_DESIGN.md`). No native apps. Reaching Diya from a phone is built in three separate, switched-off parts, none tried against a real service or phone: a VPN is the way to reach the UI away from home (`docs/lan.md`, a description only); Web Push tells a subscribed device that a reminder, question, action or the day is waiting, by default without saying what (`docs/PUSH_DESIGN.md`); and a Telegram bridge answers only a paired owner's plain-text messages, with no approvals possible from it (`docs/TELEGRAM_DESIGN.md`). One command starts the API and UI together (`diya_run.py`, `docs/ONE_COMMAND_DESIGN.md`). |
+| Proactivity | Built, and the notifier (`diya_notify.py`, every five minutes) is the one scheduled task behind all of it. Reminders have real due times and can repeat (every day, every weekday, every Monday, every month on the 15th, every 2 weeks), read in code from the person's own words (`docs/SCHEDULE_DESIGN.md`), with snooze, a Reminders page, a Scheduled page and a Today page built in code from the owner's own data. **Diya writes first** (`docs/PROACTIVE_DESIGN.md`): a good-morning with the day, an evening check-in when something is still open, a message when a reminder comes due and a hello after a quiet spell, written in the chat itself and put on the desktop, built in code so nothing is invented. **Automations** (`docs/AUTOMATIONS_DESIGN.md`): "every morning at 8am tell me the weather in Pune" is read in code, stored, and run on schedule with read-only tools, the answer written in the chat; an Automations page lists, pauses, runs and deletes them. A tick on a reminder keeps when, and a question about something the person did ("when did I buy the guitar strings?") is given what they ticked off (`docs/PROACTIVITY_DESIGN.md`). Dreaming runs on a schedule. The notes watcher is a Phase 1 script and is not connected to the assistant. |
+| Client | Done for the web. A Next.js UI with chat (replies appear word by word, with an orb while Diya thinks and while she listens), history, hold-to-talk voice input and optional spoken replies, in a light and a dark theme that were checked for contrast (`docs/UI_DESIGN.md`). No native apps. Reaching Diya from a phone is built in three separate, switched-off parts, none tried against a real service or phone: a VPN is the way to reach the UI away from home (`docs/lan.md`, a description only); Web Push tells a subscribed device that a reminder, question, action or the day is waiting, by default without saying what (`docs/PUSH_DESIGN.md`); and a Telegram bridge answers only a paired owner's plain-text messages, with no approvals possible from it (`docs/TELEGRAM_DESIGN.md`). One command starts the API and UI together (`diya_run.py`, `docs/ONE_COMMAND_DESIGN.md`). |
 | Self-authored tools | Not built. |
 | Dedicated always-on hardware | Not started. Diya runs on the owner's Windows machine. |
 
@@ -39,7 +39,10 @@ describes a commercial local-first assistant. Diya is a one-person project; the 
   and white pills. It follows the operating system's setting, or Light/Dark/System at the foot of the sidebar. One sidebar (a menu on a
   phone) is the only navigation, with a count on Reminders (due) and Actions (waiting); the chat is a document-like transcript and a plain
   message box.
-- **Chat.** A message goes to `/api/chat`. Diya answers, and the UI shows which tools it used.
+- **Chat.** A message goes to `/api/chat/stream` (or `/api/chat` from an API without it). The reply appears as it is written, with an orb while Diya reads the question, and the UI shows which tools it used. Diya has a voice (`diya.PERSONA`): a greeting is answered in a short, different sentence that uses the person's name, with no tools and the model already loaded, so "hey" takes about a second (`docs/SPEED_DESIGN.md`, `docs/STREAMING_DESIGN.md`).
+- **Diya writes first.** Cards at the top of the chat show what she wrote on her own (the day, an evening check-in, a reminder that came due); Reply opens that chat and Dismiss hides it.
+- **Past chats.** Search inside every chat, and give a chat a name.
+- **Automations.** Say what to do and when, in the chat or on the Automations page; a run can only read, and its answer arrives as a message.
 - **Plain facts get one line.** A message that only shares a fact ("my flight is Friday at 6") gets a
   one-sentence acknowledgement and no tool calls (`diya_intent.py`). Questions and requests are
   handled normally.
@@ -56,9 +59,10 @@ describes a commercial local-first assistant. Diya is a one-person project; the 
 ```
 browser (Next.js, HTTPS) -> FastAPI diya_web.py (HTTPS, loopback by default)
                               |- Agent (diya.py): tool loop -> Ollama
-                              |- Store (diya_db.py): SQLite threads, messages, reminders
+                              |- Store (diya_db.py): SQLite threads, messages, reminders, tasks, automations, facts, actions
                               '- faster-whisper
 scheduled: dreaming.py reads the database -> dream_pending.jsonl (+ dream_state.json, dream_log.txt)
+scheduled: diya_notify.py (every 5 min) -> reminders that came due, what Diya writes first, due automations -> the chat and the desktop
 ```
 
 Nothing is loaded at import time. Settings come from `DIYA_*` variables (`diya_config.py`); the
@@ -141,8 +145,8 @@ to `dream_log.txt` and `watcher_log.txt`.
   varies between runs.
 - Voice input and output were exercised from a phone browser on the local network, before the loopback
   default; LAN mode has not been re-tested on a device since.
-- CI (`.github/workflows/ci.yml`) has not had a real GitHub-hosted run yet; its three commands were
-  run in a plain Linux container first, which is where it is verified from for now.
+- CI (`.github/workflows/ci.yml`) runs on every push to GitHub and is green on the latest commit. The microphone's recovery steps, the phone channels (Web Push, Telegram), the Google Calendar OAuth
+  flow and Todoist were never exercised against a real microphone, phone, bot or account; they are built and tested against stand-ins only.
 
 ## Known limitations
 
@@ -159,7 +163,6 @@ to `dream_log.txt` and `watcher_log.txt`.
 
 ## Next
 
-Stage 0 (`ROADMAP.md`): model pinning (blocked on Ollama's own tooling); the rest of the Stage 1
-trust design is built, and so is the review and promotion step for staged facts, on the command line and
-in the UI, with an optional model check. Stage 2 is complete. Next: the later stages (connectors, durable
-workflows, proactivity), each design-first. The stage list is in the roadmap.
+Everything the roadmap planned for Phases 1 and 2 is built in code except what needs hardware or an account that only the owner has: model pinning (blocked on Ollama's own tooling), the Mac mini,
+a real Google or Todoist account, and a phone. What is not built at all: Diya writing her own tools, call management and a streaming voice pipeline, each needing its own design and the owner's yes.
+The next real step is use: a few days of daily use will say what to fix, which is more useful than more features. The stage list and the owner's own steps are in `ROADMAP.md`.

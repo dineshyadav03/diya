@@ -4,6 +4,8 @@ Current work is Stage 0 (safety and reproducibility); the later stages are at th
 learning roadmap is archived in [`archive/phase1-learning-roadmap.md`](archive/phase1-learning-roadmap.md).
 Market and technical context for these choices is in [RESEARCH.md](RESEARCH.md).
 
+**Status (2026-10-12):** every unit this roadmap planned is built in code. What is left needs the owner, hardware or an account (the owner's steps: schedule/limit the Dreaming task, move the data folder, decide on `DIYA_AUTO_MEMORY`, try the microphone, review the waiting facts, and optionally Google/Todoist/push/Telegram), or is a new feature that has not been designed (Diya writing her own tools, call management, a streaming voice pipeline). Built since the last status: Diya writes first, streaming replies, a voice for greetings, Automations, reminders that remember when they were done, search and rename for past chats, notes that refresh themselves (see `PRODUCT_VISION.md`).
+
 **Platform note (2026-09-27):** the Mac mini purchase from `CLAUDE.md` (a historical record, not
 rewritten here) is deferred indefinitely, not imminent. Windows + Ollama is the real, primary
 development platform for as long as that holds -- not a stopgap being tolerated until the Mac
