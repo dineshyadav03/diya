@@ -353,6 +353,53 @@ def test_what_the_page_is_shown_is_made_safe(parts):
     assert chr(27) not in text and chr(0x202E) not in text
 
 
+# ---- "automate ..." with no "when": she asks, and the answer is the rest of it ----------------------------------------------------
+
+def test_the_word_automate_is_a_request_with_no_verb_needed():
+    request = auto.parse_request("automate the weather in Bangalore every morning at 7am", NOW)
+    assert isinstance(request, auto.Request) and request.instruction == "the weather in Bangalore" and request.rule.canonical() == "daily@07:00"
+    assert "am or pm" in auto.parse_request("automate the weather in Bangalore every morning at 7", NOW)
+
+
+@pytest.mark.parametrize("text, instruction", [
+    ("automate whats the weather in bangalore karnataka", "whats the weather in bangalore karnataka"),
+    ("Please automate: tell me the news", "tell me the news"),
+    ("I want to automate checking the news", "checking the news"),
+    ("schedule a summary of my tasks", "a summary of my tasks"),
+])
+def test_told_what_to_automate_but_not_when_she_asks_when_and_says_how(text, instruction):
+    said = auto.ask_when(text, NOW)
+    assert said == f'{auto.WHEN_PREFIX}"{instruction}". When should I do it? Say it like: every morning at 8am, every Friday at 5pm, or every weekday at 9am.'
+
+
+@pytest.mark.parametrize("text", ["what is an automation", "can you automate things?", "show my schedule for today", "remind me every day to automate backups", "automate", "hey", SAY])
+def test_a_question_a_noun_a_reminder_or_a_message_that_already_says_when_is_not_asked_about(text):
+    assert auto.ask_when(text, NOW) is None
+
+
+@pytest.mark.parametrize("answer", ["every morning at 8am", "yes, every day at 7pm please", "ok every Friday at 5pm"])
+def test_a_message_that_is_only_a_when_is_the_answer(answer):
+    asked = auto.ask_when("automate whats the weather in bangalore", NOW)
+    request = auto.follow_up(answer, asked, NOW)
+    assert isinstance(request, auto.Request) and request.instruction == "whats the weather in bangalore" and request.words in answer
+
+
+def test_an_answer_with_no_am_or_pm_is_asked_about_and_one_about_something_else_or_to_nothing_asked_is_not_taken():
+    asked = auto.ask_when("automate whats the weather in bangalore", NOW)
+    assert "am or pm" in auto.follow_up("every morning at 8", asked, NOW) and "am or pm" in auto.follow_up("every morning at 8 please", asked, NOW)
+    assert auto.follow_up("every morning at 8am and also remind me to eat", asked, NOW) is None and auto.follow_up("what is the weather in Pune", asked, NOW) is None
+    assert auto.follow_up("every morning at 8am", "Sunny and 32 C.", NOW) is None and auto.follow_up("every morning at 8am", None, NOW) is None
+
+
+def test_asked_in_the_chat_and_answered_in_the_next_message_it_is_made(tmp_path):
+    agent = make_agent(tmp_path)
+    asked, _ = agent.ask([{"role": "user", "content": "automate whats the weather in bangalore karnataka"}])
+    assert asked.startswith(auto.WHEN_PREFIX) and auto.Automations(agent.store).list() == [] and agent.client.chat_calls == []
+    done, _ = agent.ask([{"role": "user", "content": "automate whats the weather in bangalore karnataka"}, {"role": "assistant", "content": asked}, {"role": "user", "content": "every morning at 8am"}])
+    (row,) = auto.Automations(agent.store).list()
+    assert done.startswith("Okay. Every day at 08:00 I will: whats the weather in bangalore karnataka.") and row["instruction"] == "whats the weather in bangalore karnataka" and agent.client.chat_calls == []
+
+
 # ---- the settings -----------------------------------------------------------------------------------------------------------
 
 def test_it_is_on_unless_told_otherwise():

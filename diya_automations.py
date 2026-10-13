@@ -36,8 +36,18 @@ _ASKS_FOR_SOMETHING = re.compile(
     r"\b(?:tell|give|send|show|brief|update|message|text|ping|let)\s+me\b|\b(?:check|search|summari[sz]e|look\s+up|find|list|read|remind\s+me\s+what)\b|\bsum\s+(?:it\s+)?up\b",
     re.IGNORECASE,
 )
+# The word itself is a request: "automate the weather in Bangalore every morning at 7" asks for something without a verb after it.
+# "schedule" counts only as the first word ("schedule a summary of my tasks"): as a noun it is everywhere ("show my schedule").
+_AUTOMATE = re.compile(r"\bautomat(?:e|ed|ing|ion)\b|^\s*(?:please\s+)?schedule\b", re.IGNORECASE)
+_LEADING_AUTOMATE = re.compile(
+    r"^\s*(?:(?:please|let'?s|i\s+(?:want|need|would\s+like)\s+to|i'd\s+like\s+to|i\s+want\s+you\s+to)\s+)*(?:automate|schedule)\b\s*(?:this|that|the\s+following)?\s*[:,-]?\s*", re.IGNORECASE
+)
 _QUESTION_START = re.compile(r"^\s*(?:what|what's|whats|how|why|where|when|who|which|is|are|does|do|did|can|could|should|would)\b", re.IGNORECASE)
 _BARE_HOUR = re.compile(r"\s*(?:at\s+)?\d")  # "every morning at 8 tell me": an hour with no am or pm
+# What Diya says when she is told what to automate but not when, and how the next message is known to be the answer: it starts with this and holds the instruction in quotes.
+WHEN_PREFIX = "Okay, I can do that on a schedule: "
+_WHEN_ASKED = re.compile(r'^Okay, I can do that on a schedule: "(?P<what>[^"]{4,300})"\. When should I do it\?')
+_FILLER = frozenset("ok okay yes yeah yep sure please do it then at and make that set just go ahead so run".split())  # words that may come with the "when" in the answer
 
 
 class AutomationError(Exception):
@@ -60,14 +70,54 @@ def parse_request(text, now=None):
     if found is None or diya_intent.is_reminder_request(text) or diya_intent.is_task_request(text) or _QUESTION_START.match(text):
         return None
     rest = (text[:found.start] + " " + text[found.end:]).strip()
-    if not _ASKS_FOR_SOMETHING.search(rest):
+    if not (_ASKS_FOR_SOMETHING.search(rest) or _AUTOMATE.search(rest)):
         return None
     if _BARE_HOUR.match(text[found.end:]):  # "every morning at 8 tell me ..." reads as 09:00 without it: do not guess an hour
-        return "I need am or pm with that hour (or 24-hour time like 08:00): morning or evening?"
-    instruction = re.sub(r"\s+", " ", rest).strip(" ,.;:-")
+        return BARE_HOUR_REPLY
+    instruction = _instruction_of(rest)
     if len(instruction) < 4:
         return None
     return Request(instruction[:MAX_INSTRUCTION_CHARS], found.words, found.rule)
+
+
+BARE_HOUR_REPLY = "I need am or pm with that hour (or 24-hour time like 08:00): morning or evening?"
+
+
+def _instruction_of(rest):
+    """What is to be done, from the words that are not the "when": tidied, without a leading "automate"."""
+    return re.sub(r"\s+", " ", _LEADING_AUTOMATE.sub("", rest)).strip(" ,.;:-")
+
+
+def ask_when(text, now=None):
+    """If `text` says to automate something but not when ("automate whats the weather in bangalore"), what to say: the instruction back, and how to say when. None otherwise: a question
+    about automation, a reminder, a task, or a message that does have a "when" (parse_request has had its say about those)."""
+    if not isinstance(text, str) or not text.strip() or len(text) > MAX_REQUEST_CHARS or "\n" in text.strip():
+        return None
+    if not _AUTOMATE.search(text) or _QUESTION_START.match(text) or diya_intent.is_reminder_request(text) or diya_intent.is_task_request(text):
+        return None
+    if diya_repeat.find_repeat(text, now) is not None:
+        return None
+    instruction = _instruction_of(text).replace('"', "'")[:MAX_INSTRUCTION_CHARS]
+    if len(instruction) < 4:
+        return None
+    return f'{WHEN_PREFIX}"{instruction}". When should I do it? Say it like: every morning at 8am, every Friday at 5pm, or every weekday at 9am.'
+
+
+def follow_up(text, previous, now=None):
+    """The answer to ask_when: a message that is only a "when" ("every morning at 8am", "yes, every day at 7pm please"), given the instruction Diya asked about in `previous`, her last message.
+    A Request, the am/pm question as a string, or None if `previous` was not that question or `text` is about something else."""
+    asked = _WHEN_ASKED.match(previous) if isinstance(previous, str) else None
+    if not asked or not isinstance(text, str) or len(text) > 120 or "\n" in text.strip():
+        return None
+    found = diya_repeat.find_repeat(text, now)
+    if found is None:
+        return None
+    bare = _BARE_HOUR.match(text[found.end:])  # "every morning at 8": the hour is asked about, not guessed
+    tail = text[found.end + bare.end():] if bare else text[found.end:]
+    leftover = re.sub(r"[^\w\s]", " ", text[:found.start] + " " + tail).lower().split()
+    if any(word not in _FILLER for word in leftover):
+        return None
+    return BARE_HOUR_REPLY if bare else Request(asked["what"], found.words, found.rule)
 
 
 def _iso(local):
@@ -174,12 +224,15 @@ def confirmation(row, assumed=()):
             "what it finds comes to you here. Pause or delete it on the Automations page.")
 
 
-def from_chat(store, text, clock):
-    """If `text` is an automation, make it and return what to say back; a string to say if it nearly is; None if it is an ordinary message."""
+def from_chat(store, text, clock, previous=None):
+    """If `text` is an automation, make it and return what to say back; a string to say if it nearly is (or to ask when); None if it is an ordinary message. `previous` is what Diya said last,
+    so that a message that is only a "when" is taken as the answer to her asking."""
     now = clock()
-    request = parse_request(text, now)
+    request = follow_up(text, previous, now)
     if request is None:
-        return None
+        request = parse_request(text, now)
+    if request is None:
+        return ask_when(text, now)
     if isinstance(request, str):
         return request
     try:

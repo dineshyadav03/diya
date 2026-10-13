@@ -1051,7 +1051,8 @@ class Agent:
         """
         messages = self._within_window(messages)
         if only_tools is None and self.config.automations:  # "every morning at 8am tell me the weather in Pune": made here, in code, and answered with a fixed sentence (diya_automations.from_chat)
-            said = diya_automations.from_chat(self.store, _last_user_text(messages), self._clock)
+            before = messages[-2] if len(messages) >= 2 and isinstance(messages[-2], dict) and messages[-2].get("role") == "assistant" else None
+            said = diya_automations.from_chat(self.store, _last_user_text(messages), self._clock, before.get("content") if before else None)
             if said is not None:
                 return said, []
         self._turn.user_text = _last_user_text(messages)
