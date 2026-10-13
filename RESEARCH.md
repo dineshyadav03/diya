@@ -884,9 +884,9 @@ Not comparable and left out: coding agents (OpenHands, Open Interpreter), browse
   Diya, and when it needs relevance recall or a knowledge base (units R1 and K1 of `docs/RESEARCH_PLAN_2026-10.md`), try a memory layer as a **dependency** (supermemory local or Hindsight, installed from its
   package, its licence and notice kept) before writing our own. *Build*: keep writing everything, borrowing only ideas. My recommendation is borrow-and-build, plus trying Hermes side by side for a day to
   learn what a finished daily driver feels like (entry 16 suggested the same).
-- **The rule that follows (also in `THIRD_PARTY_NOTICES.md`):** code from another project goes in only with its licence read, its notice kept, its name listed and its author credited; it is never presented as ours. Nothing is
-  copied today: the repository holds no code from any project in this file, and its one third-party asset (an icon set) is credited. AGPL code is not used.
-- **Action:** README now says where Diya stands against these projects; `THIRD_PARTY_NOTICES.md` carries the rule; no build.
+- **The rule that follows (also in `THIRD_PARTY_NOTICES.md`):** code from another project goes in only with its licence read, its notice kept, its name listed and its author credited; it is never presented as ours.
+  AGPL code is not used. The owner has decided to take code from these projects: that is done with their MIT and Apache-2.0 code under this rule, and what is taken is listed in `THIRD_PARTY_NOTICES.md`.
+- **Action:** `docs/COMPARISON.md` lists, project by project, what each does and whether Diya has it; README says where Diya stands against these projects; `THIRD_PARTY_NOTICES.md` carries the rule; no build.
 
 ## Cross-cutting
 

@@ -51,7 +51,7 @@ model proposes and code decides ([why](docs/GATE_BENCHMARK.md)); an unattended r
 ## Is this like other projects?
 
 Yes, the category is crowded. OpenClaw and Hermes Agent (hundreds of thousands of stars), Khoj, Leon, and memory libraries such as Hindsight, mem0 and supermemory all do parts of it, and are bigger,
-better funded and more tested. [RESEARCH.md](RESEARCH.md) (entry 33) lists about fifty of them with their licences, checked on GitHub. What Diya is for: one person's assistant whose memory is reviewed before
+better funded and more tested. [docs/COMPARISON.md](docs/COMPARISON.md) lists what each one does and whether Diya has it; [RESEARCH.md](RESEARCH.md) (entry 33) lists about fifty of them with their licences, checked on GitHub. What Diya is for: one person's assistant whose memory is reviewed before
 the model sees it, whose actions wait for approval, and which is measured with the real small model on an ordinary laptop. If you want a finished daily assistant today, one of those is the better choice;
 if you want to see, change and understand every line, this is that.
 
@@ -128,7 +128,7 @@ Start with [PRODUCT_VISION.md](PRODUCT_VISION.md) (what it is today) and [ROADMA
 - **Talking:** [speed](docs/SPEED_DESIGN.md), [streaming](docs/STREAMING_DESIGN.md), [voice](docs/VOICE_DESIGN.md), [answering general questions](docs/LOOKUP_DESIGN.md), [the interface](docs/UI_DESIGN.md).
 - **Outside the computer:** [connectors](docs/CONNECTORS_DESIGN.md), [Google setup](docs/GOOGLE_SETUP.md), [approvals](docs/ACTIONS_DESIGN.md), [push](docs/PUSH_DESIGN.md), [Telegram](docs/TELEGRAM_DESIGN.md), [phone channel](docs/PHONE_CHANNEL_DESIGN.md), [LAN mode](docs/lan.md).
 - **Trust:** [access token and the boundary](docs/STAGE1_DESIGN.md), [UI login](docs/UI_LOGIN_DESIGN.md), [the October audit](docs/AUDIT_2026-10-10.md).
-- **Research and plans:** [RESEARCH.md](RESEARCH.md) (33 dated entries), [the research plan](docs/RESEARCH_PLAN_2026-10.md), [model benchmark](docs/MODEL_BENCHMARK.md), [the gate benchmark](docs/GATE_BENCHMARK.md).
+- **Research and plans:** [RESEARCH.md](RESEARCH.md) (33 dated entries), [Diya next to the projects like it](docs/COMPARISON.md), [the research plan](docs/RESEARCH_PLAN_2026-10.md), [model benchmark](docs/MODEL_BENCHMARK.md), [the gate benchmark](docs/GATE_BENCHMARK.md).
 
 ## Architecture
 
@@ -160,9 +160,9 @@ Results vary between runs on a small model.
 
 All rights reserved: the code is published to read, and no licence to use, copy, modify or distribute it is granted.
 
-**What is borrowed.** No code is copied from the projects listed in [RESEARCH.md](RESEARCH.md); where an idea came from one of them, the entry says so. The only third-party material in the repository is
-an icon set (MIT, by Jakub Antalik), credited in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), which also states the rule for the future: code from another project goes in only with its licence read, its
-notice kept and its author named, and is never presented as ours. Libraries Diya depends on keep their own licences ([pyproject.toml](pyproject.toml), `frontend/package.json`).
+**Other people's work.** Everything taken from another project, code or assets, is listed with its licence and author in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), which also says how it is
+handled (licence read first, notice kept, author named, changes marked). Ideas that came from other projects are credited in [RESEARCH.md](RESEARCH.md). Libraries Diya depends on keep their own licences
+([pyproject.toml](pyproject.toml), `frontend/package.json`).
 
 The project began as a study of a research dossier: `dossier_content.py` is its source; the PDF (`render_pdf.py`) and the web page (`render_html.py`, standard library only) are both generated from it, and a
 test fails if the committed page is stale.
