@@ -796,6 +796,7 @@ class Memory:
         flags stay in front. A model's second opinion (`verifier:`), which is asked for on request and cannot be
         recomputed here, is kept, at the end. Returns (candidates checked, how many changed)."""
         import diya_checks
+        import diya_intent
 
         every = self.facts()
         checked = changed = 0
@@ -809,8 +810,8 @@ class Memory:
                 messages = [
                     (m["id"], m["content"])
                     for m in self.store.get_messages_between(fact["batch_first"], fact["batch_last"])
-                    if m["role"] == "user"  # the extractor only ever saw the user's own words
-                ]
+                    if m["role"] == "user" and not diya_intent.only_asks(m["content"])  # the extractor only ever saw the user's own words, and not a message that only asks or tells Diya something
+                ]  # (so a fact cannot be "grounded" in one: on the owner's chat a fact that named Pune was grounded in a pasted instruction the extractor never read)
             others = [{"id": o["id"], "text": o["text"], "status": o["status"]} for o in every if o["id"] != fact["id"]]
             cleaned = normalise_fact(fact["text"])  # what cleaning says about the text as it is NOW (it may have been edited)
             kept = list(cleaned.flags) if cleaned is not None else []

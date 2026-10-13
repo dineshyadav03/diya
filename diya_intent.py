@@ -26,7 +26,7 @@ _REQUEST_START = re.compile(
     r"should|will|shall|may|might|please|tell|give|show|explain|write|make|find|search|look|remind|"
     r"set|add|create|list|open|call|send|book|schedule|help|let's|lets|check|get|bring|order|"
     r"translate|summarize|summarise|calculate|compare|recommend|suggest|plan|read|delete|remove|"
-    r"cancel|turn|play|stop|start|forget|note)\b",
+    r"cancel|turn|play|stop|start|forget|note|automate|try|run|ask|say|use)\b",  # automate...use: found on the owner's own chat, where "automate whats the weather in bangalore" was read for facts
     re.IGNORECASE,
 )
 # ...and these anywhere in it: a need, a wish, a problem, or an address to Diya.

@@ -10,7 +10,8 @@ Memory page lists them all); this module is the part that goes TO the person, at
     offer        something remembered that is going to happen                   "... is on Friday at 15:00. Want a reminder at 14:00?"
 
 Nothing here is written by a model. A question's words come from the fact's own text through `diya_memory.printable`; the time in a stale question or an
-offer is read from the fact's words by `diya_time`, or there is no such question. A question is never asked about a secret (a discarded secret has no text), a
+offer is read from the fact's words by `diya_time`, or there is no such question (a loose day like "next Tuesday" or "before the weekend", which `diya_time` will
+not guess at, only makes a stale question once the LATEST day it can have meant has passed, `outer_limit`). A question is never asked about a secret (a discarded secret has no text), a
 fact is never asked about twice in the same way, and the person's answer is the only thing that accepts, rejects or retires: an ignored question is dropped
 and its fact stays unused, never accepted by silence.
 
@@ -67,6 +68,27 @@ def horizon(text, anchor):
                 continue
             return None if after_modifier else when  # a day that a word like "next" or "after" changes is not the day it reads as, and nothing later in the fact makes up for it
     return None
+
+
+# A day said loosely ("next Tuesday", "before the weekend", "this week") that diya_time will not read as one day: the number of days after the day it was said by which it has certainly passed.
+# A fact that was true "next Tuesday" is not true a fortnight later, and with a loose day it never got a stale question, so Diya kept telling the model about an exam that was long over.
+_OUTER_LIMITS = (
+    (re.compile(r"\b(?:tomorrow|tonight|today|this\s+(?:morning|afternoon|evening))\b", re.IGNORECASE), 2),
+    (re.compile(r"\b(?:this|by|before|over|for)\s+(?:the\s+)?weekend\b|\bthis\s+week\b", re.IGNORECASE), 8),
+    (re.compile(r"\bnext\s+(?:mon|tues|wednes|thurs|fri|satur|sun)day\b|\bnext\s+week(?:end)?\b|\bin\s+(?:a|one)\s+week\b", re.IGNORECASE), 15),
+    (re.compile(r"\bthis\s+month\b", re.IGNORECASE), 32),
+    (re.compile(r"\bnext\s+month\b", re.IGNORECASE), 63),
+)
+_ONLY_A_HABIT = re.compile(r"\b(?:usually|always|often|sometimes|typically|normally|generally)\b", re.IGNORECASE)
+
+
+def outer_limit(text, anchor):
+    """The local time by which a loosely-dated fact has certainly passed, or None: the latest day it can have meant, counted from the day it was said (`anchor`), for the longest such phrase in
+    it. None for a habit or anything that repeats ("every Tuesday", "usually before the weekend"), and for a fact with no such phrase."""
+    if diya_intent.mentions_repeat(text) or _ONLY_A_HABIT.search(text):
+        return None
+    days = [limit for pattern, limit in _OUTER_LIMITS if pattern.search(text)]
+    return anchor.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=max(days)) if days else None
 
 
 def _iso(local):
@@ -190,9 +212,14 @@ class Questions:
         for fact in accepted:
             if (fact["id"], "stale") in known:
                 continue
-            when = horizon(fact["text"], _local_of_created(fact["created_at"]))
+            anchor = _local_of_created(fact["created_at"])
+            when = horizon(fact["text"], anchor)
             if when is not None and when.local <= now:
                 yield "stale", fact, {"was": when.describe()}
+            elif when is None:
+                limit = outer_limit(fact["text"], anchor)  # a day said loosely: asked about once the latest day it can have meant is over
+                if limit is not None and limit <= now:
+                    yield "stale", fact, {"was": "a day that has passed"}
         for fact in accepted:
             if (fact["id"], "offer") in known:
                 continue

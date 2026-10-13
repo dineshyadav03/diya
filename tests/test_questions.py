@@ -223,6 +223,40 @@ def test_a_habit_has_neither_a_stale_question_nor_an_offer(parts):
     assert questions.refill(memory, SUNDAY + timedelta(days=30)) == 0
 
 
+@pytest.mark.parametrize("text, days", [
+    ("I have an exam next Tuesday I need to prepare for.", 15), ("Need to check audit results tomorrow.", 2), ("Remember to buy new guitar strings before the weekend.", 8),
+    ("finishing the report this week", 8), ("I'm moving to Pune next month", 63), ("Back at work next week and this weekend is free", 15), ("review on the 3rd and this month is busy", 32),
+])
+def test_a_day_said_loosely_has_a_latest_day_it_can_have_meant(text, days):
+    anchor = datetime(2026, 9, 28, 16, 44)
+    assert q.outer_limit(text, anchor) == datetime(2026, 9, 28) + timedelta(days=days)
+
+
+@pytest.mark.parametrize("text", [
+    "My dog's name is Rocky", "I like tea in the morning", "I play badminton every Tuesday", "usually goes for a run before the weekend", "Favorite color is teal.", "I was there last week", "",
+])
+def test_a_habit_or_a_fact_with_no_loose_day_has_none(text):
+    assert q.outer_limit(text, datetime(2026, 9, 28, 16, 44)) is None
+
+
+def test_a_loosely_dated_fact_is_asked_about_only_once_the_latest_day_it_can_have_meant_has_passed(parts):
+    memory, questions = parts
+    fact = made_at_sunday(memory, "I have an exam next Tuesday I need to prepare for.")  # said on Sunday 11 Oct: at the latest Monday 26 Oct
+    assert questions.refill(memory, SUNDAY + timedelta(days=14)) == 0  # the Tuesday after next is still possible
+    assert questions.refill(memory, SUNDAY + timedelta(days=16)) == 1 and kinds(questions.open()) == [(fact, "stale")]
+    assert questions.describe(memory, questions.open()[0])["text"] == "You told me “I have an exam next Tuesday I need to prepare for.”. Is that still true?"
+
+
+def test_answering_no_to_such_a_question_retires_the_fact_and_yes_keeps_it(parts):
+    memory, questions = parts
+    old, kept = made_at_sunday(memory, "Need to check audit results tomorrow."), made_at_sunday(memory, "Remember to buy strings before the weekend")
+    questions.refill(memory, SUNDAY + timedelta(days=20))
+    by_fact = {item["fact_id"]: item for item in questions.open()}
+    questions.answer(memory, by_fact[old]["id"], "no", SUNDAY + timedelta(days=20))
+    questions.answer(memory, by_fact[kept]["id"], "yes", SUNDAY + timedelta(days=20))
+    assert memory.get(old)["status"] == "retired" and memory.get(kept)["status"] == "accepted"
+
+
 def test_a_candidate_is_not_offered_a_reminder_until_it_is_remembered(parts):
     memory, questions = parts
     waiting(memory, "has a dentist appointment on Friday at 3pm")

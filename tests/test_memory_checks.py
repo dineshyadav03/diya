@@ -271,6 +271,15 @@ def test_only_the_users_own_words_count_as_support(store, memory):
     assert flags_of(memory, fact_id) == ["ungrounded"]
 
 
+def test_a_message_that_only_asks_diya_something_is_not_support_because_the_extractor_never_read_it(store, memory):
+    """Found on the owner's own chat: with memory automatic a message that only asks or tells Diya something is not read for facts, but a fact that named Pune and 8am was "grounded" in a pasted
+    instruction that said both, and was accepted on its own. Support must be what the extractor could see."""
+    request, real = seed(store, ("user", "Try an Automation: add tell me the weather in Pune every morning at 8am and press Run now."), ("user", "I bought a new guitar"))
+    invented, genuine = candidate(memory, "has set up an automation for the weather in Pune every morning at 8am", request, real), candidate(memory, "bought a new guitar", request, real, 1)
+    memory.run_checks()
+    assert flags_of(memory, invented) == ["ungrounded"] and flags_of(memory, genuine) == [f"source_message:{real}"]
+
+
 @pytest.mark.parametrize("range_covers_the_message, expected", [(False, ["ungrounded"]), (True, None)])
 def test_only_the_messages_in_the_facts_own_range_count(store, memory, range_covers_the_message, expected):
     first, second = seed(store, ("user", "I adopted a cat named Pixel"), ("user", "I collect vintage stamps"))

@@ -380,6 +380,7 @@ def test_the_extraction_prompt_is_one_text_for_both_ways_of_reading():
     "who won the cricket match yesterday?", "what is 9 times 7?", "can you remind me to call mum at 5?", "Maya got a new job, any gift ideas?",
     "please summarise this", "is it going to rain?", "", "   ", "what’s the weather in Pune today?", "write a poem about cats",
     "translate this sentence into French", "go on then, tell me a joke", "the printer isn’t working", "what should the dog eat?",
+    "automate whats the weather in bangalore karnataka", "try the new automations page", "run it now", "use the web to find out", "ask her what time it is",  # the owner's own chat: read for facts before these words were here
 ])
 def test_a_message_that_only_asks_or_tells_diya_something_is_only_asking(text):
     assert diya_intent.only_asks(text) is True
