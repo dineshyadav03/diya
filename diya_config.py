@@ -55,6 +55,7 @@ class Config:
     embed_model: str = "nomic-embed-text"
     ollama_url: str = "http://localhost:11434/v1"
     notes_dir: str = "sample_notes"
+    knowledge_dir: str = "knowledge"  # DIYA_KNOWLEDGE_DIR: where `python diya_knowledge.py build` writes pages made from the notes (docs/KNOWLEDGE_DESIGN.md); personal data once real notes are in it
     profile_path: str = "user_profile.txt"
     dream_log_path: str = "dream_log.txt"
     dream_state_path: str = "dream_state.json"
@@ -183,6 +184,7 @@ _STRING_SETTINGS = {
     "embed_model": "DIYA_EMBED_MODEL",
     "ollama_url": "DIYA_OLLAMA_URL",
     "notes_dir": "DIYA_NOTES_DIR",
+    "knowledge_dir": "DIYA_KNOWLEDGE_DIR",
     "profile_path": "DIYA_PROFILE_PATH",
     "dream_log_path": "DIYA_DREAM_LOG_PATH",
     "dream_state_path": "DIYA_DREAM_STATE_PATH",
@@ -211,7 +213,7 @@ _STRING_SETTINGS = {
 
 
 # The settings whose default is a file or folder Diya writes about you: with DIYA_DATA_DIR set they default to the same name in that folder.
-_DATA_FILES = ("db_path", "profile_path", "dream_log_path", "dream_state_path", "dream_pending_path", "notify_log_path",
+_DATA_FILES = ("db_path", "knowledge_dir", "profile_path", "dream_log_path", "dream_state_path", "dream_pending_path", "notify_log_path",
                "token_path", "connector_tokens_dir", "connectors_log_path", "push_vapid_path", "telegram_token_path")
 
 

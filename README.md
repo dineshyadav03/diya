@@ -16,7 +16,7 @@ designed yet. In plain terms:
 | **Built, and used every day** | chat with streaming replies and a voice; tap-to-talk; reminders, repeating reminders, tasks, the Today page; Diya writing to you first; automations; reviewed memory, with automatic memory switched on; general questions answered with a web lookup |
 | **Built, but never tried against the real thing** | the Google Calendar sign-in, Todoist, Home Assistant and Notion; push notifications to a phone; the Telegram bot; the one-command launcher's install step |
 | **Built, switched off until you choose** | the desktop notifier's schedule, Dreaming's schedule, the phone channels, every connector |
-| **Not built** | Diya writing her own tools; call handling; a streaming voice pipeline; a knowledge base from your documents ([the plan](docs/RESEARCH_PLAN_2026-10.md)); the Mac mini (deferred) |
+| **Not built** | Diya writing her own tools; call handling; a streaming voice pipeline; a knowledge base you can read in the UI and that the chat uses (its first step, pages built from your notes, is built: `python diya_knowledge.py build`; [the plan](docs/RESEARCH_PLAN_2026-10.md)); the Mac mini (deferred) |
 
 Stage 0 of the roadmap (safety and reproducibility) is 17 of 20 items done; the other three are blocked by tools or were decided against, and say so in [ROADMAP.md](ROADMAP.md).
 [PRODUCT_VISION.md](PRODUCT_VISION.md) says what each part does today and what was never tried for real.
@@ -30,7 +30,7 @@ sent, and it moves on to another microphone). Ask it anything: a question that n
 
 **It remembers, and you stay in charge.** Facts it picks up from your chats wait for review, and the model is told only what you accepted. With *automatic memory* on (it is, here) plain facts are taken
 in on their own, marked, and can be undone with one press; anything private, doubtful or that may replace what it knew becomes a question in the chat. A fact whose day has passed is asked about, not
-kept for ever. You can correct it ("no, I live in Pune") or make it forget ("forget that").
+kept for ever. When the memory outgrows what fits in one message, the model is told the facts closest to what you just said. You can correct it ("no, I live in Pune") or make it forget ("forget that").
 
 ![The Today page](docs/screenshot-today.png)
 
@@ -95,6 +95,7 @@ Nothing below happens on its own; each is a step only you can take (an account, 
 - **Dreaming** (reading your chats for facts): schedule it ([docs/dreaming.md](docs/dreaming.md)) with a 15-minute limit, not Windows' 72-hour default.
 - **Automatic memory** (`DIYA_AUTO_MEMORY=1`, with `DIYA_PRIVACY_MODEL=qwen2.5:3b`): on or off is your decision; read [the measurement](docs/AUTO_MEMORY_DESIGN.md) first. Off means every fact waits for you.
 - **Connectors:** a token for Home Assistant, Notion or Todoist on the Connections page; Google needs your own small Google app ([steps](docs/GOOGLE_SETUP.md)). None has been tried against a real account.
+- **Your notes as pages:** point `DIYA_NOTES_DIR` at a folder of yours and run `python diya_knowledge.py build` ([docs/KNOWLEDGE_DESIGN.md](docs/KNOWLEDGE_DESIGN.md)): one Markdown page per name that recurs, made only of your own sentences.
 - **Your phone:** Web Push (`DIYA_PUSH=1`) and a Telegram bot (`DIYA_TELEGRAM=1`) are built and have never been tried on a real device or bot.
 - **Your data folder:** move it out of a cloud-synced folder with `python diya_data.py move` (below).
 
