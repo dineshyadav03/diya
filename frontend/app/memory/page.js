@@ -357,6 +357,12 @@ export default function MemoryPage() {
                 </div>
                 <span>
                   {summary.used} of {summary.limit} characters used
+                  {summary.used > summary.told && (
+                    <>
+                      {' '}
+                      · Diya tells the model about {summary.told} of them in one message, the ones that match what you ask
+                    </>
+                  )}
                 </span>
                 <button type="button" className="memory-btn" onClick={checkForNew} disabled={busy === 'page'}>
                   Check for new facts

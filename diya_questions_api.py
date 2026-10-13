@@ -52,7 +52,7 @@ def register(app, config, agent):
     def list_questions():
         if not config.auto_memory:
             return {"questions": []}
-        memory, queue, now = Memory(agent.store), questions(), agent.now()
+        memory, queue, now = diya_memory.open_memory(agent.store, agent.config), questions(), agent.now()
         queue.refill(memory, now)
         shown = []
         for item in queue.visible(now):
@@ -76,7 +76,7 @@ def register(app, config, agent):
             raise HTTPException(status_code=404, detail=f"there is no question {printable(question_id)}")
         if not config.auto_memory:
             raise HTTPException(status_code=409, detail="automatic memory is off, so there are no questions")
-        memory, queue = Memory(agent.store), questions()
+        memory, queue = diya_memory.open_memory(agent.store, agent.config), questions()
         try:
             closed = queue.answer(memory, question_id, body.answer, agent.now(), text=body.text, add_reminder=agent.store.add_reminder)
         except FactError as exc:

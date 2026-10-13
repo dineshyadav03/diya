@@ -239,7 +239,7 @@ class Dreamer:
                 print(f"[capture] could not ask the model ({exc}); the scheduled pass will read message {message_id}.", file=sys.stderr)
                 return None
             lines = [] if not answer or answer.upper().startswith("NONE") else [line.strip() for line in answer.split("\n") if line.strip()]
-            memory = diya_memory.Memory(self.store)
+            memory = diya_memory.open_memory(self.store, self.config)
             new, _, _ = diya_memory.ingest_lines(
                 memory, lines, first_message_id=message_id, last_message_id=message_id, model=self.config.model,
                 staged_at=datetime.now(timezone.utc).isoformat(), actor="system", position_base=LIVE_POSITION_BASE,
@@ -261,7 +261,7 @@ class Dreamer:
         retires the wrong thing. Marks the message read. Returns how many facts were retired (0 when nothing matched)."""
         import diya_memory
 
-        memory = diya_memory.Memory(self.store)
+        memory = diya_memory.open_memory(self.store, self.config)
         kind, what = target
         accepted = memory.facts("accepted")
         if kind == "person":
@@ -307,7 +307,7 @@ class Dreamer:
         try:
             import diya_memory
 
-            memory = diya_memory.Memory(self.store)
+            memory = diya_memory.open_memory(self.store, self.config)
             ingested = diya_memory.ingest_queue(memory, self.config, actor="system")
             done = self._put_in_lanes(memory)
             questions = self._refill_questions(memory)

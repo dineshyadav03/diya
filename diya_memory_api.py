@@ -103,14 +103,15 @@ def register(app, config, agent):
         return {
             "counts": memory.counts(),
             "used": len(memory.render()),
-            "limit": diya_memory.MAX_PROFILE_CHARS,
+            "limit": memory.store_limit,  # how much may be KEPT; with relevance recall off it is the same as `told`
+            "told": diya_memory.MAX_PROFILE_CHARS,  # how much the model is told in one message (docs/RECALL_DESIGN.md)
             "max_fact_chars": diya_memory.MAX_FACT_CHARS,
             "automatic": automatic(memory),
         }
 
     def public(fact, actors=None):
         if actors is None:  # one fact on its own (a list passes the actors it has already asked for, once)
-            actors = Memory(agent.store).accepting_actors()
+            actors = diya_memory.open_memory(agent.store, agent.config).accepting_actors()
         return {
             "id": fact["id"],
             "text": printable(fact["text"]),
@@ -127,7 +128,7 @@ def register(app, config, agent):
 
     @app.get("/api/memory")
     def list_facts():
-        memory = Memory(agent.store)
+        memory = diya_memory.open_memory(agent.store, agent.config)
         actors = memory.accepting_actors()
         return {"summary": summary(memory), "facts": [public(fact, actors) for fact in memory.facts()]}
 
@@ -145,7 +146,7 @@ def register(app, config, agent):
     def learned(message_id: int):
         _check_id(message_id)
         items = []
-        for item in Memory(agent.store).learned_from(message_id):
+        for item in diya_memory.open_memory(agent.store, agent.config).learned_from(message_id):
             shown = {"kind": item["kind"], "id": item["id"]}
             for key in ("text", "old_text"):
                 if key in item:
@@ -158,7 +159,7 @@ def register(app, config, agent):
     @app.get("/api/memory/{fact_id}")
     def show(fact_id: int):
         _check_id(fact_id)
-        memory = Memory(agent.store)
+        memory = diya_memory.open_memory(agent.store, agent.config)
         try:
             fact = memory.get(fact_id)
         except FactError as exc:
@@ -191,7 +192,7 @@ def register(app, config, agent):
 
     @app.post("/api/memory/ingest")
     def ingest():
-        memory = Memory(agent.store)
+        memory = diya_memory.open_memory(agent.store, agent.config)
         try:
             report = diya_memory.ingest_queue(memory, config, actor="api")
         except SourceUnreadable as exc:
@@ -201,7 +202,7 @@ def register(app, config, agent):
 
     @app.post("/api/memory/add", status_code=201)
     def add(body: TextBody):
-        memory = Memory(agent.store)
+        memory = diya_memory.open_memory(agent.store, agent.config)
         fact = normalise_fact(body.text)
         if fact is None:
             raise HTTPException(status_code=422, detail="there is nothing left of that text once it is cleaned up")
@@ -214,7 +215,7 @@ def register(app, config, agent):
 
     @app.post("/api/memory/merge")
     def merge(body: MergeBody):
-        memory = Memory(agent.store)
+        memory = diya_memory.open_memory(agent.store, agent.config)
         try:
             moved = memory.merge_people(body.from_name, body.into_name, "api")
         except FactError as exc:
@@ -225,7 +226,7 @@ def register(app, config, agent):
     def replace(fact_id: int, body: ReplaceBody):
         _check_id(fact_id)
         _check_id(body.old_id)
-        memory = Memory(agent.store)
+        memory = diya_memory.open_memory(agent.store, agent.config)
         try:
             memory.supersede(fact_id, body.old_id, "api")
         except FactError as exc:
@@ -236,7 +237,7 @@ def register(app, config, agent):
     @app.post("/api/memory/{fact_id}/undo-replace")
     def undo_replace(fact_id: int):
         _check_id(fact_id)
-        memory = Memory(agent.store)
+        memory = diya_memory.open_memory(agent.store, agent.config)
         try:
             old_id = memory.undo_replace(fact_id, "api")
         except FactError as exc:
@@ -249,7 +250,7 @@ def register(app, config, agent):
         _check_id(fact_id)
         if action != "edit" and action not in diya_memory.ACTIONS:
             raise HTTPException(status_code=404, detail=f"there is no action {printable(action)}")
-        memory = Memory(agent.store)
+        memory = diya_memory.open_memory(agent.store, agent.config)
         try:
             if action == "edit":
                 if body is None:

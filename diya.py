@@ -23,6 +23,7 @@ import diya_connectors
 import diya_db
 import diya_intent
 import diya_memory
+import diya_recall
 import diya_schedule
 import diya_tasks
 import diya_time
@@ -947,7 +948,7 @@ class Agent:
         call), and only if the file exists. The file is never changed, and after this it is never read
         again: what the model knows is changed with `python diya_review.py`, not by editing the file.
         Returns the ImportResult if this call imported anything, else None."""
-        memory = diya_memory.Memory(self.store)
+        memory = diya_memory.open_memory(self.store, self.config)
         if memory.has_legacy_import() or not os.path.exists(self.config.profile_path):
             return None
         result = diya_memory.import_legacy_profile(memory, self.config)
@@ -966,7 +967,7 @@ class Agent:
         if not self._profile_import_checked:
             self.ensure_profile_imported()
             self._profile_import_checked = True
-        profile = diya_memory.Memory(self.store).render_for_model()
+        profile = diya_memory.open_memory(self.store, self.config).render_for_model(query=diya_recall.query_of(history), embed=self.embed, model=self.config.embed_model)
         now = self.now()
         persona = f"{PERSONA} Today is {diya_time.DAY_NAMES[now.weekday()]} {now.day} {diya_time.MONTH_NAMES[now.month - 1]} {now.year}." if PERSONA else ""
         known = f"What you know about the user so far:\n{profile}" if profile else ""
@@ -1229,7 +1230,7 @@ def memory_startup_lines(agent):
     both print these): that the old profile file was taken in, if it was; how much the model is being
     told; whether facts are waiting for review; and whether the old file has lines that are in no fact
     (that file is no longer read). Imports the old profile if that has not happened yet."""
-    memory = diya_memory.Memory(agent.store)
+    memory = diya_memory.open_memory(agent.store, agent.config)
     lines = []
     try:
         imported = agent.ensure_profile_imported()

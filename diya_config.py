@@ -114,6 +114,10 @@ class Config:
     automations: bool = True  # DIYA_AUTOMATIONS
     # A general question that needs today's facts is searched on the web first, and one the model gave up on is searched and answered again (diya.Agent._ask, docs/LOOKUP_DESIGN.md); off with DIYA_LOOKUP=0.
     lookup: bool = True  # DIYA_LOOKUP
+    # Relevance recall (diya_recall.py, docs/RECALL_DESIGN.md): more facts may be kept than fit in one message, and the model is told the ones for the message just sent. DIYA_RECALL=0 keeps the old
+    # limit (what is kept is what is told); DIYA_MEMORY_STORE_CHARS is how many characters of facts may be kept with it on.
+    recall: bool = True  # DIYA_RECALL
+    memory_store_chars: int = 20000  # DIYA_MEMORY_STORE_CHARS
     # Keeping the chat model loaded (diya_warm.py, docs/SPEED_DESIGN.md): Ollama unloads a model after five idle minutes, and loading it again plus reading the tools took about 20 seconds on
     # this computer's CPU, so the first message after a pause was slow even for "hey". While the API runs it asks Ollama, every few minutes, to keep the model for `keep_alive` more
     # (Ollama's own format: "30m", "2h", seconds, or -1 for always). DIYA_KEEP_WARM=0 turns it off and lets Ollama unload the model as usual (the model's memory, about 3 GB, is held while it is on).
@@ -273,7 +277,7 @@ def load_config(env=None) -> Config:
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
                         ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
-                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP")):
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag
@@ -313,6 +317,15 @@ def load_config(env=None) -> Config:
             raise ConfigError(f"DIYA_MAX_BODY_BYTES must be an integer, got {max_body!r}") from None
         if values["max_body_bytes"] < 1:
             raise ConfigError(f"DIYA_MAX_BODY_BYTES must be at least 1, got {values['max_body_bytes']}")
+
+    store_chars = read("DIYA_MEMORY_STORE_CHARS")
+    if store_chars is not None:
+        try:
+            values["memory_store_chars"] = int(store_chars)
+        except ValueError:
+            raise ConfigError(f"DIYA_MEMORY_STORE_CHARS must be an integer, got {store_chars!r}") from None
+        if not 2000 <= values["memory_store_chars"] <= 1_000_000:
+            raise ConfigError(f"DIYA_MEMORY_STORE_CHARS must be between 2000 and 1000000, got {values['memory_store_chars']}")
 
     for field, (name, zero_means) in _LIMIT_SETTINGS.items():
         given = read(name)

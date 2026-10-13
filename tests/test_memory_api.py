@@ -93,7 +93,7 @@ def no_hidden(value):
 def test_an_empty_memory_lists_nothing_and_says_how_big_it_may_grow(client):
     body = client.get("/api/memory").json()
     assert body == {"summary": {"counts": {"candidate": 0, "accepted": 0, "rejected": 0, "retired": 0},
-                                "used": 0, "limit": 2000, "max_fact_chars": 200,
+                                "used": 0, "limit": 2000, "told": 2000, "max_fact_chars": 200,
                                 "automatic": {"on": False, "today": 0, "limit": 20, "taken_back": 0, "breaker_limit": 3, "breaker_open": False}},
                     "facts": []}
 
@@ -111,7 +111,7 @@ def test_the_list_carries_status_flags_in_words_and_the_size_used(client, memory
     summary = dict(body["summary"])
     assert summary.pop("automatic")["on"] is False
     assert summary == {"counts": {"candidate": 1, "accepted": 1, "rejected": 0, "retired": 0},
-                       "used": len("- has a cat named Pixel"), "limit": 2000, "max_fact_chars": 200}
+                       "used": len("- has a cat named Pixel"), "limit": 2000, "told": 2000, "max_fact_chars": 200}
     first, second = body["facts"]
     assert (first["id"], first["text"], first["status"], first["source"]) == (1, "has a cat named Pixel", "accepted", "dreaming")
     assert first["flags"] == [{"code": "source_message:1", "label": "source message 1"}]

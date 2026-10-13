@@ -283,12 +283,26 @@ class IngestReport:
     skipped: int = 0  # lines with nothing to keep (blank, a lone marker, NONE, not text)
 
 
+def open_memory(store, config):
+    """The fact store as the settings say: with relevance recall on (DIYA_RECALL), as many characters may be kept as DIYA_MEMORY_STORE_CHARS and the model is told the facts for each message; with it
+    off, the room is the limit of what is kept, as it was before."""
+    return Memory(store, store_limit=config.memory_store_chars if getattr(config, "recall", False) else None)
+
+
 class Memory:
     """The fact store, bound to one `diya_db.Store`. Each call uses its own short-lived connection,
     as Store does."""
 
-    def __init__(self, store):
+    def __init__(self, store, store_limit=None):
+        """`store_limit` is how many characters of facts may be KEPT (accepted); None is MAX_PROFILE_CHARS, the room the model is told in one message, which is what it always was. With relevance recall
+        (docs/RECALL_DESIGN.md) more can be kept than is told, and open_memory() gives it from the settings."""
         self.store = store
+        self._store_limit = store_limit
+
+    @property
+    def store_limit(self):
+        """Read each time, so a limit that is changed (a test does) is the limit."""
+        return self._store_limit or MAX_PROFILE_CHARS
 
     # ---- connections ----
     @contextlib.contextmanager
@@ -453,12 +467,23 @@ class Memory:
             args = (exclude_id,)
         return conn.execute(query + " ORDER BY f.id", args).fetchall()
 
-    def render_for_model(self):
+    def render_for_model(self, query="", embed=None, model=""):
         """The accepted facts as the model is actually given them (docs/PERSON_MEMORY_DESIGN.md, M4):
-        self facts as a plain list, then a labelled block per named person. '' when there are none."""
+        self facts as a plain list, then a labelled block per named person. '' when there are none.
+
+        When they all fit in MAX_PROFILE_CHARS that is every one of them, as it always was. When there are more than fit (possible once the store is larger than the room, docs/RECALL_DESIGN.md),
+        the ones for this `query` are chosen (diya_recall.choose); `embed(text)` and `model` rank them by meaning, and without them the newest are told after the lasting ones."""
         with self._read() as conn:
             rows = self._accepted_with_person(conn)
-        return render_grouped(rows)
+            everything = render_grouped(rows)
+            if len(everything) <= MAX_PROFILE_CHARS or self.store_limit <= MAX_PROFILE_CHARS:  # all of them: they fit, or recall is off and what is kept is what is told
+                return everything
+            import diya_recall
+
+            facts = [{"id": r[0], "text": r[1], "text_key": r[2], "person": r[3]} for r in conn.execute(
+                "SELECT f.id, f.text, f.text_key, p.name FROM facts f LEFT JOIN people p ON p.id = f.person_id WHERE f.status = 'accepted' ORDER BY f.id").fetchall()]
+        chosen = diya_recall.choose(facts, query, MAX_PROFILE_CHARS, lambda picked: render_grouped([(f["text"], f["person"]) for f in picked]), store=self.store, embed=embed, model=model)
+        return render_grouped([(f["text"], f["person"]) for f in chosen])
 
     def has_legacy_import(self):
         """Has the old profile ever been taken in? True whatever became of those facts since, so a fact
@@ -873,8 +898,7 @@ class Memory:
             (fact_id, event, actor, at, detail),
         )
 
-    @staticmethod
-    def _check_room(conn, fact_id, text, person, enforce_fact_length):
+    def _check_room(self, conn, fact_id, text, person, enforce_fact_length):
         """Inside the write transaction: would accepting `text` (about `person`, as fact `fact_id`, or
         a new one when None) repeat an accepted fact or take the profile over its limit? The limit is
         measured on the grouped, model-facing render (docs/PERSON_MEMORY_DESIGN.md, M4), since that is
@@ -892,9 +916,9 @@ class Memory:
         others = Memory._accepted_with_person(conn, exclude_id=own)
         used = len(render_grouped(others))
         total = len(render_grouped(others + [(text, person)]))
-        if total > MAX_PROFILE_CHARS:
+        if total > self.store_limit:
             raise BudgetExceeded(
-                f"memory is full: {used} of {MAX_PROFILE_CHARS} characters are used and this fact needs "
+                f"memory is full: {used} of {self.store_limit} characters are used and this fact needs "
                 f"{total - used} more. Retire a fact first."
             )
 

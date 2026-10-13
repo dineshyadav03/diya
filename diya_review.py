@@ -268,7 +268,7 @@ def main(argv=None, config=None, out=None, err=None, client=None):
     except diya_config.ConfigError as exc:
         print(f"diya_review: {exc}", file=err)
         return EXIT_USAGE
-    memory = Memory(Store(config.db_path))
+    memory = diya_memory.open_memory(Store(config.db_path), config)
     args.client = client
     try:
         return args.run(memory, config, args, out)

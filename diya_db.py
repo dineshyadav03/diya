@@ -340,6 +340,19 @@ MIGRATIONS = (
     (15, (
         "ALTER TABLE reminders ADD COLUMN done_at TEXT",
     )),
+    # 16: the embedding of each accepted fact, for relevance recall (docs/RECALL_DESIGN.md): one row per fact and embedding model, with the fact's text_key so a fact whose words changed is embedded again.
+    # The vector is JSON text. Nothing here is ever sent anywhere, and a row can always be made again from the fact.
+    (16, (
+        """
+        CREATE TABLE IF NOT EXISTS fact_embeddings (
+            fact_id INTEGER NOT NULL,
+            model TEXT NOT NULL,
+            text_key TEXT NOT NULL,
+            vector TEXT NOT NULL,
+            PRIMARY KEY (fact_id, model)
+        )
+        """,
+    )),
 )
 
 MAX_THREAD_TITLE = 80  # the longest name a chat can be given
