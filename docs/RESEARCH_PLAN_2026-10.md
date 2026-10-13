@@ -44,7 +44,8 @@
 
 Ideas, designs and file formats can be copied freely; **code is another matter.** Diya is published *all rights reserved*. Sentient OS's code is **AGPL-3.0**: copying any of it into Diya would oblige
 Diya to be offered under the AGPL. supermemory's `company-brain` is Apache-2.0 (entry 10), which allows copying with a notice. Before any code is taken from a project, its licence is read and written
-into the commit message; the default is to write our own from the design.
+into the commit message; the default is to write our own from the design. Borrowed code is never presented as ours; the rule is written out in `THIRD_PARTY_NOTICES.md`, and `RESEARCH.md` entry 33 lists
+fifty similar projects with their licences (MIT and Apache-2.0 ones can be used as dependencies or, with their notice kept, copied; the AGPL ones cannot).
 
 ## 5. A reading path (for you; nothing here is a prerequisite)
 

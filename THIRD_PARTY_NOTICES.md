@@ -1,5 +1,16 @@
 # Third-party notices
 
+## How Diya treats other people's work
+
+- **Nothing is copied today** except what is listed below. The code in this repository was written for Diya; none of it comes from the projects in `RESEARCH.md` (OpenClaw, Hermes Agent, Khoj, Leon,
+  Hindsight, supermemory, Sentient OS and the rest). Where an idea came from one of them, the research entry says so.
+- **If code from another project is ever used**, it goes in only with its licence read first, its copyright notice and licence text kept, its author and source named here and in the commit message, and
+  any change of ours marked as ours. It is **never presented as written by us.** Presenting borrowed code as our own would be wrong whatever the licence, and under most licences it is also a breach of it.
+- **Licences decide what is possible.** MIT, BSD and Apache-2.0 code may be reused with the notice kept (Apache-2.0 also asks that changed files say so). **AGPL-3.0 and GPL code may not be copied into
+  Diya**, which is published all rights reserved: using it would oblige the whole of Diya to be offered under that licence. Sentient OS, Khoj and basic-memory are AGPL-3.0. A project with no licence, or
+  one GitHub could not read, is all rights reserved by default and is not used.
+- **Prefer a dependency to a copy.** A library installed from its own package keeps its own licence file and is credited by being listed in `pyproject.toml` or `frontend/package.json`.
+
 ## Libraries.dev (Jakub Antalik) — MIT
 
 Diya's message box used to be ported from the demo chat-input mock in
@@ -9,7 +20,7 @@ rules, markup and fit-to-width scaling, and the packages (`voice-glow`, `border-
 `metal-fx`, `thinking-orbs`, `img-fx`), are gone. What remains from that source:
 
 - `frontend/public/icons/mic-16.svg` (from `sites/home/public/assets/icons/`), used by the
-  Hold to talk button.
+  tap-to-talk button (it was hold-to-talk when this was taken).
 - `frontend/public/icons/arrow-up-16.svg`, on the Send button: committed together with the composer
   and built the same way, but its source was not written down at the time, so it is treated as part
   of the same MIT-licensed set.

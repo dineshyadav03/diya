@@ -1,23 +1,64 @@
 # Diya
 
-Diya is the beginning of a local-first AI appliance: a private assistant that runs entirely on
-hardware you own, not a cloud subscription. Today that means the model, your memory, and your
-speech all stay on this machine, and facts it learns about you are staged for review before
-they're ever trusted.
+Diya is a personal AI assistant for one person that runs on their own computer: the model, the memory and the speech stay on the machine, what it learns about you is reviewed before it is trusted,
+and nothing it does outside the computer happens without your approval. It is one person's real, daily-use project, built in the open and still changing.
 
-**Where it stands (2026-10-13):** every unit the roadmap planned is built and tested; what is left needs your own accounts, hardware or choices ([what needs you](#switched-off-until-you-choose)).
-[Roadmap](ROADMAP.md) has the checklist, [Product vision](PRODUCT_VISION.md) says what each part does today and what was never tried for real.
+![The chat: a greeting, a question about something ticked off, a lookup on the web, an automation made from one sentence](docs/screenshot-chat.png)
 
-![The chat, with a saved conversation](docs/screenshot-chat.png)
+## Where it stands (2026-10-13)
 
-![The Memory page: facts waiting for review, and what Diya knows](docs/screenshot-memory.png)
+Built for Windows with [Ollama](https://ollama.com), tested and used on a 16 GB laptop with no GPU. About 6,500 automated tests run on every push. Every unit the [roadmap](ROADMAP.md) has designed is built;
+against the larger vision about two thirds is there (a rough estimate, areas weighted equally), and what is left is mostly what only the owner can do (accounts, a phone, hardware) plus a few features not
+designed yet. In plain terms:
 
-*Screenshots of the real UI on invented data (`sample_notes/` and made-up facts), taken in headless Edge.*
+| | |
+|---|---|
+| **Built, and used every day** | chat with streaming replies and a voice; tap-to-talk; reminders, repeating reminders, tasks, the Today page; Diya writing to you first; automations; reviewed memory, with automatic memory switched on; general questions answered with a web lookup |
+| **Built, but never tried against the real thing** | the Google Calendar sign-in, Todoist, Home Assistant and Notion; push notifications to a phone; the Telegram bot; the one-command launcher's install step |
+| **Built, switched off until you choose** | the desktop notifier's schedule, Dreaming's schedule, the phone channels, every connector |
+| **Not built** | Diya writing her own tools; call handling; a streaming voice pipeline; a knowledge base from your documents ([the plan](docs/RESEARCH_PLAN_2026-10.md)); the Mac mini (deferred) |
+
+Stage 0 of the roadmap (safety and reproducibility) is 17 of 20 items done; the other three are blocked by tools or were decided against, and say so in [ROADMAP.md](ROADMAP.md).
+[PRODUCT_VISION.md](PRODUCT_VISION.md) says what each part does today and what was never tried for real.
+
+## What it does
+
+**Talk to it.** Chat in a web page: replies appear as they are written, with an orb while it thinks. Tap the mic to speak, tap again to send (a local Whisper model; a recording with no sound in it is never
+sent, and it moves on to another microphone). Ask it anything: a question that needs today's facts, or that it cannot answer, is searched on the web and answered from the results. Search inside past chats and rename them.
+
+![The Memory page](docs/screenshot-memory.png)
+
+**It remembers, and you stay in charge.** Facts it picks up from your chats wait for review, and the model is told only what you accepted. With *automatic memory* on (it is, here) plain facts are taken
+in on their own, marked, and can be undone with one press; anything private, doubtful or that may replace what it knew becomes a question in the chat. A fact whose day has passed is asked about, not
+kept for ever. You can correct it ("no, I live in Pune") or make it forget ("forget that").
+
+![The Today page](docs/screenshot-today.png)
+
+**It looks after your day.** Reminders that read your own words ("tomorrow at 3pm", "every Monday at 9am") with snooze; a to-do list kept inside Diya; a Today page built from your own data (no model
+writes it). Diya writes first: a good morning with your day, an evening check-in, a message when a reminder comes due. Ticking a reminder off keeps when, so "when did I buy the guitar strings?" has an answer.
+
+![The Automations page](docs/screenshot-automations.png)
+
+**Automations.** Say "every morning at 8am tell me the weather in Pune" (in the chat or on the page) and it does that on schedule and writes you the answer. A run can only read (the weather, the web, your
+notes, reminders and tasks); it can never save or send anything.
+
+**It can reach outside, only when you let it.** Connectors for Google Calendar, Todoist, Home Assistant and Notion (off until you connect them; Google is set up from the Connections page, see
+[docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md)). The one thing Diya may change outside the computer is a Todoist task, and only after you press Approve on exactly what is shown.
+
+**How it stays safe.** It listens on this computer only and needs an access token (and an optional passcode for the page); it has no shell tool, no skills marketplace and no generic page fetcher; the
+model proposes and code decides ([why](docs/GATE_BENCHMARK.md)); an unattended run is read-only; text from the web is read, never obeyed.
+
+## Is this like other projects?
+
+Yes, the category is crowded. OpenClaw and Hermes Agent (hundreds of thousands of stars), Khoj, Leon, and memory libraries such as Hindsight, mem0 and supermemory all do parts of it, and are bigger,
+better funded and more tested. [RESEARCH.md](RESEARCH.md) (entry 33) lists about fifty of them with their licences, checked on GitHub. What Diya is for: one person's assistant whose memory is reviewed before
+the model sees it, whose actions wait for approval, and which is measured with the real small model on an ordinary laptop. If you want a finished daily assistant today, one of those is the better choice;
+if you want to see, change and understand every line, this is that.
 
 ## Quickstart
 
 Needs Python 3.10+, Node 18.18+ (22.15+ trusts the mkcert certificate on its own, see [docs/lan.md](docs/lan.md)), [Ollama](https://ollama.com) and [mkcert](https://github.com/FiloSottile/mkcert).
-Setup note: Diya has only been run on Windows; other systems are untested. Run them from the repo root (the last three in a second terminal):
+Diya has only been run on Windows; other systems are untested. Run these from the repo root (the last three in a second terminal):
 
 ```bash
 ollama pull qwen2.5:3b
@@ -31,127 +72,14 @@ npm install
 npm run dev                                # set DIYA_TOKEN to that token first (below); then open https://localhost:3000
 ```
 
-The API requires an access token; the UI's server sends it for you. Set `DIYA_TOKEN` to the token the
-API printed at first start (PowerShell: `$env:DIYA_TOKEN = "<token>"`; POSIX: `export DIYA_TOKEN=<token>`)
-before `npm run dev`, or put `DIYA_TOKEN=<token>` in `frontend/.env.local` (gitignored). Only a hash is
-kept, so a lost token can't be shown again: start the API once with `--rotate-token`.
-`DIYA_REQUIRE_TOKEN=0` turns the requirement off. Details in [docs/lan.md](docs/lan.md).
+The API requires an access token; the UI's server sends it for you. Set `DIYA_TOKEN` to the token the API printed at first start (PowerShell: `$env:DIYA_TOKEN = "<token>"`) before `npm run dev`, or put
+`DIYA_TOKEN=<token>` in `frontend/.env.local` (gitignored). Only a hash is kept, so a lost token can't be shown again: start the API once with `--rotate-token`. Details in [docs/lan.md](docs/lan.md).
 
-Instead of the two terminals, `python diya_run.py` checks first (Ollama, the models, the certificate, Node), then starts whichever of the API and the UI is
-not already answering, waits for each, and keeps them up (Ctrl+C or `python diya_run.py --stop` stops only what it started). `--check` and `--status` start
-nothing. A new access token is shown on the terminal and never written to its logs; `--save-token` saves it to `frontend/.env.local`. `--install` registers
-it to run at logon (and, with `--with-jobs`, the notifier and Dreaming if they are missing); nothing registers on its own. See
-[docs/ONE_COMMAND_DESIGN.md](docs/ONE_COMMAND_DESIGN.md) for what it does not do.
+Instead of the two terminals, `python diya_run.py` checks first (Ollama, the models, the certificate, Node), starts whichever of the API and the UI is not already answering, and keeps them up
+(`--stop` stops only what it started; `--check` and `--status` start nothing; `--install` registers it to run at logon). See [docs/ONE_COMMAND_DESIGN.md](docs/ONE_COMMAND_DESIGN.md).
 
-`pyproject.toml` pins every direct dependency to an exact version. `requirements.lock` pins the
-full dependency tree with hashes; `pip install --require-hashes -r requirements.lock` is the most
-reproducible install, proved in a fresh virtualenv against the full test suite. It is resolved for
-this project's own platform (Windows, Python 3.13) -- regenerate it for another platform with
-`uv pip compile pyproject.toml --extra dev -o requirements.lock --generate-hashes`. Settings are
-`DIYA_*` environment variables (see `diya_config.py`). For a terminal chat instead of the UI:
-`python diya.py new`.
-
-## Works today
-
-- Chat with eight tools (notes search, web search, weather, reminders, a to-do list, file listing); threads are saved.
-- Reminders: say "remind me to call mum tomorrow at 5pm". The time is read in code, a reminder is saved only if you asked for one, and the
-  **Reminders** page (the sidebar shows how many are due) shows what is due, with buttons to push one back 10 minutes, an hour or to tomorrow
-  morning. An optional desktop notifier (`diya_notify.py`) can tell you outside the app, but only once you schedule it yourself
-  ([docs/reminders.md](docs/reminders.md)); nothing here schedules it for you.
-  Ticking one off keeps when, so "when did I buy the guitar strings?" is answered from what you ticked off ([docs/PROACTIVITY_DESIGN.md](docs/PROACTIVITY_DESIGN.md), "Reminders that were done").
-  File listing is limited to `Documents/Diya` under your home folder, or the folders in `DIYA_FILES_ROOTS`.
-- **Diya writes first**: a good-morning with the day (08:30), an evening check-in when something is still open (19:00), a message when a reminder comes due and a hello after two quiet days, written in the chat itself
-  (cards at the top of the chat page) and put on the desktop by the notifier. Built in code from your own reminders and tasks, so nothing is invented; `DIYA_PROACTIVE=0` turns it off
-  ([docs/PROACTIVE_DESIGN.md](docs/PROACTIVE_DESIGN.md)). Replies appear word by word, with an orb while she thinks, and the chat model is kept loaded so "hey" is not slow
-  ([docs/SPEED_DESIGN.md](docs/SPEED_DESIGN.md), [docs/STREAMING_DESIGN.md](docs/STREAMING_DESIGN.md)).
-- **Past chats**: a search box on the History page looks inside every chat (not just the first message) and shows the piece that matched; each chat has a Rename button. New notes you put in the notes folder are found without a restart.
-- **Ask it anything**: Diya is a general assistant (she runs on a small model on your computer, and says so). A question that needs today's facts ("who is the current CEO of ...", "latest news about ..."), a short
-  "what is X", and any general question she gave up on are searched on the web and answered from the results, with no tools offered while she reads them, so a page cannot give her orders; `DIYA_LOOKUP=0`
-  turns it off ([docs/LOOKUP_DESIGN.md](docs/LOOKUP_DESIGN.md)).
-- **Automations**: say "every morning at 8am tell me the weather in Pune" (in the chat, or on the **Automations** page) and Diya does it on that schedule and writes you the answer in the chat. A run can
-  only read (the weather, the web, your notes, reminders and tasks), never save or send anything; it is made by code from your own words, not by the model; `DIYA_AUTOMATIONS=0` turns it off
-  ([docs/AUTOMATIONS_DESIGN.md](docs/AUTOMATIONS_DESIGN.md)).
-- **Telling your phone** (off; `DIYA_PUSH=1` and a contact address you choose in `DIYA_PUSH_SUBJECT`; `pip install ".[push]"`): the same pass of the notifier can send a Web Push when a
-  reminder is due, a question is waiting, an action needs your approval, or (at a time you choose) your day is ready, to a device that tapped **Notify this device** on the Today page. By
-  default the notification says only that something is waiting, never what; reminders are never held back at night, the rest are. [docs/PUSH_DESIGN.md](docs/PUSH_DESIGN.md) says what is
-  and is not verified: nothing has been sent to a real push service.
-- **Talking to Diya from Telegram** (off; `DIYA_TELEGRAM=1`, a bot you make yourself, `python diya_telegram.py --set-token`, then `--pair`): only the one paired owner, in a private chat, in plain
-  text, is answered, by the same code as the chat; everything else is dropped, and nothing can be approved from it. What you type and what Diya answers pass through Telegram, which can read both.
-  [docs/TELEGRAM_DESIGN.md](docs/TELEGRAM_DESIGN.md); never tried against the real service.
-- **Repeating reminders**: say "remind me every Monday at 9am to take out the bins". The repeat is read in code from your own words
-  (every day, every weekday, every Monday and Thursday, every month on the 15th, every 2 weeks; no time means 09:00, and Diya says
-  so), and each time one falls it becomes an ordinary reminder. The **Scheduled** page lists them, and pauses, resumes, skips the
-  next time of, or stops one, with a plain-words record of what happened. A week missed while the computer was off is one
-  reminder, not seven. Hourly, "until June", "every second Tuesday" and yearly are refused, not guessed. See
-  [Schedule design](docs/SCHEDULE_DESIGN.md).
-- A **Today** page: what is due now and later today, the tasks overdue or due today, and the repeating reminders that make one next.
-  It is built in code from your own reminders and tasks; no model writes any of it.
-- A **to-do list inside Diya**: say "add a task to buy oat milk" and it is saved at once, in Diya's own database, with nothing
-  sent anywhere. The **Tasks** page lists what is open (and what is overdue), takes a new one, ticks one off and puts it back.
-  A task is saved only if you asked for one, a due date only if you said it, and it is never sent to Todoist unless you name
-  Todoist. Diya can add a task and read the list; ticking one off is yours to do. See [Tasks design](docs/TASKS_DESIGN.md).
-- Optional connectors on the **Connections** page: Home Assistant, Notion and Todoist, each off until you paste a token there,
-  plus Google Calendar (a real Google sign-in: make a small Google app of your own once, paste its client ID and secret on the same page, then Connect;
-  step by step in [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md), design in [Connectors design](docs/CONNECTORS_DESIGN.md)). They read on their own; the one thing Diya can
-  change is a Todoist task you approve (below). Nothing is sent anywhere until you connect it, and disconnecting is instant.
-- An **Actions** page (and `python diya_actions_cli.py`) where anything Diya proposes to change outside this computer waits
-  for your approval: you press Approve on exactly what is shown, it runs once, and every step is recorded. The one thing it can
-  propose is **adding a task to your Todoist Inbox**, and only when you ask for one and name Todoist ("add 'x' to my
-  Todoist"; any other "add a task" goes on Diya's own list above), with a due date only if you said one; nothing else Diya
-  touches can be changed, and **no real Todoist account has been tried yet**, only the real API's answer to a fake token.
-- Tap-to-talk voice input through local Whisper (tap the mic to start, tap again to send; a recording with no sound in it is not sent, and the next tap tries another microphone), and optional spoken replies.
-- A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
-- Facts it extracts wait in a review queue; nothing reaches the model unless you accept it.
-  Review them on the **Memory** page of the UI, or with `python diya_review.py list`, `accept`, `reject` and `edit` (see [Dreaming](docs/dreaming.md)); `judge` asks the local model for an optional second opinion.
-  The model is told the accepted facts, in every chat; your old `user_profile.txt` was imported once.
-- **Memory that remembers on its own is built and OFF** (`DIYA_AUTO_MEMORY`; [design and measurement](docs/AUTO_MEMORY_DESIGN.md)). If you turn it on, code decides what
-  to do with each fact (remember it, ask you, or never keep it: secrets are discarded and their text is not stored), the local model's own answer to "is this private?" and
-  "does this replace something I know?" can only add caution, every automatic fact is marked "Learned on its own" with an Undo on the Memory page, and three taken back in a
-  day pauses it. Measured on labelled days, with the 4B model extracting (`DIYA_MODEL=diya-chat`) and the 3B judging privacy (`DIYA_PRIVACY_MODEL=qwen2.5:3b`), none of the
-  things that must never happen did (a secret kept, an order or something only the assistant said accepted, a sensitive statement accepted): a small sample written by the
-  policy's author, so read the limits in the design before you decide. It asks about a good deal that is harmless; that is the price.
-- With automatic memory on, Diya also asks: cards at the top of the chat for what it was unsure of, what may replace something it knew, what has gone out of date and what
-  is coming (an offer of a reminder), at most three at a time and two new a day, none between 22:00 and 07:00 (`DIYA_QUESTIONS_QUIET`, `off` for never); the desktop notifier says
-  only that there is a question. Nothing is accepted by silence.
-- Long chats and long gaps are cut to what the model can read: `DIYA_HISTORY_CHARS` (24,000 characters of the newest messages sent each turn) and
-  `DIYA_DREAM_BATCH_CHARS` (12,000 characters of yours read per Dreaming pass); `0` removes either limit.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 6380 tests pass on Windows (as of 2026-10-13).
-
-## Switched off until you choose
-
-Nothing below happens on its own; each is a step only you can take (an account, a device, a decision):
-
-- **The desktop notifier** (reminders, what Diya writes first, due automations, all in one pass every five minutes): schedule it once; the commands are in [docs/reminders.md](docs/reminders.md), or `python diya_run.py --install --with-jobs`.
-- **Dreaming** (extracting facts from your chats for review): schedule it (see [docs/dreaming.md](docs/dreaming.md)) and give its task a 15-minute limit, not Windows' 72-hour default.
-- **Automatic memory** (`DIYA_AUTO_MEMORY=1`, with `DIYA_PRIVACY_MODEL=qwen2.5:3b`): built and measured, off until you read [the measurement](docs/AUTO_MEMORY_DESIGN.md) and decide.
-- **Connectors:** a token for Home Assistant, Notion or Todoist on the Connections page; Google Calendar needs your own `DIYA_GOOGLE_CLIENT_ID` and `DIYA_GOOGLE_CLIENT_SECRET`. None has been tried against a real account.
-- **Your phone:** Web Push (`DIYA_PUSH=1`) and a Telegram bot (`DIYA_TELEGRAM=1`) are built and never tried against a real device or bot.
-- **Your data folder:** move it out of a cloud-synced folder with `python diya_data.py move` (below).
-- **A better model:** `diya-chat` (below), which also needs `DIYA_MODEL=diya-chat` set for the API and Dreaming.
-
-## Privacy, and where your data is kept
-
-- **Stays on this computer:** the model, the embeddings, speech-to-text (after Whisper's first download), your chats, your memory, reminders and tasks.
-- **Leaves, only when it is used:** `web_search` (the words it searches, to DuckDuckGo), `get_weather` (the place, to Open-Meteo), a connector you
-  connected, and, once, the download of the Whisper model from Hugging Face.
-- **Usage reporting is switched off** in the three libraries that would otherwise send some: ChromaDB (the notes index), Hugging Face (the download) and
-  Next.js (the UI's launcher). One thing code cannot decide: spoken replies use the voice your *browser* picks, and some browsers' default voices are
-  online services. Leave "Speak replies" off, or pick a local voice, if that matters to you.
-- **Where it is kept.** By default, beside the code. If that folder is copied by a cloud-sync program (OneDrive, Dropbox), set `DIYA_DATA_DIR` to a folder
-  outside it: one setting moves the database, the access-token hash, Dreaming's state, log and review queue, the notifier's log and the connectors' tokens
-  (a file's own `DIYA_*` setting still wins). The folder is made when Diya starts. The TLS certificate pair is separate: `DIYA_SSL_CERT` and `DIYA_SSL_KEY`.
-  To move what already exists: `python diya_data.py move --to "$env:LOCALAPPDATA\DiyaData" --certs` (PowerShell). It **copies and checks** (same bytes, same rows in every
-  table, the database's integrity checks) and never deletes or overwrites anything, refuses a cloud-sync folder, and ends by printing the settings to apply;
-  deleting the originals afterwards is yours to do. `--dry-run` shows the plan first.
-- **A passcode for the UI.** `DIYA_UI_PASSCODE` (in the terminal that starts the UI, or in `frontend/.env.local`) puts a sign-in in front of every page and
-  call; `npm run dev:lan` refuses to start without one of at least 12 characters, because otherwise anyone on the network could use Diya as you. See
-  [UI login design](docs/UI_LOGIN_DESIGN.md) and [LAN mode](docs/lan.md).
-
-## A better model for this laptop (optional)
-
-`qwen2.5:3b` is the default because a plain `ollama pull` is all it needs. On a 16 GB computer `qwen3:4b-instruct` was measured as better (9 of 9 evals in
-every run against 7 to 8; it reaches for a tool nobody asked for on 2% of messages against 13%; [model benchmark](docs/MODEL_BENCHMARK.md)), at about 1.4 times
-the time per message and 1.7 GB more memory. It needs its context window capped or it fails to load:
+Settings are `DIYA_*` environment variables (see `diya_config.py`). For a terminal chat instead of the UI: `python diya.py new`. A better model for a 16 GB laptop is optional
+(`qwen3:4b-instruct`, see [the model benchmark](docs/MODEL_BENCHMARK.md)):
 
 ```bash
 ollama pull qwen3:4b-instruct
@@ -159,54 +87,63 @@ ollama create diya-chat -f ollama/diya-chat.Modelfile   # the same weights, capp
 # then set DIYA_MODEL=diya-chat for the API and for the scheduled Dreaming task
 ```
 
+## Switched off until you choose
+
+Nothing below happens on its own; each is a step only you can take (an account, a device, a decision):
+
+- **The desktop notifier** (reminders, what Diya writes first, due automations, all in one pass every five minutes): schedule it once; the commands are in [docs/reminders.md](docs/reminders.md), or `python diya_run.py --install --with-jobs`.
+- **Dreaming** (reading your chats for facts): schedule it ([docs/dreaming.md](docs/dreaming.md)) with a 15-minute limit, not Windows' 72-hour default.
+- **Automatic memory** (`DIYA_AUTO_MEMORY=1`, with `DIYA_PRIVACY_MODEL=qwen2.5:3b`): on or off is your decision; read [the measurement](docs/AUTO_MEMORY_DESIGN.md) first. Off means every fact waits for you.
+- **Connectors:** a token for Home Assistant, Notion or Todoist on the Connections page; Google needs your own small Google app ([steps](docs/GOOGLE_SETUP.md)). None has been tried against a real account.
+- **Your phone:** Web Push (`DIYA_PUSH=1`) and a Telegram bot (`DIYA_TELEGRAM=1`) are built and have never been tried on a real device or bot.
+- **Your data folder:** move it out of a cloud-synced folder with `python diya_data.py move` (below).
+
+## Privacy, and where your data is kept
+
+- **Stays on this computer:** the model, the embeddings, speech-to-text (after Whisper's first download), your chats, your memory, reminders and tasks.
+- **Leaves, only when it is used:** `web_search` (the words it searches, to DuckDuckGo), `get_weather` (the place, to Open-Meteo), a connector you connected, and, once, the download of the Whisper model.
+- **Usage reporting is switched off** in the libraries that would otherwise send some (ChromaDB, Hugging Face, Next.js). Spoken replies use the voice your *browser* picks, and some browsers' default voices
+  are online services: leave "Speak replies" off, or pick a local voice, if that matters.
+- **Where it is kept.** By default, beside the code. If that folder is copied by a cloud-sync program (OneDrive, Dropbox), set `DIYA_DATA_DIR` to a folder outside it; to move what already exists:
+  `python diya_data.py move --to "$env:LOCALAPPDATA\DiyaData" --certs` (PowerShell). It copies and checks (same bytes, same rows, the database's integrity checks) and never deletes anything;
+  `--dry-run` shows the plan first.
+- **A passcode for the UI.** `DIYA_UI_PASSCODE` puts a sign-in in front of every page and call; `npm run dev:lan` refuses to start without one of at least 12 characters. See [UI login design](docs/UI_LOGIN_DESIGN.md) and [LAN mode](docs/lan.md).
+
 ## Known limits
 
-- Nothing tells you outside the app until you schedule the desktop notifier yourself, and the 3B model sometimes changes the time you gave: the tool refuses a changed time and the model asks again, so a valid
-  request is sometimes not saved at first (4 of 27 runs in a small measurement). "Next Friday", a bare "at 5" and "3/4" are refused on purpose.
-- Repeating reminders: the repeat is read from your own words when it is part of the request ("remind me every day at 8am to ..."), not from
-  what the model passes on, because measured on the 3B model that saved the wrong time (9 of 60) and said a reminder repeated when it did not
-  (11 of 60); with the words read in code it was 59 of 60 right, and a repeat Diya refuses (hourly, "until June") was never saved (0 of 27).
-  The 20 labelled requests were looked at while building it; on 30 fresh phrasings 29 behaved (the miss, "I need a reminder every morning ...",
-  fails safe). A repeat that is part of something else ("I do it every Sunday") or has words after it that could change it ("every day except
-  Sunday") is not read, and the model's own version is kept only if it is your words exactly. Tasks do not repeat. See
-  [Schedule design](docs/SCHEDULE_DESIGN.md), section 6.
-- The optional model check on a staged fact (`python diya_review.py judge`) is the same small model that proposed it, and it was measured only on
-  a few dozen invented cases: it says "not supported" to true facts that are only implied, and a message can steer it. It is a hint, never a decision.
-- `web_search` is not covered by the outbound-host allowlist that limits `get_weather` to Open-Meteo (`DIYA_TOOL_ALLOWED_HOSTS`).
-- Models are pulled by tag, not pinned; the 3B model sometimes calls tools it should not. For adding a task it reached for the tool
-  unasked on 16% of messages (24 of 153 in a measured run, `python diya_actions_bench.py`), and a guard in code refused every one
-  (0 of 153 saved). The guard knows a short list of ways of asking, so an unusual phrasing ("jot it down as a task") is refused and
-  you can say it again. The model's words are another matter: after a refusal it still told the person it had added a task in about
-  2% of those messages (3 of 153, found by a rough pattern match; the list itself was right). The "Todoist" rule is a word, not an
-  understanding: "add a task to update my Todoist password" goes to Todoist (a card to approve, or a refusal that says why).
+- It is a 3 to 4 billion parameter model on a CPU: replies take seconds to tens of seconds, it sometimes changes a time you gave (the tool refuses a changed time and the model asks again), and it reaches for
+  tools it should not (guards in code refuse them: 0 of 153 unasked task proposals were saved in a measured run).
+- Repeating reminders read your words in code: hourly, "until June", "every second Tuesday" and yearly are refused, not guessed. Tasks do not repeat.
+- `web_search` is not covered by the outbound-host allowlist that limits weather to Open-Meteo.
+- Models are pulled by tag, not pinned (Ollama cannot pin by digest).
+- The optional model check on a staged fact is the same small model that proposed it: a hint, never a decision.
+- The microphone, the phone channels and the Google sign-in were built and tested against stand-ins only.
 
 ## Docs
 
-- [LAN mode and certificates](docs/lan.md): use Diya from a phone, and the mkcert details.
-- [Dreaming](docs/dreaming.md): how staged memory works, and how to run and schedule it.
-- [Roadmap](ROADMAP.md): the Stage 0 checklist and later stages. [Product vision](PRODUCT_VISION.md): the current state.
-- [Research](RESEARCH.md): a dated index of market and technical signals, including comparable
-  local-memory projects (Truffle, Hindsight) and agent-harness engineering patterns (UFO's
-  grant-in-chat audit trail, Dreaming-shaped nightly consolidation showing up independently in
-  three unrelated projects) weighed against Diya's own design, not adopted wholesale.
-  [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built, including an optional, measured model verifier). [Person-tagged memory](docs/PERSON_MEMORY_DESIGN.md): who a fact is about, built into review, the model's own system message, and the CLI/UI (built). [Model benchmark](docs/MODEL_BENCHMARK.md): three installed models on this laptop, first pass. [Proactivity design](docs/PROACTIVITY_DESIGN.md): reminders that fire, the first step from an assistant that answers to one that tells you (built except the desktop notifier). [Connectors design](docs/CONNECTORS_DESIGN.md): outside accounts as a menu any owner picks from (Home Assistant, Notion, Todoist and Google Calendar all built; the OAuth connector's code is not yet verified against the real Google endpoints). [Actions design](docs/ACTIONS_DESIGN.md): the approval gate and action trail any future write must go through -- the model proposes, code executes, only the owner approves (built: the store and its state machine, the model's side, the Actions page and command line you approve on, and the first real write, adding a Todoist task; every other connector is read-only). [Tasks design](docs/TASKS_DESIGN.md): the to-do list kept inside Diya itself, why that and not an API, and what the model may do with it (built: the list, its two tools, the Tasks page). [Schedule design](docs/SCHEDULE_DESIGN.md): repeating reminders, snooze, a record of what happened, and the Scheduled and Today pages (built, and measured with the real models; the measurement changed the design). [UI design](docs/UI_DESIGN.md): the redesigned interface, a warm-paper light theme and a near-black dark theme, one sidebar, a plain message box, and the measured palette. [Proactive design](docs/PROACTIVE_DESIGN.md): Diya writing first. [Automations design](docs/AUTOMATIONS_DESIGN.md): requests that run on a schedule, read-only. [Look-it-up design](docs/LOOKUP_DESIGN.md): answering general questions from the web. [Voice design](docs/VOICE_DESIGN.md): tap to talk, and not turning silence into words. [Google setup](docs/GOOGLE_SETUP.md). [Research plan, October 2026](docs/RESEARCH_PLAN_2026-10.md): what the newest research says to build next. [Speed](docs/SPEED_DESIGN.md) and [streaming](docs/STREAMING_DESIGN.md) designs: why "hey" is fast and replies appear as they are written. [Push](docs/PUSH_DESIGN.md), [Telegram](docs/TELEGRAM_DESIGN.md), [one command](docs/ONE_COMMAND_DESIGN.md) and [phone channel](docs/PHONE_CHANNEL_DESIGN.md) designs (built, never tried against a real device or service).
+Start with [PRODUCT_VISION.md](PRODUCT_VISION.md) (what it is today) and [ROADMAP.md](ROADMAP.md) (what is planned and done). Then by topic:
+
+- **Memory:** [staged facts and review](docs/STAGE2_DESIGN.md), [people](docs/PERSON_MEMORY_DESIGN.md), [automatic memory](docs/AUTO_MEMORY_DESIGN.md), [Dreaming](docs/dreaming.md).
+- **Your day:** [reminders](docs/PROACTIVITY_DESIGN.md), [repeating reminders](docs/SCHEDULE_DESIGN.md), [tasks](docs/TASKS_DESIGN.md), [Diya writes first](docs/PROACTIVE_DESIGN.md), [automations](docs/AUTOMATIONS_DESIGN.md).
+- **Talking:** [speed](docs/SPEED_DESIGN.md), [streaming](docs/STREAMING_DESIGN.md), [voice](docs/VOICE_DESIGN.md), [answering general questions](docs/LOOKUP_DESIGN.md), [the interface](docs/UI_DESIGN.md).
+- **Outside the computer:** [connectors](docs/CONNECTORS_DESIGN.md), [Google setup](docs/GOOGLE_SETUP.md), [approvals](docs/ACTIONS_DESIGN.md), [push](docs/PUSH_DESIGN.md), [Telegram](docs/TELEGRAM_DESIGN.md), [phone channel](docs/PHONE_CHANNEL_DESIGN.md), [LAN mode](docs/lan.md).
+- **Trust:** [access token and the boundary](docs/STAGE1_DESIGN.md), [UI login](docs/UI_LOGIN_DESIGN.md), [the October audit](docs/AUDIT_2026-10-10.md).
+- **Research and plans:** [RESEARCH.md](RESEARCH.md) (33 dated entries), [the research plan](docs/RESEARCH_PLAN_2026-10.md), [model benchmark](docs/MODEL_BENCHMARK.md), [the gate benchmark](docs/GATE_BENCHMARK.md).
 
 ## Architecture
 
 ```
 browser -> Next.js UI (:3000, HTTPS): its /api/* routes forward to the API, holding the token
              -> FastAPI diya_web.py (127.0.0.1:8080, HTTPS)
-                  |- diya.py Agent (tool loop) -> Ollama :11434 (qwen2.5:3b, nomic-embed-text)
+                  |- diya.py Agent (tool loop, voice, lookups) -> Ollama :11434 (a 3-4B chat model, nomic-embed-text)
                   |- diya_db.py -> SQLite diya.db (threads, messages, reminders, tasks, automations, facts, actions)
                   '- faster-whisper (base)
 diya_notify.py (scheduled, every 5 min): due reminders, what Diya writes first, due automations -> the chat and the desktop
-dreaming.py (run separately) reads diya.db -> dream_pending.jsonl
-diya_review.py (by hand) or the UI's Memory page reads dream_pending.jsonl -> reviewed facts in diya.db -> the model, if accepted
+dreaming.py (scheduled) reads diya.db -> staged facts -> lanes and questions, or the Memory page -> the model, if accepted
 ```
 
-`sample_notes/` holds fictional demo notes, embedded into an in-memory Chroma index at each start.
-`milestone*.py` and `archive/` record the first, learning phase. Personal data (`diya.db`,
-`user_profile.txt`, `dream_*`, `watcher_*`, `*.pem`) is gitignored.
+`sample_notes/` holds fictional demo notes, embedded into an in-memory index that is rebuilt when the folder changes. `milestone*.py` and `archive/` record the first, learning phase. Personal data
+(`diya.db`, `user_profile.txt`, `dream_*`, `watcher_*`, `*.pem`) is gitignored.
 
 ## Tests and evals
 
@@ -216,14 +153,16 @@ python diya_evals.py                      # needs Ollama and both models; exits 
 python diya_actions_bench.py --runs 3     # needs Ollama: when does the model add a task, asked and not (about 30 minutes)
 ```
 
-The tests use a fake model client, temporary directories and a cleared `DIYA_*` environment, so they
-cannot reach `diya.db`. The evals send nine prompts to the real model, on a temporary database; one
-calls Open-Meteo. Results vary between runs on a 3B model.
+The tests use a fake model client, temporary directories and a cleared `DIYA_*` environment, so they cannot reach `diya.db`. The evals send nine prompts to the real model on a temporary database.
+Results vary between runs on a small model.
 
-## License and credits
+## Licence and credits
 
-All rights reserved: the code is published to read, and no license to use, copy, modify or distribute
-it is granted. Third-party parts keep their own licenses (the microphone icon is from the MIT-licensed
-[Libraries.dev](https://github.com/Jakubantalik/Libraries.dev); see [notices](THIRD_PARTY_NOTICES.md)).
-The project is modeled on a research dossier: `dossier_content.py` is its source; the PDF (`render_pdf.py`) and the web page
-(`render_html.py`, standard library only) are both generated from it, and a test fails if the committed page is stale.
+All rights reserved: the code is published to read, and no licence to use, copy, modify or distribute it is granted.
+
+**What is borrowed.** No code is copied from the projects listed in [RESEARCH.md](RESEARCH.md); where an idea came from one of them, the entry says so. The only third-party material in the repository is
+an icon set (MIT, by Jakub Antalik), credited in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), which also states the rule for the future: code from another project goes in only with its licence read, its
+notice kept and its author named, and is never presented as ours. Libraries Diya depends on keep their own licences ([pyproject.toml](pyproject.toml), `frontend/package.json`).
+
+The project began as a study of a research dossier: `dossier_content.py` is its source; the PDF (`render_pdf.py`) and the web page (`render_html.py`, standard library only) are both generated from it, and a
+test fails if the committed page is stale.

@@ -845,6 +845,49 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
   one person); the training and serving-at-scale papers need hardware Diya does not have.
 - **Action:** a reading path for the owner, in the order that builds on itself, each with something to try on this laptop, is in `docs/RESEARCH_PLAN_2026-10.md`; nothing is built from this entry.
 
+### 33. Are there already repositories like Diya? A survey of GitHub, read live on 2026-10-13 (51 repositories)
+
+- **Source:** the GitHub search and API (`gh`), run on 2026-10-13 with eight searches ("local-first personal AI assistant", "AI agent long-term memory", "second brain", "openclaw", "hermes agent" and
+  similar) plus the projects already in this file; stars, licence and last push are what the API returned that day. READMEs read for Hermes Agent, supermemory and Leon (and OpenClaw, Khoj, Hindsight
+  in earlier entries). The owner asked for it ("i feel like there are already repos in github like this already can u check all of them"). "All of them" is not possible: the search found about 50
+  that matter and hundreds of small ones, and the listing below is the part that overlaps with what Diya does.
+- **Noted:** 2026-10-13.
+- **Answer: yes, many, and several are far bigger and better funded.** Stars are popularity, not use; "Last push" is when someone last committed.
+
+| Kind | Project | Licence | Stars | Last push | What it is, in one line |
+|---|---|---|---|---|---|
+| Personal agent | openclaw/openclaw | MIT | 391,842 | 2026-10-13 | self-hosted agent that lives in 20+ chat apps, with skills and a scheduler (entry 16) |
+| Personal agent | NousResearch/hermes-agent | MIT | 253,307 | 2026-10-13 | "self-improving" agent: its own memory (SQLite, full-text search), skills it writes, a built-in cron scheduler, Telegram/Discord/Slack/WhatsApp/Signal, **native Windows** |
+| Personal agent | khoj-ai/khoj | **AGPL-3.0** | 37,669 | 2026-08-02 | "second brain": answers from the web or your documents, scheduled automations; its hosted cloud closed in April (entry 16) |
+| Personal agent | leon-ai/leon | MIT | 17,575 | 2026-10-12 | open-source assistant since 2019, now a "2.0 developer preview": tools, layered memory, a proactive "pulse", computer use, local models, Windows |
+| Chat front end | open-webui/open-webui | not machine-readable (custom) | 155,505 | 2026-10-12 | the usual Ollama web UI |
+| Chat front end | Mintplex-Labs/anything-llm | MIT | 67,014 | 2026-10-12 | local chat over your documents |
+| Chat front end | janhq/jan | not machine-readable | 44,930 | 2026-10-13 | an offline ChatGPT-style desktop app |
+| Memory layer | mem0ai/mem0 | Apache-2.0 | 67,103 | 2026-10-12 | memory for agents as a library and a service (entry 26) |
+| Memory layer | vectorize-io/hindsight | MIT | 49,029 | 2026-10-12 | retain, recall and reflect; runs locally with Ollama on Windows (entry 14) |
+| Memory layer | supermemoryai/supermemory | MIT | 31,206 | 2026-10-13 | the engine behind entry 28, with a one-binary local mode that works with Ollama: facts, profile, updates and forgetting, hybrid search, connectors |
+| Memory layer | topoteretes/cognee, getzep/graphiti, letta-ai/letta, MemTensor/MemOS | Apache-2.0 | 32,142 / 31,697 / 25,123 / 11,845 | 2026-09 to 10 | graph or "stateful agent" memory platforms |
+| Memory layer | basicmachines-co/basic-memory | **AGPL-3.0** | 4,162 | 2026-10-12 | memory as plain Markdown notes |
+| Knowledge base | Sentient-OS-Labs/sentient-os | **AGPL-3.0** | 568 | 2026-10-11 | entry 29 |
+| Knowledge base | supermemoryai/company-brain | Apache-2.0 | 996 | 2026-10-02 | entry 10 |
+
+Not comparable and left out: coding agents (OpenHands, Open Interpreter), browser agents (browser-use), agent frameworks (autogen, agno), and the dozens of OpenClaw skill lists and installers.
+
+- **What this means for Diya:** (a) The *category* is crowded and Diya will not out-feature it (entry 16 said so; the numbers are now 391k and 253k stars). (b) The *parts* are largely available as libraries: a memory
+  layer (Hindsight, supermemory local, mem0), a scheduler and cron-style automations (Hermes), a chat front end (Open WebUI), layered memory and a proactive pulse (Leon). Most are **MIT or Apache-2.0**,
+  which allow reuse *with* the copyright notice kept; a few important ones are **AGPL-3.0** (Khoj, Sentient OS, basic-memory), which cannot be built into an all-rights-reserved project. (c) What the
+  READMEs read do **not** say they do, and Diya does: a memory the person reviews before the model is told it (Hindsight, supermemory and Hermes all say they learn automatically; the AUTO memory switch
+  Diya now has keeps lanes, questions and Undo around that), actions that wait for a one-by-one approval, and everything measured with the real small model on a CPU laptop. That is a design
+  choice, not a feature count, and it is judged from READMEs only. (d) What Diya genuinely lacks next to them: reach (a phone app or chat apps; Diya's Telegram and Web Push are untried), a skills
+  ecosystem (deliberately none), and years of other people's testing.
+- **Three honest ways forward (the owner's choice):** *Adopt*: run Hermes Agent (MIT, native Windows) as the daily assistant and keep Diya as the learning project and the audit. *Borrow*: keep
+  Diya, and when it needs relevance recall or a knowledge base (units R1 and K1 of `docs/RESEARCH_PLAN_2026-10.md`), try a memory layer as a **dependency** (supermemory local or Hindsight, installed from its
+  package, its licence and notice kept) before writing our own. *Build*: keep writing everything, borrowing only ideas. My recommendation is borrow-and-build, plus trying Hermes side by side for a day to
+  learn what a finished daily driver feels like (entry 16 suggested the same).
+- **The rule that follows (also in `THIRD_PARTY_NOTICES.md`):** code from another project goes in only with its licence read, its notice kept, its name listed and its author credited; it is never presented as ours. Nothing is
+  copied today: the repository holds no code from any project in this file, and its one third-party asset (an icon set) is credited. AGPL code is not used.
+- **Action:** README now says where Diya stands against these projects; `THIRD_PARTY_NOTICES.md` carries the rule; no build.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,
@@ -878,3 +921,6 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
     Diya the usable form is propose-only: a script may write a suggested edit; only the owner applies one. A model that grades its own work shares its own blind spots.
 12. (2026-10-13, entry 29) "Copy wherever needed" is a licence question before it is an engineering one: Sentient OS is AGPL-3.0 and Diya is all rights reserved, so its code cannot be copied
     into Diya; its design can. Read a project's licence before taking any code from it, and say which in the commit.
+13. (2026-10-13, entry 33) Fifty projects like Diya exist and the biggest have hundreds of thousands of stars. Diya's reason to exist is not feature count: it is a memory the person
+    reviews, actions that wait for approval, and measurement with a small local model. The parts (memory layers, schedulers, chat front ends) are available as MIT or Apache-2.0 libraries; use them
+    as dependencies, with their notices, when a unit needs one, and never as code pasted in and renamed.
