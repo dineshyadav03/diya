@@ -888,6 +888,41 @@ Not comparable and left out: coding agents (OpenHands, Open Interpreter), browse
   AGPL code is not used. The owner has decided to take code from these projects: that is done with their MIT and Apache-2.0 code under this rule, and what is taken is listed in `THIRD_PARTY_NOTICES.md`.
 - **Action:** `docs/COMPARISON.md` lists, project by project, what each does and whether Diya has it; README says where Diya stands against these projects; `THIRD_PARTY_NOTICES.md` carries the rule; no build.
 
+### 34. numbat (Perplexity, Apache-2.0, Go): an audit log for AI agents -- and the gap it shows in Diya
+
+- **Source:** https://github.com/perplexityai/numbat. Read through the GitHub API on 2026-10-13: the repository's metadata, the README, `docs/enforcement.md`, `docs/rule-catalog.md`, the first part
+  of `docs/agent-coverage.md`, `CONTRIBUTING.md` and the first part of `SECURITY.md`. **Not read:** the Go source and the rule files. **Nothing was installed or run.**
+- **Noted:** 2026-10-13 (the owner's link).
+- **What it is:** one Go program that watches *other* agents on a computer; it does not run one. Published under Perplexity's GitHub organisation (whose own homepage field is perplexity.ai),
+  Apache-2.0, created 2026-07-24, last pushed 2026-10-12, 1,109 stars and 116 forks when read. It sees an agent three ways: the session files the agent leaves on disk (read-only "forensic
+  reconstruction"), hooks or plugins the agent calls before each tool action, and OTLP logs. Every action becomes one normalised event (a command run, a file read, a network request ...) judged
+  by rules written in CEL (a small expression language) in YAML. The catalogue page lists 47 built-in rules: secret reads (`.env`, SSH keys, cloud credentials, browser cookie stores),
+  exfiltration, `curl | sh`, reverse shells, persistence (shell profile, scheduler, `authorized_keys`), tampering with the agent's own configuration, reduced-approval modes, and two *sequence*
+  rules (a secret read followed by an outbound send). The coverage matrix I read lists Claude Code, Codex, Gemini CLI, Cursor and Windsurf; its notes and examples also name OpenClaw, Hermes and
+  others. Output is versioned NDJSON with JSON Schemas, secrets redacted, and "case bundles" with SHA-256 manifests. Binaries are built for macOS, Linux and native Windows.
+- **How it treats blocking:** off by default; every shipped rule is monitor-only; enforcement is chosen rule by rule, can only *deny* (no allow, rewrite or approve, because hosts differ and an
+  allow could bypass a host's own approval), and any error of its own means it says nothing ("fail open"). The agent host stays the enforcement point: numbat asks it to refuse and cannot stop the tool itself.
+- **Skeptic note:** it is a security-monitoring product for fleets of computers, under three months old. Its star count is popularity, not evidence that it catches things; the README's example
+  records are "controlled replays", and it says itself that a finding is a rule match and not proof, and that its redaction is not data-loss prevention. I did not run it, so how well its rules
+  work on real sessions is unknown to me.
+- **What is worth taking (ideas only):**
+  1. *The contract in CONTRIBUTING.* Prefer a documented false negative to a false positive; emit only what the source supports; monitoring fails open, enforcement only ever denies. This is the
+     stance Diya's gates already take (`docs/GATE_BENCHMARK.md`), stated more sharply than anywhere in Diya's own docs.
+  2. *One normalised event for every tool call, in an append-only journal.* This is the real gap. Diya records what the model *proposes to change* (`action_events`) and every change to a fact
+     (`fact_events`), but of its read-only tool calls it keeps nothing: the `messages` table holds only what the person said and what Diya answered. After an unattended automation has run there
+     is no answer to "what did Diya actually look at or run for me?" The owner's own claim for Diya is that it is the assistant you can audit; this is the part of that claim that is not yet true.
+  3. *Order matters.* numbat's strongest rules are sequences. Diya's taint warning on a proposal is the same idea; the plain per-tool Rule-of-Two table that would test it (entry 17, action (a)) was
+     never written, and still should be.
+  4. *The journal is itself sensitive.* numbat's threat model says its records hold commands, paths and previews even after redaction. A tool-call journal in Diya would need the same care: arguments
+     redacted or hashed, shown only behind the token, and no copy of tool output.
+- **Not for Diya:** the parsers for other vendors' session files, fleet rollout, the endpoint-security rule catalogue (Diya has no shell tool and no arbitrary-URL tool for those rules to watch), and
+  Go. Diya is not one of numbat's supported agents and has no hook for it to attach to; a journal would be written by Diya itself.
+- **A separate thing the owner could do, which is not about Diya:** numbat can watch the coding agents used on this computer, Claude Code included. `numbat agents` and `numbat scan` are read-only and
+  install nothing; but reading Claude Code's session files means it would read these very conversations, and downloading and running a program is the owner's decision. I have not.
+- **Rules about other AI agents using it:** none found in `CONTRIBUTING.md` (read whole), `SECURITY.md` or the README. The licence is Apache-2.0: its code could be reused with the notice kept; none will
+  be, because the language and the job are different.
+- **Action:** unit **J1** (a tool-call journal, with the Rule-of-Two table as its test) added to `docs/RESEARCH_PLAN_2026-10.md`; no code yet.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,
