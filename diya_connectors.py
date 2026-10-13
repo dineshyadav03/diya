@@ -24,6 +24,20 @@ class ConnectorError(Exception):
 
 
 @dataclass(frozen=True)
+class Setup:
+    """What an OAuth connector needs given once before it can connect, and where it comes from (docs/CONNECTORS_DESIGN.md, "Setting up Google from the page"). `fields` are
+    (name, label, secret) for the form; `steps` is the plain-words list of what to do in the other service to get them; `state(config)` says where they are now ("file" for the page,
+    "environment" for a DIYA_* setting, or None); `save(config, values)` checks and stores them, raising ConnectorError for ones that cannot be right; `clear(config)` forgets what the page
+    stored (and says whether there was any)."""
+
+    fields: tuple
+    steps: tuple
+    state: object
+    save: object
+    clear: object
+
+
+@dataclass(frozen=True)
 class Connector:
     """One connector TYPE (docs/CONNECTORS_DESIGN.md, D6): what the Connections page offers, not a
     live connection. `auth_kind` is "token" (a form: paste a token, checked by `validate` before
@@ -38,6 +52,7 @@ class Connector:
     implemented: bool = False
     validate: object = None  # token-kind only: callable(token) -> None, raises ConnectorError
     oauth_connect: object = None  # oauth-kind only: callable(config) -> None, raises ConnectorError
+    setup: object = None  # a Setup, for a connector that needs something given once (a client id and secret) before it can connect; None for the rest
 
     def __post_init__(self):
         if not _NAME.fullmatch(self.name):
@@ -133,10 +148,46 @@ def log_call(config, name, action, ok, detail=None):
         f.write(line + "\n")
 
 
+def setup_status(config, connector):
+    """The page's view of a connector's one-time setup: what to ask for, what to do to get it, and whether it is done and from where. Never the values themselves."""
+    setup = connector.setup
+    state = setup.state(config)
+    return {
+        "fields": [{"name": name, "label": label, "secret": bool(secret)} for name, label, secret in setup.fields],
+        "steps": list(setup.steps),
+        "done": state is not None,
+        "from": state,
+    }
+
+
+def save_setup(config, connector, values):
+    """Check and store a connector's one-time setup. ConnectorError, and nothing stored, for a connector that has none or values that cannot be right."""
+    if connector.setup is None:
+        raise ConnectorError(f"{connector.label} does not need any setup")
+    wanted = {name for name, _label, _secret in connector.setup.fields}
+    given = {str(k): str(v) for k, v in (values or {}).items() if str(k) in wanted}
+    missing = [label for name, label, _secret in connector.setup.fields if not given.get(name, "").strip()]
+    if missing:
+        raise ConnectorError(f"fill in: {', '.join(missing)}")
+    connector.setup.save(config, {k: v.strip() for k, v in given.items()})
+    log_call(config, connector.name, "setup saved", True)
+
+
+def clear_setup(config, connector):
+    """Forget what the page stored for a connector, and disconnect it: a stored sign-in belongs to the app it was made with, so it cannot outlive a change of app."""
+    if connector.setup is None:
+        raise ConnectorError(f"{connector.label} does not need any setup")
+    removed = connector.setup.clear(config)
+    disconnect(config, connector.name)
+    log_call(config, connector.name, "setup cleared", True, detail=None if removed else "had none stored")
+    return removed
+
+
 def status(config, connectors):
     """Every known connector type and its state, for the Connections page and its API."""
-    return [
-        {
+    found = []
+    for c in connectors:
+        entry = {
             "name": c.name,
             "label": c.label,
             "description": c.description,
@@ -144,5 +195,7 @@ def status(config, connectors):
             "implemented": c.implemented,
             "connected": is_connected(config, c.name),
         }
-        for c in connectors
-    ]
+        if c.setup is not None:
+            entry["setup"] = setup_status(config, c)
+        found.append(entry)
+    return found

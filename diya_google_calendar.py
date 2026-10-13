@@ -7,16 +7,21 @@ own browser to Google's own consent screen and BLOCKS until a temporary local se
 loopback port catches the redirect back, then exchanges the code for a refresh token -- the credential
 that gets stored, through the same diya_connectors.store_token every connector uses.
 
-Needs DIYA_GOOGLE_CLIENT_ID and DIYA_GOOGLE_CLIENT_SECRET, from an OAuth client the owner registers
-themselves (Google Cloud Console, "Desktop app" type, since only that type gets RFC 8252's loopback
-exception -- an arbitrary port, not one fixed at registration time) -- Diya cannot create one. The
-client secret is not treated as fully confidential here either way (Google's own guidance: a desktop
-app cannot keep one secret, which is exactly why the loopback redirect and a one-time code exist), but
-it is still an owner-supplied setting, never committed, like every other DIYA_* value.
+Needs a client id and secret, from an OAuth client the owner registers themselves (Google Cloud
+Console, "Desktop app" type, since only that type gets RFC 8252's loopback exception -- an arbitrary
+port, not one fixed at registration time) -- Diya cannot create one. They are pasted once on the
+Connections page (stored in a file of their own beside the connector tokens) or set as
+DIYA_GOOGLE_CLIENT_ID and DIYA_GOOGLE_CLIENT_SECRET, which win if both exist. The client secret is not
+treated as fully confidential here either way (Google's own guidance: a desktop app cannot keep one
+secret, which is exactly why the loopback redirect and a one-time code exist), but it is still the
+owner's, never committed, never sent back to the page, like every other credential.
 """
 from __future__ import annotations
 
 import http.server
+import json
+import os
+import re
 import secrets
 import urllib.parse
 import webbrowser
@@ -95,14 +100,88 @@ def _exchange(data):
     return response.json()
 
 
+CLIENT_ID_SHAPE = re.compile(r"[0-9A-Za-z._-]{8,200}\.apps\.googleusercontent\.com")
+CLIENT_SECRET_SHAPE = re.compile(r"[0-9A-Za-z._~-]{8,200}")
+
+
+def _client_file(config):
+    return os.path.join(config.connector_tokens_dir, "google_calendar.client")
+
+
+def _stored_client(config):
+    """The client id and secret pasted on the Connections page, or None (nothing stored, or a file that is not what save_client writes)."""
+    try:
+        with open(_client_file(config), encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    client_id, client_secret = str(data.get("client_id") or "").strip(), str(data.get("client_secret") or "").strip()
+    return (client_id, client_secret) if client_id and client_secret else None
+
+
+def client_state(config):
+    """Where Google's client id and secret are now: "environment" (the DIYA_GOOGLE_* settings, which win), "file" (pasted on the page) or None."""
+    if (config.google_client_id or "").strip() and (config.google_client_secret or "").strip():
+        return "environment"
+    return "file" if _stored_client(config) else None
+
+
+def save_client(config, values):
+    """Check a pasted client id and secret for the shape Google gives them and store them (atomically, readable by the owner only where the system allows). ConnectorError, and nothing
+    stored, for ones that cannot be right: a refusal says what the shape is, never what was pasted."""
+    client_id, client_secret = values.get("client_id", "").strip(), values.get("client_secret", "").strip()
+    if not CLIENT_ID_SHAPE.fullmatch(client_id):
+        raise ConnectorError("that does not look like a Google client ID: it is a long text that ends in .apps.googleusercontent.com")
+    if not CLIENT_SECRET_SHAPE.fullmatch(client_secret):
+        raise ConnectorError("that does not look like a Google client secret: letters, digits, - and _ only, no spaces")
+    os.makedirs(config.connector_tokens_dir, exist_ok=True)
+    path = _client_file(config)
+    temporary = path + ".tmp"
+    with open(temporary, "w", encoding="utf-8", newline="\n") as f:
+        f.write(json.dumps({"client_id": client_id, "client_secret": client_secret}) + "\n")
+    try:
+        os.chmod(temporary, 0o600)  # a no-op for most of what Windows means by permissions; the folder is the owner's own either way
+    except OSError:
+        pass
+    os.replace(temporary, path)
+
+
+def clear_client(config):
+    """Forget what the page stored. True if there was something. What the DIYA_GOOGLE_* settings say is the owner's to change, not this page's."""
+    try:
+        os.remove(_client_file(config))
+        return True
+    except FileNotFoundError:
+        return False
+
+
 def _client_credentials(config):
     client_id = (config.google_client_id or "").strip()
     client_secret = (config.google_client_secret or "").strip()
     if not client_id or not client_secret:
-        raise ConnectorError(
-            "set DIYA_GOOGLE_CLIENT_ID and DIYA_GOOGLE_CLIENT_SECRET first (docs/CONNECTORS_DESIGN.md, unit C3)"
-        )
+        stored = _stored_client(config)
+        if stored is None:
+            raise ConnectorError("Google is not set up yet: paste your Google client ID and secret on the Connections page first (or set DIYA_GOOGLE_CLIENT_ID and DIYA_GOOGLE_CLIENT_SECRET; docs/GOOGLE_SETUP.md)")
+        client_id, client_secret = stored
     return client_id, client_secret
+
+
+SETUP = diya_connectors.Setup(
+    fields=(("client_id", "Client ID", False), ("client_secret", "Client secret", True)),
+    steps=(
+        "Open console.cloud.google.com and create a project (any name).",
+        "APIs & Services, Library: search for Google Calendar API and press Enable.",
+        "APIs & Services, OAuth consent screen (called Google Auth platform in the newer console): choose External, fill in the app name and your email, and add your own Google address as a test user. "
+        "Then, under Audience, set Publishing status to In production, or Google ends the sign-in after 7 days (the app stays unverified and shows a warning screen: that is expected for your own app).",
+        "APIs & Services, Credentials (Clients, in the newer console): Create credentials, OAuth client ID, Application type Desktop app.",
+        "Copy the Client ID and the Client secret it shows into the two boxes here.",
+    ),
+    state=client_state,
+    save=save_client,
+    clear=clear_client,
+)
 
 
 def connect(config, open_browser=webbrowser.open):

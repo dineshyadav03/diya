@@ -27,13 +27,14 @@ import diya_questions
 import diya_config
 import diya_web
 from diya_config import ConfigError, load_config
-from diya_connectors import Connector
+from diya_connectors import Connector, Setup
 from diya_memory import Memory
 from fakes import FakeClient, task_kind, text_reply
 
 SEEDED_CONNECTORS = (
     Connector(name="demo", label="Demo", description="A seeded connector for tests.",
-             auth_kind="token", implemented=True, validate=lambda token: None),
+             auth_kind="token", implemented=True, validate=lambda token: None,
+             setup=Setup(fields=(("code", "Code", True),), steps=("do nothing",), state=lambda config: None, save=lambda config, values: None, clear=lambda config: False)),
 )
 SEEDED_KINDS = (task_kind(),)  # a fake kind of action, so the /api/actions routes have real actions to decide
 APPROVE_ME = diya_actions.args_hash("add_task", {"title": "approve me"})
@@ -170,6 +171,8 @@ ENDPOINTS = [
     ("GET", "/api/connections", {}),
     ("POST", "/api/connections/demo/connect", {"json": {"token": "a-token"}}),
     ("POST", "/api/connections/demo/disconnect", {}),
+    ("POST", "/api/connections/demo/setup", {"json": {"values": {"code": "x"}}}),
+    ("POST", "/api/connections/demo/clear-setup", {}),
     ("GET", "/api/reminders", {}),
     ("POST", "/api/reminders", {"json": {"text": "call mum", "when": "in 2 hours"}}),
     ("POST", "/api/reminders/1/done", {}),

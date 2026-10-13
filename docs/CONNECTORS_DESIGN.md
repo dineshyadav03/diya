@@ -259,3 +259,17 @@ first.
   an OAuth client of type "Desktop app" (the only type Google gives RFC 8252's arbitrary-loopback-port
   exception to). `DIYA_GOOGLE_CLIENT_ID` and `DIYA_GOOGLE_CLIENT_SECRET` are the two values that come
   out of that -- until they're set, Connect just says so.
+
+## Setting up Google from the page (2026-10-13)
+
+The owner asked for Google to connect "the way Claude connects to Google". What makes Claude's one click possible is an OAuth app that Anthropic registered once, for everybody, and servers that handle the
+sign-in; a local app with no server of its own has neither, so each owner registers a small Google app of their own once (`docs/GOOGLE_SETUP.md`). What changed is where its two codes go: not environment
+variables, but two boxes on the Connections page.
+
+- `Connector.setup` (a `Setup`: the fields, the steps to get them, `state`, `save`, `clear`) is how any OAuth connector can ask for something given once. Only Google has one. The list gives the page
+  `setup: {fields, steps, done, from}` (never the values); `POST /api/connections/{name}/setup` checks the shape Google gives them (an id ending in `.apps.googleusercontent.com`, a secret of letters, digits,
+  `-` and `_`) and stores them in `google_calendar.client` beside the tokens (atomically, mode 0600 where the system has one; not in the database); `.../clear-setup` forgets them **and disconnects**, because a
+  sign-in belongs to the app it was made with. `DIYA_GOOGLE_CLIENT_ID`/`_SECRET`, if both set, win and the page says so.
+- Tested with stand-ins only: no sign-in has been made through it against the real Google. A secret pasted on a page is only as private as the files of this computer's account, like the connector tokens beside it.
+- The other idea, Diya as an **MCP client** (connectors added the way they are in Claude), is bigger: it needs a design of what an MCP server may do without asking. It is for the research-and-plan session, and
+  it would still need this Google app for Google itself.

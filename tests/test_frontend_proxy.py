@@ -444,6 +444,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/push/status", "/api/push/key", "/api/push/subscribe", "/api/push/unsubscribe", "/api/push/test",  # its "Notify this device" control
         "/api/connections", "/api/connections/${connector.name}/connect", "/api/connections/${connector.name}/connect",
         "/api/connections/${connector.name}/disconnect",  # the token-kind form and the oauth-kind button both post here
+        "/api/connections/${connector.name}/setup", "/api/connections/${connector.name}/clear-setup",  # Google's one-time client ID and secret form, and forgetting that app
         "/api/actions", "/api/actions",  # the chat header's waiting count, and the Actions page's list
         "/api/actions/${action.id}/approve", "/api/actions/${action.id}/reject", "/api/actions/${action.id}/resolve",
         "/session", "/session", "/session",  # the sign-in page's POST, the sidebar's "am I signed in" and its sign-out (docs/UI_LOGIN_DESIGN.md)
@@ -500,7 +501,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         "/api/automations", "/api/automations/{automation_id}/pause", "/api/automations/{automation_id}/resume", "/api/automations/{automation_id}/run",
         "/api/automations/{automation_id}/delete",
         "/api/tasks", "/api/tasks/{task_id}/done", "/api/tasks/{task_id}/reopen",
-        "/api/connections", "/api/connections/{name}/connect", "/api/connections/{name}/disconnect",
+        "/api/connections", "/api/connections/{name}/connect", "/api/connections/{name}/disconnect", "/api/connections/{name}/setup", "/api/connections/{name}/clear-setup",
         "/api/actions", "/api/actions/{action_id}", "/api/actions/{action_id}/approve",
         "/api/actions/{action_id}/reject", "/api/actions/{action_id}/resolve",
     }

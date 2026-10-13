@@ -367,6 +367,10 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 }
 .memory-input::placeholder { color: var(--text-dim); opacity: 1; }
 .memory-edit, .memory-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.connection-setup details { margin: 4px 0 10px; font-size: 14.5px; }
+.connection-setup details ol { margin: 8px 0 0 18px; padding: 0; display: grid; gap: 6px; }
+.connection-setup .memory-edit > div { flex: 1 1 240px; }
+.connection-setup .memory-edit > div .memory-input { width: 100%; }
 .memory-add { margin-top: 12px; }
 .memory-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .memory-notice, .memory-error { margin: 0 0 12px; padding: 10px 14px; border-radius: var(--r-sm); font-size: 14px; line-height: 1.45; }

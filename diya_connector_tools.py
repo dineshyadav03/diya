@@ -330,7 +330,7 @@ def real_connectors(config):
         Connector(name="todoist", label="Todoist", description="List your open tasks, and add one when you approve it.",
                  auth_kind="token", implemented=True, validate=todoist_validate),
         Connector(name="google_calendar", label="Google Calendar", description="Read your upcoming events.",
-                 auth_kind="oauth", implemented=True, oauth_connect=diya_google_calendar.connect),
+                 auth_kind="oauth", implemented=True, oauth_connect=diya_google_calendar.connect, setup=diya_google_calendar.SETUP),
     )
 
 

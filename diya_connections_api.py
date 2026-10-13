@@ -5,6 +5,9 @@
                                                one (unit C3): no body -- this call runs the whole
                                                browser flow itself and blocks until it finishes.
     POST /api/connections/{name}/disconnect   remove a connector's stored credential (idempotent)
+    POST /api/connections/{name}/setup        {"values": {"client_id": ..., "client_secret": ...}}: what a connector needs given once before it can connect (Google's client id
+                                               and secret); checked for shape, stored, and never sent back. 409 for a connector that needs none.
+    POST /api/connections/{name}/clear-setup  forget what the page stored for it, and disconnect it (a sign-in belongs to the app it was made with)
 
 GET and POST only, like every other route; every route is behind the access token like the rest of
 the API. A refusal is an HTTP error with the reason in `detail`: 404 for a connector name that does
@@ -25,6 +28,10 @@ from diya_memory import printable
 
 class ConnectBody(BaseModel):
     token: str
+
+
+class SetupBody(BaseModel):
+    values: dict[str, str]
 
 
 def register(app, config, agent, connectors=diya_connectors.CONNECTORS):
@@ -55,6 +62,25 @@ def register(app, config, agent, connectors=diya_connectors.CONNECTORS):
                 connector.oauth_connect(config)
         except ConnectorError as exc:
             raise HTTPException(status_code=422, detail=printable(str(exc)))
+        return {"connectors": diya_connectors.status(config, connectors)}
+
+    @app.post("/api/connections/{name}/setup")
+    def setup(name: str, body: SetupBody):
+        connector = find(name)
+        if connector.setup is None:
+            raise HTTPException(status_code=409, detail=f"{connector.label} does not need any setup")
+        try:
+            diya_connectors.save_setup(config, connector, body.values)
+        except ConnectorError as exc:
+            raise HTTPException(status_code=422, detail=printable(str(exc)))
+        return {"connectors": diya_connectors.status(config, connectors)}
+
+    @app.post("/api/connections/{name}/clear-setup")
+    def clear_setup(name: str):
+        connector = find(name)
+        if connector.setup is None:
+            raise HTTPException(status_code=409, detail=f"{connector.label} does not need any setup")
+        diya_connectors.clear_setup(config, connector)
         return {"connectors": diya_connectors.status(config, connectors)}
 
     @app.post("/api/connections/{name}/disconnect")

@@ -25,6 +25,7 @@ export default function ConnectionsPage() {
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [tokenInputs, setTokenInputs] = useState({}) // name -> the pasted-token form's current text
+  const [setupInputs, setSetupInputs] = useState({}) // name -> { field name -> what has been typed in that box of the one-time setup form }
 
   const load = useCallback(async (first) => {
     let status
@@ -103,6 +104,30 @@ export default function ConnectionsPage() {
     )
   }
 
+  // The one-time setup of a connector that needs something given once (Google's client ID and secret). What was typed is sent, and then forgotten here: it is never shown again.
+  function saveSetup(event, connector) {
+    event.preventDefault()
+    const values = setupInputs[connector.name] || {}
+    settle(
+      () =>
+        fetch(`/api/connections/${connector.name}/setup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values }),
+        }),
+      connector.name,
+      () => `${connector.label} is set up. Press Connect to sign in.`,
+    ).then(() => setSetupInputs((current) => ({ ...current, [connector.name]: {} })))
+  }
+
+  function clearSetup(connector) {
+    settle(
+      () => fetch(`/api/connections/${connector.name}/clear-setup`, { method: 'POST' }),
+      connector.name,
+      () => `${connector.label}'s app was forgotten, and it was disconnected. Paste a new one to set it up again.`,
+    )
+  }
+
   function disconnect(connector) {
     settle(
       () => fetch(`/api/connections/${connector.name}/disconnect`, { method: 'POST' }),
@@ -173,6 +198,46 @@ export default function ConnectionsPage() {
                           </div>
                         ) : !connector.implemented ? (
                           <p className="memory-dim">Not available yet.</p>
+                        ) : connector.setup && !connector.setup.done ? (
+                          <div className="connection-setup">
+                            <p className="memory-dim">One-time setup first: {connector.label} needs an app of your own, made once in Google Cloud (free).</p>
+                            <details open>
+                              <summary>How to get these two (about ten minutes)</summary>
+                              <ol>
+                                {connector.setup.steps.map((step) => (
+                                  <li key={step}>{step}</li>
+                                ))}
+                              </ol>
+                            </details>
+                            <form className="memory-edit" onSubmit={(e) => saveSetup(e, connector)}>
+                              {connector.setup.fields.map((field) => (
+                                <div key={field.name}>
+                                  <label className="memory-sr" htmlFor={`setup-${connector.name}-${field.name}`}>
+                                    {field.label}
+                                  </label>
+                                  <input
+                                    id={`setup-${connector.name}-${field.name}`}
+                                    className="memory-input"
+                                    type={field.secret ? 'password' : 'text'}
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    placeholder={field.label}
+                                    value={(setupInputs[connector.name] || {})[field.name] || ''}
+                                    onChange={(e) =>
+                                      setSetupInputs((current) => ({ ...current, [connector.name]: { ...(current[connector.name] || {}), [field.name]: e.target.value } }))
+                                    }
+                                  />
+                                </div>
+                              ))}
+                              <button
+                                type="submit"
+                                className="memory-btn memory-btn--primary"
+                                disabled={isBusy || connector.setup.fields.some((field) => !((setupInputs[connector.name] || {})[field.name] || '').trim())}
+                              >
+                                Save
+                              </button>
+                            </form>
+                          </div>
                         ) : connector.auth_kind === 'token' ? (
                           <form className="memory-edit" onSubmit={(e) => connectWithToken(e, connector)}>
                             <label className="memory-sr" htmlFor={`token-${connector.name}`}>
@@ -204,6 +269,17 @@ export default function ConnectionsPage() {
                             >
                               {isBusy ? 'Waiting for your browser…' : 'Connect'}
                             </button>
+                            {connector.setup && connector.setup.from === 'file' && (
+                              <button
+                                type="button"
+                                className="memory-btn"
+                                onClick={() => clearSetup(connector)}
+                                disabled={isBusy}
+                                aria-label={`Use a different app for ${connector.label}`}
+                              >
+                                Use a different app
+                              </button>
+                            )}
                           </div>
                         )}
                       </li>
