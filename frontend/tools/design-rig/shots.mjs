@@ -140,7 +140,7 @@ const SCENARIOS = [
     steps: [`await __send("Remind me to call the dentist on Monday", 600)`, `await __micDown(700); await __micUp(300)`],
     checks: [
       { name: 'the message box is off and says why', js: `document.querySelector('.composer-input').disabled && /didn.t load/i.test(document.querySelector('.composer-input').placeholder)` },
-      { name: 'Send and the microphone are off', js: `document.querySelector('button[aria-label="Send"]').disabled && document.querySelector('button[aria-label="Hold to talk"]').disabled` },
+      { name: 'Send and the microphone are off', js: `document.querySelector('button[aria-label="Send"]').disabled && document.querySelector('button[aria-label="Tap to talk"]').disabled` },
       { name: 'Send is not filled in even with text typed', js: `document.querySelector('button[aria-label="Send"]').disabled` },
       { name: 'a submit that got through anyway sent nothing', js: `window.__chatCalls === 0 && document.querySelectorAll('#log .msg').length === 0` },
       { name: 'what was typed is still there, not thrown away', js: `document.querySelector('.composer-input').value === 'Remind me to call the dentist on Monday'` },
@@ -269,7 +269,7 @@ const SCENARIOS = [
     name: 'chat-transcribe-failed', path: '/', stub: { mic: 'ok', tx: 'down' },
     steps: [`await __micDown(700); await __micUp(1500)`],
     checks: [
-      { name: 'the mic button is usable again (not stuck disabled)', js: `!document.querySelector('button[aria-label="Hold to talk"]').disabled` },
+      { name: 'the mic button is usable again (not stuck disabled)', js: `!document.querySelector('button[aria-label="Tap to talk"]').disabled` },
       { name: 'the "Transcribing..." chip is gone', js: `!document.querySelector('.mic-status')` },
       { name: 'a message says the server could not be reached', js: `Array.from(document.querySelectorAll('.msg.system')).some((m) => /couldn.t reach diya.s server/i.test(m.textContent))` },
     ],
@@ -279,7 +279,7 @@ const SCENARIOS = [
     name: 'chat-transcribe-unauthorized', path: '/', stub: { mic: 'ok', tx: '401' },
     steps: [`await __micDown(700); await __micUp(1500)`],
     checks: [
-      { name: 'the mic button is usable again (not stuck disabled)', js: `!document.querySelector('button[aria-label="Hold to talk"]').disabled` },
+      { name: 'the mic button is usable again (not stuck disabled)', js: `!document.querySelector('button[aria-label="Tap to talk"]').disabled` },
       { name: 'the "Transcribing..." chip is gone', js: `!document.querySelector('.mic-status')` },
       { name: 'a message says the access token is the problem', js: `Array.from(document.querySelectorAll('.msg.system')).some((m) => /access token/i.test(m.textContent))` },
       { name: 'no message claims the server could not be reached', js: `!Array.from(document.querySelectorAll('.msg.system')).some((m) => /couldn.t reach/i.test(m.textContent))` },
@@ -289,7 +289,7 @@ const SCENARIOS = [
     name: 'chat-transcribe-server-error', path: '/', stub: { mic: 'ok', tx: '500' },
     steps: [`await __micDown(700); await __micUp(1500)`],
     checks: [
-      { name: 'the mic button is usable again (not stuck disabled)', js: `!document.querySelector('button[aria-label="Hold to talk"]').disabled` },
+      { name: 'the mic button is usable again (not stuck disabled)', js: `!document.querySelector('button[aria-label="Tap to talk"]').disabled` },
       { name: 'an error status is reported as an error, with its number', js: `Array.from(document.querySelectorAll('.msg.system')).some((m) => /HTTP 500/.test(m.textContent))` },
     ],
   },
@@ -353,7 +353,7 @@ const stubSource = (stub) => `(() => {
     document.querySelector('form.composer').requestSubmit();
     await __wait(settle);
   };
-  const mic = () => document.querySelector('button[aria-label="Hold to talk"]');
+  const mic = () => document.querySelector('button[aria-label="Tap to talk"]');
   window.__micDown = async (settle = 600) => { mic().dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); await __wait(settle); };
   window.__micUp = async (settle = 600) => { mic().dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); await __wait(settle); };
 })();`

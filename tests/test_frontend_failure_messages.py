@@ -30,7 +30,7 @@ needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="Node is no
 REFUSED = "the access token the UI sends is missing or wrong (see docs/lan.md, Access token)"
 SEND_UNANSWERED = "Didn’t send. Diya’s server didn’t answer."
 LOAD_UNANSWERED = "Diya’s server didn’t answer. Check that it’s running, then try again."
-MIC_UNANSWERED = "Couldn't reach Diya's server to transcribe that. Hold the mic to try again."
+MIC_UNANSWERED = "Couldn't reach Diya's server to transcribe that. Tap the mic to try again."
 
 CODE = (
     "import { pathToFileURL } from 'node:url'\n"
@@ -132,7 +132,7 @@ def test_every_chat_message_starts_with_the_words_the_design_rig_and_the_person_
 @needs_node
 def test_every_microphone_message_reads_like_the_other_microphone_messages():
     for text in describe("describeTranscribeFailure", None, 200, 401, 404, 500, 502, 503, 504):
-        assert text.startswith("Couldn't") and text.endswith("Hold the mic to try again.")
+        assert text.startswith("Couldn't") and text.endswith("Tap the mic to try again.")
         assert "’" not in text  # straight apostrophes, like "Didn't catch that" beside it
 
 
@@ -248,9 +248,9 @@ def test_nothing_can_be_sent_into_a_chat_that_is_loading_or_failed_to_load():
     assert "unavailable = ''" in voice.split("export default function VoiceBar")[1].split(")")[0]
     submit = voice[voice.index("function submit"):voice.index("async function startRecording")]
     assert submit.index("if (unavailable) return") < submit.index("setValue('')")  # typed text is left where it is
-    assert "if (unavailable) return" in voice[voice.index("async function startRecording"):voice.index("try {", voice.index("async function startRecording"))]
+    assert "if (unavailable ||" in voice[voice.index("async function startRecording"):voice.index("try {", voice.index("async function startRecording"))]
     assert "disabled={!!unavailable}" in voice and "placeholder={unavailable || 'Message Diya...'}" in voice
-    assert "disabled={micDisabled || !!unavailable}" in voice
+    assert "disabled={micDisabled || starting || !!unavailable}" in voice
     assert 'disabled={!hasText}' in voice  # Send is off unless there is something to send...
     assert "const hasText = value.trim().length > 0 && !unavailable" in voice  # ...and never while nothing can be sent
     # New chat is the way out and must stay usable

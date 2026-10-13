@@ -320,15 +320,20 @@ def test_apps_built_from_different_agents_do_not_share_data(config, tmp_path):
 
 # --- the Whisper wrapper ----------------------------------------------------------------
 
+ASKED = []  # the options each fake transcribe() was given
+
+
 @pytest.fixture
 def fake_whisper(monkeypatch):
     built = []
+    ASKED.clear()
 
     class FakeWhisperModel:
         def __init__(self, name, device, compute_type):
             built.append((name, device, compute_type))
 
-        def transcribe(self, path):
+        def transcribe(self, path, **options):
+            ASKED.append(options)
             return iter([types.SimpleNamespace(text=" hello "), types.SimpleNamespace(text="world ")]), None
 
     monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=FakeWhisperModel))
@@ -341,6 +346,24 @@ def test_whisper_is_loaded_lazily_and_once_with_the_same_settings_as_before(fake
     assert transcriber.transcribe("a.wav") == "hello  world"
     transcriber.transcribe("b.wav")
     assert fake_whisper == [("base", "cpu", "int8")]
+
+
+def test_only_the_stretches_with_speech_in_them_are_read_so_silence_is_not_turned_into_words(fake_whisper):
+    """Whisper `base` turned four seconds of silence into "You" (measured with the real model); the speech detector in front of it means a recording of nothing gives no text at all."""
+    diya_web.WhisperTranscriber("base").transcribe("a.wav")
+    assert ASKED == [{"vad_filter": True, "vad_parameters": {"min_silence_duration_ms": 500}, "condition_on_previous_text": False}]
+
+
+def test_a_recording_with_no_speech_in_it_gives_no_text(monkeypatch):
+    class Silent:
+        def __init__(self, name, device, compute_type):
+            pass
+
+        def transcribe(self, path, **options):
+            return iter([]), None
+
+    monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Silent))
+    assert diya_web.WhisperTranscriber("base").transcribe("a.wav") == ""
 
 
 def test_the_model_download_does_not_report_usage_and_the_owner_can_still_allow_it(fake_whisper, monkeypatch):

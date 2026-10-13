@@ -268,7 +268,9 @@ class WhisperTranscriber:
         print("Whisper ready.")
 
     def transcribe(self, path):
-        segments, _ = self.model.transcribe(path)
+        """The words in a recording, or "" if nobody spoke in it. Whisper invents text for silence (measured here: four seconds of nothing came back as "You", the same word every time), so
+        only the stretches a speech detector finds are read at all (docs/VOICE_DESIGN.md); real speech comes back as it did without it."""
+        segments, _ = self.model.transcribe(path, vad_filter=True, vad_parameters={"min_silence_duration_ms": 500}, condition_on_previous_text=False)
         return " ".join(s.text for s in segments).strip()
 
 

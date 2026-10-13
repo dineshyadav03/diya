@@ -243,16 +243,20 @@ def test_the_reader_ignores_blank_lines_and_unknown_kinds_and_a_delta_with_no_te
 # ---- the microphone (Node) -----------------------------------------------------------------------------------------------------
 
 MIC = """
-import { describeMicrophoneFailure, openMicrophone } from './lib/microphone.mjs'
+import { describeMicrophoneFailure, forgetSilent, markSilent, markWorking, openMicrophone } from './lib/microphone.mjs'
 const store = {}
 globalThis.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = String(v) }, removeItem: (k) => { delete store[k] } }
 const fail = (name) => Object.assign(new Error(name), { name })
-function media({ works = [], devices = [] }) {
+function media({ works = [], devices = [] }, groupsOf) {
   const asked = []
-  return { asked, getUserMedia: async (c) => { const id = c.audio === true ? 'default' : c.audio.deviceId.exact; asked.push(id); if (works.includes(id)) return { id }; throw fail(works.error || 'NotReadableError') },
-           enumerateDevices: async () => devices.map((id) => ({ kind: id.startsWith('out') ? 'audiooutput' : 'audioinput', deviceId: id })) }
+  const groups = groupsOf || {}
+  const stream = (id, group) => ({ id, stopped: false, getTracks() { return [{ stop: () => { this.stopped = true } }] }, getAudioTracks() { return [{ label: 'Mic ' + id, getSettings: () => ({ deviceId: id, groupId: group || '' }) }] } })
+  return { asked, getUserMedia: async (c) => { const id = c.audio === true ? 'default' : c.audio.deviceId.exact; asked.push(id); if (works.includes(id)) return stream(id, c.audio === true ? (groups.default || '') : (groups[id] || '')); throw fail(works.error || 'NotReadableError') },
+           enumerateDevices: async () => devices.map((id) => ({ kind: id.startsWith('out') ? 'audiooutput' : 'audioinput', deviceId: id, groupId: groups[id] || '' })) }
 }
 const run = async (m) => { try { return { got: (await openMicrophone(m)).id } } catch (e) { return { threw: e.name } } }
+const open = async (m) => { try { return await openMicrophone(m) } catch (e) { return { threw: e.name } } }
+const asked = async (m) => { const r = await open(m); return r.id ?? r.threw }
 const out = {}
 SCRIPT
 console.log(JSON.stringify({ out, store }))
@@ -305,6 +309,70 @@ def test_every_failure_says_what_to_do_and_names_the_problem_it_does_not_know():
     assert all(text.startswith("Microphone: ") for text in result.values())
 
 
+@needs_node
+def test_a_microphone_heard_to_be_silent_is_not_offered_again_so_each_silent_try_moves_on_to_the_next():
+    script = """
+    const m = media({ works: ['default', 'a', 'b'], devices: ['default', 'a', 'b'] })
+    const first = await open(m); out.first = first.id; markSilent(first)
+    const second = await open(m); out.second = second.id; markSilent(second)
+    out.third = await asked(m)
+    out.askedAll = m.asked
+    """
+    result = mic(script)["out"]
+    assert result["first"] == "default" and result["second"] == "a" and result["third"] == "b" and result["askedAll"] == ["default", "a", "b"]
+
+
+@needs_node
+def test_the_same_physical_microphone_under_another_id_is_skipped_too():
+    script = """
+    const m = media({ works: ['default', 'a', 'b'], devices: ['default', 'a', 'b'] }, { default: 'g1', a: 'g1', b: 'g2' })
+    const first = await open(m); markSilent(first)
+    out.next = await asked(m)
+    out.askedAll = m.asked
+    """
+    result = mic(script)["out"]
+    assert result["next"] == "b" and result["askedAll"] == ["default", "b"]  # a is the default's own microphone (the same group), so it is not tried
+
+
+@needs_node
+def test_when_every_microphone_has_been_heard_silent_it_says_so_once_and_starts_over():
+    script = """
+    const m = media({ works: ['default', 'a'], devices: ['default', 'a'] })
+    for (const expected of ['default', 'a']) { const r = await open(m); out['got_' + expected] = r.id; markSilent(r) }
+    out.none = await asked(m)
+    out.after = await asked(m)
+    """
+    result = mic(script)["out"]
+    assert result == {"got_default": "default", "got_a": "a", "none": "NoSoundAnywhere", "after": "default"}
+
+
+@needs_node
+def test_a_microphone_that_picked_up_sound_is_remembered_unless_it_is_just_the_default():
+    result = mic("const m = media({ works: ['a'], devices: ['a'] }); const r = await open(m); markWorking(r); out.saved = store.diya_mic_device ?? null")
+    assert result["out"] == {"saved": "a"}
+    result = mic("const m = media({ works: ['default'], devices: [] }); const r = await open(m); markWorking(r); out.saved = store.diya_mic_device ?? null")
+    assert result["out"] == {"saved": None}
+
+
+@needs_node
+def test_a_remembered_microphone_that_goes_silent_is_forgotten():
+    script = """
+    store.diya_mic_device = 'a'
+    const m = media({ works: ['a', 'default'], devices: ['a'] })
+    const r = await open(m); out.got = r.id; markSilent(r)
+    out.saved = store.diya_mic_device ?? null
+    out.next = await asked(m)
+    """
+    result = mic(script)["out"]
+    assert result == {"got": "a", "saved": None, "next": "default"}
+
+
+@needs_node
+def test_the_no_sound_failure_says_what_to_do():
+    text = mic("out.t = describeMicrophoneFailure({ name: 'NoSoundAnywhere' })")["out"]["t"]
+    assert text.startswith("Microphone: none of the microphones") and "Settings" in text and "bar move" in text
+
+
 # ---- what is checked in ------------------------------------------------------------------------------------------------------
 
 def test_the_page_never_shows_a_streamed_reply_that_did_not_finish_and_asks_for_the_stream_first():
@@ -314,10 +382,21 @@ def test_the_page_never_shows_a_streamed_reply_that_did_not_finish_and_asks_for_
     assert "(thinking && !streamText) || speaking" in page and "<Orb state=" in page
 
 
-def test_the_microphone_button_keeps_hearing_the_release_and_stops_cleanly():
+def test_the_microphone_button_is_tap_to_start_and_tap_again_to_send_and_nothing_is_held():
     voice = (ROOT / "frontend" / "components" / "VoiceBar.jsx").read_text(encoding="utf-8")
-    assert "setPointerCapture" in voice and "onPointerCancel={stopRecording}" in voice and "onContextMenu" in voice and "if (!pressedRef.current)" in voice
-    assert "MIN_PRESS_MS" in voice and "Hold the mic button down" in voice and "recorded ${kb} KB" not in voice and "<Orb state={recording ? 'listening' : 'thinking'}" in voice
+    assert "onClick={() => (recording ? stopRecording() : startRecording())}" in voice and "aria-pressed={recording}" in voice
+    assert "aria-label={recording ? 'Tap to stop and send' : 'Tap to talk'}" in voice
+    assert not any(handler in voice for handler in ("onPointerDown", "onPointerUp", "onPointerLeave", "onPointerCancel", "setPointerCapture", "Hold to talk", "Hold the mic"))
+    assert "<Orb state={recording ? 'listening' : 'thinking'}" in voice and "recorded ${kb} KB" not in voice
+
+
+def test_a_recording_with_no_sound_is_never_sent_and_the_next_tap_uses_another_microphone():
+    voice = (ROOT / "frontend" / "components" / "VoiceBar.jsx").read_text(encoding="utf-8")
+    silent_at, send_at = voice.index("peakRef.current < SILENT_BELOW"), voice.index("fetch('/api/transcribe'")
+    assert silent_at < send_at and voice.index("markSilent(mic)") < send_at and "return" in voice[silent_at:voice.index("markWorking(mic)")]
+    assert "MIN_RECORDING_MS" in voice and "MAX_RECORDING_MS" in voice and "setTimeout(() => stopRecording(), MAX_RECORDING_MS)" in voice
+    assert "stopRecording(true)" in voice and "Cancel" in voice and "discardRef" in voice  # Cancel throws the recording away
+    assert voice.count("mediaRecorder.stream.getTracks().forEach((t) => t.stop())") == 2  # stopping, and leaving the page, both let go of the microphone
 
 
 def test_the_orb_is_only_css_and_stops_under_reduced_motion():

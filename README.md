@@ -96,7 +96,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   propose is **adding a task to your Todoist Inbox**, and only when you ask for one and name Todoist ("add 'x' to my
   Todoist"; any other "add a task" goes on Diya's own list above), with a due date only if you said one; nothing else Diya
   touches can be changed, and **no real Todoist account has been tried yet**, only the real API's answer to a fake token.
-- Hold-to-talk voice input through local Whisper, and optional spoken replies.
+- Tap-to-talk voice input through local Whisper (tap the mic to start, tap again to send; a recording with no sound in it is not sent, and the next tap tries another microphone), and optional spoken replies.
 - A plain fact ("my flight is Friday at 6") gets a one-line reply, not an essay.
 - Facts it extracts wait in a review queue; nothing reaches the model unless you accept it.
   Review them on the **Memory** page of the UI, or with `python diya_review.py list`, `accept`, `reject` and `edit` (see [Dreaming](docs/dreaming.md)); `judge` asks the local model for an optional second opinion.

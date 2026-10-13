@@ -77,15 +77,15 @@ export function describeLoadFailure(status) {
 export function describeTranscribeFailure(status) {
   switch (classify(status)) {
     case 'unreachable':
-      return "Couldn't reach Diya's server to transcribe that. Hold the mic to try again."
+      return "Couldn't reach Diya's server to transcribe that. Tap the mic to try again."
     case 'unauthorized':
-      return `Couldn't transcribe that: Diya's server refused it, because ${REFUSED}. Hold the mic to try again.`
+      return `Couldn't transcribe that: Diya's server refused it, because ${REFUSED}. Tap the mic to try again.`
     case 'signin':
       return "Couldn't transcribe that: you're signed out of Diya. Reload this page to sign in again."
     case 'unreadable':
-      return "Couldn't transcribe that: Diya's server sent back something this page couldn't read. Hold the mic to try again."
+      return "Couldn't transcribe that: Diya's server sent back something this page couldn't read. Tap the mic to try again."
     default:
-      return `Couldn't transcribe that: Diya's server answered with an error (HTTP ${status}). Hold the mic to try again.`
+      return `Couldn't transcribe that: Diya's server answered with an error (HTTP ${status}). Tap the mic to try again.`
   }
 }
 

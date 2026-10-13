@@ -20,7 +20,7 @@ model writes about five tokens a second here); streaming does not make an answer
 ## The orbs
 
 `components/Orb.jsx`: pure CSS (no library, nothing downloaded), in the theme's own accent colour. A breathing sphere with a turning ring while Diya is thinking; the sphere swells with how loud the microphone
-is while you hold to talk; the ring pulses while a reply is read aloud. With "reduce motion" switched on in the system the animations stop and a still sphere is left. (The seven decorative libraries
+is while it listens (tap to start, tap again to send); the ring pulses while a reply is read aloud. With "reduce motion" switched on in the system the animations stop and a still sphere is left. (The seven decorative libraries
 removed in the redesign stay removed: `docs/UI_DESIGN.md` said the orb would not come back unless asked for, and it was asked for.)
 
 ## The microphone

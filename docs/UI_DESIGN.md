@@ -43,7 +43,7 @@ page is now one thing to check, not nine.
 
 ### D3. A composer that is a text box
 
-A rounded white (or charcoal) box with the message field, a Hold-to-talk button, a Send button that is a filled pill when there is
+A rounded white (or charcoal) box with the message field, a Tap-to-talk button (it was hold-to-talk; see VOICE_DESIGN.md), a Send button that is a filled pill when there is
 something to send, and a quiet "New chat" that asks for confirmation inline (no liquid menu). The same props, the same failure
 messages, the same rule that it is off while a saved chat is loading or failed to load. "Listening..." and "Transcribing..." are a
 text chip. Diya working is three quiet dots, never a spinner; speaking is a thin line along the top of the composer. Nothing moves when

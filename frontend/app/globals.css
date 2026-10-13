@@ -285,7 +285,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .composer-btn--quiet { border-color: transparent; color: var(--text-dim); padding: 0 10px; }
 .composer-confirm { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; color: var(--text-dim); }
 @media (pointer: coarse) { .composer-btn { height: 44px; min-width: 44px; } }
-.mic-status { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-dim); }
+.mic-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-dim); }
 .composer-progress {
   position: absolute; left: 0; right: 0; top: 0; height: 2px; opacity: 0;
   background: linear-gradient(90deg, transparent, var(--link), transparent); background-size: 40% 100%; background-repeat: no-repeat;

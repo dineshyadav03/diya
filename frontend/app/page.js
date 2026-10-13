@@ -535,7 +535,7 @@ export default function ChatPage() {
           <div className="empty-state">
             <img src="/diya-flame.svg" alt="" className="empty-mark" />
             <h1>Ask Diya anything</h1>
-            <p>Type below, or hold the mic to talk.</p>
+            <p>Type below, or tap the mic to talk.</p>
           </div>
         ))}
         {messages.map((m, i) => {
