@@ -5,6 +5,9 @@ hardware you own, not a cloud subscription. Today that means the model, your mem
 speech all stay on this machine, and facts it learns about you are staged for review before
 they're ever trusted.
 
+**Where it stands (2026-10-13):** every unit the roadmap planned is built and tested; what is left needs your own accounts, hardware or choices ([what needs you](#switched-off-until-you-choose)).
+[Roadmap](ROADMAP.md) has the checklist, [Product vision](PRODUCT_VISION.md) says what each part does today and what was never tried for real.
+
 ![The chat, with a saved conversation](docs/screenshot-chat.png)
 
 ![The Memory page: facts waiting for review, and what Diya knows](docs/screenshot-memory.png)
@@ -55,6 +58,7 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   **Reminders** page (the sidebar shows how many are due) shows what is due, with buttons to push one back 10 minutes, an hour or to tomorrow
   morning. An optional desktop notifier (`diya_notify.py`) can tell you outside the app, but only once you schedule it yourself
   ([docs/reminders.md](docs/reminders.md)); nothing here schedules it for you.
+  Ticking one off keeps when, so "when did I buy the guitar strings?" is answered from what you ticked off ([docs/PROACTIVITY_DESIGN.md](docs/PROACTIVITY_DESIGN.md), "Reminders that were done").
   File listing is limited to `Documents/Diya` under your home folder, or the folders in `DIYA_FILES_ROOTS`.
 - **Diya writes first**: a good-morning with the day (08:30), an evening check-in when something is still open (19:00), a message when a reminder comes due and a hello after two quiet days, written in the chat itself
   (cards at the top of the chat page) and put on the desktop by the notifier. Built in code from your own reminders and tasks, so nothing is invented; `DIYA_PROACTIVE=0` turns it off
@@ -108,7 +112,19 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   only that there is a question. Nothing is accepted by silence.
 - Long chats and long gaps are cut to what the model can read: `DIYA_HISTORY_CHARS` (24,000 characters of the newest messages sent each turn) and
   `DIYA_DREAM_BATCH_CHARS` (12,000 characters of yours read per Dreaming pass); `0` removes either limit.
-- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 5147 tests pass on Windows (as of 2026-10-11).
+- The API listens on localhost only, requires an access token, checks Host and Origin, and rejects an over-size body (413); 6380 tests pass on Windows (as of 2026-10-13).
+
+## Switched off until you choose
+
+Nothing below happens on its own; each is a step only you can take (an account, a device, a decision):
+
+- **The desktop notifier** (reminders, what Diya writes first, due automations, all in one pass every five minutes): schedule it once; the commands are in [docs/reminders.md](docs/reminders.md), or `python diya_run.py --install --with-jobs`.
+- **Dreaming** (extracting facts from your chats for review): schedule it (see [docs/dreaming.md](docs/dreaming.md)) and give its task a 15-minute limit, not Windows' 72-hour default.
+- **Automatic memory** (`DIYA_AUTO_MEMORY=1`, with `DIYA_PRIVACY_MODEL=qwen2.5:3b`): built and measured, off until you read [the measurement](docs/AUTO_MEMORY_DESIGN.md) and decide.
+- **Connectors:** a token for Home Assistant, Notion or Todoist on the Connections page; Google Calendar needs your own `DIYA_GOOGLE_CLIENT_ID` and `DIYA_GOOGLE_CLIENT_SECRET`. None has been tried against a real account.
+- **Your phone:** Web Push (`DIYA_PUSH=1`) and a Telegram bot (`DIYA_TELEGRAM=1`) are built and never tried against a real device or bot.
+- **Your data folder:** move it out of a cloud-synced folder with `python diya_data.py move` (below).
+- **A better model:** `diya-chat` (below), which also needs `DIYA_MODEL=diya-chat` set for the API and Dreaming.
 
 ## Privacy, and where your data is kept
 
@@ -170,7 +186,7 @@ ollama create diya-chat -f ollama/diya-chat.Modelfile   # the same weights, capp
   local-memory projects (Truffle, Hindsight) and agent-harness engineering patterns (UFO's
   grant-in-chat audit trail, Dreaming-shaped nightly consolidation showing up independently in
   three unrelated projects) weighed against Diya's own design, not adopted wholesale.
-  [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built, including an optional, measured model verifier). [Person-tagged memory](docs/PERSON_MEMORY_DESIGN.md): who a fact is about, built into review, the model's own system message, and the CLI/UI (built). [Model benchmark](docs/MODEL_BENCHMARK.md): three installed models on this laptop, first pass. [Proactivity design](docs/PROACTIVITY_DESIGN.md): reminders that fire, the first step from an assistant that answers to one that tells you (built except the desktop notifier). [Connectors design](docs/CONNECTORS_DESIGN.md): outside accounts as a menu any owner picks from (Home Assistant, Notion, Todoist and Google Calendar all built; the OAuth connector's code is not yet verified against the real Google endpoints). [Actions design](docs/ACTIONS_DESIGN.md): the approval gate and action trail any future write must go through -- the model proposes, code executes, only the owner approves (built: the store and its state machine, the model's side, the Actions page and command line you approve on, and the first real write, adding a Todoist task; every other connector is read-only). [Tasks design](docs/TASKS_DESIGN.md): the to-do list kept inside Diya itself, why that and not an API, and what the model may do with it (built: the list, its two tools, the Tasks page). [Schedule design](docs/SCHEDULE_DESIGN.md): repeating reminders, snooze, a record of what happened, and the Scheduled and Today pages (built, and measured with the real models; the measurement changed the design). [UI design](docs/UI_DESIGN.md): the redesigned interface, a warm-paper light theme and a near-black dark theme, one sidebar, a plain message box, and the measured palette.
+  [Stage 1 design](docs/STAGE1_DESIGN.md): the trust/auth spec (built). [Stage 2 design](docs/STAGE2_DESIGN.md): reviewing and promoting staged facts, so memory the model sees has been read by you (built, including an optional, measured model verifier). [Person-tagged memory](docs/PERSON_MEMORY_DESIGN.md): who a fact is about, built into review, the model's own system message, and the CLI/UI (built). [Model benchmark](docs/MODEL_BENCHMARK.md): three installed models on this laptop, first pass. [Proactivity design](docs/PROACTIVITY_DESIGN.md): reminders that fire, the first step from an assistant that answers to one that tells you (built except the desktop notifier). [Connectors design](docs/CONNECTORS_DESIGN.md): outside accounts as a menu any owner picks from (Home Assistant, Notion, Todoist and Google Calendar all built; the OAuth connector's code is not yet verified against the real Google endpoints). [Actions design](docs/ACTIONS_DESIGN.md): the approval gate and action trail any future write must go through -- the model proposes, code executes, only the owner approves (built: the store and its state machine, the model's side, the Actions page and command line you approve on, and the first real write, adding a Todoist task; every other connector is read-only). [Tasks design](docs/TASKS_DESIGN.md): the to-do list kept inside Diya itself, why that and not an API, and what the model may do with it (built: the list, its two tools, the Tasks page). [Schedule design](docs/SCHEDULE_DESIGN.md): repeating reminders, snooze, a record of what happened, and the Scheduled and Today pages (built, and measured with the real models; the measurement changed the design). [UI design](docs/UI_DESIGN.md): the redesigned interface, a warm-paper light theme and a near-black dark theme, one sidebar, a plain message box, and the measured palette. [Proactive design](docs/PROACTIVE_DESIGN.md): Diya writing first. [Automations design](docs/AUTOMATIONS_DESIGN.md): requests that run on a schedule, read-only. [Speed](docs/SPEED_DESIGN.md) and [streaming](docs/STREAMING_DESIGN.md) designs: why "hey" is fast and replies appear as they are written. [Push](docs/PUSH_DESIGN.md), [Telegram](docs/TELEGRAM_DESIGN.md), [one command](docs/ONE_COMMAND_DESIGN.md) and [phone channel](docs/PHONE_CHANNEL_DESIGN.md) designs (built, never tried against a real device or service).
 
 ## Architecture
 
@@ -178,8 +194,9 @@ ollama create diya-chat -f ollama/diya-chat.Modelfile   # the same weights, capp
 browser -> Next.js UI (:3000, HTTPS): its /api/* routes forward to the API, holding the token
              -> FastAPI diya_web.py (127.0.0.1:8080, HTTPS)
                   |- diya.py Agent (tool loop) -> Ollama :11434 (qwen2.5:3b, nomic-embed-text)
-                  |- diya_db.py -> SQLite diya.db (threads, messages, reminders, tasks)
+                  |- diya_db.py -> SQLite diya.db (threads, messages, reminders, tasks, automations, facts, actions)
                   '- faster-whisper (base)
+diya_notify.py (scheduled, every 5 min): due reminders, what Diya writes first, due automations -> the chat and the desktop
 dreaming.py (run separately) reads diya.db -> dream_pending.jsonl
 diya_review.py (by hand) or the UI's Memory page reads dream_pending.jsonl -> reviewed facts in diya.db -> the model, if accepted
 ```
@@ -191,7 +208,7 @@ diya_review.py (by hand) or the UI's Memory page reads dream_pending.jsonl -> re
 ## Tests and evals
 
 ```bash
-pip install ".[dev]" && python -m pytest  # about 2 minutes, from the repo root
+pip install ".[dev]" && python -m pytest  # about 8 minutes on a laptop, from the repo root
 python diya_evals.py                      # needs Ollama and both models; exits 1 if any case fails
 python diya_actions_bench.py --runs 3     # needs Ollama: when does the model add a task, asked and not (about 30 minutes)
 ```

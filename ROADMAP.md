@@ -55,8 +55,7 @@ Done:
       address-scan script's own docstring named a placeholder address literally, tripping its own
       check once it covered `scripts/` too; and a pyproject test assumed the `dossier` extra
       (`reportlab`, for `render_pdf.py`, not installed by `pip install ".[dev]"`) would always be
-      present. Both fixed. Not yet verified: an actual GitHub-hosted run (only a real push does
-      that) and Node-dependent behaviour on `ubuntu-latest` specifically.
+      present. Both fixed. **Since verified (2026-10-13):** GitHub-hosted runs happen on every push and the latest ones are green. Still true: CI never builds or lints the frontend (`next build`), and the product has only been run on Windows.
 - [x] Database migrations: `diya_db.py`'s `MIGRATIONS` (an ordered, numbered tuple) replaces the
       old bare `_SCHEMA`; `apply_migrations(conn)`, called from `Store.connect()` exactly where the
       old schema DDL used to run, tracks applied versions in a `migrations` table and only runs
