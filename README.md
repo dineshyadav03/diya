@@ -16,7 +16,7 @@ designed yet. In plain terms:
 | **Built, and used every day** | chat with streaming replies and a voice; tap-to-talk; reminders, repeating reminders, tasks, the Today page; Diya writing to you first; automations; reviewed memory, with automatic memory switched on; general questions answered with a web lookup |
 | **Built, but never tried against the real thing** | the Google Calendar sign-in, Todoist, Home Assistant and Notion; push notifications to a phone; the Telegram bot; the one-command launcher's install step |
 | **Built, switched off until you choose** | the desktop notifier's schedule, Dreaming's schedule, the phone channels, every connector |
-| **Not built** | Diya writing her own tools; call handling; a streaming voice pipeline; a knowledge base you can read in the UI and that the chat uses (its first step, pages built from your notes, is built: `python diya_knowledge.py build`; [the plan](docs/RESEARCH_PLAN_2026-10.md)); the Mac mini (deferred) |
+| **Not built** | Diya writing her own tools; call handling; a streaming voice pipeline; the chat using the pages made from your notes (the pages and a Knowledge page to read them are built; [the plan](docs/RESEARCH_PLAN_2026-10.md)); the Mac mini (deferred) |
 
 Stage 0 of the roadmap (safety and reproducibility) is 17 of 20 items done; the other three are blocked by tools or were decided against, and say so in [ROADMAP.md](ROADMAP.md).
 [PRODUCT_VISION.md](PRODUCT_VISION.md) says what each part does today and what was never tried for real.
@@ -95,7 +95,7 @@ Nothing below happens on its own; each is a step only you can take (an account, 
 - **Dreaming** (reading your chats for facts): schedule it ([docs/dreaming.md](docs/dreaming.md)) with a 15-minute limit, not Windows' 72-hour default.
 - **Automatic memory** (`DIYA_AUTO_MEMORY=1`, with `DIYA_PRIVACY_MODEL=qwen2.5:3b`): on or off is your decision; read [the measurement](docs/AUTO_MEMORY_DESIGN.md) first. Off means every fact waits for you.
 - **Connectors:** a token for Home Assistant, Notion or Todoist on the Connections page; Google needs your own small Google app ([steps](docs/GOOGLE_SETUP.md)). None has been tried against a real account.
-- **Your notes as pages:** point `DIYA_NOTES_DIR` at a folder of yours and run `python diya_knowledge.py build` ([docs/KNOWLEDGE_DESIGN.md](docs/KNOWLEDGE_DESIGN.md)): one Markdown page per name that recurs, made only of your own sentences.
+- **Your notes as pages:** point `DIYA_NOTES_DIR` at a folder of yours (the demo one has six one-line notes) and press "Read my notes now" on the Knowledge page, or run `python diya_knowledge.py build` ([docs/KNOWLEDGE_DESIGN.md](docs/KNOWLEDGE_DESIGN.md)): one Markdown page per name that recurs, made only of your own sentences.
 - **Your phone:** Web Push (`DIYA_PUSH=1`) and a Telegram bot (`DIYA_TELEGRAM=1`) are built and have never been tried on a real device or bot.
 - **Your data folder:** move it out of a cloud-synced folder with `python diya_data.py move` (below).
 

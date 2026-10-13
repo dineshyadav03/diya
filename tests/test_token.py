@@ -58,7 +58,10 @@ def client_for(tmp_path, require=None):
         load_config(env),
         db_path=str(tmp_path / "t.db"),
         profile_path=str(tmp_path / "t_profile.txt"),
+        notes_dir=str(tmp_path / "t_notes"),  # a folder the knowledge page may read (and find nothing in)
+        knowledge_dir=str(tmp_path / "t_knowledge"),
     )
+    (tmp_path / "t_notes").mkdir(exist_ok=True)
     agent = diya.Agent(config, client=FakeClient([text_reply("ok")] * 20), action_kinds=SEEDED_KINDS)
     # three actions: 1 is waiting to be approved, 2 to be turned down, and 3 was cut off mid-run (its outcome is
     # unknown), so each of the three decisions has a real action to act on
@@ -190,6 +193,10 @@ ENDPOINTS = [
     ("POST", "/api/automations/2/resume", {}),
     ("POST", "/api/automations/3/run", {}),
     ("POST", "/api/automations/4/delete", {}),
+    ("GET", "/api/knowledge", {}),
+    ("POST", "/api/knowledge/build", {}),
+    ("POST", "/api/knowledge/hide", {"json": {"name": "Maya"}}),
+    ("POST", "/api/knowledge/unhide", {"json": {"name": "Maya"}}),
     ("GET", "/api/tasks", {}),
     ("POST", "/api/tasks", {"json": {"text": "buy milk", "when": "tomorrow"}}),
     ("POST", "/api/tasks/1/done", {}),

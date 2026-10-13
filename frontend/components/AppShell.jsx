@@ -25,6 +25,7 @@ export const NAV = [
       { href: '/', name: 'Chat' },
       { href: '/history', name: 'History' },
       { href: '/memory', name: 'Memory' },
+      { href: '/knowledge', name: 'Knowledge' },
     ],
   },
   {

@@ -388,7 +388,7 @@ def test_a_hidden_name_loses_its_page_and_does_not_get_it_back(folders):
     assert "Maya" not in pages(out) and "Maya.md" not in report.written
     assert "[[Maya]]" not in (out / "Lisbon.md").read_text(encoding="utf-8")
     assert hide(str(out), "maya") is False  # already hidden, in any case
-    assert list_pages(str(out))[1] == ["maya"]
+    assert list_pages(str(out))[1] == ["Maya"]
 
 
 def test_unhiding_brings_the_page_back_on_the_next_build(folders):
@@ -544,7 +544,7 @@ def test_the_list_hide_and_unhide_commands(folders):
     assert "5 pages: Diya, Lisbon, Maya, Pune, Rocky" in run(["list"], folders)[1]
     assert run(["hide", "Maya"], folders) == (0, "Hidden: Maya\n")
     assert run(["hide", "Maya"], folders) == (0, "Already hidden: Maya\n")
-    assert "hidden: maya" in run(["list"], folders)[1]
+    assert "hidden: Maya" in run(["list"], folders)[1]
     assert run(["unhide", "Maya"], folders)[1].startswith("It will come back")
     assert run(["unhide", "Maya"], folders)[1].startswith("It was not hidden")
 
@@ -571,4 +571,4 @@ def test_the_knowledge_folder_setting_and_its_default(tmp_path):
 
 def test_the_pages_are_never_committed():
     ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
-    assert "knowledge/" in ignored
+    assert "/knowledge/" in ignored

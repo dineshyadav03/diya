@@ -1,6 +1,7 @@
 # A knowledge base from your own notes (unit K1, step 1)
 
-> **Status (2026-10-13):** step 1 built (`diya_knowledge.py`, `DIYA_KNOWLEDGE_DIR`, `python diya_knowledge.py build`). Steps 2 and 3 (a page to read it in, using it in chat, a second source) are not built.
+> **Status (2026-10-13):** step 1 built (`diya_knowledge.py`, `DIYA_KNOWLEDGE_DIR`, `python diya_knowledge.py build`), and the **Knowledge page** to read, build and hide pages in the UI (`diya_knowledge_api.py`,
+> `frontend/app/knowledge/`). Not built: the chat reading a page, and a second source.
 > Unit K1 of `docs/RESEARCH_PLAN_2026-10.md`; the research is `RESEARCH.md` entries 29 and 31.
 
 ## What it is for
@@ -75,5 +76,7 @@ pages useful: that is the real test, and it starts when `DIYA_NOTES_DIR` points 
 
 ## Next steps (not built)
 
-2. A **Knowledge page** in the UI to read pages with their sources, and a Hide button; the chat reading a page when you ask "what do my notes say about X?".
+2. **Built:** a **Knowledge page** in the UI (sidebar, under Memory): the notes folder in use, a "Read my notes now" button, the names that have a page, a page with each sentence and the note it came from, links to
+   the names beside it, "Hide this name", and the hidden names with "Bring back". Routes: `GET /api/knowledge`, `POST /api/knowledge/build`, `/hide`, `/unhide`; the same token rule as every route.
+   **Not built:** the chat reading a page when you ask "what do my notes say about X?". That is the step that needs care: a page is text from your notes, so the chat has to read it as data, as it reads web results.
 3. A **second source**, one at a time and only if you want it: Calendar once connected; mail and messages only by your decision.

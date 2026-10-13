@@ -405,4 +405,10 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .today-undated { margin-top: 20px; }
 .notify-device { margin-top: 32px; }
 .notify-device p { max-width: 62ch; }
+/* The Knowledge page (docs/KNOWLEDGE_DESIGN.md): the names that have a page, as pills, and the note each sentence came from. */
+.knowledge-names { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.knowledge-count { margin-left: 4px; color: var(--text-dim); font-size: 12.5px; }
+.memory-btn--primary .knowledge-count { color: inherit; opacity: 0.85; }
+.knowledge-source { margin: 6px 0 0; color: var(--text-dim); font-size: 13px; font-family: var(--mono); overflow-wrap: anywhere; }
+.knowledge-link { min-height: 0; padding: 0 4px; text-decoration: underline; }
 .today-page h2 a, .scheduled-page h2 a { margin-left: 10px; font-family: var(--font); font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--link); }

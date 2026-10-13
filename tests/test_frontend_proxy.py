@@ -440,6 +440,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/reminders/${reminder.id}/snooze",  # the Reminders page's push-back buttons
         "/api/scheduled", "/api/scheduled", "/api/scheduled/${series.id}/${action}",  # the Scheduled page: its list, add, and pause/resume/skip/stop
         "/api/automations", "/api/automations", "/api/automations/${item.id}/${action}",  # the Automations page: its list, add, and pause/resume/run/delete
+        "/api/knowledge", "/api/knowledge/build", "/api/knowledge/${action}",  # the Knowledge page: its list, build now, and hide or unhide a name
         "/api/today",  # the Today page
         "/api/push/status", "/api/push/key", "/api/push/subscribe", "/api/push/unsubscribe", "/api/push/test",  # its "Notify this device" control
         "/api/connections", "/api/connections/${connector.name}/connect", "/api/connections/${connector.name}/connect",
@@ -500,6 +501,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         "/api/scheduled/{series_id}/skip", "/api/scheduled/{series_id}/stop",
         "/api/automations", "/api/automations/{automation_id}/pause", "/api/automations/{automation_id}/resume", "/api/automations/{automation_id}/run",
         "/api/automations/{automation_id}/delete",
+        "/api/knowledge", "/api/knowledge/build", "/api/knowledge/hide", "/api/knowledge/unhide",
         "/api/tasks", "/api/tasks/{task_id}/done", "/api/tasks/{task_id}/reopen",
         "/api/connections", "/api/connections/{name}/connect", "/api/connections/{name}/disconnect", "/api/connections/{name}/setup", "/api/connections/{name}/clear-setup",
         "/api/actions", "/api/actions/{action_id}", "/api/actions/{action_id}/approve",
@@ -987,6 +989,28 @@ def test_an_automation_id_that_is_not_a_whole_number_is_refused_before_anything_
     refused = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call(route, "POST", params={"automation_id": bad}) for bad in BAD_IDS]})
     assert [r["status"] for r in refused["results"]] == [404] * len(BAD_IDS) and refused["captured"] == []
     wrong = run_harness({"mode": "route", "env": {}, "calls": [call(route, "GET", params={"automation_id": "1"})]})
+    assert wrong["results"] == [{"noHandler": True}] and wrong["captured"] == []
+
+
+# --- the knowledge page's routes (docs/KNOWLEDGE_DESIGN.md) ----------------------------------------------
+
+KNOWLEDGE_CALLS = [("knowledge", "GET", "/api/knowledge"), ("knowledgeBuild", "POST", "/api/knowledge/build"), ("knowledgeHide", "POST", "/api/knowledge/hide"),
+                   ("knowledgeUnhide", "POST", "/api/knowledge/unhide")]
+
+
+@needs_node
+def test_the_knowledge_routes_forward_to_their_own_path_and_method_with_the_token_and_nothing_else_of_the_browsers():
+    calls = [call(route, method, {"content-type": "application/json", "authorization": "Bearer from-the-browser", "cookie": "a=b"}, "{}" if method == "POST" else None)
+             for route, method, _ in KNOWLEDGE_CALLS]
+    out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": calls})
+    assert [(c["method"], c["url"]) for c in out["captured"]] == [(m, u) for _, m, u in KNOWLEDGE_CALLS]
+    assert all(c["headers"]["authorization"] == f"Bearer {TOKEN}" and "cookie" not in c["headers"] for c in out["captured"])
+
+
+@needs_node
+@pytest.mark.parametrize("route, method", [(route, "POST" if method == "GET" else "GET") for route, method, _ in KNOWLEDGE_CALLS])
+def test_a_knowledge_route_answers_only_its_own_method(route, method):
+    wrong = run_harness({"mode": "route", "env": {}, "calls": [call(route, method)]})
     assert wrong["results"] == [{"noHandler": True}] and wrong["captured"] == []
 
 

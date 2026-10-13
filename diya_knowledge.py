@@ -337,12 +337,17 @@ def _is_generated(path):
         return False
 
 
-def load_hidden(out_dir):
+def hidden_names(out_dir):
+    """The names in the hidden file as the person wrote them, in order."""
     path = os.path.join(out_dir, HIDDEN_FILE)
     if not os.path.isfile(path):
-        return set()
+        return []
     with open(path, encoding="utf-8", errors="replace") as handle:
-        return {_fold(line) for line in handle.read().splitlines() if line.strip() and not line.lstrip().startswith("#")}
+        return [" ".join(line.split()) for line in handle.read().splitlines() if line.strip() and not line.lstrip().startswith("#")]
+
+
+def load_hidden(out_dir):
+    return {_fold(name) for name in hidden_names(out_dir)}
 
 
 def _write(path, text, dry_run):
@@ -528,9 +533,34 @@ def unhide(out_dir, name):
 def list_pages(out_dir):
     """The names of the pages Diya made, and the names hidden."""
     if not os.path.isdir(out_dir):
-        return [], sorted(load_hidden(out_dir))
+        return [], hidden_names(out_dir)
     pages = [name[:-3] for name in sorted(os.listdir(out_dir)) if name.endswith(".md") and name != INDEX_STEM + ".md" and _is_generated(os.path.join(out_dir, name))]
-    return pages, sorted(load_hidden(out_dir))
+    return pages, hidden_names(out_dir)
+
+
+def read_page(out_dir, stem):
+    """A page Diya made, read back from its own file: {stem, name, sentences: [{text, source}], omitted, links: [stem]}. None if there is no such page, or the file is not one of Diya's (a
+    file of the person's own is never read as a page, and `stem` is only ever used as a name inside the knowledge folder)."""
+    if not stem or os.path.basename(stem) != stem or stem != stem.strip() or stem.startswith("."):
+        return None
+    path = os.path.join(out_dir, stem + ".md")
+    if stem == INDEX_STEM or not _is_generated(path):
+        return None
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        lines = handle.read().splitlines()
+    name, sentences, omitted, links = stem, [], 0, []
+    for line in lines[1:]:
+        if line.startswith("# ") and name == stem:
+            name = line[2:].strip() or stem
+            continue
+        match = re.match(r"^- (.*) — (.+)$", line)  # the last " — " splits a sentence from the note's path, which may have spaces in it
+        if match:
+            sentences.append({"text": match.group(1), "source": match.group(2)})
+        elif re.match(r"^- \.\.\.and (\d+) more", line):
+            omitted = int(re.match(r"^- \.\.\.and (\d+) more", line).group(1))
+        elif line.startswith("Mentioned with: "):
+            links = re.findall(r"\[\[([^\]]+)\]\]", line)
+    return {"stem": stem, "name": name, "sentences": sentences, "omitted": omitted, "links": links}
 
 
 # ---- the command line --------------------------------------------------------------------------------------------

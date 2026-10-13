@@ -160,7 +160,7 @@ def test_the_one_navigation_links_every_page_there_is_and_no_page_that_is_not():
     (components/AppShell.jsx, rendered by the layout) is the only list now, so this is the check that no page is left out of it."""
     routes = {"/" if p.parent.name == "app" else "/" + p.parent.name for p in pages()}
     # /login is the way in, drawn without the shell (docs/UI_LOGIN_DESIGN.md): it is a page that is meant to be in no list of links
-    assert routes == {"/", "/actions", "/automations", "/connections", "/history", "/login", "/memory", "/reminders", "/scheduled", "/tasks", "/today"}
+    assert routes == {"/", "/actions", "/automations", "/connections", "/history", "/knowledge", "/login", "/memory", "/reminders", "/scheduled", "/tasks", "/today"}
     routes.remove("/login")
     links = shell_links()
     assert sorted(links) == sorted(routes) and len(links) == len(set(links))

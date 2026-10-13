@@ -21,7 +21,7 @@ notify_log.txt
 proactive_context.txt
 connector_tokens/
 # Pages Diya builds from your notes (diya_knowledge.py): your own sentences, grouped by name
-knowledge/
+/knowledge/
 connectors_log.txt
 # diya_run.py: the API's and the UI's logs, and the notes it leaves for --status and --stop (they go in the data folder when there is one)
 /logs/
