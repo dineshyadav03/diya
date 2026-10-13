@@ -324,6 +324,11 @@ Remaining:
    bridge ([`docs/TELEGRAM_DESIGN.md`](docs/TELEGRAM_DESIGN.md): `diya_telegram.py`; pairing code, paired owner only, no approvals, plain text, rate limits; `DIYA_TELEGRAM=1` and a bot the owner makes), written
    and tested only against scripted stand-ins: **no push service, phone, Telegram account or bot token has ever been involved.**
 
+7. **Research plan, October 2026** ([`docs/RESEARCH_PLAN_2026-10.md`](docs/RESEARCH_PLAN_2026-10.md), `RESEARCH.md` entries 28-32). Built from it on 2026-10-13: Q1 (a message that only asks is never read for
+   facts, and a fact cannot be "grounded" in one) and D1 (a loosely dated fact such as "next Tuesday" is asked about once its latest day has passed). Proposed, in order, and waiting for the owner's
+   answers (section 6 of the plan): K1 a Markdown knowledge base from the owner's documents, M1 Diya as an MCP client, R1 relevance recall when the memory grows, H1 a propose-only harness advisor,
+   E1 a memory-usefulness measure.
+
 ## Future items
 
 - Call management (market signal: Equal AI).

@@ -723,6 +723,128 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
   patterns rather than clever ones.
 - **Action:** none.
 
+### 28. "How AI memory actually works" (supermemory's beginner's guide), and the three papers behind its numbers
+
+- **Source:** the guide the owner pasted 2026-10-13 (written at supermemory; vendor content). Checked the same day by fetching the three papers it leans on -- LongMemEval
+  (arXiv 2410.10813), ConvoMem (arXiv 2511.10523) and "Lost in the Middle" (arXiv 2307.03172) -- and supermemory's own LongMemEval-S report
+  (https://supermemory.ai/research/longmembench). The guide itself could not be found by search.
+- **Noted:** 2026-10-13.
+- **What the guide says:** a model remembers nothing; the app resends the chat every turn and anything that "remembers you" is notes pasted back in. A bigger window does not fix it (more text
+  makes the answer harder to find, and a 100-turn chat resends about 2.5M tokens in total). Raw data can be searched as it is (grep, embeddings, RAG), or a model can first turn it into notes or
+  facts, which can notice that a fact changed. Every system has a search step, chunking, learning outside the conversation and code that puts the result back into the prompt. Memory is a
+  lifecycle: write (only what would change a future answer), update, forget (some facts expire), infer, and recall (the only live part). A store tracks time and connections. Memory plugs in as a
+  tool the model may call, or as hooks the app runs at set moments. supermemory's own design: atomic facts linked by *updates*, *extends* and *derives* (a derived guess is trusted less until
+  confirmed), and three ways to read back (source chunks, facts, a short always-present profile).
+- **What checked out:** LongMemEval is real (Wu, Wang, Yu, Zhang, Chang, Yu; ICLR 2025): 500 questions, five abilities (extraction, multi-session reasoning, temporal reasoning, knowledge updates,
+  abstention); its abstract says commercial assistants and long-context models show "a 30% accuracy drop" on remembering across sustained interactions. ConvoMem is real (Pakhomov, Nijkamp, Xiong,
+  13 Nov 2025; 75,336 question-answer pairs) and says what the guide says: for a small history the whole conversation in the prompt does best (about 70-82% accuracy); up to roughly 30
+  conversations it is the best, up to roughly 150 it stays workable, beyond that a hybrid or retrieval design is needed; and a retrieval-based memory system, Mem0, scored only about 30-45% on
+  histories under 150 interactions. "Lost in the Middle" (Liu et al.) is real: models use the start and the end of a long prompt best and the middle worst.
+- **What did not check out:** the guide's "87% with only the answer sessions, 60.6% with the whole ~115k-token history, GPT-4o" is not in LongMemEval's abstract, and supermemory's own report gives
+  the full-context baseline for the same setup as **60.2%**, not 60.6%; the 87% was not found. supermemory's headline 97% is *Recall@20* (does the search result contain the answer), not answer
+  accuracy, and the report's two tables use different measures; swapping the answer model from gpt-4o to GPT-5 or Gemini 3 Pro lowers its overall score to 84.6% / 85.2%. All of it is the vendor's
+  own harness.
+- **Why it matters for Diya:** (a) The strongest point for a one-person assistant is ConvoMem's: **while the history is small, tell the model everything.** That is what Diya does (every accepted
+  fact, one system message, 2,000 characters), and the owner's memory is seven facts. The guide's own case for search only starts past about 150 conversations. So no retrieval needed *yet*; the
+  numbers also give the trigger for building it: when the accepted facts approach the cap or run to a few dozen. (b) The lifecycle is Diya's, almost step for step: write (Dreaming, live
+  capture, the lanes), update (the `similar` flag, corrections, `supersede`), forget (retire, "forget that", Undo), recall (all accepted facts). What it adds and Diya lacks: *time* (facts that
+  carry when they were true; Diya had only a stale question for an exactly-dated fact, and nothing at all for "next Tuesday" until 2026-10-13), *relevance recall*, a split of an always-present
+  profile from recent events, and *documents as a second store* (Diya indexes one notes folder and returns one note). (c) "derives" is the inference that cross-cutting note 8 forbids as a
+  silent fact: a derived guess could only ever be *offered* to the owner as a question. (d) Hooks versus a memory tool is the same choice `docs/GATE_BENCHMARK.md` measured (the small model
+  was worse at deciding); Diya uses hooks. (e) The code sample is supermemory's hosted API: the owner's facts would leave the computer, so it is a reference for shape only.
+- **Action:** no build from this entry alone. It feeds the plan in `docs/RESEARCH_PLAN_2026-10.md` (units D1 time-aware facts, partly done the same day; R1 relevance recall, when the memory
+  grows; K1 a knowledge base from the owner's documents).
+
+### 29. Sentient OS (open source, AGPL-3.0, macOS only): "your computer catches up with you overnight"
+
+- **Source:** the founder's launch thread, pasted 2026-10-13; checked the same day against the project's README (https://github.com/Sentient-OS-Labs/sentient-os, fetched) and a web search.
+  The founders, the "$1M+ pre-seed from Y Combinator, Afore, Pioneer and a16z speedrun" and the thread's claims about other agents could not be confirmed; secondary sites disagree with each other.
+- **Noted:** 2026-10-13.
+- **What it is (from the README):** a menu-bar Mac app (Apple silicon, macOS 15.4+, 8 GB; no Windows) with three parts: *Sidekick* (hand off what is on screen; it works with its own cursor and
+  does not ask before each click), *Double Tap* (a double tap of a key drafts a reply in place and never sends it), and suggestions prepared overnight. At 3 AM, plugged in, an on-device model
+  (Gemma 4 E4B through a modified LiteRT-LM with Metal and speculative decoding) reads the sources the person enabled (files, screenshots, iMessage, WhatsApp, Apple Notes, Mail and Calendar),
+  drops what is irrelevant and common sensitive identifiers, and summarises it; the summaries become linked notes about people, projects, plans and preferences, which a *frontier model of the
+  person's choice* consolidates into a knowledge base: **a folder of ordinary Markdown files** (plus a graph view of the links). Interrupted runs resume from checkpoints. Suggestions wait for
+  approval. The first analysis takes hours.
+- **Skeptic note:** the thread's headline ("private on-device inference") is true of the first pass only: the README says plainly that the knowledge base and task context go to the chosen cloud
+  provider in normal use, and Sidekick/Double Tap send screenshots. Full Disk Access is required. Claims about speed-ups and about other products are the founders' own.
+- **Why it matters for Diya:** (a) It is the same bet as Diya's, built from a different side: Dreaming is the nightly on-device pass, and "knowing you matters more than the next agent benchmark" is
+  the project's thesis. (b) The difference that matters: Sentient's input is the person's *documents and messages*, its output a *linked Markdown knowledge base*; Diya reads only the owner's chat
+  messages and keeps *reviewed atomic facts*. Diya has no way yet to know what is in the owner's notes, mail or files, which is the gap the thread is about. (c) On safety Diya is stricter in every
+  place that counts: nothing leaves the computer, every fact is reviewed or asked about, an action waits for approval; Sentient's own README lists the opposite choices as features. (d) The
+  knowledge base format (plain Markdown, one folder, readable and editable by the owner, a link graph) is the right shape for Diya too: it is what entry 21 (Cognition's "Agent Memory Repo")
+  describes and it is auditable by construction. (e) **Licence:** AGPL-3.0. "Copy wherever needed" cannot mean its code: Diya is published all rights reserved, and AGPL code copied into it would
+  oblige the whole of Diya to be offered under the AGPL. Ideas are free; write our own code. (f) Gemma 4 E4B is a model Diya already benchmarked (`docs/MODEL_BENCHMARK.md`, the bake-off).
+- **Action:** plan unit K1 (a nightly Markdown knowledge base built on this computer from the owner's own notes first), design-first, with the sources chosen by the owner.
+
+### 30. One week of "self-improving agent" papers: harness learning, HERMES, VERA, MASS, RSI-Anything, VeriHarness, the Sharpening Tax, plasticity, memory machines, MIMESIS
+
+- **Source:** a weekly roundup of ten items and two posts (Sakana's MASS announcement, RSI-Anything), pasted 2026-10-13. Checked the same day: the MASS and RSI-Anything arXiv pages (fetched) and web
+  searches for the rest (abstract-level only). **I read abstracts and summaries, not the papers.**
+- **Noted:** 2026-10-13.
+- **Status of each item:**
+  - *MASS*, "Recursive Self-Improvement through Multi-Agent Self-Supervision" (arXiv 2610.12176, Lee, Xu, Seely, Lee, Sojoudi, Zaharia, Tang; 8 Oct 2026): checked. One base model proposes, runs and
+    grades multi-agent workflows; an evolutionary search under structural guardrails keeps the best; the model is then fine-tuned on its own best team's traces; two cycles on Qwen3.6-27B gave 1.2-1.6x
+    performance per output token on four open-ended benchmarks, and a student trained on multi-agent traces beat a single-agent student given 1.4x more tokens. Sakana's own post warns that a model
+    that is also its own evaluator may reinforce shared blind spots.
+  - *RSI-Anything* (arXiv 2610.13912, Cui et al.; 9 Oct 2026): checked. A world model predicts which updates to keep; code repair 26.3% (static verifier) to 29.2% to 31.2% after world-model adaptation, GUI
+    tasks with 39.4% fewer actions, lab planning 21.80% to 46.01% over five policy versions; the authors say external feedback is costly and the world model's predictions drift as the policy changes.
+  - *Harness Learning* ("Harness Learning Enables Generalizable Test-Time Adaptation", Zhang, Zanette, Song, Khashabi): found; the abstract matches the roundup (a proposer trained with RL edits the
+    program around a frozen solver; the reward is the revised harness's task score). The 4B-beats-35B, Reasoning Gym and CMU details were not confirmed.
+  - *CorpusMap* ("Follow the Entities: A Corpus Map for Agentic Search", Jeong, Jauhar, Hwang, Nam; 29 Sep 2026): found; the arXiv number (2609.37226) comes from an aggregator and the numbers (+6.4 to
+    +11.7 points, 34-57% fewer input tokens) from a secondary summary; the Microsoft attribution is unconfirmed. See entry 31.
+  - *VeriHarness* (arXiv 2610.00972 per one secondary entry; the Google attribution unconfirmed; other projects share the name): found, no results seen.
+  - *The Sharpening Tax* ("Sharpening Tax in Post-Training", arXiv 2610.01509, Oh et al., Meta Superintelligence Labs and others): checked. Across 14 base/post-trained pairs, four model families and three
+    agentic benchmarks (42 cases), RL post-training raises pass@1 but often lowers pass@K coverage at a large budget; the "36 of 42" count and the WebShop figures are from secondary coverage; the
+    fix (PTGS) was tested only in two small environments.
+  - *HERMES* (components of a repository as resident LLMs), *VERA* (NVIDIA; restartable sandboxes with rubric rewards; AutoCoWorkBench, AutoMedBench), *agent plasticity*, *Continuous Memory Machines* and
+    *MIMESIS*: **not found or not checked.** The search for VERA found only NVIDIA's Vera CPU page. Treat their numbers as unverified.
+- **Skeptic note:** a roundup is a summary of summaries. The only numbers recorded above as checked are those marked checked.
+- **Why it matters for Diya:** (a) The common thread is that the gains are in the **harness**, not the weights, and that the harness is now something an agent can *learn to edit* from execution
+  feedback. That is how Diya improved, by hand: every gate in `diya_intent.py`, the voice, the look-it-up rule were found by running the real model against the harness and fixing what the numbers
+  showed. (b) The part to copy is the loop, in its safe form: a script that reads the benches' failures and *proposes* edits as diffs for the owner to approve, never applying them. Cross-cutting
+  notes 8 and 9 and the Rule of Two (entry 17) say nothing may rewrite itself unreviewed; MASS's own caution (one model as optimiser *and* judge shares its blind spots) is the argument for what Diya
+  already does: the verifier is advisory, the lanes are code, and the owner decides. (c) The Sharpening Tax concerns choosing models: the bake-off chose `qwen3:4b-instruct` for single-answer
+  routing (pass@1), which is what Diya uses; the tax would only bite if Diya sampled many times and kept the best, which on a CPU laptop it will not. (d) VeriHarness's idea (disagreement carries
+  information; agreement can hide a shared error) could make extraction ask when two passes disagree, at double the CPU cost. (e) "Agent plasticity" suggests a measure Diya lacks: does memory
+  improve answers over time per unit of cost, with the weights frozen. (f) Not usable: RSI-Anything and MASS train models; Continuous Memory Machines is a network architecture; MIMESIS trains user
+  simulators for reinforcement learning.
+- **Action:** plan units H1 (a propose-only harness advisor) and E1 (a memory-usefulness measure), later and design-first; nothing built from this entry.
+
+### 31. Entity pages (CorpusMap) and a knowledge base of the owner's own documents
+
+- **Source:** entries 28-30 together, plus Obsidian-style linking in the memory guide; 2026-10-13. CorpusMap's claims are the secondary ones of entry 30.
+- **What it is:** treat a document collection by the *entities* that recur in it: give each recurring person, project or place a page that collects what is known about it and links to every document
+  that mentions it, built offline once (CorpusMap says without a model) and updated as documents arrive, so an agent follows links instead of searching again on every question. Sentient's linked
+  notes about "people, projects, plans, preferences" are the same shape.
+- **Why it matters for Diya:** Diya already has the first half: `people` and person-tagged facts (`docs/PERSON_MEMORY_DESIGN.md`). It has no pages, no links and no documents: `search_notes` embeds
+  each file of one folder and returns the single closest one. A knowledge base from the owner's notes (and later calendar and mail connectors) with an entity page per person and project would turn
+  "what do you know about Maya?" from a list of facts into everything the owner has written about her. It is also where relevance recall (R1) would come from.
+- **Caveats:** what is written into such pages is *inferred* from documents, not the owner's words: by cross-cutting note 8 it must be shown to the owner and be easy to correct, and nothing in a page
+  may become an accepted fact on its own. Documents can carry instructions (entry 17): a page is read as text, never obeyed. Privacy: mail and messages are the most sensitive input there is and are
+  the owner's decision to allow, one source at a time.
+- **Action:** plan unit K1.
+
+### 32. Four reading lists the owner shared (ML foundations, systems, reinforcement learning, LLM inference): what to read for Diya, and what to leave
+
+- **Source:** four lists pasted 2026-10-13 (about a hundred papers, each with a one-line summary). **Not read, not checked**; the summaries are the lists' own, and the 2025-2026 papers in them (EAGLE-3,
+  Hardware-Efficient Attention for Fast Decoding, the DeepSeek-V4 family, Mamba-3, Gated DeltaNet-2 and others) are beyond what could be checked here.
+- **Noted:** 2026-10-13.
+- **What they are:** curricula, not product evidence: the ML foundations (Perceptron, Dropout, Adam, word2vec, VAE, GAN, AlexNet, seq2seq, distillation, diffusion, BatchNorm, ResNet, Attention, BERT,
+  scaling laws, MoE, CLIP, Mamba, GPT-3, Chinchilla, RAG, SAM, chain of thought, LoRA, Toolformer, InstructGPT, ReAct, DPO); classic systems and networking (Shannon, Dijkstra, Bloom filters, Ethernet,
+  end-to-end arguments, DNS, consistent hashing, CAP, PageRank, LZ77, TCP congestion control, GFS, Dynamo, Raft, Tor, MapReduce, Bigtable, Bitcoin, Kafka, the tail at scale, Dremel, Borg);
+  reinforcement learning (Q-learning, REINFORCE, policy gradients, DQN, TRPO, GAE, AlphaGo, RLHF, PPO, DeepSeekMath/GRPO, DPO, DeepSeek-R1); and LLM inference (attention, scaling laws, RMSNorm,
+  FlashAttention, GQA, continuous batching, speculative decoding, ZeRO, MLA, PagedAttention, ring attention, test-time compute, sparse and linear attention, KV-cache placement, FP4 quantisation).
+- **Why it matters for Diya:** most of it is education about how the models Diya *uses* are built and served; very little changes what Diya does. The places it touches the product: word2vec and RAG
+  (the `nomic-embed-text` embeddings and `search_notes`; relevance recall); ReAct, Toolformer, chain of thought, GPT-3 and InstructGPT (why a tool-calling loop needs gates when the model is small);
+  attention, GQA, FlashAttention, PagedAttention and the KV-cache papers (why `num_ctx` decides whether a model loads on a 16 GB laptop, why the keep-warm prompt prefix is reused, why temperature 0 is
+  not reproducible, which is why Diya's evals vary between runs); speculative decoding (a possible speed-up if Ollama ever exposes it); quantisation (which models fit); test-time compute scaling
+  (Snell et al.: spending more inference compute can beat a bigger model, which is the case for the look-it-up second pass and for retries, in small doses); LoRA, DPO and distillation (the only
+  routes to adapting a small model to one person, a later idea that needs a GPU); the DNS paper (time-to-live: the same idea as facts that expire); "end-to-end arguments" (put the check where
+  it can be complete: in code at the end, not the model in the middle, which is `GATE_BENCHMARK.md` again). The distributed-systems papers describe systems Diya deliberately is not (one machine,
+  one person); the training and serving-at-scale papers need hardware Diya does not have.
+- **Action:** a reading path for the owner, in the order that builds on itself, each with something to try on this laptop, is in `docs/RESEARCH_PLAN_2026-10.md`; nothing is built from this entry.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,
@@ -749,3 +871,10 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
    classes asked about, a cap and a circuit breaker, Undo, and a measurement on real conversations before it is switched on.
    The rule from note 8 still holds for what the owner did not say: nothing a background job *infers* (a merged, retired or
    synthesized fact) becomes true without the owner.
+10. (2026-10-13, entries 28-29, 31) The memory vendors and the open-source "knows you" apps agree on the shape: a nightly on-device pass, a store the person can read, a short profile always
+    present. They differ from Diya where it counts: they act on what they infer. For a small memory the evidence says to tell the model everything (entry 28); the real gaps are time (facts
+    that go out of date), relevance when the memory has grown, and documents as a second source (a Markdown knowledge base). Everything inferred stays a proposal to the owner (notes 8 and 9).
+11. (2026-10-13, entry 30) The week's research says the harness, not the weights, is where agents improve, and that agents can now edit their own harness from execution feedback. For
+    Diya the usable form is propose-only: a script may write a suggested edit; only the owner applies one. A model that grades its own work shares its own blind spots.
+12. (2026-10-13, entry 29) "Copy wherever needed" is a licence question before it is an engineering one: Sentient OS is AGPL-3.0 and Diya is all rights reserved, so its code cannot be copied
+    into Diya; its design can. Read a project's licence before taking any code from it, and say which in the commit.

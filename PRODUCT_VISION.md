@@ -165,4 +165,4 @@ to `dream_log.txt` and `watcher_log.txt`.
 
 Everything the roadmap planned for Phases 1 and 2 is built in code except what needs hardware or an account that only the owner has: model pinning (blocked on Ollama's own tooling), the Mac mini,
 a real Google or Todoist account, and a phone. What is not built at all: Diya writing her own tools, call management and a streaming voice pipeline, each needing its own design and the owner's yes.
-The next real step is use: a few days of daily use will say what to fix, which is more useful than more features. The stage list and the owner's own steps are in `ROADMAP.md`.
+The next real step is use: a few days of daily use will say what to fix, which is more useful than more features. What the newest research says to build next, in order, with what each needs from the owner, is in `docs/RESEARCH_PLAN_2026-10.md`. The stage list and the owner's own steps are in `ROADMAP.md`.
