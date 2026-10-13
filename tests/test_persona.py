@@ -27,8 +27,10 @@ def make_agent(tmp_path, replies=(), when=datetime(2026, 10, 11, 14, 20)):
 
 
 def test_the_voice_says_who_diya_is_and_forbids_the_stock_greeting():
-    assert REAL_PERSONA.startswith("You are Diya, a private personal assistant") and "never say \"How can I assist you today\"" in REAL_PERSONA
-    assert "never make up facts" in REAL_PERSONA and len(REAL_PERSONA) < 700  # short: it is read on every first message after a pause
+    assert REAL_PERSONA.startswith("You are Diya, the user's private assistant") and "never say \"How can I assist you today\"" in REAL_PERSONA
+    assert "never make up facts" in REAL_PERSONA and len(REAL_PERSONA) < 1000  # short: it is read on every first message after a pause
+    # it is a general assistant, not one for tasks and exams only (the owner was told "I'm built to help with your tasks, exam prep, or daily routines"), and honest about being small
+    assert "talk about anything" in REAL_PERSONA and "Never describe yourself as built only for tasks" in REAL_PERSONA and "much smaller than cloud models" in REAL_PERSONA
 
 
 def test_with_nothing_known_the_system_message_is_the_voice_and_the_day(tmp_path):

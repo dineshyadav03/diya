@@ -65,6 +65,9 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   ([docs/PROACTIVE_DESIGN.md](docs/PROACTIVE_DESIGN.md)). Replies appear word by word, with an orb while she thinks, and the chat model is kept loaded so "hey" is not slow
   ([docs/SPEED_DESIGN.md](docs/SPEED_DESIGN.md), [docs/STREAMING_DESIGN.md](docs/STREAMING_DESIGN.md)).
 - **Past chats**: a search box on the History page looks inside every chat (not just the first message) and shows the piece that matched; each chat has a Rename button. New notes you put in the notes folder are found without a restart.
+- **Ask it anything**: Diya is a general assistant (she runs on a small model on your computer, and says so). A question that needs today's facts ("who is the current CEO of ...", "latest news about ..."), a short
+  "what is X", and any general question she gave up on are searched on the web and answered from the results, with no tools offered while she reads them, so a page cannot give her orders; `DIYA_LOOKUP=0`
+  turns it off ([docs/LOOKUP_DESIGN.md](docs/LOOKUP_DESIGN.md)).
 - **Automations**: say "every morning at 8am tell me the weather in Pune" (in the chat, or on the **Automations** page) and Diya does it on that schedule and writes you the answer in the chat. A run can
   only read (the weather, the web, your notes, reminders and tasks), never save or send anything; it is made by code from your own words, not by the model; `DIYA_AUTOMATIONS=0` turns it off
   ([docs/AUTOMATIONS_DESIGN.md](docs/AUTOMATIONS_DESIGN.md)).
@@ -88,8 +91,8 @@ this project's own platform (Windows, Python 3.13) -- regenerate it for another 
   A task is saved only if you asked for one, a due date only if you said it, and it is never sent to Todoist unless you name
   Todoist. Diya can add a task and read the list; ticking one off is yours to do. See [Tasks design](docs/TASKS_DESIGN.md).
 - Optional connectors on the **Connections** page: Home Assistant, Notion and Todoist, each off until you paste a token there,
-  plus Google Calendar (a real Google login, once you set `DIYA_GOOGLE_CLIENT_ID`/`DIYA_GOOGLE_CLIENT_SECRET` from your own
-  Google Cloud project -- see [Connectors design](docs/CONNECTORS_DESIGN.md)). They read on their own; the one thing Diya can
+  plus Google Calendar (a real Google sign-in: make a small Google app of your own once, paste its client ID and secret on the same page, then Connect;
+  step by step in [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md), design in [Connectors design](docs/CONNECTORS_DESIGN.md)). They read on their own; the one thing Diya can
   change is a Todoist task you approve (below). Nothing is sent anywhere until you connect it, and disconnecting is instant.
 - An **Actions** page (and `python diya_actions_cli.py`) where anything Diya proposes to change outside this computer waits
   for your approval: you press Approve on exactly what is shown, it runs once, and every step is recorded. The one thing it can

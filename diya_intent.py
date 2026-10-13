@@ -147,6 +147,67 @@ def is_done_question(text):
     return _DONE_QUESTION.search(text.replace("’", "'")) is not None
 
 
+# A general question: about the world, not about the person, Diya's own lists or Diya herself. Such a question is one the web can answer, so it is looked up when it needs today's facts
+# (wants_lookup) and when the model gave up on it (gave_up) instead of the person being told to look it up themselves. Deliberately narrow, like the checks above: a miss only means the
+# model answers as it always did.
+_ABOUT_THEM_OR_DIYA = re.compile(r"\b(?:i|i'm|i've|i'll|i'd|my|me|mine|myself|we|our|you|your|u|ur|diya)\b", re.IGNORECASE)
+_OWN_THINGS = re.compile(
+    r"\b(?:weather|temperature|forecast|tasks?|reminders?|notes?|automations?|calendar|schedule|todo|to-do|memory|facts?|chats?|history|connections?|actions?)\b", re.IGNORECASE
+)
+_QUESTION_WORD = re.compile(
+    r"^\W*(?:and\s+|so\s+|ok\s+|okay\s+)?(?:what|what's|whats|who|who's|whos|when|where|why|how|which|is|are|was|were|does|do|did|can|could|explain|define|tell\s+me\s+(?:about|what|who|how)|describe|compare)\b|\?\s*$",
+    re.IGNORECASE,
+)
+_RECENT = re.compile(
+    r"\b(?:latest|current(?:ly)?|right\s+now|today'?s|news|recent(?:ly)?|this\s+(?:week|month|year)|as\s+of|price\s+of|stock\s+price|score|who\s+won|release\s+date|newest|new\s+version|just\s+(?:released|announced)|breaking)\b",
+    re.IGNORECASE,
+)
+_GAVE_UP = re.compile(
+    r"\b(?:i\s+(?:do\s*n['’]?t|don['’]?t|dont)\s+(?:really\s+)?(?:know|have\s+(?:any\s+|that\s+|real-?time\s+)?(?:information|info|access|data|record)|recognis?e|understand\s+what)"
+    r"|i['’]?m\s+not\s+(?:sure|certain|familiar)|i\s+am\s+not\s+(?:sure|certain|familiar)|i\s+(?:can['’]?t|cannot|can\s*not)\s+(?:confirm|verify|find|provide|access|say|tell)"
+    r"|no\s+real-?time\s+(?:access|data|information)|not\s+(?:something|anything)\s+i\s+(?:was\s+)?(?:taught|told)|as\s+of\s+my\s+(?:last|latest)\s+(?:update|knowledge)"
+    r"|(?:check|visit|consult)\s+(?:the\s+)?(?:official|their)\s+(?:website|site)|i\s+recommend\s+checking)",
+    re.IGNORECASE,
+)
+MAX_LOOKUP_QUESTION_CHARS = 300
+# "what is Opus", "who is Sam Altman": a short name or term being asked about. A small model answers these from a half-remembered guess, confidently and wrongly (measured: "what is Opus" came back as
+# "a large language model developed by OpenAI"), so they are searched first like a question that needs today's facts. Not "what is the time" or "what is that", which are not about a thing in the world.
+_DEFINITION = re.compile(r"^\W*(?:and\s+)?(?:what|who)(?:\s+is|\s+are|\s+was|\s+were|['’]s)\s+(?:(?:an?|the)\s+)?(?P<subject>[\w.+#-]+(?:\s+[\w.+#-]+){0,2})\W*$", re.IGNORECASE)
+_NOT_A_THING = re.compile(
+    r"\b(?:time|date|day|today|tomorrow|yesterday|now|this|that|these|those|it|there|here|happening|going|wrong|next|left|up|new|name|plan|point|problem|answer|difference|best|good|bad"
+    r"|of|in|on|for|to|with|between|from|and|or|by|at)\b",  # a phrase with these in it ("the capital of Australia") is a question for the model, not a name to look up
+    re.IGNORECASE,
+)
+_CLOCK = re.compile(r"^\W*(?:what|whats|what['’]s)(?:\s+is)?\s+(?:the\s+|today['’]?s\s+)*(?:current\s+)?(?:time|date|day)\b", re.IGNORECASE)  # the computer's clock is not on the web
+
+
+def _is_general_question(text):
+    if not isinstance(text, str) or not text.strip() or len(text) > MAX_LOOKUP_QUESTION_CHARS or "\n" in text.strip():
+        return False
+    return bool(_QUESTION_WORD.search(text)) and not _ABOUT_THEM_OR_DIYA.search(text) and not _OWN_THINGS.search(text)
+
+
+def wants_lookup(text):
+    """A general question that needs today's facts (who the current head of something is, the latest news, a price or score), or asks what a short name or term is: searched before the model
+    answers, because a small model answers these from what it learned long ago, from a guess, or says it cannot know."""
+    if not _is_general_question(text) or _CLOCK.match(text):
+        return False
+    if _RECENT.search(text):
+        return True
+    asked = _DEFINITION.match(text)
+    return bool(asked) and not _NOT_A_THING.search(asked.group("subject"))
+
+
+def is_lookup_question(text):
+    """Any general question, for the second chance after the model gave up on it."""
+    return _is_general_question(text)
+
+
+def gave_up(answer):
+    """Did the answer say the model does not know, cannot confirm or has no access (or send the person off to look it up themselves)?"""
+    return isinstance(answer, str) and bool(_GAVE_UP.search(answer[:400]))
+
+
 # A first-person word anywhere in a message: the person is saying something about themselves, however else the message is shaped.
 _SAYS_SOMETHING_OF_ME = re.compile(r"\b(?:i|i'm|i've|i'll|i'd|my|we|we're|we've|our)\b", re.IGNORECASE)
 
