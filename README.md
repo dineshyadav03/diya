@@ -152,6 +152,7 @@ dreaming.py (scheduled) reads diya.db -> staged facts -> lanes and questions, or
 pip install ".[dev]" && python -m pytest  # about 8 minutes on a laptop, from the repo root
 python diya_evals.py                      # needs Ollama and both models; exits 1 if any case fails
 python diya_actions_bench.py --runs 3     # needs Ollama: when does the model add a task, asked and not (about 30 minutes)
+python diya_advisor.py propose            # no model: patches for the documented misses of the reminder gate, tested, never applied (docs/ADVISOR_DESIGN.md)
 ```
 
 The tests use a fake model client, temporary directories and a cleared `DIYA_*` environment, so they cannot reach `diya.db`. The evals send nine prompts to the real model on a temporary database.

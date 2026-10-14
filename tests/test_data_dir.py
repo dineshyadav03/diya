@@ -16,7 +16,7 @@ import dreaming
 
 # field -> the file name it has by default; with a data folder, the same name inside it
 FILES = {
-    "db_path": "diya.db", "knowledge_dir": "knowledge", "profile_path": "user_profile.txt", "dream_log_path": "dream_log.txt", "dream_state_path": "dream_state.json",
+    "db_path": "diya.db", "knowledge_dir": "knowledge", "advisor_dir": "advisor", "profile_path": "user_profile.txt", "dream_log_path": "dream_log.txt", "dream_state_path": "dream_state.json",
     "dream_pending_path": "dream_pending.jsonl", "notify_log_path": "notify_log.txt", "token_path": "diya_token.hash",
     "connector_tokens_dir": "connector_tokens", "connectors_log_path": "connectors_log.txt", "push_vapid_path": "push_vapid.json",
     "telegram_token_path": "telegram.token",
