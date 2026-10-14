@@ -708,11 +708,45 @@ def test_the_prompt_is_the_one_that_was_measured():
 
 # --- in Dreaming's pass ---------------------------------------------------------------------------------------------------
 
-def test_the_hook_asks_the_privacy_model_when_one_is_named(staged):
+def test_the_hook_asks_both_judges_when_a_privacy_model_is_named(staged):
     config, store = staged
-    client = FakeClient([text_reply("OK")] * 2)
+    client = FakeClient([text_reply("OK")] * 4)
     dreaming.Dreamer(dataclasses.replace(config, auto_memory=True, model="the-chat-model", privacy_model="the-suspicious-model"), client=client).remember_on_its_own()
-    assert [c["model"] for c in client.chat_calls] == ["the-suspicious-model"] * 2  # the fact, and the message it came from
+    # for the fact, and for the message it came from: the suspicious judge, then the main model
+    assert [c["model"] for c in client.chat_calls] == ["the-suspicious-model", "the-chat-model"] * 2
+
+
+@pytest.mark.parametrize("suspicious, status", [("UNSURE", "accepted"), ("PRIVATE", "candidate")])
+def test_the_suspicious_judges_unsure_no_longer_holds_a_fact_back_when_the_main_model_says_ok_but_its_private_still_does(staged, suspicious, status):
+    config, store = staged
+    client = FakeClient([text_reply(suspicious), text_reply("OK")] * 4)
+    cfg = dataclasses.replace(config, auto_memory=True, model="the-chat-model", privacy_model="the-suspicious-model")
+    dreaming.Dreamer(cfg, client=client).remember_on_its_own()
+    tea = next(f for f in Memory(store).facts() if f["text"] == "likes tea in the morning")
+    assert tea["status"] == status
+
+
+def test_with_the_old_strict_setting_the_suspicious_judges_unsure_asks_again(staged):
+    config, store = staged
+    client = FakeClient([text_reply("UNSURE")] * 4)
+    cfg = dataclasses.replace(config, auto_memory=True, model="the-chat-model", privacy_model="the-suspicious-model", privacy_unsure_asks=True)
+    dreaming.Dreamer(cfg, client=client).remember_on_its_own()
+    assert [c["model"] for c in client.chat_calls] == ["the-suspicious-model"] * 2  # only the one judge, as before
+    assert next(f for f in Memory(store).facts() if f["text"] == "likes tea in the morning")["status"] == "candidate"
+
+
+@pytest.mark.parametrize("strict, main, combined", [
+    ("ok", "ok", "ok"), ("unsure", "ok", "ok"), ("ok", "unsure", "unsure"), ("unsure", "unsure", "unsure"), ("private", "ok", "private"), ("ok", "private", "private"),
+    ("failed", "ok", "failed"), ("ok", "failed", "failed"), ("private", "failed", "failed"), ("unsure", "private", "private"),
+])
+def test_two_judges_are_combined_as_the_better_one_decides_unless_the_other_says_private_or_fails(strict, main, combined):
+    assert auto.combine_privacy(strict, main) == combined
+
+
+def test_the_worst_combined_verdict_over_several_sentences_counts():
+    client = FakeClient([text_reply("UNSURE"), text_reply("OK"), text_reply("OK"), text_reply("OK"), text_reply("PRIVATE"), text_reply("OK")])
+    assert auto.privacy_of_two(client, "strict", "main", ["a", "b", "c"]) == "private"
+    assert [c["model"] for c in client.chat_calls] == ["strict", "main"] * 3
 
 
 def test_the_hook_asks_the_chat_model_when_no_privacy_model_is_named(staged):
@@ -969,13 +1003,37 @@ def test_the_hook_puts_a_fact_to_the_chat_model_against_what_is_known_and_the_an
     old = Memory(store).add_manual("works as a teacher", "api")
     first = store.add_message(store.create_thread(), "user", "I work as a nurse")
     (tmp_path / "p.jsonl").write_text(json.dumps({"timestamp": "t", "first_message_id": first, "last_message_id": first, "model": "m", "facts": ["- works as a nurse"]}) + "\n", encoding="utf-8")
-    client = FakeClient([text_reply("OK"), text_reply("OK"), text_reply("1")])
+    client = FakeClient([text_reply("OK"), text_reply("OK"), text_reply("OK"), text_reply("OK"), text_reply("1")])
     dreaming.Dreamer(config, client=client).remember_on_its_own()
-    assert [c["model"] for c in client.chat_calls] == ["the-judge", "the-judge", "the-chat-model"]
-    question = client.chat_calls[2]["messages"][0]["content"]
+    assert [c["model"] for c in client.chat_calls] == ["the-judge", "the-chat-model", "the-judge", "the-chat-model", "the-chat-model"]
+    question = client.chat_calls[4]["messages"][0]["content"]
     assert "1. works as a teacher" in question and 'New sentence: "works as a nurse"' in question
     nurse = next(f for f in Memory(store).facts() if f["text"] == "works as a nurse")
     assert nurse["status"] == "candidate" and f"ask:conflict:replaces:{old}" in nurse["flags"]
+
+
+@pytest.mark.parametrize("text, adds", [
+    ("i got another dog named hog", True), ("I bought a second laptop", True), ("I also got a new phone", True), ("one more thing: I have a cat", True), ("I adopted yet another cat", True),
+    ("I now work as a nurse", False), ("I moved to Pune", False), ("I started also learning Python", False), ("my dog is called Rocky", False), ("", False),
+])
+def test_the_persons_own_words_say_whether_it_adds_to_what_they_had(text, adds):
+    assert auto.says_it_adds([text]) is adds
+    assert auto.says_it_adds([None, text]) is adds and auto.says_it_adds([]) is False
+
+
+def test_another_dog_is_remembered_beside_the_first_without_asking_whether_it_replaces_it(tmp_path):
+    config = dataclasses.replace(diya_config.load_config({}), db_path=str(tmp_path / "d.db"), dream_log_path=str(tmp_path / "l"), dream_state_path=str(tmp_path / "s"),
+                                 dream_pending_path=str(tmp_path / "p.jsonl"), profile_path=str(tmp_path / "pr"), auto_memory=True, model="the-chat-model", privacy_model="the-judge")
+    store = Store(config.db_path)
+    Memory(store).add_manual("my dog's name is Rocky, he's a golden retriever", "api")
+    first = store.add_message(store.create_thread(), "user", "i got another dog named hog")
+    (tmp_path / "p.jsonl").write_text(json.dumps({"timestamp": "t", "first_message_id": first, "last_message_id": first, "model": "m", "facts": ["- has a dog named hog"]}) + "\n", encoding="utf-8")
+    client = FakeClient([text_reply("UNSURE"), text_reply("OK"), text_reply("UNSURE"), text_reply("OK")])  # the suspicious judge is unsure twice; the main model says OK twice; nothing else is asked
+    dreaming.Dreamer(config, client=client).remember_on_its_own()
+    assert [c["model"] for c in client.chat_calls] == ["the-judge", "the-chat-model", "the-judge", "the-chat-model"]  # no question to the main model about replacing Rocky
+    hog = next(f for f in Memory(store).facts() if f["text"] == "has a dog named hog")
+    assert hog["status"] == "accepted" and not any(flag.startswith("ask:") for flag in hog["flags"])
+    assert any("Rocky" in f["text"] and f["status"] == "accepted" for f in Memory(store).facts())
 
 
 def test_a_fact_accepted_a_moment_ago_in_the_same_pass_is_known_to_the_next_one(tmp_path):

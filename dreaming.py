@@ -325,14 +325,20 @@ class Dreamer:
         person's it was taken from (what the checks recorded as its source), each message asked about once however many facts came from it."""
         import diya_autonomy  # here and not at the top: it needs diya_memory, which reaches this module
 
-        judge = self.config.privacy_model or self.config.model
+        strict, main = self.config.privacy_model or self.config.model, self.config.model
+        two = strict != main and not self.config.privacy_unsure_asks  # a second, suspicious judge keeps its veto, but its "unsure" does not block (docs/AUTO_MEMORY_DESIGN.md, 8.5)
         asked = {}
 
+        def verdict(text):
+            if two:
+                return diya_autonomy.privacy_of_two(self.client, strict, main, [text])
+            return diya_autonomy.privacy_of(self.client, strict, [text])
+
         def private(fact):
-            verdicts = [diya_autonomy.privacy_of(self.client, judge, [fact["text"]])]
+            verdicts = [verdict(fact["text"])]
             for text in self._source_texts(fact):
                 if text not in asked:
-                    asked[text] = diya_autonomy.privacy_of(self.client, judge, [text])
+                    asked[text] = verdict(text)
                 verdicts.append(asked[text])
             return min(verdicts, key=diya_autonomy._CAUTIOUS_FIRST.index)
 
@@ -358,6 +364,8 @@ class Dreamer:
         import diya_autonomy
 
         def replaces(fact):
+            if diya_autonomy.says_it_adds(self._source_texts(fact)):  # "another dog": it adds, whatever the rewritten fact looks like (see diya_autonomy._ADDS)
+                return diya_autonomy.Replacement("none", None)
             return diya_autonomy.replacement_of(self.client, self.config.model, memory.facts("accepted"), fact["text"])
 
         return replaces

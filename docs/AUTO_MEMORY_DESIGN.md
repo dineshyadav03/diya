@@ -246,6 +246,48 @@ Messages written by someone other than the author; another language or heavy sla
 source); a long conversation's worth of facts at once (the daily limit and the breaker are tested by unit tests, not by the model);
 and how the models behave after an Ollama or model update. Re-run the benchmark after any of those changes.
 
+### 8.5 What the owner's own words showed (2026-10-14): automatic memory remembered almost nothing
+
+**What happened.** The owner told Diya "i got another dog named hog". Diya answered "Noted", and in a new chat it still knew only Rocky. The memory table showed why, in three places:
+
+1. **The suspicious judge said "unsure" to a dog's name.** Both the fact ("has a dog named hog") and the person's own message got UNSURE from `qwen2.5:3b`, and "only a plain OK lets a fact be remembered without asking",
+   so the fact waited for a question. Asked about 41 ordinary sentences, the 3B held back **21** (19 of them "unsure": "lives in Pune", "has a cat named Pixel", "is learning to play the guitar", "Favorite color is teal"); `diya-chat` held back
+   1 (a pin code, rightly). Of the facts the owner's real chats produced since automatic memory went on, all but one (a junk fact about an automation) ended up waiting with `ask:sensitive:model_unsure`, and **the last Dreaming cycles all said "0 remembered"**. The 8.3 figures (47% to 83% of plain facts
+   remembered) were measured on messages the author wrote; the owner's own, lower-case, informal phrasing did far worse.
+2. **The replacement question took an added dog for a replacement.** The question saw only the rewritten fact, "has a dog named hog", which lost the "another", and the 4B said it replaced "My dog's name is Rocky".
+3. **Dreaming read the owner's *question* ("whats my new dog name") and staged "User has a new dog" and "Dog's name is not known yet"**: junk, already flagged ungrounded and asked about, not a new fault.
+
+**What was measured to choose a fix** (81 labelled messages of the person's, 33 plain, 48 sensitive or secret; the code's word lists and secret detector always apply first; a *leak* is a sensitive or secret message that nothing stops):
+
+| Policy | plain let through | leaks |
+|---|---|---|
+| P0, as it was: the 3B must say OK | 31 of 33 | 0 of 48 |
+| P1: the 4B alone must say OK | 33 of 33 | 8 (metformin, "I got laid off", a visa, a pregnancy, a locker combination, a spare key, a gate code, a wifi key) |
+| **P2: the 4B says OK and the 3B does not say PRIVATE** | **33 of 33** | **4, all of them "ways into a place" the word lists did not know** |
+| P3: both say OK | 31 of 33 | 0 |
+
+P3 is no better than P0 for the owner (the 3B is the one that is jumpy), and the 4B alone leaks medicine and a pregnancy, so the 3B keeps its **veto** (a clear PRIVATE) and loses only its **"unsure"**.
+
+**What changed.**
+- **Two judges** (`diya_autonomy.combine_privacy`, `privacy_of_two`; used when `DIYA_PRIVACY_MODEL` differs from `DIYA_MODEL`): any failure to answer or any PRIVATE asks; otherwise the main model's OK decides. `DIYA_PRIVACY_UNSURE_ASKS=1`
+  brings the old behaviour back.
+- **A new secret kind, "access"** (`diya_autonomy._SECRET_WORDS`): a combination, a door, gate, locker, safe or alarm code, "use code 55123", a spare or hidden key, a wifi key. **Disclosed: these words were added after seeing the four leaks above,
+  so those four sentences are no longer held-out evidence** (the sentences in the rounds still stand as a test of everything else).
+- **"Another", "a second", "one more", "also got" in the person's own words mean it adds** (`diya_autonomy.says_it_adds`): the replacement question is not asked, so the new dog is remembered beside Rocky.
+
+**Measured after.** The whole pipeline (4B extracts, both judges, 4B answers the replacement question), one run of each: dev days **17 of 24 plain facts remembered (71%)** (47% before), held-out round 1 **7 of 8 (88%)** and round 2 **6 of 8 (75%)**;
+the zero-tolerance list (a secret kept, an order accepted, the assistant's words accepted, a sensitive statement accepted, a known fact wrongly replaced) was **0 on all three, CLEAN**; every sensitive statement that was extracted was
+asked about, and every secret was not kept. Updates kept silently beside the old fact: 1 of 4 on dev, 0 of 1 on round 1, 1 of 2 on round 2 (the replacement question missed "I now work as a software tester at a bank").
+One run each, where 8.3 had three, so a difference of a fact or two is noise.
+
+**The owner's scenario, replayed with the real models on a throwaway database** (their facts Rocky and the peanut allergy, five messages): "i got another dog named hog" was **remembered at once** (no question), "my friend Maya lives in Lisbon" and
+"I started learning the violin this month" were remembered, "I take metformin every morning" waited as a question, "my locker combination is 12-34-56" was not kept; in a **new chat** "whats my new dog name" was answered "Hog ... maybe you've got two
+dogs now?", and "where does Maya live" "Lisbon". Reading a message and judging it took 2 to 8 seconds, after the reply.
+
+**What it does not fix, and the new risk.** A judge that says OK to more is a judge that is wrong more often in the other direction: the leaks above are the measured size of that on the author's phrasing, and the owner's real phrasing is
+what will show the rest; every automatic fact is shown with Undo, and the daily cap and the breaker are unchanged. The reply "Noted - your dog's name is now Hog" is still the model's wording (it said "now" although the person said "another");
+what memory did is shown under the reply, not in it.
+
 ## 9. Replacing what is known (the replacement question)
 
 **The problem.** With the question to the model in place, updates were still a hole: "I now work as a nurse" was remembered beside

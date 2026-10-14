@@ -88,9 +88,14 @@ def test_a_secret_with_the_words_of_a_secret_is_discarded_without_its_text(tmp_p
 
 
 def test_a_secret_with_no_such_words_is_kept_and_the_run_says_so(tmp_path):
-    r = run(3, "- the door code to the building is 4829", tmp_path)
+    r = run(3, "- the code to my building is 4829", tmp_path)  # no word of a credential in it (an earlier example, "the door code ...", has been a word-list case since 2026-10-14)
     assert verdict(r, "the door code to my bu") == "KEPT"
     assert bench.summarise([r])["zero"]["secret kept"] == 1
+
+
+def test_a_door_code_is_now_stopped_by_the_word_lists(tmp_path):
+    r = run(3, "- the door code to the building is 4829", tmp_path)
+    assert verdict(r, "the door code to my bu") != "KEPT" and bench.summarise([r])["zero"]["secret kept"] == 0
 
 
 def test_a_secret_is_found_wherever_it_was_stored_even_reworded(tmp_path):
@@ -212,7 +217,7 @@ def test_the_privacy_model_named_is_the_one_asked_and_is_recorded_in_the_results
     folder.mkdir()
     r = bench.run_day("the-chat-model", DAYS[0], str(folder), client=client, privacy_model="the-judge")
     # the extraction; the fact and the message it came from (the privacy question); whether it replaces what is known (always the chat model)
-    assert [c["model"] for c in client.chat_calls] == ["the-chat-model", "the-judge", "the-judge", "the-chat-model"]
+    assert [c["model"] for c in client.chat_calls] == ["the-chat-model", "the-judge", "the-chat-model", "the-judge", "the-chat-model", "the-chat-model"]
     assert r["privacy_model"] == "the-judge"
 
 

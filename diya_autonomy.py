@@ -54,6 +54,10 @@ _SECRET_WORDS = (
         r"\b(?:aadhaar|aadhar|pan\s+(?:number|card)|social\s+security|ssn|passport\s+numbers?|(?:driving\s+)?licen[cs]e\s+numbers?|national\s+id)\b",
         re.IGNORECASE)),
     ("credential", re.compile(r"\bcredentials?\b", re.IGNORECASE)),
+    # Added 2026-10-14, after the two-judge comparison (docs/AUTO_MEMORY_DESIGN.md, 8.5) showed these getting through when the suspicious judge no longer blocks everything: a way into a place.
+    ("access", re.compile(
+        r"\b(?:combination|combo\s+lock|(?:door|gate|locker|safe|alarm|garage|building|lock)\s+(?:code|combination|pin)|use\s+code\s+\d|(?:spare|hidden|extra)\s+keys?|keys?\s+(?:is|are)?\s*(?:under|inside|behind)\b|"
+        r"(?:wi-?fi|wlan)\b[^.]{0,40}\bkey\b)", re.IGNORECASE)),
 )
 # Values that look like a secret whatever the words around them say.
 _TOKEN_PREFIX = re.compile(r"\b(?:sk|pk|rk)[-_][A-Za-z0-9_-]{16,}|\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|\bxox[abprs]-[A-Za-z0-9-]{10,}|\bAKIA[0-9A-Z]{12,}|\bAIza[0-9A-Za-z_-]{20,}")
@@ -80,7 +84,7 @@ def _luhn(digits):
 
 
 def secret_kind(text):
-    """What kind of secret `text` contains or names ("password", "token", "recovery", "card", "id", "credential"), or None. Over-cautious
+    """What kind of secret `text` contains or names ("password", "token", "recovery", "card", "id", "credential", "access"), or None. Over-cautious
     on purpose."""
     if not isinstance(text, str):
         return None
@@ -172,6 +176,22 @@ def privacy_verdict(client, model, text):
 _CAUTIOUS_FIRST = ("failed", "private", "unsure", "ok")
 
 
+def combine_privacy(strict, main):
+    """Two judges, one answer (docs/AUTO_MEMORY_DESIGN.md, 8.5). A suspicious small judge (`strict`) said "unsure" about half of the ordinary facts a person really typed ("has a dog named hog",
+    "lives in Pune"), so nothing was ever remembered on its own. Now it keeps its veto, a clear "private", but its "unsure" no longer blocks when the better judge (`main`) says OK; either one failing
+    to answer, or the better judge being unsure, still means the person is asked."""
+    if "failed" in (strict, main):
+        return "failed"
+    if "private" in (strict, main):
+        return "private"
+    return "ok" if main == "ok" else "unsure"
+
+
+def privacy_of_two(client, strict_model, main_model, texts):
+    """The most cautious combined verdict over several sentences (see privacy_of and combine_privacy)."""
+    return min((combine_privacy(privacy_verdict(client, strict_model, text), privacy_verdict(client, main_model, text)) for text in texts), key=_CAUTIOUS_FIRST.index)
+
+
 def privacy_of(client, model, texts):
     """The most cautious verdict over several sentences: the fact, and the message of the person's it was taken from. A fact is a rewrite, and a rewrite
     can lose what made the original private ("my visa expires in June and I still haven't heard back" became "Visa expires in June", which the model
@@ -192,6 +212,16 @@ REPLACE_PROMPT = (
     'Known facts:\n{known}\n\nNew sentence: "{text}"\n\nAnswer with the number of the fact it replaces, or NONE if it replaces none. Answer with one word.'
 )
 MAX_KNOWN = 80  # the newest accepted facts put to the model: enough for the whole profile budget, bounded so the question stays short
+
+
+# The person's own words say it ADDS to what is known: "I got another dog named Hog" next to "my dog is Rocky". The replacement question saw only the rewritten fact ("has a dog named hog"), lost
+# the "another", and took it for Rocky's replacement, so the fact waited as a question (2026-10-14). Code reads these few words first and the model is not asked.
+_ADDS = re.compile(r"\b(?:another|a\s+second|one\s+more|an?\s+additional|yet\s+another|also\s+(?:got|have|has|bought|adopted|started))\b", re.IGNORECASE)
+
+
+def says_it_adds(texts):
+    """True if any of the person's own `texts` says the new thing is in addition to what they had (another, a second, one more, also got ...)."""
+    return any(isinstance(text, str) and _ADDS.search(text) for text in texts)
 
 
 class Replacement(NamedTuple):
