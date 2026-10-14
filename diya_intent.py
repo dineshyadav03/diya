@@ -104,7 +104,7 @@ def is_fact_share(text):
 # A greeting, a thank-you, a goodbye or "how are you" and nothing else (docs/SPEED_DESIGN.md). Such a message cannot need a tool, and the eight tools' descriptions are about 1,000 tokens that the
 # model must read before it may answer "hey": about 13 seconds of the 20 the first message after a pause took on this computer's CPU. Deliberately narrow, like is_fact_share: a message that is
 # anything more (a name, a question, a number, "yes" or "ok", which may be the answer to an offer that needs a tool) is not small talk, and missing one only means the tools are offered as before.
-_GREETING = r"(?:hi+|hey+|hello+|hiya|howdy|yo|sup|good\s+(?:morning|afternoon|evening|night)|gm|gn)"
+_GREETING = r"(?:hi+|hey+|hello+|hiya|howdy|yo|sup|good\s+(?:morning|afternoon|evening|night)|(?:morning|afternoon|evening)|gm|gn)"
 _VOCATIVE = r"(?:there|diya|buddy|friend|again|everyone|all)"
 _THANKS = r"(?:thanks?|thank\s+you|thx|ty|cheers|much\s+appreciated)(?:\s+(?:so\s+much|a\s+lot|very\s+much|diya))?"
 _GOODBYE = r"(?:bye+|goodbye|good\s+bye|see\s+(?:you|ya)(?:\s+(?:later|soon|tomorrow))?|ttyl|cya|later)"
@@ -462,3 +462,58 @@ def asks_about_notes(text):
         return False
     text = text.replace(chr(0x2019), "'")
     return bool(_NOTES_FRAME.search(text)) and bool(_NOTES_ASK.search(text)) and not _NOTES_WRITE.search(text) and not is_reminder_request(text)
+
+
+# ---- a greeting is tidied in code (docs/SPEED_DESIGN.md, "Greetings are tidied") ----
+#
+# Measured on 2026-10-14 with the real chat model and a greeting each time: with nothing in memory, 8 of 12 replies addressed the person by a name nobody had given ("Good morning, Alex!"), the name in memory
+# was ignored (Alex, Maya and Anna for a user called Priya), "Good morning" was said in the afternoon, and the prompt's "no emoji" and "never say how can I assist you" were not kept. A prompt did not hold a model
+# of this size to any of it, so what the person sees is made right here, after the model has written it: a name that is not the person's is removed, the part of the day is the real one, no emoji, and no offer
+# to assist. The model still writes the greeting; code only takes out what it had no way of knowing.
+_EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B50\u2B55\uFE0F\u200D]")
+_OPENER = r"(?:hi+|hey+|hello+|hiya|howdy|good\s+(?:morning|afternoon|evening|night)|morning|afternoon|evening|welcome\s+back|thanks|thank\s+you|you['’]re\s+welcome|bye+|goodbye|see\s+you)"
+_ADDRESSED = re.compile(rf"^(?P<open>\W*(?i:{_OPENER})(?:\s+(?:again|there))?)(?P<comma>\s*,)?\s+(?P<name>[A-Z][a-z]{{1,20}})(?P<after>[,!.?]?)(?=\s|$)")
+_NOT_A_NAME = frozenset(
+    "how what i it its you your youre glad hope nice great happy welcome sorry good have let lets take enjoy feeling no yes ok okay so well anything everything talk see there again friend everyone all "
+    "here this that today tonight tomorrow ready doing hows whats thanks thank hello hi hey".split()
+)
+_DAYPART = re.compile(r"\bgood\s+(?:morning|afternoon|evening)\b", re.IGNORECASE)  # "good night" is a goodbye at any hour: left alone
+_USER_SAID_A_PART = re.compile(r"\b(?:morning|afternoon|evening|night|gm|gn)\b", re.IGNORECASE)
+_OFFER = re.compile(r"\b(?:how\s+(?:can|may)\s+i\s+(?:assist|help)|what\s+can\s+i\s+do\s+for\s+you|is\s+there\s+anything\s+(?:else\s+)?i\s+can\s+(?:help|assist))\b", re.IGNORECASE)
+_MY_NAME = re.compile(r"^\s*(?:my\s+)?name\s+is\s+([A-Za-z]{2,20})\s*[.!]?\s*$", re.IGNORECASE)
+
+
+def known_name(fact_texts):
+    """What to call the person: the name in a fact that says "name is X" or "my name is X", else None."""
+    for text in fact_texts:
+        found = _MY_NAME.match(text) if isinstance(text, str) else None
+        if found:
+            return found.group(1).capitalize()
+    return None
+
+
+def part_of_day(hour):
+    """The greeting for this hour; None in the small hours and late evening, where "good morning" is wrong and "good night" is a goodbye."""
+    return "Good morning" if 5 <= hour < 12 else "Good afternoon" if 12 <= hour < 17 else "Good evening" if 17 <= hour < 22 else None
+
+
+def tidy_small_talk(reply, user_text, name, hour):
+    """A model's greeting, thank-you or goodbye made right: a name that is not `name` is taken out, the part of the day is the one it is (unless the person named one), pictures are taken out, and a sentence that
+    offers to assist is dropped. It only takes words out, except that it puts the real part of the day where the model wrote another; it never adds a thought of its own."""
+    text = _EMOJI.sub("", reply if isinstance(reply, str) else "").strip()
+    found = _ADDRESSED.match(text)
+    if found:
+        called = found.group("name").lower()
+        if called != (name or "").lower() and called not in _NOT_A_NAME:  # not who the person is (the model made it up, or took "Diya" for the user)
+            text = found.group("open") + (found.group("after") or found.group("comma") or "") + text[found.end():]
+    if not _USER_SAID_A_PART.search(user_text or ""):
+        first = _DAYPART.search(text)
+        if first and not re.search(r"[.!?]", text[: first.start()]):  # only the opening words, where a greeting is
+            wanted = part_of_day(hour) or "Hi"
+            if first.group(0)[0].islower():
+                wanted = wanted[0].lower() + wanted[1:]
+            text = text[: first.start()] + wanted + text[first.end():]
+    pieces = [piece for piece in re.split(r"(?<=[.!?])\s+", text) if piece and not _OFFER.search(piece)]
+    text = " ".join(pieces)
+    text = re.sub(r"\s+([,!.?])", r"\1", re.sub(r"\s{2,}", " ", text)).strip()
+    return text or "Hi."

@@ -93,11 +93,11 @@ def test_a_model_that_says_nothing_is_asked_once_more_and_that_is_told_too(confi
     assert answer == "Here now." and "".join(p for k, p in events if k == "delta") == "Here now." and len(agent.client.chat_calls) == 2
 
 
-def test_a_greeting_streams_with_its_looser_temperature_and_no_tools(config):
+def test_a_greeting_is_told_whole_with_its_looser_temperature_and_no_tools(config):
     agent = make_agent(config, [text_reply("Hey!")])
     collect(agent, [{"role": "user", "content": "hey"}])
     call = agent.client.chat_calls[0]
-    assert call["tools"] is None and call["options"] == {"temperature": diya.SMALL_TALK_TEMPERATURE, "stream": True}
+    assert call["tools"] is None and call["options"] == {"temperature": diya.SMALL_TALK_TEMPERATURE}  # not streamed: what the person sees is tidied in code after it is written (diya_intent.tidy_small_talk)
 
 
 # ---- the route ---------------------------------------------------------------------------------------------------------------

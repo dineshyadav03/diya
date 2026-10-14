@@ -41,3 +41,23 @@ shell began), so it was quietly answering with `qwen2.5:3b`. It now starts with 
 - The first message after the API is restarted waits for the priming (the model load, about 30 seconds on this computer), which now happens at start, before the first message, not during it.
 - The microphone path (Whisper on the CPU) is its own cost and was not touched.
 - A bigger or faster model would be a hardware question (`ROADMAP.md`, later stages, item 1), not this one.
+
+## 4. Greetings are tidied (2026-10-14)
+
+A greeting, thank-you or goodbye has its own turn (no tools, a short prompt, a looser temperature), and the reply used to be shown as the model wrote it. Measured with the real chat model, one greeting
+at a time, twelve different ones (hey, hi, good morning, thanks, bye ...):
+
+- **With nothing in memory, 11 of 12 replies addressed the person by a name nobody had given:** "Hi Alex" in seven, and in three the assistant's own name ("Good morning, Diya!" to someone who had said
+  "hey diya"). With "Name is Priya" in memory the right name was used **0** times and a wrong one (Alex, Maya, Anna) 11 times: the prompt's "use their name if it is given" was filled in by the model.
+- "Good morning" was said in the afternoon; the prompt's "no emoji" and "never offer to assist" were not kept ("How can I assist you today? 😊").
+
+A prompt did not hold a model of this size to any of it (it is the same finding as `docs/GATE_BENCHMARK.md`: code decides what must be true), so **what the person sees is made right in code after the model has
+written it** (`diya_intent.tidy_small_talk`): a name that is not the one a fact gives ("name is X", "my name is X") is taken out, the part of the day is the real one unless the person named one, pictures are
+taken out, and a sentence that offers to assist is dropped. The model still writes the greeting; code only removes what it had no way of knowing. The prompt now says to use no name unless a fact gives one
+and that Diya is Diya, not the person. Because the reply is changed after it is written, it is told whole when it is done (as a fact-share's already was), not word by word; it is a few words.
+A bare "morning", "afternoon" or "evening" is a greeting now (it was sent to the full turn with every tool, and answered "How can I assist you today? 😊").
+
+**Measured after,** the same twelve greetings, with empty memory and with the name Priya: **0 of 12 in both runs** had a name, a picture or an offer to assist. (An earlier try of the same
+code still let through a bare "morning", which went down the full turn and was answered "How can I assist you today?" with a picture, and "Hello again, Diya."; those are the last two rules
+above.) **Not fixed, because it is the model's voice and not a fact:** the replies are often only "Good morning." (right for the hour, but said even to "thanks"), and the model does not use
+the name it is given (it never said "Priya"). A reply with no name is safe, so the name is only ever *kept*, never added. Twelve greetings, two runs: a measurement of this fix, not a benchmark.

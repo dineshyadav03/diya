@@ -170,7 +170,7 @@ def test_importing_the_module_does_nothing(run_python):
 
 # ---- small talk -------------------------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("text", ["hey", "Hey!", "hi", "hi diya", "Hello there!", "good morning", "Good morning Diya!!", "good evening", "hey, how are you?", "hi how are you doing", "thanks",
+@pytest.mark.parametrize("text", ["hey", "Hey!", "hi", "hi diya", "Hello there!", "good morning", "Good morning Diya!!", "good evening", "morning", "Evening!", "hey, how are you?", "hi how are you doing", "thanks",
                                   "thank you", "thank you so much!", "thx", "ty", "cheers", "bye", "goodbye", "see you later", "see ya", "what's up", "whats up", "how's it going", "how are you", "hey \U0001F60A",
                                   "hello diya how are you today", "ttyl", "HEY DIYA", "heyyy", "hiii", "yo", "sup", "thanks diya", "hi’", "how’s it going", "gm", "  hey  ", "hey\n"])
 def test_a_greeting_a_thank_you_a_goodbye_or_how_are_you_is_small_talk(text):
@@ -206,7 +206,7 @@ def test_small_talk_does_not_change_how_the_answer_is_made(config):
     client = FakeClient([text_reply("Hello! How can I help you today? I can do many things for you.")])
     agent = diya.Agent(config, client=client)
     answer, _ = agent.ask(agent.with_profile([{"role": "user", "content": "hi"}]))
-    assert answer == "Hello! How can I help you today? I can do many things for you."  # not shortened: only fact-shares are
+    assert answer == "Hello! I can do many things for you."  # not shortened (only fact-shares are), but the offer to help is taken out (diya_intent.tidy_small_talk)
 
 
 def test_a_greeting_that_tries_to_call_a_tool_anyway_is_refused_by_the_tool_not_a_crash(config):

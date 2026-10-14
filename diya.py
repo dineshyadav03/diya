@@ -412,8 +412,8 @@ PERSONA = (
 )
 # Added only to a message that is just a greeting or a thank-you (diya_intent.is_small_talk): no tools are offered then, and the reply should be short and not the same twice.
 SMALL_TALK_PROMPT = (
-    "The user is only saying hello, thanks or goodbye. Reply in ONE short, plain, friendly sentence (two at most), different each time. It is {part} for them. Use their name if it is given "
-    "above. No scenery, no weather, no poetry, no emoji, nothing about yourself (you have no coffee, no window, no day), and nothing about them unless it is written above: never invent "
+    "The user is only saying hello, thanks or goodbye. Reply in ONE short, plain, friendly sentence (two at most), different each time. It is {part} for them. Address them by name only if a fact above says what to call them; otherwise use no name at all (never "
+    "guess one, and you are Diya, they are not). No scenery, no weather, no poetry, no emoji, nothing about yourself (you have no coffee, no window, no day), and nothing about them unless it is written above: never invent "
     "anything. Do not list what you can do and do not offer to assist."
 )
 SMALL_TALK_TEMPERATURE = 0.9  # a little looser than the model's own 0.7, so a greeting is not the same words every time
@@ -1032,15 +1032,23 @@ class Agent:
             kwargs["tools"] = tools
         if small_talk and not fact_share:
             kwargs["temperature"] = SMALL_TALK_TEMPERATURE
-        if on_event is None or fact_share:  # a fact-share's reply is shortened afterwards, so it cannot be shown as it is written: it is told whole, when it is done
+        if on_event is None or fact_share or small_talk:  # a fact-share's reply is shortened, and a greeting's is tidied (diya_intent.tidy_small_talk), afterwards, so neither can be shown as it is written: it is told whole, when it is done
             return self.client.chat.completions.create(**kwargs)
         return _read_stream(self.client.chat.completions.create(stream=True, **kwargs), on_event)
 
-    @staticmethod
-    def _final(content, fact_share):
+    def _final(self, content, fact_share, small_talk=False, user_text=""):
         """On a fact-share the prompt and the missing tools should already have produced one short
-        sentence; this is the backstop if the model elaborates anyway."""
-        return diya_intent.shorten_ack(content) if fact_share else content
+        sentence; this is the backstop if the model elaborates anyway. A greeting, thank-you or goodbye is made right in code (diya_intent.tidy_small_talk): a name the person never gave,
+        the wrong part of the day, pictures and an offer to assist are taken out of what the model wrote."""
+        if fact_share:
+            return diya_intent.shorten_ack(content)
+        if small_talk:
+            try:
+                name = diya_intent.known_name(diya_memory.open_memory(self.store, self.config).accepted_texts())
+            except sqlite3.Error:
+                name = None
+            return diya_intent.tidy_small_talk(content, user_text, name, self.now().hour)
+        return content
 
     def briefing(self, instruction):
         """The answer to an automation's instruction (docs/AUTOMATIONS_DESIGN.md), as the message to leave for the person. The model is offered only the tools that read
@@ -1197,7 +1205,7 @@ class Agent:
 
             if not message.tool_calls:
                 if message.content:
-                    return self._final(message.content, fact_share), tools_called
+                    return self._final(message.content, fact_share, small_talk, _last_user_text(messages)), tools_called
                 # The model sometimes returns nothing at all when no tool applies -- a known small-
                 # model quirk, not a real answer. One bounded retry, on a throwaway copy of the
                 # messages so the real conversation history doesn't get polluted with a nudge.
@@ -1206,7 +1214,7 @@ class Agent:
                 ]
                 retry_response = self._complete(retry, fact_share, tools, on_event, small_talk)
                 retry_content = retry_response.choices[0].message.content
-                return self._final(retry_content or "I didn't get a clear answer -- try rephrasing.", fact_share), tools_called
+                return self._final(retry_content or "I didn't get a clear answer -- try rephrasing.", fact_share, small_talk, _last_user_text(messages)), tools_called
 
             messages.append(getattr(message, "history_form", message))  # a streamed message is put back into the chat as the plain dict the API takes
             for call in message.tool_calls:
