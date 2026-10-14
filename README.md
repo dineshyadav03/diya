@@ -1,22 +1,26 @@
 # Diya
 
 Diya is a personal AI assistant for one person that runs on their own computer: the model, the memory and the speech stay on the machine, what it learns about you is reviewed before it is trusted,
-and nothing it does outside the computer happens without your approval. It is one person's real, daily-use project, built in the open and still changing.
+and nothing it does outside the computer happens without your approval. It is one person's project, built in the open and still changing. So far it has been built and tested far more than it has been lived with: see "Where it stands".
 
 ![The chat: a greeting, a question about something ticked off, a lookup on the web, an automation made from one sentence](docs/screenshot-chat.png)
 
-## Where it stands (2026-10-13)
+## Where it stands (2026-10-14)
 
-Built for Windows with [Ollama](https://ollama.com), tested and used on a 16 GB laptop with no GPU. About 6,500 automated tests run on every push. Every unit the [roadmap](ROADMAP.md) has designed is built;
+Built for Windows with [Ollama](https://ollama.com), tested on a 16 GB laptop with no GPU. About 6,800 automated tests run on every push. Every unit the [roadmap](ROADMAP.md) has designed is built;
 against the larger vision about two thirds is there (a rough estimate, areas weighted equally), and what is left is mostly what only the owner can do (accounts, a phone, hardware) plus a few features not
 designed yet. In plain terms:
 
 | | |
 |---|---|
-| **Built, and used every day** | chat with streaming replies and a voice; tap-to-talk; reminders, repeating reminders, tasks, the Today page; Diya writing to you first; automations; reviewed memory, with automatic memory switched on; general questions answered with a web lookup |
+| **Built and tested, but only lightly used** | chat with streaming replies and a voice; tap-to-talk; reminders, repeating reminders, tasks, the Today page; Diya writing to you first; automations; reviewed memory, with automatic memory switched on; general questions answered with a web lookup |
 | **Built, but never tried against the real thing** | the Google Calendar sign-in, Todoist, Home Assistant and Notion; push notifications to a phone; the Telegram bot; the one-command launcher's install step |
 | **Built, switched off until you choose** | the desktop notifier's schedule, Dreaming's schedule, the phone channels, every connector |
 | **Not built** | Diya writing her own tools; call handling; a streaming voice pipeline; a second source for the knowledge base, such as your calendar or mail (pages from your notes, a Knowledge page and chat answers from them are built; [the plan](docs/RESEARCH_PLAN_2026-10.md)); the Mac mini (deferred) |
+
+**An honest note on use.** Most of the messages Diya has had were typed while it was being built and tested. It has not yet been a daily assistant: answers take 10 to 30 seconds on this CPU, a model
+this small is clearly weaker than the free cloud assistants, and nothing real (a notes folder, a calendar, a phone) is connected yet. Everything above is built and tested, mostly on invented data,
+so how well it holds up in everyday life is not known. [docs/DIYA_GUIDE.md](docs/DIYA_GUIDE.md) is the long, plain account of what it is, what it lacks and how it was built.
 
 Stage 0 of the roadmap (safety and reproducibility) is 17 of 20 items done; the other three are blocked by tools or were decided against, and say so in [ROADMAP.md](ROADMAP.md).
 [PRODUCT_VISION.md](PRODUCT_VISION.md) says what each part does today and what was never tried for real.
@@ -123,7 +127,7 @@ Nothing below happens on its own; each is a step only you can take (an account, 
 
 ## Docs
 
-Start with [PRODUCT_VISION.md](PRODUCT_VISION.md) (what it is today) and [ROADMAP.md](ROADMAP.md) (what is planned and done). Then by topic:
+For the whole story in one place (what it is, what it can do, where it falls short, how it is built, how it was built, the research and the products like it) read [docs/DIYA_GUIDE.md](docs/DIYA_GUIDE.md). Otherwise start with [PRODUCT_VISION.md](PRODUCT_VISION.md) (what it is today) and [ROADMAP.md](ROADMAP.md) (what is planned and done). Then by topic:
 
 - **Memory:** [staged facts and review](docs/STAGE2_DESIGN.md), [people](docs/PERSON_MEMORY_DESIGN.md), [automatic memory](docs/AUTO_MEMORY_DESIGN.md), [Dreaming](docs/dreaming.md).
 - **Your day:** [reminders](docs/PROACTIVITY_DESIGN.md), [repeating reminders](docs/SCHEDULE_DESIGN.md), [tasks](docs/TASKS_DESIGN.md), [Diya writes first](docs/PROACTIVE_DESIGN.md), [automations](docs/AUTOMATIONS_DESIGN.md).
