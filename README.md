@@ -96,6 +96,7 @@ Nothing below happens on its own; each is a step only you can take (an account, 
 - **Automatic memory** (`DIYA_AUTO_MEMORY=1`, with `DIYA_PRIVACY_MODEL=qwen2.5:3b`): on or off is your decision; read [the measurement](docs/AUTO_MEMORY_DESIGN.md) first. Off means every fact waits for you.
 - **Connectors:** a token for Home Assistant, Notion or Todoist on the Connections page; Google needs your own small Google app ([steps](docs/GOOGLE_SETUP.md)). None has been tried against a real account.
 - **Your notes as pages:** point `DIYA_NOTES_DIR` at a folder of yours (the demo one has six one-line notes) and press "Read my notes now" on the Knowledge page, or run `python diya_knowledge.py build` ([docs/KNOWLEDGE_DESIGN.md](docs/KNOWLEDGE_DESIGN.md)): one Markdown page per name that recurs, made only of your own sentences.
+- **MCP servers:** Diya can use the read-only tools of an MCP server you add and approve yourself, one tool at a time (`python diya_mcp.py add | check | approve`, [docs/MCP_DESIGN.md](docs/MCP_DESIGN.md)). It installs nothing, a server runs as you, and nothing is offered until you approve it.
 - **Your phone:** Web Push (`DIYA_PUSH=1`) and a Telegram bot (`DIYA_TELEGRAM=1`) are built and have never been tried on a real device or bot.
 - **Your data folder:** move it out of a cloud-synced folder with `python diya_data.py move` (below).
 

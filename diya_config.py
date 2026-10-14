@@ -55,6 +55,8 @@ class Config:
     embed_model: str = "nomic-embed-text"
     ollama_url: str = "http://localhost:11434/v1"
     notes_dir: str = "sample_notes"
+    mcp: bool = True  # DIYA_MCP: offer the tools of the MCP servers the person approved (docs/MCP_DESIGN.md); with no file there is nothing to offer
+    mcp_config: str = "mcp_servers.json"  # DIYA_MCP_CONFIG: the servers, written by the person, and the tools they approved
     advisor_dir: str = "advisor"  # DIYA_ADVISOR_DIR: where `python diya_advisor.py` writes its report and patches, and keeps the messages you add (docs/ADVISOR_DESIGN.md); can quote your own messages
     knowledge_dir: str = "knowledge"  # DIYA_KNOWLEDGE_DIR: where `python diya_knowledge.py build` writes pages made from the notes (docs/KNOWLEDGE_DESIGN.md); personal data once real notes are in it
     profile_path: str = "user_profile.txt"
@@ -189,6 +191,7 @@ _STRING_SETTINGS = {
     "notes_dir": "DIYA_NOTES_DIR",
     "knowledge_dir": "DIYA_KNOWLEDGE_DIR",
     "advisor_dir": "DIYA_ADVISOR_DIR",
+    "mcp_config": "DIYA_MCP_CONFIG",
     "profile_path": "DIYA_PROFILE_PATH",
     "dream_log_path": "DIYA_DREAM_LOG_PATH",
     "dream_state_path": "DIYA_DREAM_STATE_PATH",
@@ -217,7 +220,7 @@ _STRING_SETTINGS = {
 
 
 # The settings whose default is a file or folder Diya writes about you: with DIYA_DATA_DIR set they default to the same name in that folder.
-_DATA_FILES = ("db_path", "knowledge_dir", "advisor_dir", "profile_path", "dream_log_path", "dream_state_path", "dream_pending_path", "notify_log_path",
+_DATA_FILES = ("db_path", "knowledge_dir", "advisor_dir", "mcp_config", "profile_path", "dream_log_path", "dream_state_path", "dream_pending_path", "notify_log_path",
                "token_path", "connector_tokens_dir", "connectors_log_path", "push_vapid_path", "telegram_token_path")
 
 
@@ -283,7 +286,7 @@ def load_config(env=None) -> Config:
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
                         ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
-                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("knowledge_chat", "DIYA_KNOWLEDGE_CHAT")):
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("knowledge_chat", "DIYA_KNOWLEDGE_CHAT"), ("mcp", "DIYA_MCP")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag

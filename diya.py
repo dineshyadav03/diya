@@ -23,6 +23,7 @@ import diya_connectors
 import diya_db
 import diya_intent
 import diya_knowledge
+import diya_mcp
 import diya_memory
 import diya_recall
 import diya_schedule
@@ -594,6 +595,7 @@ class Agent:
             "add_task": self.add_task,
             "list_tasks": self.list_tasks,
         }
+        self._mcp = diya_mcp.McpTools(self.config)  # the tools of MCP servers the person approved, read from their file each turn (docs/MCP_DESIGN.md)
         # Connector tools (docs/CONNECTORS_DESIGN.md, unit C2) are always registered here -- each
         # checks its own connection fresh on every call -- but only offered to the model (self.tools)
         # when actually connected, so a disconnect takes effect on the very next turn.
@@ -626,6 +628,7 @@ class Agent:
         for kind in self.actions.kinds:
             if kind.tool is not None and (kind.connector is None or diya_connectors.is_connected(self.config, kind.connector)):
                 result.append(kind.tool)
+        result.extend(self._mcp.specs())  # a tool of an MCP server only while the person has it approved, and DIYA_MCP is on
         return result
 
     def now(self):
@@ -1224,7 +1227,8 @@ class Agent:
         connector that is not connected, a reminder nobody asked for) is refused by the tool itself, with its own explanation.
         `offered` is only what the error for an unknown name lists, except when `strict` (a run nobody is watching): then a tool that was not offered is not run, however real it is."""
         name = call.function.name
-        if name not in self._functions or (strict and name not in offered):
+        function = self._functions.get(name) or (self._mcp.function(name) if isinstance(name, str) else None)
+        if function is None or (strict and name not in offered):
             available = ", ".join(sorted(offered)) or "none"
             return f"Error: there is no tool called {str(name)[:60]!r}. The tools you can use now: {available}."
         if name not in self._proposal_tools and name not in OWN_LIST_TOOLS:
@@ -1239,7 +1243,7 @@ class Agent:
             return f"Error: the arguments for {name} could not be used ({exc}). Call it again with a JSON object."
         print(f"  [tool call] {name}({args})")
         try:
-            return self._functions[name](**args)
+            return function(**args)
         except Exception as exc:
             result = f"Error: {exc}"
             print(f"  [tool error] {result}")

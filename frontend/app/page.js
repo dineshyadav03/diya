@@ -25,6 +25,12 @@ const TOOL_LABELS = {
   list_files: 'listed files',
 }
 
+// A tool of an MCP server the person approved (docs/MCP_DESIGN.md) is named mcp_<server>_<tool>: the chip says a program outside Diya was used, and which one.
+function toolLabel(name) {
+  if (TOOL_LABELS[name]) return TOOL_LABELS[name]
+  return typeof name === 'string' && name.startsWith('mcp_') ? `used a connected program (${name.split('_')[1] || 'MCP'})` : ''
+}
+
 // The questions Diya raises herself (docs/AUTO_MEMORY_DESIGN.md, D5 and unit A5), asked for when the chat opens and after each reply. They are built by code on the server
 // (the words and the answers each question offers come from the API), shown as cards at the top of the chat, and answered with one press.
 const QUESTIONS_AFTER_REPLY_MS = 20000
@@ -388,7 +394,7 @@ export default function ChatPage() {
         threadIdRef.current = data.thread_id
         localStorage.setItem('diya_thread_id', data.thread_id)
       }
-      const usedTools = [...new Set(data.tools_called || [])].filter((name) => TOOL_LABELS[name])
+      const usedTools = [...new Set(data.tools_called || [])].filter((name) => toolLabel(name))
       if (usedTools.length) {
         setMessages((prev) => [...prev, { id: nextIdRef.current++, role: 'tools', tools: usedTools }])
       }
@@ -544,7 +550,7 @@ export default function ChatPage() {
               <div key={m.id ?? 'h' + i} className="msg system tool-recap">
                 {m.tools.map((name) => (
                   <span key={name} className="tool-recap-item">
-                    {TOOL_LABELS[name]}
+                    {toolLabel(name)}
                   </span>
                 ))}
               </div>

@@ -24,6 +24,8 @@ connector_tokens/
 /knowledge/
 # What diya_advisor.py writes: a report and patches that can quote your own messages, and the messages you add
 /advisor/
+# The MCP servers you chose and the tools you approved (diya_mcp.py): commands and environment that are yours
+/mcp_servers.json
 connectors_log.txt
 # diya_run.py: the API's and the UI's logs, and the notes it leaves for --status and --stop (they go in the data folder when there is one)
 /logs/
