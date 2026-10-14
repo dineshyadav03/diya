@@ -81,7 +81,7 @@ for line in sys.stdin:
         elif MODE == "long":
             send({"jsonrpc": "2.0", "id": ident, "result": text("y" * 20000)})
         elif MODE == "control":
-            send({"jsonrpc": "2.0", "id": ident, "result": text("red \x1b[31mtext\x1b[0m and ‮ reversed and a\x00null")})
+            send({"jsonrpc": "2.0", "id": ident, "result": text("red \x1b[31mtext\x1b[0m and \u202e reversed and a\x00null")})
         elif MODE == "call_error":
             send({"jsonrpc": "2.0", "id": ident, "error": {"code": -32602, "message": "bad things"}})
         elif name == "echo":
