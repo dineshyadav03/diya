@@ -517,3 +517,29 @@ def tidy_small_talk(reply, user_text, name, hour):
     text = " ".join(pieces)
     text = re.sub(r"\s+([,!.?])", r"\1", re.sub(r"\s{2,}", " ", text)).strip()
     return text or "Hi."
+
+
+# ---- is this a question about Diya herself: what she can do, how to connect or set something up? (2026-10-14) ----
+#
+# Asked "how do i connect you to my google account" the model answered "I can't connect to Google or any external services ... no connectors", and "what can you do" with a list of things it made up,
+# because nothing in what it is told says what Diya really is. Code recognises such a question and gives the model the facts (diya.ABOUT_DIYA_NOTE) for that turn only.
+_SERVICE = r"(?:google|calendar|gmail|drive|todoist|notion|home\s*assistant|telegram|account|accounts|connector|connectors|integration|integrations)"
+_ABOUT_DIYA = re.compile(
+    rf"\b(?:connect|link|sync|integrate|hook\s+up|set\s*up|add)\b[^.?!]{{0,40}}\b{_SERVICE}\b"
+    rf"|\b{_SERVICE}\b[^.?!]{{0,30}}\b(?:connect|connected|connection|link|sync|setup|set\s*up)\b"
+    r"|\bwhat\s+(?:can|could|do)\s+(?:you|u)\s+(?:do|help\s+(?:me\s+)?with|offer)\b"
+    r"|\bwhat\s+(?:are|is)\s+(?:you|your)\s+(?:able\s+to\s+do|features?|abilit\w+|capabilit\w+)\b|\byour\s+(?:features|abilities|capabilities)\b|\bwhat\s+(?:features|connectors|integrations)\s+(?:do\s+you|are)\b"
+    rf"|\b(?:do\s+)?(?:you|u)\s+(?:have|got|support)\s+(?:the\s+|a\s+|an\s+|any\s+)?{_SERVICE}\b"
+    rf"|\b(?:is|are)\s+there\s+(?:a\s+|an\s+|any\s+)?(?:\w+\s+)?{_SERVICE}\b"
+    r"|\bhow\s+(?:do|can|would)\s+(?:i|we)\s+(?:use|turn\s+on|enable|find|open|add|make)\s+(?:the\s+|an?\s+|my\s+)?(?:memory|automations?|knowledge|connections?|reminders?|tasks?|voice|mic(?:rophone)?)\b",
+    re.IGNORECASE,
+)
+MAX_ABOUT_QUESTION_CHARS = 200
+
+
+def asks_about_diya(text):
+    """True if the message asks what Diya can do, or how to connect her to an account or turn a feature on ("how do i connect you to my google account", "what can you do"). Not a statement, not a long
+    message, and not anything that is not text."""
+    if not isinstance(text, str) or len(text) > MAX_ABOUT_QUESTION_CHARS or "\n" in text:
+        return False
+    return bool(_ABOUT_DIYA.search(text.replace(chr(0x2019), "'")))
