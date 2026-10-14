@@ -146,7 +146,8 @@ export default function KnowledgePage() {
               Diya reads your notes and makes one page for each name that comes up again and again: a person, a place, a project. A page holds only
               sentences copied word for word from your notes, with the note each one came from, so nothing is invented. Reading your notes uses no
               model and sends nothing anywhere. None of it counts as something Diya knows about you: that is still decided on the{' '}
-              <Link href="/memory">Memory</Link> page.
+              <Link href="/memory">Memory</Link> page. You can also ask in the <Link href="/">chat</Link>, for example &ldquo;what do my notes say about
+              Maya?&rdquo;, and Diya answers from the page.
             </p>
             <p className="memory-dim">
               Notes read from: <code>{data.notes_folder}</code>

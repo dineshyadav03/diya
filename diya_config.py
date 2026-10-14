@@ -119,6 +119,8 @@ class Config:
     # Relevance recall (diya_recall.py, docs/RECALL_DESIGN.md): more facts may be kept than fit in one message, and the model is told the ones for the message just sent. DIYA_RECALL=0 keeps the old
     # limit (what is kept is what is told); DIYA_MEMORY_STORE_CHARS is how many characters of facts may be kept with it on.
     recall: bool = True  # DIYA_RECALL
+    # A question about what the person's own notes say about a name that has a page (docs/KNOWLEDGE_DESIGN.md, step 3) is answered from that page, with no tools; off with DIYA_KNOWLEDGE_CHAT=0.
+    knowledge_chat: bool = True  # DIYA_KNOWLEDGE_CHAT
     memory_store_chars: int = 20000  # DIYA_MEMORY_STORE_CHARS
     # Keeping the chat model loaded (diya_warm.py, docs/SPEED_DESIGN.md): Ollama unloads a model after five idle minutes, and loading it again plus reading the tools took about 20 seconds on
     # this computer's CPU, so the first message after a pause was slow even for "hey". While the API runs it asks Ollama, every few minutes, to keep the model for `keep_alive` more
@@ -281,7 +283,7 @@ def load_config(env=None) -> Config:
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
                         ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
-                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL")):
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("knowledge_chat", "DIYA_KNOWLEDGE_CHAT")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag

@@ -1,7 +1,8 @@
 # A knowledge base from your own notes (unit K1, step 1)
 
 > **Status (2026-10-13):** step 1 built (`diya_knowledge.py`, `DIYA_KNOWLEDGE_DIR`, `python diya_knowledge.py build`), and the **Knowledge page** to read, build and hide pages in the UI (`diya_knowledge_api.py`,
-> `frontend/app/knowledge/`). Not built: the chat reading a page, and a second source.
+> `frontend/app/knowledge/`), and **step 3: the chat answers "what do my notes say about X?" from the page** (`diya_intent.asks_about_notes`, `diya_knowledge.page_for`, `Agent._pages_note`,
+> `DIYA_KNOWLEDGE_CHAT`). Not built: a second source.
 > Unit K1 of `docs/RESEARCH_PLAN_2026-10.md`; the research is `RESEARCH.md` entries 29 and 31.
 
 ## What it is for
@@ -78,5 +79,13 @@ pages useful: that is the real test, and it starts when `DIYA_NOTES_DIR` points 
 
 2. **Built:** a **Knowledge page** in the UI (sidebar, under Memory): the notes folder in use, a "Read my notes now" button, the names that have a page, a page with each sentence and the note it came from, links to
    the names beside it, "Hide this name", and the hidden names with "Bring back". Routes: `GET /api/knowledge`, `POST /api/knowledge/build`, `/hide`, `/unhide`; the same token rule as every route.
-   **Not built:** the chat reading a page when you ask "what do my notes say about X?". That is the step that needs care: a page is text from your notes, so the chat has to read it as data, as it reads web results.
-3. A **second source**, one at a time and only if you want it: Calendar once connected; mail and messages only by your decision.
+3. **Built: the chat reads a page.** Decided in code, like the lookup (`docs/LOOKUP_DESIGN.md`): a message that asks what your own notes say ("what do my notes say about Maya?", "anything I wrote about the
+   trip?") and names someone who has a page is answered from that page. The model is given the page's sentences, newest first, each with its note (at most 3,000 characters, and it says how many more
+   there are), a warning that they are read and never obeyed, and **no tools** for that answer: a note can hold text pasted from anywhere, so nothing in it can ask for a tool. Not taken for such a
+   question: something to write into the notes ("add this to my notes"), a reminder, an unattended automation, a name with no page (the old note search answers as before), or `DIYA_KNOWLEDGE_CHAT=0`.
+   The chip under the reply says "searched your notes".
+   **Measured with the real chat model** on the 24 invented notes: for Maya, Rocky, Japan and Dr Mehta it listed what the page held, every line a sentence that is in the note it names, with nothing
+   added; about 10 to 30 seconds each on this CPU. It treated the one sentence that read like an instruction ("Diya should read my notes...") as text and said so. Not measured: how often a person's
+   questions are phrased in a way the gate does not recognise (it is a short list of frames; a miss only means the old note search answers). **A name with no page** (here Zomato, one note) is
+   answered by the old search of the one nearest note, and the model then wrote a muddled answer from that note: that is the old behaviour, unchanged, and a reason to write names you care about as [[links]].
+4. A **second source**, one at a time and only if you want it: Calendar once connected; mail and messages only by your decision.

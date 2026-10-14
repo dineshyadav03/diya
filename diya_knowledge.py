@@ -563,6 +563,15 @@ def read_page(out_dir, stem):
     return {"stem": stem, "name": name, "sentences": sentences, "omitted": omitted, "links": links}
 
 
+def page_for(out_dir, text):
+    """The page whose name is in `text` (the longest, when more than one is, and in any case of letters), as its stem; None if no name that has a page is there."""
+    best = None
+    for stem in list_pages(out_dir)[0]:
+        if re.search(r"(?<!\w)" + re.escape(stem) + r"(?!\w)", text, re.IGNORECASE) and (best is None or len(stem) > len(best)):
+            best = stem
+    return best
+
+
 # ---- the command line --------------------------------------------------------------------------------------------
 
 

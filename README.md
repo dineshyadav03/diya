@@ -16,7 +16,7 @@ designed yet. In plain terms:
 | **Built, and used every day** | chat with streaming replies and a voice; tap-to-talk; reminders, repeating reminders, tasks, the Today page; Diya writing to you first; automations; reviewed memory, with automatic memory switched on; general questions answered with a web lookup |
 | **Built, but never tried against the real thing** | the Google Calendar sign-in, Todoist, Home Assistant and Notion; push notifications to a phone; the Telegram bot; the one-command launcher's install step |
 | **Built, switched off until you choose** | the desktop notifier's schedule, Dreaming's schedule, the phone channels, every connector |
-| **Not built** | Diya writing her own tools; call handling; a streaming voice pipeline; the chat using the pages made from your notes (the pages and a Knowledge page to read them are built; [the plan](docs/RESEARCH_PLAN_2026-10.md)); the Mac mini (deferred) |
+| **Not built** | Diya writing her own tools; call handling; a streaming voice pipeline; a second source for the knowledge base, such as your calendar or mail (pages from your notes, a Knowledge page and chat answers from them are built; [the plan](docs/RESEARCH_PLAN_2026-10.md)); the Mac mini (deferred) |
 
 Stage 0 of the roadmap (safety and reproducibility) is 17 of 20 items done; the other three are blocked by tools or were decided against, and say so in [ROADMAP.md](ROADMAP.md).
 [PRODUCT_VISION.md](PRODUCT_VISION.md) says what each part does today and what was never tried for real.

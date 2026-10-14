@@ -431,3 +431,34 @@ def is_reminder_request(text):
     if not isinstance(text, str):
         return False
     return bool(_REMINDER_REQUEST.search(text.replace(chr(0x2019), "'")))
+
+
+# ---- is this a question about what the person's own notes say? (docs/KNOWLEDGE_DESIGN.md, step 3) ----
+#
+# Decided here, in code, like the other gates: the chat answers such a question from the person's page about the name in it (diya.Agent._pages_note), with no tools. It must be a question or a request
+# to look (not a thing to write down, not a reminder), and it must talk about the person's notes or what they wrote; which name it is about is found in diya_knowledge.page_for.
+_NOTES_FRAME = re.compile(
+    r"\bmy\s+notes?\b|\bnotes?\s+(?:say|said|mention\w*|about|on)\b|\b(?:i|we)(?:'ve|\s+have|\s+had)?\s+(?:written|wrote|noted|jotted|saved)\b"
+    r"|\b(?:did|do|does|have|had)\s+(?:i|we)\s+(?:ever\s+)?(?:write|wrote|written|note|noted|jot|jotted|save|saved)\b",
+    re.IGNORECASE,
+)
+_NOTES_ASK = re.compile(
+    r"^\W*(?:(?:hey|hi|ok|okay|please|diya|and|so)\b[\s,]*)*(?:what|which|who|where|when|why|how|anything|everything|whatever|do|did|does|have|has|had|is|are|was|were|can|could|would|tell|show|give|list|"
+    r"summari[sz]e|find|search|look|read|pull|check)\b|\?\s*$",
+    re.IGNORECASE,
+)
+_NOTES_WRITE = re.compile(
+    r"(?:^|[.!?;:,]\s*|\b(?:please|can\s+you|could\s+you|would\s+you|will\s+you|and|then)\s+)\W*(?:add|put|save|write|store|jot|keep|append|record)\b[^.?!]*\b(?:in|to|into|on)\s+my\s+notes?\b"
+    r"|\bmake\s+a\s+note\b|\bnote\s+(?:that|to\s+self)\b",
+    re.IGNORECASE,
+)
+MAX_NOTES_QUESTION_CHARS = 300
+
+
+def asks_about_notes(text):
+    """True if the message asks what the person's own notes say ("what do my notes say about Maya?", "anything I wrote about the trip?"). Not something to be written down ("add this to my notes"), not a
+    reminder, and not anything that is not one short piece of text: those are False."""
+    if not isinstance(text, str) or len(text) > MAX_NOTES_QUESTION_CHARS or "\n" in text:
+        return False
+    text = text.replace(chr(0x2019), "'")
+    return bool(_NOTES_FRAME.search(text)) and bool(_NOTES_ASK.search(text)) and not _NOTES_WRITE.search(text) and not is_reminder_request(text)
