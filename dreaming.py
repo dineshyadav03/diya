@@ -300,7 +300,9 @@ class Dreamer:
         """Every candidate in its lane (diya_autonomy.apply), asking the models the policy asks. What it did, as diya_autonomy.Report."""
         import diya_autonomy
 
-        return diya_autonomy.apply(memory, private=self._privacy_judge(), replaces=self._replace_judge(memory), corrects=self._correction_judge())
+        return diya_autonomy.apply(
+            memory, private=self._privacy_judge(), replaces=self._replace_judge(memory), corrects=self._correction_judge(), adds=lambda fact: diya_autonomy.says_it_adds(self._source_texts(fact))
+        )
 
     def look_for_categories(self, now=None, max_sorted=200):
         """Each cycle, if categories are on (DIYA_CATEGORIES): sort the person's messages that are in no category yet (up to `max_sorted` a cycle, so the earlier chats are done over a few), and at most

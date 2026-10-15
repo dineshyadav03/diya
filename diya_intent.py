@@ -248,7 +248,13 @@ _CORRECTION = re.compile(
     r"|\b(?:stopped|quit|gave\s+up|sold|moved|switched|changed|left)\b"
     r"|\bused\s+to\b"
     r"|\bnow\s+(?:work|works|live|lives|use|uses|drive|drives|have|has|ride|rides|study|studies|go|goes|am|play|plays|prefer|prefers)\b"
-    r"|\bis\s+gone\b",
+    r"|\bis\s+gone\b"
+    # Added 2026-10-16 after the memory question-and-answer measurement (docs/MEMORY_BENCH.md): "I started a new job at a bank" and "I just bought an iPhone" are changes too, and were only asked about.
+    # The model must still name the fact they replace, so a word here alone replaces nothing.
+    r"|\b(?:started|began|landed|took|got)\s+(?:a\s+)?new\s+(?:job|role|position|place|flat|apartment|house|home|phone|laptop|car|bike|course|school|college)\b"
+    r"|\bjust\s+(?:bought|started|joined|moved|switched|changed|upgraded|quit|left)\b"
+    r"|\b(?:bought|got)\s+(?:a\s+)?new\s+(?:phone|laptop|car|bike|computer|watch)\b"
+    r"|\bupgraded\b|\breplaced\b|\bstarted\s+(?:working|studying|living|using)\b",
     re.IGNORECASE,
 )
 
