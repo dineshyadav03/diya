@@ -152,7 +152,14 @@ def is_done_question(text):
 # model answers as it always did.
 _ABOUT_THEM_OR_DIYA = re.compile(r"\b(?:i|i'm|i've|i'll|i'd|my|me|mine|myself|we|our|you|your|u|ur|diya)\b", re.IGNORECASE)
 _OWN_THINGS = re.compile(
-    r"\b(?:weather|temperature|forecast|tasks?|reminders?|notes?|automations?|calendar|schedule|todo|to-do|memory|facts?|chats?|history|connections?|actions?)\b", re.IGNORECASE
+    r"\b(?:weather|temperature|forecast|tasks?|reminders?|notes?|automations?|calendar|schedule|todo|to-do|memory|facts?|chats?|history|connections?|actions?)\b"
+    r"|\b(?:current|working|this)\s+(?:folder|directory|dir|path)\b|\bwhat\s+files\b",  # "what files are in the current folder" is about this computer, and "current" is not a news word here
+    re.IGNORECASE,
+)
+# Arithmetic ("what's 9 times 7", "what is 15% of 80", "what is 2+2"): the model, or a calculator, answers it; the web does not. Measured 2026-10-14 by the real-model evals: "What's 9 times 7?" was
+# taken for "what is <a short name>" and searched on the web.
+_ARITHMETIC = re.compile(
+    r"\d\s*(?:[+*/x\u00d7\u00f7^]|\s-\s|times|plus|minus|divided|multiplied|over|squared|cubed|percent|%)\s*(?:\d|of\b|by\b)|\b(?:square|cube)\s+root\b|\d\s*(?:squared|cubed)\b", re.IGNORECASE
 )
 _QUESTION_WORD = re.compile(
     r"^\W*(?:and\s+|so\s+|ok\s+|okay\s+)?(?:what|what's|whats|who|who's|whos|when|where|why|how|which|is|are|was|were|does|do|did|can|could|explain|define|tell\s+me\s+(?:about|what|who|how)|describe|compare)\b|\?\s*$",
@@ -184,7 +191,7 @@ _CLOCK = re.compile(r"^\W*(?:what|whats|what['’]s)(?:\s+is)?\s+(?:the\s+|today
 def _is_general_question(text):
     if not isinstance(text, str) or not text.strip() or len(text) > MAX_LOOKUP_QUESTION_CHARS or "\n" in text.strip():
         return False
-    return bool(_QUESTION_WORD.search(text)) and not _ABOUT_THEM_OR_DIYA.search(text) and not _OWN_THINGS.search(text)
+    return bool(_QUESTION_WORD.search(text)) and not _ABOUT_THEM_OR_DIYA.search(text) and not _OWN_THINGS.search(text) and not _ARITHMETIC.search(text)
 
 
 def wants_lookup(text):

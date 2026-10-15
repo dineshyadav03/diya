@@ -31,6 +31,14 @@ Two things, both measured with the real model (`diya-chat`, a 4B model) on a thr
 searched and answered; "what is the capital of Australia" was answered at once with no search; "did I call the bank?" and "what can you do" were never searched. Not measured: how often the first-pass
 "giving up" check fires on real chats; it is a short list of phrases and a miss only means the model answers as it did before.
 
+### A regression the real-model evals found (2026-10-14)
+
+`diya_evals.py` had passed 9 of 9 and then gave 6 of 9: "What's 9 times 7?" and "What files are in the current folder?" were sent to the web. Two gate bugs, both in `diya_intent`: "9 times 7" fitted the
+"what is <a short name>" rule, and the word "current" in "current folder" fitted the "today's facts" rule. Arithmetic (`_ARITHMETIC`) and questions about this computer's folders and files (`_OWN_THINGS`)
+are now never web questions, in either pass; "what is 5G", "what is GPT-4" and "what is Python 3.12" are still looked up. After the fix the evals were 9 of 9 again (real `diya-chat`). The unit tests did not
+catch it because they only held examples written when the gate was written; the evals are what is for that, and they were not being run after each change. Disclosed: that is a lapse in how I (the AI)
+worked on this repo, not a one-off.
+
 ## Cost and limits
 
 An extra search (a few seconds) and a second answer for the questions that need it, nothing for the rest. The results are three DuckDuckGo snippets, so an answer is as good as those and a 4B model's summary of

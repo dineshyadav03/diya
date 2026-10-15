@@ -41,6 +41,20 @@ def test_a_question_about_the_person_diya_or_diyas_own_lists_is_never_a_web_ques
     assert not diya_intent.wants_lookup(text) and not diya_intent.is_lookup_question(text)
 
 
+@pytest.mark.parametrize("text", [
+    "What's 9 times 7?", "What is 17 times 23?", "what is 15% of 80", "what is 2+2", "what is the square root of 144", "what is 12 divided by 4",
+    "What files are in the current folder?", "what is in the working directory", "list what files are in this folder",
+])
+def test_arithmetic_and_questions_about_this_computers_files_are_never_web_questions(text):
+    """Found by the real-model evals on 2026-10-14 (6 of 9, where it had been 9 of 9): "9 times 7" was taken for a short name to look up, and the word "current" in "current folder" for a news word."""
+    assert not diya_intent.wants_lookup(text) and not diya_intent.is_lookup_question(text)
+
+
+@pytest.mark.parametrize("question", ["what is 5G", "what is GPT-4", "what is Python 3.12", "who is the current CEO of OpenAI?"])
+def test_a_name_with_a_number_in_it_is_still_looked_up(question):
+    assert diya_intent.wants_lookup(question)
+
+
 @pytest.mark.parametrize("answer", [
     "I don't have real-time access to current leadership updates, so I can't confirm.", "I don’t know what it is or how it works.", "I'm not sure about that one.",
     "As of my last update, Sam Altman is the CEO.", "I recommend checking OpenAI's official website.", "That's not something I was taught.",
