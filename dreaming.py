@@ -290,7 +290,11 @@ class Dreamer:
         import diya_questions
         from datetime import datetime
 
-        return diya_questions.Questions(self.store).refill(memory, datetime.now())  # the quiet hours are about showing a question, not about making one
+        questions = diya_questions.Questions(self.store)
+        gone = questions.retire_gone(memory, datetime.now())  # facts whose day has passed: retired by themselves (with Undo), not asked about
+        if gone:
+            print(f"Retired {gone} fact(s) whose day has passed (the Memory page can bring one back).")
+        return questions.refill(memory, datetime.now())  # the quiet hours are about showing a question, not about making one
 
     def _put_in_lanes(self, memory):
         """Every candidate in its lane (diya_autonomy.apply), asking the models the policy asks. What it did, as diya_autonomy.Report."""

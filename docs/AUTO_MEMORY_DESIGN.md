@@ -288,6 +288,16 @@ dogs now?", and "where does Maya live" "Lisbon". Reading a message and judging i
 what will show the rest; every automatic fact is shown with Undo, and the daily cap and the breaker are unchanged. The reply "Noted - your dog's name is now Hog" is still the model's wording (it said "now" although the person said "another");
 what memory did is shown under the reply, not in it.
 
+### 8.6 A fact whose day has passed is retired by itself (2026-10-14)
+
+The owner's memory still held "has an exam coming up next Tuesday" and "check audit results tomorrow" days after both had gone, and Diya listed them as things she knew about them. The cause was not a missing
+check (`diya_questions.outer_limit` already knew the day had passed) but the pace: a fact whose day has passed became a *question*, and questions are shown two a day, doubtful ones first, so these two never reached
+the front of the queue while being told to the model every turn.
+
+With automatic memory on (`DIYA_AUTO_MEMORY=1`), `Questions.retire_gone` (called first in Dreaming's question refill) **retires such a fact itself**: it is recorded in the trail as an automatic decision with the
+reason `day_passed`, it shows on the Memory page as retired, and Restore brings it back. A fact that already has a stale question is left to that question; a habit ("every Monday") is never retired.
+Applied once to the owner's own memory: facts 3 and 6 retired, 8 facts remain. With automatic memory off, nothing changes (the question is asked as before).
+
 ## 9. Replacing what is known (the replacement question)
 
 **The problem.** With the question to the model in place, updates were still a hole: "I now work as a nurse" was remembered beside

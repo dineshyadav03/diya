@@ -234,6 +234,22 @@ class Questions:
                 continue
             yield "offer", fact, {"event": when.describe(), "due": _iso(remind), "due_text": diya_time.describe_local(remind)}
 
+    def retire_gone(self, memory, now):
+        """With automatic memory on, a fact whose day has passed (\"I have an exam next Tuesday\", a fortnight later) is retired by itself instead of being asked about: it stays in the trail, shows on the
+        Memory page as retired, and \"Restore\" brings it back. Measured on the owner's own memory (2026-10-14): two such facts had been told to the model for weeks because the pace of questions (two a day,
+        the doubtful first) never reached them. A fact that already has a stale question is left to it. Returns how many were retired."""
+        known = {(q["fact_id"], q["kind"]) for q in self._rows("")}
+        retired = 0
+        for kind, fact, detail in list(self._wanted(memory, now, known)):
+            if kind != "stale":
+                continue
+            try:
+                memory.decide(fact["id"], "retire", "auto", {"lane": "stale", "reasons": [f"day_passed:{detail.get('was', '')}"]})
+                retired += 1
+            except diya_memory.FactError:
+                pass  # someone retired it a moment ago
+        return retired
+
     def refill(self, memory, now):
         """Put new questions in the queue, as many as the pace allows (three open, two new in a day), after closing what is settled and ageing what was
         ignored. Returns how many were made."""

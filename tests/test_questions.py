@@ -728,3 +728,40 @@ def test_yes_to_a_possible_replacement_that_has_since_lost_its_old_fact_is_not_o
         questions.answer(memory, item["id"], "yes", SUNDAY)
     questions.answer(memory, item["id"], "keep", SUNDAY)
     assert memory.get(new)["status"] == "accepted" and memory.get(old)["status"] == "retired"
+
+
+# --- a fact whose day has passed is retired by itself (2026-10-14) --------------------------------------------------------------------
+
+def test_a_remembered_event_whose_day_has_gone_is_retired_by_itself_not_asked_about(parts):
+    memory, questions = parts
+    appointment = made_at_sunday(memory, "has a dentist appointment on Friday at 3pm")
+    exam = made_at_sunday(memory, "has an exam next Tuesday")
+    tea = remembered(memory, "likes tea in the morning")
+    assert questions.retire_gone(memory, datetime(2026, 10, 16, 14, 0)) == 0  # the appointment is still ahead, and "next Tuesday" can still be this week's
+    assert questions.retire_gone(memory, datetime(2026, 10, 30, 10, 0)) == 2
+    statuses = {fact["id"]: fact["status"] for fact in memory.facts()}
+    assert statuses[appointment] == "retired" and statuses[exam] == "retired" and statuses[tea] == "accepted"
+    assert questions.open() == []  # nothing was asked
+    assert questions.retire_gone(memory, datetime(2026, 11, 30, 10, 0)) == 0  # and it is done once
+
+
+def test_a_retired_fact_can_be_brought_back_and_the_trail_says_it_was_code_that_retired_it(parts):
+    memory, questions = parts
+    exam = made_at_sunday(memory, "has an exam next Tuesday")
+    questions.retire_gone(memory, datetime(2026, 10, 30, 10, 0))
+    conn = memory.store.connect()
+    events = conn.execute("SELECT event, actor FROM fact_events WHERE fact_id = ? ORDER BY id", (exam,)).fetchall()
+    conn.close()
+    assert events[-1] == ("retired", "auto")
+    memory.decide(exam, "restore", "api", {})
+    assert next(f for f in memory.facts() if f["id"] == exam)["status"] == "accepted"
+
+
+def test_a_fact_that_already_has_a_stale_question_is_left_to_it_and_a_habit_is_never_retired(parts):
+    memory, questions = parts
+    exam = made_at_sunday(memory, "has an exam next Tuesday")
+    habit = made_at_sunday(memory, "usually has exams on a Tuesday before the weekend")
+    questions.refill(memory, datetime(2026, 10, 30, 10, 0))
+    assert [(item["fact_id"], item["kind"]) for item in questions.open()] == [(exam, "stale")]
+    assert questions.retire_gone(memory, datetime(2026, 10, 31, 10, 0)) == 0
+    assert {f["id"]: f["status"] for f in memory.facts()}[habit] == "accepted"
