@@ -462,6 +462,13 @@ _NOTES_WRITE = re.compile(
 MAX_NOTES_QUESTION_CHARS = 300
 
 
+def repo_to_study(text):
+    """(owner, repo) if the message gives a GitHub repository address and asks for it to be studied, explained or looked into; else None (diya_repostudy.wants_study)."""
+    import diya_repostudy
+
+    return diya_repostudy.repo_from_text(text) if diya_repostudy.wants_study(text) else None
+
+
 def asks_about_notes(text):
     """True if the message asks what the person's own notes say ("what do my notes say about Maya?", "anything I wrote about the trip?"). Not something to be written down ("add this to my notes"), not a
     reminder, and not anything that is not one short piece of text: those are False."""

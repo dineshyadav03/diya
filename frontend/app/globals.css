@@ -197,6 +197,23 @@ h1, h2, h3 { letter-spacing: -0.01em; }
   padding: 10px 24px; border-bottom: 1px solid var(--border);
 }
 /* Diya has one chat (docs/ONE_CHAT_DESIGN.md): an earlier chat is shown read-only under a bar saying so, and a one-line note when older messages are left out. */
+/* Looking at the one chat by category (docs/ONE_CHAT_DESIGN.md): chips under the chat bar, and each of the person's messages has its category beneath it, changeable. */
+.category-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 24px; border-bottom: 1px solid var(--border); }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border-radius: var(--pill); border: 1px solid var(--border-strong); background: transparent; color: var(--text-dim); font: inherit; font-size: 13px; cursor: pointer; }
+.chip:hover { background: var(--surface-hover); color: var(--text); }
+.chip[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); border-color: var(--text-dim); }
+.chip-count { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); }
+.chip-link { text-decoration: none; margin-left: auto; }
+.category-suggestion { margin: 12px 0; }
+.category-suggestion-list, .category-messages { list-style: none; margin: 8px 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.category-suggestion-list label { display: flex; gap: 8px; align-items: flex-start; font-size: 14.5px; line-height: 1.45; cursor: pointer; }
+.category-jobs { margin: 12px 0; }
+.category-merge { align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.category-inside { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.category-messages li { font-size: 14.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.msg-tag-row { align-self: flex-end; margin-top: -10px; }
+.msg-tag { appearance: none; background: transparent; border: 0; padding: 2px 6px; border-radius: var(--pill); color: var(--text-dim); font: inherit; font-size: 12px; cursor: pointer; }
+.msg-tag:hover { background: var(--surface-hover); color: var(--text); }
 .earlier-chat-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 24px; border-bottom: 1px solid var(--border); background: var(--surface); color: var(--text-dim); font-size: 14px; }
 .older-left { text-align: center; padding: 6px 0 2px; }
 .chat-title { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); }

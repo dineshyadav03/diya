@@ -362,6 +362,45 @@ MIGRATIONS = (
         )
         """,
     )),
+    # 18: what is said, in categories (docs/ONE_CHAT_DESIGN.md, step 2). `categories` is the list the person sees (the starter ones are made on first use; `origin` keeps a starter category's original
+    # name when it is renamed, so code that knows it as "Weather" still finds it); `message_categories` puts each of the person's messages in exactly one (`source`: code, model, continued or person).
+    (18, (
+        """
+        CREATE TABLE IF NOT EXISTS categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            meaning TEXT,
+            origin TEXT,
+            position INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS message_categories (
+            message_id INTEGER PRIMARY KEY,
+            category_id INTEGER NOT NULL,
+            source TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (message_id) REFERENCES messages(id),
+            FOREIGN KEY (category_id) REFERENCES categories(id)
+        )
+        """,
+    )),
+    # 19: merging categories, and new categories Diya suggests (docs/ONE_CHAT_DESIGN.md, step 4). A merged category stays as a hidden row (`merged_into`) so that code which knows it by its starter name
+    # still finds where its messages went. A suggestion is a name and the messages it is about, until the person says yes or no.
+    (19, (
+        "ALTER TABLE categories ADD COLUMN merged_into INTEGER",
+        """
+        CREATE TABLE IF NOT EXISTS category_suggestions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL COLLATE NOCASE,
+            message_ids TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open',
+            created_at TEXT NOT NULL,
+            decided_at TEXT
+        )
+        """,
+    )),
 )
 
 MAX_THREAD_TITLE = 80  # the longest name a chat can be given
@@ -611,16 +650,16 @@ class Store:
         finally:
             conn.close()
 
-    def get_history_tail(self, thread_id, limit):
-        """The newest `limit` messages of a chat, oldest first, and whether older ones were left out: ([{role, content}], more_before). The one chat grows without end, so a page asks for a tail."""
+    def get_messages_tail(self, thread_id, limit):
+        """The newest `limit` messages of a chat, oldest first, and whether older ones were left out: ([{id, role, content}], more_before). The one chat grows without end, so a page asks for a tail."""
         conn = self.connect()
         rows = conn.execute(
-            "SELECT role, content FROM (SELECT id, role, content FROM messages WHERE thread_id = ? ORDER BY id DESC LIMIT ?) ORDER BY id", (thread_id, int(limit) + 1)
+            "SELECT id, role, content FROM (SELECT id, role, content FROM messages WHERE thread_id = ? ORDER BY id DESC LIMIT ?) ORDER BY id", (thread_id, int(limit) + 1)
         ).fetchall()
         conn.close()
         more = len(rows) > int(limit)
         rows = rows[1:] if more else rows
-        return [{"role": role, "content": content} for role, content in rows], more
+        return [{"id": row_id, "role": role, "content": content} for row_id, role, content in rows], more
 
     def add_message(self, thread_id, role, content):
         conn = self.connect()

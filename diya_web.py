@@ -19,6 +19,8 @@ from pydantic import BaseModel
 import diya
 import diya_actions_api
 import diya_brief_api
+import diya_categories
+import diya_categories_api
 import diya_config
 import diya_connections_api
 import diya_connector_tools
@@ -341,9 +343,13 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
         else:
             raise HTTPException(status_code=404, detail="No such thread")
         if number == main:
-            messages, more_before = agent.store.get_history_tail(number, MAX_PAGE_MESSAGES)
+            messages, more_before = agent.store.get_messages_tail(number, MAX_PAGE_MESSAGES)
+            tags = diya_categories.Book(agent.store).tags([m["id"] for m in messages if m["role"] == "user"])
+            messages = [dict(m, category=tags[m["id"]]) if m["id"] in tags else m for m in messages]
         else:
-            messages, more_before = agent.store.get_history(number), False
+            messages, more_before = agent.store.get_messages(number), False  # an earlier chat is read whole; its messages carry ids and categories too (so a tag can be moved)
+            tags = diya_categories.Book(agent.store).tags([m["id"] for m in messages if m["role"] == "user"])
+            messages = [dict(m, category=tags[m["id"]]) if m["id"] in tags else m for m in messages]
         return {"thread_id": number, "is_main": number == main, "more_before": more_before, "messages": messages}
 
     @app.post("/api/transcribe")
@@ -365,6 +371,20 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
             os.remove(tmp_path)
 
         return {"text": text}
+
+    sorting = diya_categories.SORT_LOCK  # one exchange is sorted at a time, each waiting its turn in a thread of its own so that a chat never waits for it
+
+    def sort_exchange(message_id, text, tools_called):
+        """After a reply has been sent: put the person's message in a category (docs/ONE_CHAT_DESIGN.md, step 2). Code decides what it can; the model is asked the rest. It never raises and a failure
+        leaves the message with no category, which the page shows as none yet."""
+        if not config.categories:
+            return
+        with sorting:
+            try:
+                diya_categories.sort(diya_categories.Book(agent.store), agent.client, config.model, message_id, text, tools_called)
+            except Exception:  # a label is never worth a chat's trouble
+                print("[categories] sorting failed:", file=sys.stderr)
+                traceback.print_exc()
 
     reading_for_facts = threading.Lock()
 
@@ -422,6 +442,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
             status, detail = failure_of(exc)
             return JSONResponse({"detail": detail, "thread_id": thread_id}, status_code=status)
         reading = end_turn(thread_id, message_id, req, answer)
+        background.add_task(sort_exchange, message_id, req.message, tools_called)  # after the response is on its way, never before it
         if config.auto_memory:
             background.add_task(read_for_facts, message_id)  # runs after the response is on its way, never before it
         # `message_id` and `reading` let the page ask, a little later, what memory did with the message (GET /api/memory/learned)
@@ -444,6 +465,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
                 events.put(("error", failure_of(exc)))
                 return
             events.put(("done", {"thread_id": thread_id, "answer": answer, "tools_called": tools_called, "message_id": message_id, "reading": reading}))
+            sort_exchange(message_id, req.message, tools_called)  # after the last line is on its way
             if config.auto_memory:
                 read_for_facts(message_id)  # after the last line is on its way, as /api/chat's background task is
 
@@ -486,6 +508,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     diya_automations_api.register(app, config, agent)  # what Diya does on a schedule for the person (docs/AUTOMATIONS_DESIGN.md)
     diya_knowledge_api.register(app, config, agent)  # the pages made from the person's notes (docs/KNOWLEDGE_DESIGN.md)
     diya_threads_api.register(app, config, agent)  # searching and naming past chats
+    diya_categories_api.register(app, config, agent, lambda: MAX_PAGE_MESSAGES)  # the one chat by category (docs/ONE_CHAT_DESIGN.md, steps 2 and 3)
     diya_push_api.register(app, config, agent)  # telling the phone by Web Push, off unless DIYA_PUSH=1 (docs/PUSH_DESIGN.md, unit P2)
     diya_reminders_api.register(app, config, agent)
     diya_tasks_api.register(app, config, agent)  # the to-do list inside Diya (docs/TASKS_DESIGN.md, unit T2)

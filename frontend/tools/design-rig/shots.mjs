@@ -195,6 +195,101 @@ const SCENARIOS = [
       { name: 'the composer is usable', js: `!document.querySelector('.composer-input').disabled` },
     ],
   },
+  {
+    // The one chat by category (docs/ONE_CHAT_DESIGN.md): chips for the categories in the chat, a tag under each of the person's messages, a filter, and a change that is put back if it fails.
+    name: 'chat-by-category', path: '/', stub: { history: [{ id: 1, role: 'user', content: 'how hot is it in Pune', category: 'Weather' }, { id: 2, role: 'assistant', content: 'About 31 degrees.' }, { id: 3, role: 'user', content: 'remind me to call mom', category: 'Reminders & tasks' }, { id: 4, role: 'assistant', content: 'Done, I will remind you.' }, { id: 5, role: 'user', content: 'hello', category: 'Chat' }, { id: 6, role: 'assistant', content: 'Hi!' }], categories: [{ id: 1, name: 'Weather', meaning: '', count: 1 }, { id: 2, name: 'Reminders & tasks', meaning: '', count: 1 }, { id: 3, name: 'About me', meaning: '', count: 0 }, { id: 4, name: 'Chat', meaning: '', count: 1 }], tags: { 1: 'Weather', 3: 'Reminders & tasks', 5: 'Chat' } },
+    steps: [`await __wait(700)`],
+    checks: [
+      { name: 'a chip for All and one for each category that has messages (not the empty one)', js: `Array.from(document.querySelectorAll('.category-chips .chip')).map((c) => c.textContent.replace(/\\s+/g, ' ').trim()).join('|') === 'All|Weather 1|Reminders & tasks 1|Chat 1'` },
+      { name: 'All is the one pressed', js: `document.querySelector('.category-chips .chip').getAttribute('aria-pressed') === 'true'` },
+      { name: 'each of the person\'s messages has its category under it', js: `Array.from(document.querySelectorAll('select.msg-tag')).map((s) => s.value).join('|') === 'Weather|Reminders & tasks|Chat'` },
+      { name: 'all six messages are shown', js: `document.querySelectorAll('#log .msg').length === 6` },
+    ],
+  },
+  {
+    name: 'chat-by-category-filtered', path: '/', stub: { history: [{ id: 1, role: 'user', content: 'how hot is it in Pune', category: 'Weather' }, { id: 2, role: 'assistant', content: 'About 31 degrees.' }, { id: 3, role: 'user', content: 'remind me to call mom', category: 'Reminders & tasks' }, { id: 4, role: 'assistant', content: 'Done, I will remind you.' }, { id: 5, role: 'user', content: 'hello', category: 'Chat' }, { id: 6, role: 'assistant', content: 'Hi!' }], categories: [{ id: 1, name: 'Weather', meaning: '', count: 1 }, { id: 2, name: 'Reminders & tasks', meaning: '', count: 1 }, { id: 3, name: 'About me', meaning: '', count: 0 }, { id: 4, name: 'Chat', meaning: '', count: 1 }], tags: { 1: 'Weather', 3: 'Reminders & tasks', 5: 'Chat' } },
+    steps: [`await __wait(700)`, `Array.from(document.querySelectorAll('.category-chips .chip')).find((c) => c.textContent.startsWith('Weather')).click(); await __wait(300)`],
+    checks: [
+      { name: 'only that category\'s exchange is shown: the question and its reply', js: `Array.from(document.querySelectorAll('#log .msg')).map((m) => m.textContent).join('|') === 'how hot is it in Pune|About 31 degrees.'` },
+      { name: 'the chip is pressed and All is not', js: `Array.from(document.querySelectorAll('.category-chips .chip')).map((c) => c.getAttribute('aria-pressed')).join('|') === 'false|true|false|false'` },
+    ],
+  },
+  {
+    name: 'chat-by-category-move', path: '/', stub: { history: [{ id: 1, role: 'user', content: 'how hot is it in Pune', category: 'Weather' }, { id: 2, role: 'assistant', content: 'About 31 degrees.' }, { id: 3, role: 'user', content: 'remind me to call mom', category: 'Reminders & tasks' }, { id: 4, role: 'assistant', content: 'Done, I will remind you.' }, { id: 5, role: 'user', content: 'hello', category: 'Chat' }, { id: 6, role: 'assistant', content: 'Hi!' }], categories: [{ id: 1, name: 'Weather', meaning: '', count: 1 }, { id: 2, name: 'Reminders & tasks', meaning: '', count: 1 }, { id: 3, name: 'About me', meaning: '', count: 0 }, { id: 4, name: 'Chat', meaning: '', count: 1 }], tags: { 1: 'Weather', 3: 'Reminders & tasks', 5: 'Chat' } },
+    steps: [`await __wait(700)`, `const sel = document.querySelectorAll('select.msg-tag')[2]; sel.value = 'About me'; sel.dispatchEvent(new Event('change', { bubbles: true })); await __wait(500)`],
+    checks: [
+      { name: 'the change was sent: that message, that category', js: `window.__categoryPosts.length === 1 && window.__categoryPosts[0].action === 'assign' && window.__categoryPosts[0].message_id === 5 && window.__categoryPosts[0].category === 'About me'` },
+      { name: 'the tag shows the new category', js: `document.querySelectorAll('select.msg-tag')[2].value === 'About me'` },
+      { name: 'no error is shown', js: `!document.querySelector('.category-chips [role="alert"]')` },
+    ],
+  },
+  {
+    name: 'chat-by-category-move-fails', path: '/', stub: { history: [{ id: 1, role: 'user', content: 'how hot is it in Pune', category: 'Weather' }, { id: 2, role: 'assistant', content: 'About 31 degrees.' }, { id: 3, role: 'user', content: 'remind me to call mom', category: 'Reminders & tasks' }, { id: 4, role: 'assistant', content: 'Done, I will remind you.' }, { id: 5, role: 'user', content: 'hello', category: 'Chat' }, { id: 6, role: 'assistant', content: 'Hi!' }], categories: [{ id: 1, name: 'Weather', meaning: '', count: 1 }, { id: 2, name: 'Reminders & tasks', meaning: '', count: 1 }, { id: 3, name: 'About me', meaning: '', count: 0 }, { id: 4, name: 'Chat', meaning: '', count: 1 }], tags: { 1: 'Weather', 3: 'Reminders & tasks', 5: 'Chat' }, categoryPost: 'down' },
+    steps: [`await __wait(700)`, `const sel = document.querySelectorAll('select.msg-tag')[2]; sel.value = 'About me'; sel.dispatchEvent(new Event('change', { bubbles: true })); await __wait(500)`],
+    checks: [
+      { name: 'the tag is put back', js: `document.querySelectorAll('select.msg-tag')[2].value === 'Chat'` },
+      { name: 'it says nothing was changed', js: `/nothing was changed/i.test(document.querySelector('.category-chips [role="alert"]').textContent)` },
+    ],
+  },
+  // ---- the Categories page (docs/ONE_CHAT_DESIGN.md, step 4) ----
+  {
+    name: 'categories-page', path: '/categories', stub: { categories: [{ id: 1, name: 'Weather', meaning: 'the weather', count: 4 }, { id: 2, name: 'Reminders & tasks', meaning: '', count: 7 }, { id: 3, name: 'About me', meaning: '', count: 0 }, { id: 4, name: 'Chat', meaning: '', count: 12 }], suggestions: [{ id: 9, name: 'School', messages: [{ id: 21, text: 'my physics exam is on Friday' }, { id: 22, text: 'quiz me on organic chemistry' }, { id: 23, text: 'what should I do this weekend' }, { id: 24, text: 'my thesis draft is due Monday' }, { id: 25, text: 'the lecture moved to 10am' }] }], unsorted: 12 },
+    steps: [`await __wait(700)`],
+    checks: [
+      { name: 'every category is listed with how many messages are in it', js: `Array.from(document.querySelectorAll('.category .memory-text')).map((p) => p.textContent.replace(/\\s+/g, ' ').trim()).join('|') === 'Weather · 4 messages|Reminders & tasks · 7 messages|About me · 0 messages|Chat · 12 messages'` },
+      { name: 'a suggestion is shown with each of its messages ticked', js: `document.querySelectorAll('.category-suggestion input[type=checkbox]:checked').length === 5` },
+      { name: 'sorting the earlier chats says how many messages are in none', js: `/Sort my earlier chats \\(12 messages in none\\)/.test(document.body.textContent)` },
+      { name: 'there is no error', js: `!document.querySelector('[role="alert"]')` },
+    ],
+  },
+  {
+    name: 'categories-look-inside', path: '/categories', stub: { categories: [{ id: 1, name: 'Weather', meaning: 'the weather', count: 4 }, { id: 2, name: 'Reminders & tasks', meaning: '', count: 7 }, { id: 3, name: 'About me', meaning: '', count: 0 }, { id: 4, name: 'Chat', meaning: '', count: 12 }], browse: [{ id: 31, text: 'weather in Berlin?', at: '2026-10-14T09:30:00+00:00', thread_id: 7, source: 'code', reply: 'Cold.' }, { id: 32, text: 'is it going to rain', at: '2026-10-13T18:05:00+00:00', thread_id: 5, source: 'person', reply: '' }] },
+    steps: [`await __wait(700)`, `document.querySelector('button[aria-label="Look inside: Weather"]').click(); await __wait(500)`],
+    checks: [
+      { name: 'it asked for that category\'s messages', js: `window.__categoryPosts.length === 1 && window.__categoryPosts[0].action === 'browse' && window.__categoryPosts[0].category_id === 1` },
+      { name: 'its messages are shown with where they are and who sorted them', js: `/weather in Berlin\\?.*sorted by Diya/.test(document.querySelector('.category-messages').textContent) && /moved by you/.test(document.querySelector('.category-messages').textContent)` },
+      { name: 'each message links to its chat', js: `document.querySelector('.category-messages a').getAttribute('href') === '/?thread=7'` },
+    ],
+  },
+  {
+    name: 'categories-rename-and-merge', path: '/categories', stub: { categories: [{ id: 1, name: 'Weather', meaning: 'the weather', count: 4 }, { id: 2, name: 'Reminders & tasks', meaning: '', count: 7 }, { id: 3, name: 'About me', meaning: '', count: 0 }, { id: 4, name: 'Chat', meaning: '', count: 12 }] },
+    steps: [
+      `await __wait(700)`,
+      `document.querySelector('button[aria-label="Rename: Chat"]').click(); await __wait(300)`,
+      `const box = document.getElementById('rename-4'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(box, 'Small talk'); box.dispatchEvent(new Event('input', { bubbles: true })); await __wait(200); box.form.requestSubmit(); await __wait(500)`,
+      `document.querySelector('button[aria-label="Merge into another: Weather"]').click(); await __wait(300)`,
+      `const pick = document.getElementById('merge-1'); pick.value = '4'; pick.dispatchEvent(new Event('change', { bubbles: true })); await __wait(200); pick.form.requestSubmit(); await __wait(500)`,
+    ],
+    checks: [
+      { name: 'the new name was sent', js: `window.__categoryPosts.some((p) => p.action === 'rename' && p.category_id === 4 && p.name === 'Small talk')` },
+      { name: 'the merge was sent: which one, and into which', js: `window.__categoryPosts.some((p) => p.action === 'merge' && p.category_id === 1 && p.into_id === 4)` },
+    ],
+  },
+  {
+    name: 'categories-answer-a-suggestion', path: '/categories', stub: { categories: [{ id: 1, name: 'Weather', meaning: 'the weather', count: 4 }, { id: 2, name: 'Reminders & tasks', meaning: '', count: 7 }, { id: 3, name: 'About me', meaning: '', count: 0 }, { id: 4, name: 'Chat', meaning: '', count: 12 }], suggestions: [{ id: 9, name: 'School', messages: [{ id: 21, text: 'my physics exam is on Friday' }, { id: 22, text: 'quiz me on organic chemistry' }, { id: 23, text: 'what should I do this weekend' }, { id: 24, text: 'my thesis draft is due Monday' }, { id: 25, text: 'the lecture moved to 10am' }] }] },
+    steps: [
+      `await __wait(700)`,
+      `document.querySelectorAll('.category-suggestion input[type=checkbox]')[2].click(); await __wait(200)`,
+      `Array.from(document.querySelectorAll('.category-suggestion button')).find((b) => /Make the category/.test(b.textContent)).click(); await __wait(500)`,
+    ],
+    checks: [
+      { name: 'yes was sent with every message still ticked, and not the one that was unticked', js: `window.__categoryPosts.length === 1 && window.__categoryPosts[0].action === 'answer_suggestion' && window.__categoryPosts[0].suggestion_id === 9 && window.__categoryPosts[0].accept === true && window.__categoryPosts[0].message_ids.join(',') === '21,22,24,25'` },
+    ],
+  },
+  {
+    name: 'categories-job-running', path: '/categories', stub: { categories: [{ id: 1, name: 'Weather', meaning: 'the weather', count: 4 }, { id: 2, name: 'Reminders & tasks', meaning: '', count: 7 }, { id: 3, name: 'About me', meaning: '', count: 0 }, { id: 4, name: 'Chat', meaning: '', count: 12 }], unsorted: 40, job: { kind: 'sort_earlier', running: true, done: 23, total: 65, note: '' } },
+    steps: [`await __wait(700)`],
+    checks: [
+      { name: 'it says how far the sorting is', js: `/Sorting your earlier chats… 23 of 65/.test(document.querySelector('.memory-notice').textContent)` },
+      { name: 'nothing else can be started meanwhile', js: `Array.from(document.querySelectorAll('.category-jobs button')).every((b) => b.disabled)` },
+    ],
+  },
+  {
+    name: 'categories-load-failed', path: '/categories', stub: { categoriesMode: 'down' }, steps: [`await __wait(700)`],
+    checks: [
+      { name: 'it says the categories could not be loaded, with a way to try again', js: `/Couldn.t load your categories/.test(document.querySelector('.empty-state h2').textContent) && !!document.querySelector('.empty-state button')` },
+    ],
+  },
   { name: 'history-list', path: '/history', stub: { threads: THREADS }, steps: [] },
   { name: 'history-empty', path: '/history', stub: { threads: [] }, steps: [] },
   { name: 'history-loading', path: '/history', stub: { threads: 'pending' }, steps: [] },
@@ -295,6 +390,7 @@ const stubSource = (stub) => `(() => {
   window.__chatMode = sc.chat || 'ok';   // ok | pending | down (network error) | 500
   window.__txMode = sc.tx || 'pending';  // pending | down | ok
   window.__historyMode = sc.historyMode || 'ok';  // ok | down | 401 | 500 | held -- how loading a saved chat's messages answers ("held" waits for window.__releaseHistory())
+  window.__categoryPosts = [];  // what was sent to POST /api/categories
   window.__historyUrls = [];  // every history address asked for (the one chat is asked for by name)
   window.__chatCalls = 0;  // how many times /api/chat was called: a message that must not be sent must not reach it
   const rf = window.fetch.bind(window);
@@ -303,6 +399,16 @@ const stubSource = (stub) => `(() => {
     const u = String(url);
     const refused = () => new Response('Missing or invalid access token', { status: 401, headers: { 'Content-Type': 'text/plain' } });
     if (u.includes('/api/threads')) return sc.threads === 'pending' ? new Promise(() => {}) : sc.threads === 'error' ? Promise.reject(new TypeError('Failed to fetch')) : sc.threads === '401' ? Promise.resolve(refused()) : sc.threads === '500' ? Promise.resolve(json({ detail: 'Internal Server Error' }, 500)) : Promise.resolve(json({ threads: sc.threads || [] }));
+    if (u.includes('/api/categories')) {
+      if (opts && opts.method === 'POST') {
+        const posted = JSON.parse(opts.body);
+        window.__categoryPosts.push(posted);
+        if (sc.categoryPost === 'down') return Promise.reject(new TypeError('Failed to fetch'));
+        if (posted.action === 'browse') return Promise.resolve(json({ messages: sc.browse || [] }));
+      } else if (sc.categoriesMode === 'down') return Promise.reject(new TypeError('Failed to fetch'));
+      return Promise.resolve(json({ categories: sc.categories || [], tags: sc.tags || {}, suggestions: sc.suggestions || [], unsorted: sc.unsorted || 0,
+        job: sc.job || { kind: null, running: false, done: 0, total: 0, note: '' } }));
+    }
     if (u.includes('/api/history/')) {
       window.__historyUrls.push(u);
       const hm = window.__historyMode;

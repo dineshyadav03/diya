@@ -121,6 +121,10 @@ class Config:
     # Relevance recall (diya_recall.py, docs/RECALL_DESIGN.md): more facts may be kept than fit in one message, and the model is told the ones for the message just sent. DIYA_RECALL=0 keeps the old
     # limit (what is kept is what is told); DIYA_MEMORY_STORE_CHARS is how many characters of facts may be kept with it on.
     recall: bool = True  # DIYA_RECALL
+    # Putting what is said into categories after each reply (diya_categories.py, docs/ONE_CHAT_DESIGN.md). DIYA_CATEGORIES=0 turns the sorting off (what was sorted stays).
+    categories: bool = True  # DIYA_CATEGORIES
+    # Studying a public GitHub repository when asked, read-only, with the evidence shown (diya_repostudy.py, docs/REPO_STUDY_DESIGN.md). DIYA_REPO_STUDY=0 turns it off.
+    repo_study: bool = True  # DIYA_REPO_STUDY
     # With a second, suspicious privacy judge (DIYA_PRIVACY_MODEL), its "unsure" no longer holds a fact back when the main model says OK (docs/AUTO_MEMORY_DESIGN.md, 8.5): measured on the owner's own messages the
     # suspicious judge said "unsure" about half of ordinary facts and nothing was remembered. DIYA_PRIVACY_UNSURE_ASKS=1 brings the old, stricter behaviour back.
     privacy_unsure_asks: bool = False  # DIYA_PRIVACY_UNSURE_ASKS
@@ -289,7 +293,7 @@ def load_config(env=None) -> Config:
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
                         ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
-                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("knowledge_chat", "DIYA_KNOWLEDGE_CHAT"), ("mcp", "DIYA_MCP"), ("privacy_unsure_asks", "DIYA_PRIVACY_UNSURE_ASKS")):
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("categories", "DIYA_CATEGORIES"), ("repo_study", "DIYA_REPO_STUDY"), ("knowledge_chat", "DIYA_KNOWLEDGE_CHAT"), ("mcp", "DIYA_MCP"), ("privacy_unsure_asks", "DIYA_PRIVACY_UNSURE_ASKS")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag

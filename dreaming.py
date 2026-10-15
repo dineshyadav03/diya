@@ -302,6 +302,37 @@ class Dreamer:
 
         return diya_autonomy.apply(memory, private=self._privacy_judge(), replaces=self._replace_judge(memory), corrects=self._correction_judge())
 
+    def look_for_categories(self, now=None, max_sorted=200):
+        """Each cycle, if categories are on (DIYA_CATEGORIES): sort the person's messages that are in no category yet (up to `max_sorted` a cycle, so the earlier chats are done over a few), and at most
+        once a day look for a new category to suggest (diya_category_ideas), unless one is already waiting. Never stops Dreaming: a failure is written to the log and the next cycle tries again."""
+        if not self.config.categories:
+            return
+        try:
+            import threading
+
+            import diya_categories
+            import diya_category_ideas
+
+            book = diya_categories.Book(self.store)
+            todo = book.unsorted(max_sorted)
+            done = 0
+            for message_id, text in todo:
+                with diya_categories.SORT_LOCK:
+                    try:
+                        diya_categories.sort(book, self.client, self.config.model, message_id, text, ())
+                        done += 1
+                    except diya_categories.CategoryError:
+                        pass
+            if done:
+                print(f"Categories: sorted {done} message(s) that were in none.")
+            today = (now or datetime.now()).strftime("%Y-%m-%d")
+            if book.state("category_ideas_on") != today and not book.open_suggestions():
+                book.set_state("category_ideas_on", today)  # one look a day, whatever it finds
+                made = diya_category_ideas.suggest(book, self.client, self.config.model)
+                print("Categories: I have a new category to suggest to you." if made else "Categories: nothing stood out that the categories do not cover.")
+        except Exception as exc:  # noqa: BLE001 -- the log is where a headless run says what went wrong
+            print(f"[error] Sorting into categories failed ({type(exc).__name__}: {exc}). What was sorted is kept; will retry next cycle.")
+
     def remember_on_its_own(self):
         """When DIYA_AUTO_MEMORY is on, carry what is staged into the store and put every candidate in its lane (diya_autonomy.apply):
         remembered, asked about, or not kept. Off, this does nothing, and what was staged waits for a person as it always did. It never
@@ -427,6 +458,7 @@ def main():
                 dreamer = Dreamer(config)
                 dreamer.dream_cycle()
                 dreamer.remember_on_its_own()
+                dreamer.look_for_categories()
             except Exception:
                 traceback.print_exc()
                 return 1

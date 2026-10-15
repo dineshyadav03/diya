@@ -448,6 +448,7 @@ def chat_parts(tmp_path):
         config = dataclasses.replace(
             diya_config.load_config({}), db_path=str(tmp_path / "w.db"), dream_log_path=str(tmp_path / "log"), dream_state_path=str(tmp_path / "state.json"),
             dream_pending_path=str(tmp_path / "pending.jsonl"), profile_path=str(tmp_path / "profile.txt"), auto_memory=auto_memory, require_token=False,
+            categories=False,  # sorting each message asks the model once more; these tests count the model's calls, and tests/test_categories.py has the sorting
         )
         model = client or ByQuestionClient(extraction=["- likes tea in the morning"])
         agent = diya.Agent(config, client=model)

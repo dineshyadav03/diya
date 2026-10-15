@@ -23,6 +23,7 @@ const TOOL_LABELS = {
   add_task: 'added a task',
   list_tasks: 'checked your tasks',
   list_files: 'listed files',
+  study_repo: 'studied a repository',
 }
 
 // A tool of an MCP server the person approved (docs/MCP_DESIGN.md) is named mcp_<server>_<tool>: the chip says a program outside Diya was used, and which one.
@@ -71,6 +72,17 @@ function loadVoices() {
   })
 }
 
+// The exchanges of one category: each of the person's messages that is in it, and everything after it up to the next message of theirs (the reply, the tools it used, what memory learned).
+function inCategory(messages, tags, name) {
+  const kept = []
+  let inside = false
+  for (const m of messages) {
+    if (m.role === 'user') inside = Number.isInteger(m.serverId) && tags[m.serverId] === name
+    if (inside) kept.push(m)
+  }
+  return kept
+}
+
 export default function ChatPage() {
   const [messages, setMessages] = useState([])
   // Speaking is opt-in: off until the user ticks "Speak", then remembered per browser.
@@ -99,6 +111,13 @@ export default function ChatPage() {
   const [earlierChat, setEarlierChat] = useState(false)
   // True when the one chat has older messages than the page was given (it keeps the newest few hundred); History has the rest.
   const [olderLeft, setOlderLeft] = useState(false)
+  // Diya sorts each message of the person's into a category after replying (docs/ONE_CHAT_DESIGN.md): the list of categories, where each message is (message id -> name), the category the chat is
+  // being looked at by (null = all of it), and why a change of category did not happen.
+  const [categories, setCategories] = useState([])
+  const [tags, setTags] = useState({})
+  const [lookingAt, setLookingAt] = useState(null)
+  const [tagProblem, setTagProblem] = useState('')
+  const [suggestions, setSuggestions] = useState(0) // how many new categories Diya has suggested and the person has not answered
   // Which chat the page is showing: a look at what memory learned that finishes after the chat was changed must not be added to the new one.
   const chatEpochRef = useRef(0)
   // The questions Diya has for the person right now, and the answer being sent (a question id) or the one being typed (an edit).
@@ -148,8 +167,13 @@ export default function ChatPage() {
         setOlderLeft(data.more_before === true)
         const loaded = data.messages
           .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m) => ({ role: m.role, text: m.content }))
+          .map((m) => ({ role: m.role, text: m.content, serverId: Number.isInteger(m.id) ? m.id : undefined }))
+        const found = {}
+        for (const m of data.messages) if (m.role === 'user' && Number.isInteger(m.id) && typeof m.category === 'string') found[m.id] = m.category
+        setTags(found)
+        setLookingAt(null)
         setMessages(loaded)
+        loadCategories(data.is_main !== false) // an earlier chat's tags came with it; only the one chat's are looked for again
       })
       .catch(() => {
         if (!stale()) setLoadProblem(describeLoadFailure(status))
@@ -174,6 +198,39 @@ export default function ChatPage() {
   }
   function setFailed(id, failed) {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, failed } : m)))
+  }
+
+  // The categories, and where the newest messages are. A failed look shows nothing: the tags are a courtesy and the chat does not need them.
+  async function loadCategories(withTags = true) {
+    try {
+      const response = await fetch('/api/categories')
+      const body = response.ok ? await response.json() : null
+      if (body && Array.isArray(body.categories)) {
+        setCategories(body.categories.filter((c) => typeof c.name === 'string'))
+        if (withTags && body.tags && typeof body.tags === 'object') setTags(body.tags)
+        setSuggestions(Array.isArray(body.suggestions) ? body.suggestions.length : 0)
+      }
+    } catch {
+      // nothing to show
+    }
+  }
+
+  // The person says a message belongs elsewhere: shown at once, put back if it could not be kept.
+  async function moveMessage(serverId, name) {
+    const before = tags[serverId]
+    setTagProblem('')
+    setTags((shown) => ({ ...shown, [serverId]: name }))
+    try {
+      const response = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'assign', message_id: serverId, category: name }),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    } catch {
+      setTags((shown) => ({ ...shown, [serverId]: before }))
+      setTagProblem('Couldn’t change that category. Nothing was changed.')
+    }
   }
 
   // What Diya wrote first. A failed look shows nothing: the messages are also in the chat they were written in, which History lists.
@@ -391,6 +448,11 @@ export default function ChatPage() {
         return
       }
       setFailed(id, false)
+      if (Number.isInteger(data.message_id)) {
+        setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, serverId: data.message_id } : m)))
+        setTimeout(loadCategories, 4000) // Diya sorts the message after replying; look for where it went, and again for a model that was busy
+        setTimeout(loadCategories, 15000)
+      }
       if (data.thread_id != null) {
         threadIdRef.current = data.thread_id
       }
@@ -412,6 +474,7 @@ export default function ChatPage() {
     // The composer is off in these states (see `unavailable`); this is the backstop. A message sent
     // into a chat that isn't on screen would be added to a thread the person can't see.
     if (loadingChat || loadProblem || earlierChat) return
+    setLookingAt(null) // a new message is shown among everything, not hidden by the category being looked at
     const id = addMsg('user', text)
     await sendMessage(text, id)
   }
@@ -420,6 +483,11 @@ export default function ChatPage() {
     setFailed(id, false)
     sendMessage(text, id)
   }
+
+  const shownMessages = lookingAt ? inCategory(messages, tags, lookingAt) : messages
+  const counts = {}
+  for (const name of Object.values(tags)) counts[name] = (counts[name] || 0) + 1
+  const chips = categories.filter((c) => counts[c.name]).map((c) => [c.name, counts[c.name]])
 
   return (
     <div className="chat">
@@ -444,6 +512,26 @@ export default function ChatPage() {
           </label>
         </div>
       </div>
+      {chips.length > 0 && !earlierChat && (
+        <div className="category-chips" role="group" aria-label="Look at the chat by category">
+          <button type="button" className="chip" aria-pressed={lookingAt === null} onClick={() => setLookingAt(null)}>
+            All
+          </button>
+          {chips.map(([name, count]) => (
+            <button key={name} type="button" className="chip" aria-pressed={lookingAt === name} onClick={() => setLookingAt(name)}>
+              {name} <span className="chip-count">{count}</span>
+            </button>
+          ))}
+          {tagProblem && (
+            <span className="learned-problem" role="alert">
+              {tagProblem}
+            </span>
+          )}
+          <Link href="/categories" className="chip chip-link">
+            {suggestions > 0 ? 'A new category is suggested' : 'Edit categories'}
+          </Link>
+        </div>
+      )}
       {earlierChat && (
         <div className="earlier-chat-bar" role="status">
           <span>This is an earlier chat. You can read it here; Diya&rsquo;s one chat is where you write.</span>
@@ -543,7 +631,7 @@ export default function ChatPage() {
             <p>Type below, or tap the mic to talk.</p>
           </div>
         ))}
-        {messages.map((m, i) => {
+        {shownMessages.map((m, i) => {
           if (m.role === 'tools') {
             return (
               <div key={m.id ?? 'h' + i} className="msg system tool-recap">
@@ -593,6 +681,23 @@ export default function ChatPage() {
                   <button type="button" className="cta small" onClick={() => retrySend(m.id, m.text)}>
                     Try again
                   </button>
+                </div>
+              </Fragment>
+            )
+          }
+          if (m.role === 'user' && Number.isInteger(m.serverId) && tags[m.serverId] && categories.length > 0) {
+            return (
+              <Fragment key={m.id ?? 'h' + i}>
+                <div className="msg user">{m.text}</div>
+                <div className="msg-tag-row">
+                  <select className="msg-tag" aria-label="Category of this message" title="Change this message’s category" value={tags[m.serverId]} onChange={(e) => moveMessage(m.serverId, e.target.value)}>
+                    {categories.some((c) => c.name === tags[m.serverId]) ? null : <option value={tags[m.serverId]}>{tags[m.serverId]}</option>}
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </Fragment>
             )

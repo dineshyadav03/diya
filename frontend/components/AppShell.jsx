@@ -23,6 +23,7 @@ export const NAV = [
     label: 'Assistant',
     items: [
       { href: '/', name: 'Chat' },
+      { href: '/categories', name: 'Categories' },
       { href: '/history', name: 'History' },
       { href: '/memory', name: 'Memory' },
       { href: '/knowledge', name: 'Knowledge' },

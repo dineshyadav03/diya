@@ -105,12 +105,11 @@ def test_callers_asking_at_the_same_moment_get_the_same_chat_and_only_one_is_mad
 
 def test_the_tail_of_a_chat_is_its_newest_messages_oldest_first_and_says_when_older_ones_were_left_out(store):
     chat = store.create_thread()
-    for number in range(5):
-        store.add_message(chat, "user", f"m{number}")
-    assert store.get_history_tail(chat, 5) == ([{"role": "user", "content": f"m{n}"} for n in range(5)], False)  # exactly as many as asked for: nothing left out
-    tail, more = store.get_history_tail(chat, 3)
-    assert [m["content"] for m in tail] == ["m2", "m3", "m4"] and more is True
-    assert store.get_history_tail(chat, 50)[1] is False and store.get_history_tail(store.create_thread(), 3) == ([], False)
+    ids = [store.add_message(chat, "user", f"m{number}") for number in range(5)]
+    assert store.get_messages_tail(chat, 5) == ([{"id": ids[n], "role": "user", "content": f"m{n}"} for n in range(5)], False)  # exactly as many as asked for: nothing left out
+    tail, more = store.get_messages_tail(chat, 3)
+    assert [m["content"] for m in tail] == ["m2", "m3", "m4"] and [m["id"] for m in tail] == ids[2:] and more is True
+    assert store.get_messages_tail(chat, 50)[1] is False and store.get_messages_tail(store.create_thread(), 3) == ([], False)
 
 
 # ---- the web routes -----------------------------------------------------------------------------------------------------------
