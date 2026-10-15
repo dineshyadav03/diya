@@ -384,14 +384,14 @@ def test_forwarding_is_manual_about_redirects_and_a_get_has_no_body():
 
 
 @needs_node
-@pytest.mark.parametrize("thread_id", ["..", "5/../../threads", "%2e%2e", "5?x=1", "5#x", "abc", "", "-1", "1e3", " 5", "5 ", "٣", "1" * 19])
+@pytest.mark.parametrize("thread_id", ["..", "5/../../threads", "%2e%2e", "5?x=1", "5#x", "abc", "", "-1", "1e3", " 5", "5 ", "٣", "1" * 19, "main2", "MAIN", "main/../x"])
 def test_a_thread_id_that_is_not_a_whole_number_is_refused_before_anything_is_sent(thread_id):
     out = run_harness({"mode": "route", "env": {"DIYA_TOKEN": TOKEN}, "calls": [call("history", "GET", params={"thread_id": thread_id})]})
     assert out["results"][0]["status"] == 404 and out["captured"] == []
 
 
 @needs_node
-@pytest.mark.parametrize("thread_id", ["5", "007", "1" * 18])
+@pytest.mark.parametrize("thread_id", ["5", "007", "1" * 18, "main"])  # `main` is the one chat (docs/ONE_CHAT_DESIGN.md)
 def test_a_whole_number_thread_id_is_forwarded(thread_id):
     out = run_harness({"mode": "route", "env": {}, "calls": [call("history", "GET", params={"thread_id": thread_id})]})
     assert [c["url"] for c in out["captured"]] == [f"/api/history/{thread_id}"]

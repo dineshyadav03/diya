@@ -95,7 +95,6 @@ const SCENARIOS = [
   },
   { name: 'chat-thinking', path: '/', stub: { chat: 'pending' }, steps: [`await __send("What's the weather in London?", 300)`] },
   { name: 'chat-typing', path: '/', stub: {}, steps: [`await __type("Remind me to call the dentist on Monday")`] },
-  { name: 'chat-menu-open', path: '/', stub: {}, steps: [`document.querySelector('button[aria-label="New chat"]').click(); await __wait(300)`] },
   { name: 'chat-listening', path: '/', stub: { mic: 'ok' }, steps: [`await __micDown(700)`] },
   { name: 'chat-transcribing', path: '/', stub: { mic: 'ok' }, steps: [`await __micDown(700); await __micUp(600)`] },
   {
@@ -170,19 +169,14 @@ const SCENARIOS = [
     ],
   },
   {
-    // Starting a new chat while a saved one is still loading: the old load must not land in it.
-    name: 'chat-resume-new-chat-while-loading', path: '/',
-    stub: { thread: '55', historyMode: 'held', history: [{ role: 'user', content: 'earlier question' }, { role: 'assistant', content: 'earlier answer' }] },
-    steps: [
-      `document.querySelector('button[aria-label="New chat"]').click(); await __wait(300)`,
-      `document.querySelector('button[aria-label="Confirm new chat"]').click(); await __wait(600)`,
-      `window.__releaseHistory(); await __wait(700)`,
-    ],
+    // Diya has one chat (docs/ONE_CHAT_DESIGN.md): a chat opened from History that is not it is shown under a bar that says so, and nothing can be written in it.
+    name: 'chat-earlier-read-only', path: '/?thread=7',
+    stub: { earlier: true, history: [{ role: 'user', content: 'earlier question' }, { role: 'assistant', content: 'earlier answer' }] },
+    steps: [`await __wait(700)`],
     checks: [
-      { name: 'the old chat did not land in the new one', js: `document.querySelectorAll('#log .msg').length === 0` },
-      { name: 'the ordinary empty chat is showing', js: `/ask diya anything/i.test(document.querySelector('.empty-state h1').textContent)` },
-      { name: 'the composer is usable', js: `!document.querySelector('.composer-input').disabled` },
-      { name: 'the old thread is forgotten', js: `localStorage.getItem('diya_thread_id') === null` },
+      { name: 'the earlier messages are shown', js: `document.querySelectorAll('#log .msg').length === 2` },
+      { name: 'a bar says it is an earlier chat and links back', js: `/earlier chat/i.test(document.querySelector('.earlier-chat-bar').textContent) && document.querySelector('.earlier-chat-bar a').getAttribute('href') === '/'` },
+      { name: 'the composer is off and says why', js: `document.querySelector('.composer-input').disabled && /earlier chat/i.test(document.querySelector('.composer-input').placeholder)` },
     ],
   },
   {
@@ -191,13 +185,14 @@ const SCENARIOS = [
     checks: [...RESUME_FAIL_CHECKS, { name: 'exactly one error state (not stacked)', js: `document.querySelectorAll('.empty-state').length === 1` }],
   },
   {
-    name: 'chat-resume-failed-new-chat', path: '/', stub: { thread: '55', historyMode: '401' },
-    steps: [`document.querySelector('button[aria-label="New chat"]').click(); await __wait(300)`, `document.querySelector('button[aria-label="Confirm new chat"]').click(); await __wait(600)`],
+    name: 'chat-main-opens-by-name', path: '/', stub: { history: [{ role: 'user', content: 'earlier question' }, { role: 'assistant', content: 'earlier answer' }] },
+    steps: [`await __wait(700)`],
     checks: [
-      { name: 'starting a new chat clears the error', js: `!document.querySelector('.empty-state[role="alert"]')` },
-      { name: 'the ordinary empty state is back', js: `/ask diya anything/i.test(document.querySelector('.empty-state h1').textContent)` },
-      { name: 'the old thread is forgotten', js: `localStorage.getItem('diya_thread_id') === null` },
-      { name: 'the composer is usable again', js: `!document.querySelector('.composer-input').disabled` },
+      { name: 'the one chat was asked for by name, not by a saved id', js: `window.__historyUrls.length === 1 && window.__historyUrls[0].endsWith('/api/history/main')` },
+      { name: 'its messages are shown', js: `document.querySelectorAll('#log .msg').length === 2` },
+      { name: 'there is no New chat button', js: `!document.querySelector('button[aria-label="New chat"]')` },
+      { name: 'no bar says it is an earlier chat', js: `!document.querySelector('.earlier-chat-bar')` },
+      { name: 'the composer is usable', js: `!document.querySelector('.composer-input').disabled` },
     ],
   },
   { name: 'history-list', path: '/history', stub: { threads: THREADS }, steps: [] },
@@ -240,7 +235,6 @@ const SCENARIOS = [
       ...FAIL_CHECKS,
       { name: 'an error status is reported as an error, with its number', js: `/HTTP 500/.test(document.querySelector('.send-error').textContent)` },
       { name: 'no empty assistant bubble is shown', js: `!Array.from(document.querySelectorAll('.msg.assistant:not(.thinking-row)')).some((m) => !m.textContent.trim())` },
-      { name: 'the saved thread id is not corrupted ("undefined")', js: `localStorage.getItem('diya_thread_id') !== 'undefined'` },
     ],
   },
   {
@@ -301,6 +295,7 @@ const stubSource = (stub) => `(() => {
   window.__chatMode = sc.chat || 'ok';   // ok | pending | down (network error) | 500
   window.__txMode = sc.tx || 'pending';  // pending | down | ok
   window.__historyMode = sc.historyMode || 'ok';  // ok | down | 401 | 500 | held -- how loading a saved chat's messages answers ("held" waits for window.__releaseHistory())
+  window.__historyUrls = [];  // every history address asked for (the one chat is asked for by name)
   window.__chatCalls = 0;  // how many times /api/chat was called: a message that must not be sent must not reach it
   const rf = window.fetch.bind(window);
   const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json' } });
@@ -309,12 +304,13 @@ const stubSource = (stub) => `(() => {
     const refused = () => new Response('Missing or invalid access token', { status: 401, headers: { 'Content-Type': 'text/plain' } });
     if (u.includes('/api/threads')) return sc.threads === 'pending' ? new Promise(() => {}) : sc.threads === 'error' ? Promise.reject(new TypeError('Failed to fetch')) : sc.threads === '401' ? Promise.resolve(refused()) : sc.threads === '500' ? Promise.resolve(json({ detail: 'Internal Server Error' }, 500)) : Promise.resolve(json({ threads: sc.threads || [] }));
     if (u.includes('/api/history/')) {
+      window.__historyUrls.push(u);
       const hm = window.__historyMode;
       if (hm === 'down') return Promise.reject(new TypeError('Failed to fetch'));
       if (hm === '401') return Promise.resolve(refused());
       if (hm === '500') return Promise.resolve(json({ detail: 'Internal Server Error' }, 500));
-      if (hm === 'held') return new Promise((r) => { window.__releaseHistory = () => r(json({ messages: sc.history || [] })); });
-      return new Promise((r) => setTimeout(() => r(json({ messages: sc.history || [] })), sc.historyDelay || 0));
+      if (hm === 'held') return new Promise((r) => { window.__releaseHistory = () => r(json({ thread_id: 7, is_main: !sc.earlier, more_before: false, messages: sc.history || [] })); });
+      return new Promise((r) => setTimeout(() => r(json({ thread_id: 7, is_main: !sc.earlier, more_before: false, messages: sc.history || [] })), sc.historyDelay || 0));
     }
     if (u.includes('/api/transcribe')) return window.__txMode === 'down' ? Promise.reject(new TypeError('Failed to fetch')) : window.__txMode === '401' ? Promise.resolve(refused()) : window.__txMode === '500' ? Promise.resolve(json({ detail: 'Internal Server Error' }, 500)) : window.__txMode === 'ok' ? Promise.resolve(json({ text: 'what is on my list today' })) : new Promise(() => {});
     if (u.includes('/api/chat')) {
@@ -332,7 +328,6 @@ const stubSource = (stub) => `(() => {
   if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = sc.mic === 'ok'
     ? async () => { const ac = new AudioContext(); const d = ac.createMediaStreamDestination(); const o = ac.createOscillator(); o.connect(d); o.start(); return d.stream; }
     : async () => { throw new Error('Permission denied'); };
-  if (sc.thread) localStorage.setItem('diya_thread_id', sc.thread);
   ${THEME_JS}
   window.__emptySeen = 0; setInterval(() => { if (document.querySelector('.empty-state')) window.__emptySeen++; }, 20);
   // Next's dev-only "N" badge is tooling, not UI; keep it out of the screenshots (and any variant CSS).

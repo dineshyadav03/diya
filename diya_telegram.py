@@ -320,11 +320,7 @@ class AgentAsker:
 
     def __call__(self, text):
         store = self.agent.store
-        thread_id = self.state.get("thread_id")
-        thread_id = int(thread_id) if thread_id is not None else None
-        if thread_id is None:
-            thread_id = store.create_thread()
-            self.state.set("thread_id", thread_id)
+        thread_id = store.main_thread()  # the phone and the page are one conversation (docs/ONE_CHAT_DESIGN.md)
         saved = store.get_messages(thread_id)
         history = self.agent.with_profile([{"role": m["role"], "content": m["content"]} for m in saved])
         message_id = store.add_message(thread_id, "user", text)

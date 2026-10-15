@@ -438,8 +438,18 @@ def test_the_turn_is_the_chats_own_in_one_thread_that_is_kept(tmp_path):
     state = tg.State(agent.store)
     asker = tg.AgentAsker(agent, state)
     assert asker("one") == "first answer" and asker("two") == "second answer"
-    thread = int(state.get("thread_id"))
+    thread = agent.store.main_thread()  # the phone is the one chat the page shows (docs/ONE_CHAT_DESIGN.md)
     assert [(m["role"], m["content"]) for m in agent.store.get_messages(thread)] == [("user", "one"), ("assistant", "first answer"), ("user", "two"), ("assistant", "second answer")]
+    assert len(agent.store.list_threads()) == 1
+
+
+def test_a_message_from_the_phone_goes_into_the_chat_the_page_already_has(tmp_path):
+    agent = make_agent(tmp_path, ["phone answer"])
+    earlier = agent.store.create_thread()
+    agent.store.add_message(earlier, "user", "typed on the laptop")
+    agent.store.add_message(earlier, "assistant", "laptop answer")
+    assert tg.AgentAsker(agent, tg.State(agent.store))("typed on the phone") == "phone answer"
+    assert [m["content"] for m in agent.store.get_messages(earlier)] == ["typed on the laptop", "laptop answer", "typed on the phone", "phone answer"]
     assert len(agent.store.list_threads()) == 1
 
 
@@ -448,7 +458,7 @@ def test_a_failed_turn_leaves_the_question_saved_and_raises(tmp_path):
     asker = tg.AgentAsker(agent, tg.State(agent.store))
     with pytest.raises(Exception):
         asker("hello")
-    assert [m["content"] for m in agent.store.get_messages(int(tg.State(agent.store).get("thread_id")))] == ["hello"]
+    assert [m["content"] for m in agent.store.get_messages(agent.store.main_thread())] == ["hello"]
 
 
 # ---- the loop ---------------------------------------------------------------------------------------------------------------------
@@ -884,7 +894,7 @@ def test_the_turn_tells_the_agent_which_thread_and_message_it_belongs_to(tmp_pat
 
     state = tg.State(Agent.store)
     assert tg.AgentAsker(Agent(), state)("hello") == "answer"
-    assert seen["thread_id"] == int(state.get("thread_id")) and seen["message_id"] == Agent.store.get_messages(seen["thread_id"])[0]["id"] and seen["history"][-1] == {"role": "user", "content": "hello"}
+    assert seen["thread_id"] == Agent.store.main_thread() and seen["message_id"] == Agent.store.get_messages(seen["thread_id"])[0]["id"] and seen["history"][-1] == {"role": "user", "content": "hello"}
 
 
 def test_a_token_file_with_anything_after_the_token_is_not_a_token(tmp_path):

@@ -196,6 +196,9 @@ h1, h2, h3 { letter-spacing: -0.01em; }
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   padding: 10px 24px; border-bottom: 1px solid var(--border);
 }
+/* Diya has one chat (docs/ONE_CHAT_DESIGN.md): an earlier chat is shown read-only under a bar saying so, and a one-line note when older messages are left out. */
+.earlier-chat-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 24px; border-bottom: 1px solid var(--border); background: var(--surface); color: var(--text-dim); font-size: 14px; }
+.older-left { text-align: center; padding: 6px 0 2px; }
 .chat-title { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); }
 .chat-tools { display: flex; align-items: center; gap: 8px; }
 .quiet-btn {

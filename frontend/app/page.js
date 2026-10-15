@@ -95,6 +95,10 @@ export default function ChatPage() {
   // that has since been started over.
   const loadSeqRef = useRef(0)
   const threadIdRef = useRef(null)
+  // True when the page is showing an EARLIER chat (opened from History): it can be read, not written in. Diya has one chat; this is where it was before.
+  const [earlierChat, setEarlierChat] = useState(false)
+  // True when the one chat has older messages than the page was given (it keeps the newest few hundred); History has the rest.
+  const [olderLeft, setOlderLeft] = useState(false)
   // Which chat the page is showing: a look at what memory learned that finishes after the chat was changed must not be added to the new one.
   const chatEpochRef = useRef(0)
   // The questions Diya has for the person right now, and the answer being sent (a question id) or the one being typed (an edit).
@@ -108,14 +112,10 @@ export default function ChatPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     setSpeakOn(localStorage.getItem('diya_speak') === '1')
-    const urlThread = params.get('thread')
-    const threadId = urlThread || localStorage.getItem('diya_thread_id')
-    if (urlThread) localStorage.setItem('diya_thread_id', urlThread)
-    threadIdRef.current = threadId
-
-    // If opened from History, load and show that thread's real past messages.
-    if (threadId) loadThread(threadId)
-    else setReady(true)
+    // Diya has ONE chat (docs/ONE_CHAT_DESIGN.md): the server knows which. An earlier chat is opened only by a link that names it (History), and is read, not written in.
+    const urlThread = /^[0-9]{1,18}$/.test(params.get('thread') || '') ? params.get('thread') : null
+    threadIdRef.current = urlThread
+    loadThread(urlThread || 'main')
     loadQuestions()
     loadNotes()
     const timer = setInterval(() => {
@@ -143,6 +143,9 @@ export default function ChatPage() {
       .then((data) => {
         if (stale()) return
         if (!Array.isArray(data.messages)) throw new Error('not a history')
+        if (Number.isInteger(data.thread_id)) threadIdRef.current = data.thread_id
+        setEarlierChat(data.is_main === false) // an API that does not say (an older one) is taken to have given the chat that was asked for
+        setOlderLeft(data.more_before === true)
         const loaded = data.messages
           .filter((m) => m.role === 'user' || m.role === 'assistant')
           .map((m) => ({ role: m.role, text: m.content }))
@@ -363,7 +366,6 @@ export default function ChatPage() {
               // the chat the message is in is known from the first line, so a reply that fails half way still leaves the page knowing it
               if (Number.isInteger(event.thread_id)) {
                 threadIdRef.current = event.thread_id
-                localStorage.setItem('diya_thread_id', event.thread_id)
               }
             },
             onDelta: (piece) => setStreamText((shown) => shown + piece),
@@ -382,7 +384,6 @@ export default function ChatPage() {
         // a new chat): remember that chat, so trying again goes to it and does not start a second one.
         if (failure.threadId !== undefined) {
           threadIdRef.current = failure.threadId
-          localStorage.setItem('diya_thread_id', failure.threadId)
         }
         setStreamText('') // whatever had been written of a reply that did not finish is not shown as if it were one
         // the reason is stored on the message (a string, so still truthy) and shown as its error text
@@ -392,7 +393,6 @@ export default function ChatPage() {
       setFailed(id, false)
       if (data.thread_id != null) {
         threadIdRef.current = data.thread_id
-        localStorage.setItem('diya_thread_id', data.thread_id)
       }
       const usedTools = [...new Set(data.tools_called || [])].filter((name) => toolLabel(name))
       if (usedTools.length) {
@@ -411,7 +411,7 @@ export default function ChatPage() {
   async function handleSend(text) {
     // The composer is off in these states (see `unavailable`); this is the backstop. A message sent
     // into a chat that isn't on screen would be added to a thread the person can't see.
-    if (loadingChat || loadProblem) return
+    if (loadingChat || loadProblem || earlierChat) return
     const id = addMsg('user', text)
     await sendMessage(text, id)
   }
@@ -419,18 +419,6 @@ export default function ChatPage() {
   function retrySend(id, text) {
     setFailed(id, false)
     sendMessage(text, id)
-  }
-
-  function handleNewChat() {
-    threadIdRef.current = null
-    localStorage.removeItem('diya_thread_id')
-    window.history.replaceState(null, '', '/')
-    loadSeqRef.current += 1 // whatever load is still in flight is for the chat being left
-    chatEpochRef.current += 1
-    setLoadProblem('') // starting over is the way out of a chat that wouldn't open
-    setLoadingChat(false)
-    setReady(true)
-    setMessages([])
   }
 
   return (
@@ -456,7 +444,18 @@ export default function ChatPage() {
           </label>
         </div>
       </div>
+      {earlierChat && (
+        <div className="earlier-chat-bar" role="status">
+          <span>This is an earlier chat. You can read it here; Diya&rsquo;s one chat is where you write.</span>
+          <a className="cta small" href="/">
+            Back to your chat
+          </a>
+        </div>
+      )}
       <div id="log" ref={logRef}>
+        {olderLeft && !earlierChat && (
+          <p className="memory-dim older-left">Older messages are kept in <Link href="/history">History</Link>.</p>
+        )}
         {notes.length > 0 && (
           <section className="question-cards note-cards" aria-label="Messages from Diya">
             {notes.map((note) => (
@@ -533,7 +532,7 @@ export default function ChatPage() {
             <img src="/diya-flame.svg" alt="" className="empty-mark" />
             <h1>Couldn&rsquo;t load this chat</h1>
             <p>{loadProblem}</p>
-            <button type="button" className="cta" onClick={() => loadThread(threadIdRef.current)}>
+            <button type="button" className="cta" onClick={() => loadThread(threadIdRef.current || 'main')}>
               Try again
             </button>
           </div>
@@ -615,14 +614,15 @@ export default function ChatPage() {
       <VoiceBar
         onSend={handleSend}
         onSystemMessage={(t) => addMsg('system', t)}
-        onNewChat={handleNewChat}
         processing={thinking || speaking}
         unavailable={
           loadingChat
             ? 'Loading this chat…'
             : loadProblem
-              ? 'This chat didn’t load. Try again, or start a new one.'
-              : ''
+              ? 'This chat didn’t load. Try again.'
+              : earlierChat
+                ? 'This is an earlier chat. Go back to your chat to write.'
+                : ''
         }
       />
     </div>

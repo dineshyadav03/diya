@@ -94,12 +94,13 @@ def test_threads_and_history_come_from_the_agents_own_store(config):
     assert [x["id"] for x in threads] == [t, empty]
     assert threads[0]["preview"] == "first question"
     assert client.get(f"/api/history/{t}").json() == {
+        "thread_id": t, "is_main": True, "more_before": False,  # t has the newest message, so it is the one chat
         "messages": [
             {"role": "user", "content": "first question"},
             {"role": "assistant", "content": "first answer"},
         ]
     }
-    assert client.get("/api/history/9999").json() == {"messages": []}
+    assert client.get("/api/history/9999").json() == {"thread_id": 9999, "is_main": False, "more_before": False, "messages": []}
 
 
 def test_chat_without_a_thread_creates_one_and_saves_both_messages(config):
@@ -260,8 +261,9 @@ def test_the_same_words_as_an_assistant_message_are_not_a_retry(config):
 
 def test_the_same_words_in_another_chat_are_never_a_retry(config):
     client, agent, _, failed = failing_then(config, text_reply("Hi!"))
-    other = client.post("/api/chat", json={"message": "is it raining?"}).json()  # a new chat, same words
-    assert other["thread_id"] != failed["thread_id"]
+    elsewhere = agent.store.create_thread()
+    other = client.post("/api/chat", json={"thread_id": elsewhere, "message": "is it raining?"}).json()  # a chat that was named, same words
+    assert other["thread_id"] == elsewhere != failed["thread_id"]
     assert [m["role"] for m in agent.store.get_history(failed["thread_id"])] == ["user"]
 
 

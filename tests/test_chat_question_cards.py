@@ -15,7 +15,7 @@ def block(start, end):
 
 
 def test_the_page_asks_for_questions_when_it_opens_and_again_after_each_reply():
-    assert "    else setReady(true)\n    loadQuestions()" in PAGE
+    assert "    loadThread(urlThread || 'main')\n    loadQuestions()" in PAGE
     assert "const QUESTIONS_AFTER_REPLY_MS = 20000" in PAGE and "setTimeout(loadQuestions, QUESTIONS_AFTER_REPLY_MS)" in PAGE
 
 

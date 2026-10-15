@@ -3,6 +3,7 @@ import hmac
 import json
 import os
 import queue
+import re
 import secrets
 import sys
 import tempfile
@@ -10,7 +11,7 @@ import threading
 import traceback
 
 import openai
-from fastapi import BackgroundTasks, FastAPI, File, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
@@ -229,6 +230,9 @@ class BodyLimitMiddleware:
         await PlainTextResponse(message, status_code=413)(scope, receive, send)
 
 
+MAX_PAGE_MESSAGES = 300  # how many of the one chat's newest messages the page is given; the rest are one "earlier" away
+
+
 class ChatRequest(BaseModel):
     thread_id: int | None = None
     message: str
@@ -323,11 +327,24 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
 
     @app.get("/api/threads")
     def api_threads():
-        return {"threads": agent.store.list_threads_with_preview()}
+        main = agent.store.current_main_thread()  # reading the list makes no chat
+        return {"threads": [dict(thread, main=thread["id"] == main) for thread in agent.store.list_threads_with_preview()]}
 
     @app.get("/api/history/{thread_id}")
-    def api_history(thread_id: int):
-        return {"messages": agent.store.get_history(thread_id)}
+    def api_history(thread_id: str):
+        """A chat's messages. `main` is the one chat (docs/ONE_CHAT_DESIGN.md): its newest MAX_PAGE_MESSAGES, with `more_before` true when older ones are left out. Any other whole number is an
+        earlier chat, read as before. `is_main` tells the page whether it may write in what it was given."""
+        if thread_id == "main":
+            number = main = agent.store.main_thread()
+        elif re.fullmatch(r"[0-9]{1,18}", thread_id):
+            number, main = int(thread_id), agent.store.current_main_thread()  # looking at an earlier chat makes nothing
+        else:
+            raise HTTPException(status_code=404, detail="No such thread")
+        if number == main:
+            messages, more_before = agent.store.get_history_tail(number, MAX_PAGE_MESSAGES)
+        else:
+            messages, more_before = agent.store.get_history(number), False
+        return {"thread_id": number, "is_main": number == main, "more_before": more_before, "messages": messages}
 
     @app.post("/api/transcribe")
     async def transcribe(audio: UploadFile = File(...)):
@@ -369,7 +386,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
 
     def start_turn(req):
         """The part of a chat turn that comes before the model: the chat (a new one if none was named), the history, and the person's message saved. Returns (thread_id, history, message_id)."""
-        thread_id = req.thread_id or agent.store.create_thread()
+        thread_id = req.thread_id or agent.store.main_thread()  # no chat named: the one chat (docs/ONE_CHAT_DESIGN.md)
         saved = agent.store.get_messages(thread_id)
         # The same words, from the person, as the last message of this thread, which nothing answered: they are trying again
         # after a failed turn. That message is used again, not saved a second time, so a retry leaves one message, not two.

@@ -353,6 +353,15 @@ MIGRATIONS = (
         )
         """,
     )),
+    # 17: small settings of the app itself (docs/ONE_CHAT_DESIGN.md): for now which chat is THE chat (key 'main_thread'). One row per key; nothing secret is kept here.
+    (17, (
+        """
+        CREATE TABLE IF NOT EXISTS app_state (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """,
+    )),
 )
 
 MAX_THREAD_TITLE = 80  # the longest name a chat can be given
@@ -564,6 +573,55 @@ class Store:
         conn.close()
         return thread_id
 
+    @staticmethod
+    def _chosen_main(conn):
+        """(the id of the one chat, whether it was already kept). The kept one if that chat is still there; else the chat that has the newest message; else (None, False): there is no chat at all."""
+        row = conn.execute("SELECT value FROM app_state WHERE key = 'main_thread'").fetchone()
+        if row is not None and re.fullmatch(r"[0-9]{1,18}", str(row[0])):
+            found = conn.execute("SELECT id FROM threads WHERE id = ?", (int(row[0]),)).fetchone()
+            if found is not None:
+                return found[0], True
+        newest = conn.execute("SELECT t.id FROM messages m JOIN threads t ON t.id = m.thread_id ORDER BY m.id DESC LIMIT 1").fetchone()
+        return (newest[0] if newest is not None else None), False
+
+    def current_main_thread(self):
+        """Which chat is the one chat, without making anything (for a list or a read): None when there is no chat yet."""
+        conn = self.connect()
+        try:
+            return self._chosen_main(conn)[0]
+        finally:
+            conn.close()
+
+    def main_thread(self):
+        """The one chat Diya has (docs/ONE_CHAT_DESIGN.md): its id, made and kept (in app_state) if need be. The first time (or if that chat has gone) it is the chat that has the newest message, so a
+        person who has been talking carries on where they were, or a new chat called Diya when there are none. Chosen under one write lock, so two callers asking at the same moment get the same chat."""
+        conn = self.connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            chosen, kept = self._chosen_main(conn)
+            if not kept:
+                if chosen is None:
+                    chosen = conn.execute("INSERT INTO threads (title, created_at) VALUES (?, ?)", ("Diya", datetime.now(timezone.utc).isoformat())).lastrowid
+                conn.execute("INSERT OR REPLACE INTO app_state (key, value) VALUES ('main_thread', ?)", (str(chosen),))
+            conn.commit()
+            return chosen
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def get_history_tail(self, thread_id, limit):
+        """The newest `limit` messages of a chat, oldest first, and whether older ones were left out: ([{role, content}], more_before). The one chat grows without end, so a page asks for a tail."""
+        conn = self.connect()
+        rows = conn.execute(
+            "SELECT role, content FROM (SELECT id, role, content FROM messages WHERE thread_id = ? ORDER BY id DESC LIMIT ?) ORDER BY id", (thread_id, int(limit) + 1)
+        ).fetchall()
+        conn.close()
+        more = len(rows) > int(limit)
+        rows = rows[1:] if more else rows
+        return [{"role": role, "content": content} for role, content in rows], more
+
     def add_message(self, thread_id, role, content):
         conn = self.connect()
         now = datetime.now(timezone.utc).isoformat()
@@ -719,6 +777,10 @@ def complete_reminder(reminder_id):
 
 def create_thread(title=None):
     return _default_store().create_thread(title)
+
+
+def main_thread():
+    return _default_store().main_thread()
 
 
 def add_message(thread_id, role, content):

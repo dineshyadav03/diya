@@ -107,6 +107,7 @@ export default function HistoryPage() {
     <main className="history-page">
       <div className="history-inner">
         <h1>Past chats</h1>
+        <p className="memory-dim">Diya has one chat, on the Chat page. These are the chats from before that: you can read and search them here.</p>
         {threads === null ? (
           <div role="status" aria-label="Loading your chats">
             <div className="thread-skeleton" />
@@ -186,7 +187,7 @@ export default function HistoryPage() {
                   <>
                     <Link className="thread" href={`/?thread=${t.id}`}>
                       {/* CSS ellipsis, not a hard slice: it used to cut mid-word ("...from Bengalu"). */}
-                      <div className="preview">{t.preview}</div>
+                      <div className="preview">{t.main && <strong>Your chat now &middot; </strong>}{t.preview}</div>
                       {t.match && t.match !== t.preview && <div className="date">{t.match}</div>}
                       <div className="date">{t.created_at.slice(0, 16).replace('T', ' ')}</div>
                     </Link>

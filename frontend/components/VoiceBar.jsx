@@ -8,21 +8,19 @@ import { SILENT_BELOW, deviceOf, describeMicrophoneFailure, markSilent, markWork
 const MIN_RECORDING_MS = 600 // a recording shorter than this was a double tap, not something said
 const MAX_RECORDING_MS = 60_000 // a forgotten recording stops and is sent by itself after this
 
-// The message box (docs/UI_DESIGN.md, D3): a text field, Tap to talk (tap to start, tap again to send; docs/VOICE_DESIGN.md), Send, and a New chat that asks first. It was a drawing with a WebGL
+// The message box (docs/UI_DESIGN.md, D3): a text field, Tap to talk (tap to start, tap again to send; docs/VOICE_DESIGN.md) and Send. Diya has one chat now (docs/ONE_CHAT_DESIGN.md), so nothing in the box starts another. It was a drawing with a WebGL
 // ring, a voice-reactive glow and a liquid menu; it is a text box now, and what it shows of Diya working is words and one thin line.
 
 // `unavailable` is why nothing can be sent right now ('' when something can): the page is still
 // loading, or failed to load, the saved chat a message would continue. It is shown as the
 // placeholder, and while it is set typing, Send and the microphone are all off -- a message sent
-// into a chat the page hasn't shown would be added to a thread the person can't see. New chat (the
-// menu) stays available: it is the way out.
-export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processing, unavailable = '' }) {
+// into a chat the page hasn't shown would be added to a thread the person can't see.
+export default function VoiceBar({ onSend, onSystemMessage, processing, unavailable = '' }) {
   const [value, setValue] = useState('')
   const [recording, setRecording] = useState(false)
   const [starting, setStarting] = useState(false) // the browser is still opening the microphone (it may be asking permission)
   const [micName, setMicName] = useState('') // which microphone is listening, so a wrong one is noticed at once
   const [micDisabled, setMicDisabled] = useState(false)
-  const [confirming, setConfirming] = useState(false) // New chat has been pressed once and is asking
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const startedAtRef = useRef(0)
@@ -194,31 +192,6 @@ export default function VoiceBar({ onSend, onSystemMessage, onNewChat, processin
           </div>
         )}
         <div className="composer-row">
-          {/* New chat wipes the thread, so it asks first instead of firing on a single press. */}
-          {confirming ? (
-            <span className="composer-confirm" role="group" aria-label="Start a new chat?">
-              Start a new chat?
-              <button
-                type="button"
-                className="composer-btn"
-                aria-label="Confirm new chat"
-                onClick={() => {
-                  setConfirming(false)
-                  onNewChat()
-                }}
-                suppressHydrationWarning
-              >
-                New chat
-              </button>
-              <button type="button" className="composer-btn composer-btn--quiet" onClick={() => setConfirming(false)} suppressHydrationWarning>
-                Keep this one
-              </button>
-            </span>
-          ) : (
-            <button type="button" className="composer-btn composer-btn--quiet" aria-label="New chat" onClick={() => setConfirming(true)} suppressHydrationWarning>
-              + New chat
-            </button>
-          )}
           <div className="composer-actions">
             <button
               type="button"

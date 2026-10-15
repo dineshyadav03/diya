@@ -34,7 +34,7 @@ def test_it_keeps_asking_while_the_message_is_being_read_and_adds_a_line_only_if
 def test_a_look_that_finishes_after_the_chat_was_changed_adds_nothing_to_the_new_chat():
     part = block("async function watchLearned", "async function undoLearned")
     assert part.count("epoch !== chatEpochRef.current") == 1 and "const epoch = chatEpochRef.current" in part
-    assert PAGE.count("chatEpochRef.current += 1") == 2  # a new chat, and the opening of a saved one
+    assert PAGE.count("chatEpochRef.current += 1") == 1  # the opening of a chat (Diya has one chat now, so there is no new chat to start)
 
 
 def test_each_thing_memory_did_is_said_in_its_own_words():

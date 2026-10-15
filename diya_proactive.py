@@ -96,9 +96,8 @@ class Proactive:
         return bool(self._rows("WHERE key = ?", (key,)))
 
     def _thread(self):
-        """The chat these messages go in: the one the last of them went in, or a new one called Diya."""
-        last = self._rows("ORDER BY id DESC LIMIT 1")
-        return last[0]["thread_id"] if last else self.store.create_thread("Diya")
+        """The chat these messages go in: the one chat (docs/ONE_CHAT_DESIGN.md), where the person will see them in order with everything else."""
+        return self.store.main_thread()
 
     def _post(self, kind, key, text, now_utc):
         """Say it in the chat and remember that it was said. Returns the row, or None if this key was already said."""

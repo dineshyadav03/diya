@@ -114,11 +114,11 @@ export async function forward(request, path, { env = process.env, fetchImpl = fe
   return new Response(upstream.body, { status: upstream.status, headers: headersOut })
 }
 
-// A thread id is a whole number; anything else (a path, a query, an encoded slash) is turned away
+// A thread id is a whole number, or `main` (the one chat); anything else (a path, a query, an encoded slash) is turned away
 // here instead of being pasted into the URL of the API request.
 export async function forwardHistory(request, context, options) {
   const { thread_id: threadId } = await context.params
-  if (!/^[0-9]{1,18}$/.test(String(threadId))) return errorResponse(404, 'No such thread')
+  if (!/^(?:[0-9]{1,18}|main)$/.test(String(threadId))) return errorResponse(404, 'No such thread')
   return forward(request, `/api/history/${threadId}`, options)
 }
 
