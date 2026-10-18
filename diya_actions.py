@@ -34,6 +34,7 @@ from datetime import datetime, timedelta, timezone
 
 import diya_connectors
 import diya_memory
+import diya_pause
 
 # Starting points from the design doc (D6), to tune, not findings.
 MAX_PENDING = 10  # actions waiting at once
@@ -113,6 +114,10 @@ class TurnLimit(ActionError):
 
 class DuplicatePending(ActionError):
     """The same action is already waiting."""
+
+
+class Paused(ActionError):
+    """Diya is paused (diya_pause.py): an approved action is not run until the owner resumes. The action stays as it was."""
 
 
 class IllegalTransition(ActionError):
@@ -519,6 +524,8 @@ class Actions:
         cannot start (its connector was disconnected since, its arguments no longer validate or no longer
         match what was approved, its kind is gone) is `failed` without `execute` being called. Returns the
         action as it ends; raises IllegalTransition for one that is not approved or has expired."""
+        if diya_pause.is_paused(self.store):  # the kill switch: checked before anything is touched, so the action stays approved and can be run after "resume"
+            raise Paused("Diya is paused, so nothing is run. Resume Diya on the Status page; this action stays approved until its day has passed.")
         now = self._clock()
         self.expire(now)  # an approval that outlived its proposal is `expired`, and so is refused below
         problem = None

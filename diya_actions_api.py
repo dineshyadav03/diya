@@ -27,7 +27,8 @@ from pydantic import BaseModel, StrictBool
 
 import diya_actions
 import diya_connectors
-from diya_actions import ActionError, HashMismatch, IllegalTransition, InvalidArgs, UnknownAction
+import diya_pause
+from diya_actions import ActionError, HashMismatch, IllegalTransition, InvalidArgs, Paused, UnknownAction
 from diya_memory import printable
 
 HISTORY_LIMIT = 50  # how many decided or finished actions the page lists
@@ -35,7 +36,7 @@ SOURCE_CHARS = 300  # how much of the message an action came from is sent
 DETAIL_CHARS = 200
 MAX_ID = 2**63 - 1  # SQLite's largest integer: anything above it cannot be an action's id
 
-_STATUS = ((UnknownAction, 404), (IllegalTransition, 409), (HashMismatch, 409), (InvalidArgs, 422))
+_STATUS = ((UnknownAction, 404), (IllegalTransition, 409), (HashMismatch, 409), (Paused, 423), (InvalidArgs, 422))
 
 
 class ApproveBody(BaseModel):
@@ -152,6 +153,8 @@ def register(app, config, agent):
     def approve(action_id: int, body: ApproveBody):
         _check_id(action_id)
         try:
+            if diya_pause.is_paused(agent.store):  # "Approve" also does it: while paused it is refused BEFORE approving, so the action simply stays waiting (docs/PAUSE_DESIGN.md)
+                raise Paused("Diya is paused, so nothing is done. Resume Diya on the Status page, then approve it; it stays waiting until its day has passed.")
             agent.actions.approve(action_id, body.args_hash, "ui")
             done = agent.actions.run(action_id)
         except ActionError as exc:

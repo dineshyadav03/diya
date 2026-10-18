@@ -248,7 +248,15 @@ def main(argv=None, config=None, out=None, notify=None, now=None):
             say(f"could not look at the questions: {printable(exc, 200)}")
             questions_failed = 1
     auto_ran = auto_told = auto_failed = 0
-    if config.automations:  # what the person asked to be done on a schedule (docs/AUTOMATIONS_DESIGN.md): at most one run a pass, its answer written in the chat and put on the desktop
+    try:
+        import diya_pause
+
+        paused = diya_pause.is_paused(Store(config.db_path))  # the kill switch (docs/PAUSE_DESIGN.md): no automations and no writing first; the reminders above are the person's own alarms and still fire
+    except Exception:  # noqa: BLE001
+        paused = False
+    if paused:
+        say("paused: automations and Diya writing first are stopped until she is resumed")
+    if config.automations and not paused:  # what the person asked to be done on a schedule (docs/AUTOMATIONS_DESIGN.md): at most one run a pass, its answer written in the chat and put on the desktop
         try:
             import diya_automations
             import diya_events
@@ -268,7 +276,7 @@ def main(argv=None, config=None, out=None, notify=None, now=None):
             say(f"could not run automations: {printable(type(exc).__name__)}")
             auto_failed = 1
     wrote = wrote_told = wrote_failed = 0
-    if config.proactive:  # Diya writing first (docs/PROACTIVE_DESIGN.md): messages in the chat, then the desktop; a failure here never hides a reminder that was told
+    if config.proactive and not paused:  # Diya writing first (docs/PROACTIVE_DESIGN.md): messages in the chat, then the desktop; a failure here never hides a reminder that was told
         try:
             import diya_events
             import diya_proactive

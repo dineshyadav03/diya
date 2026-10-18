@@ -434,6 +434,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/journal",  # the Activity page: what Diya did with a tool or an account
         "/api/health",  # the Status page: is Diya well
         "/api/dreaming",  # the Activity page: what Dreaming read and did
+        "/api/pause", "/api/resume",  # the Status page's pause switch
         "/api/categories", "/api/categories", "/api/categories",  # the Categories page: its list, a change (every change goes through one call), and looking inside one
         "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
         "/api/memory/${fact.id}/replace",  # the Memory page's "replace the old one" button
@@ -496,7 +497,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
     routes, proxies = api_routes(tmp_path), proxy_route_files()
     assert set(routes) == {
         "/api/threads", "/api/threads/search", "/api/threads/{thread_id}/rename", "/api/history/{thread_id}", "/api/chat", "/api/chat/stream", "/api/transcribe",
-        "/api/categories", "/api/journal", "/api/health", "/api/dreaming",
+        "/api/categories", "/api/journal", "/api/health", "/api/dreaming", "/api/pause", "/api/resume",
         "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/merge", "/api/memory/{fact_id}/{action}",
         "/api/memory/{fact_id}/replace", "/api/memory/{fact_id}/undo-replace", "/api/memory/learned",
         "/api/questions", "/api/questions/seen", "/api/questions/{question_id}/answer",

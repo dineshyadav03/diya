@@ -18,6 +18,7 @@ import httpx
 
 import diya_backup
 import diya_connectors
+import diya_pause
 import diya_secrets
 import diya_warm
 from diya_memory import printable
@@ -54,6 +55,14 @@ def _item(name, label, status, text):
 
 def _api():
     return _item("api", "Diya's API", "ok", "Running: this page was answered by it.")
+
+
+def _pause(store):
+    paused = diya_pause.state(store)
+    if not paused["paused"]:
+        return _item("pause", "Pause switch", "ok", "Not paused: approved actions run, automations run, and Diya may write first.")
+    why = f" ({paused['reason']})" if paused["reason"] else ""
+    return _item("pause", "Pause switch", "warn", f"Paused since {paused['since'][:16].replace('T', ' ')} UTC{why}: approved actions are not run, automations do not run, and Diya does not write first. Reminders still fire.")
 
 
 def _database(config, store):
@@ -172,6 +181,7 @@ def collect(config, store, now=None, ping=ping_ollama):
     moment = now or datetime.now()
     parts = (
         ("api", "Diya's API", _api),
+        ("pause", "Pause switch", lambda: _pause(store)),
         ("database", "Memory (database)", lambda: _database(config, store)),
         ("model", "Chat model", lambda: _model(config, ping)),
         ("reading", "Reading messages for facts", lambda: _reading(config, store)),

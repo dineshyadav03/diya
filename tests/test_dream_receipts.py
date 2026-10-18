@@ -189,12 +189,12 @@ def test_the_route_makes_errors_safe_to_show_and_works_with_no_receipts(world):
 def test_the_status_line_comes_from_the_receipts_and_says_when_the_last_pass_went_wrong(world):
     config, store = world
     now = datetime.now()
-    assert health.collect(config, store, now=now, ping=lambda c: (True, []))["items"][4]["status"] == "warn"  # never ran
+    assert health.collect(config, store, now=now, ping=lambda c: (True, []))["items"][5]["status"] == "warn"  # never ran
     store.dream_run_add(started_at=(datetime.now(timezone.utc) - timedelta(minutes=150)).isoformat(), duration_ms=5, outcome="nothing new")
-    item = health.collect(config, store, now=now, ping=lambda c: (True, []))["items"][4]
+    item = health.collect(config, store, now=now, ping=lambda c: (True, []))["items"][5]
     assert item["status"] == "ok" and "Last ran 2 hours ago" in item["text"]
     store.dream_run_add(started_at=datetime.now(timezone.utc).isoformat(), duration_ms=5, outcome="the model could not be reached", errors=json.dumps(["no model"]))
-    item = health.collect(config, store, now=now, ping=lambda c: (True, []))["items"][4]
+    item = health.collect(config, store, now=now, ping=lambda c: (True, []))["items"][5]
     assert item["status"] == "warn" and "something went wrong in that pass" in item["text"]
     store.dream_run_add(started_at=(datetime.now(timezone.utc) - timedelta(days=3)).isoformat(), duration_ms=5, outcome="nothing new")  # an older row does not hide the newest
-    assert health.collect(config, store, now=now, ping=lambda c: (True, []))["items"][4]["status"] == "warn"
+    assert health.collect(config, store, now=now, ping=lambda c: (True, []))["items"][5]["status"] == "warn"

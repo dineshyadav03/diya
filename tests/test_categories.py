@@ -6,6 +6,7 @@ and the model cannot make up a category; the person can add, rename and re-assig
 reply (both chat routes), never before it, and a failure to sort never breaks a chat; the one chat's history carries each message's id and category; and DIYA_CATEGORIES=0 turns it off.
 """
 import dataclasses
+import time
 import threading
 from types import SimpleNamespace
 
@@ -257,7 +258,16 @@ def test_the_streamed_route_sorts_too(tmp_path):
     start = client.post("/api/chat/stream", json={"message": "hey"}).text
     assert '"type":"done"' in start
     message = agent.store.get_messages(agent.store.main_thread())[0]["id"]
-    assert agent.store.connect().execute("SELECT COUNT(*) FROM message_categories WHERE message_id = ?", (message,)).fetchone()[0] == 1
+    for _ in range(50):  # the sorting runs after the reply is on its way, so it may not be finished the instant the stream is: wait for it (a race this test had, found 2026-10-18)
+        conn = agent.store.connect()
+        try:
+            sorted_count = conn.execute("SELECT COUNT(*) FROM message_categories WHERE message_id = ?", (message,)).fetchone()[0]
+        finally:
+            conn.close()
+        if sorted_count:
+            break
+        time.sleep(0.1)
+    assert sorted_count == 1
 
 
 def test_with_categories_off_nothing_is_sorted_and_the_model_is_not_asked(tmp_path):

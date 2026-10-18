@@ -5,15 +5,15 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 
 | Status | Tasks |
 |---|---|
-| Not started | 190 |
+| Not started | 183 |
 | Needs verification | 10 |
 | Research queue | 63 |
-| In progress | 11 |
+| In progress | 12 |
 | Blocked | 0 |
-| Done | 24 |
+| Done | 30 |
 | Deferred | 0 |
 
-## Done (24)
+## Done (30)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -32,19 +32,26 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-026** Write Hog next-turn/cold-restart/truncated-history test (2026-10-18): tests/test_hog_regression.py: next turn, history cut, cold restart, correction, forgetting, malicious email
 - **DIYA-028** Validate existing dreaming staged checkpoint semantics (2026-10-18): tests/test_dreaming.py: a staging failure leaves the checkpoint alone; a crash between staging and checkpoint cannot duplicate the batch
 - **DIYA-030** Emit per-Dreaming-run receipts (2026-10-18): dream_runs table (migration 22), dreaming.run_cycle, GET /api/dreaming, Activity page section; tests/test_dream_receipts.py (14); docs/DREAMING_RECEIPTS_DESIGN.md. Run id, message range, staged, remembered/asked/not kept/held/replaced, errors, duration. No merges yet because Dreaming does not merge.
+- **DIYA-036** Define tiered action authority model (2026-10-18): docs/AUTHORITY_MODEL.md (generated from diya_catalog.py): tiers 0 to 4, what each means, and which exist. Tiers 3 (external-facing) and 4 (destructive) are defined but nothing at those tiers is built.
+- **DIYA-037** Build central authority broker for every write (2026-10-18): tests/test_catalog.py: the only code that can send data out is named with a reason; Google and Todoist requests are made only inside the execute functions; kind.execute is called in exactly one place (diya_actions.run), which refuses unless approved. A static guarantee about today's code: a new write path fails the test until it is declared. There is no external-facing tier yet to enforce.
+- **DIYA-038** Create typed tool schemas and side-effect catalog (2026-10-18): diya_catalog.CATALOG: every tool, proposal and flow with tier, effect, hosts reached, undo, approval and whether its output holds other people's words; tests/test_catalog.py fails for an undeclared or stale entry. Parameter schemas are the tools' own; no tool takes an address, header or credential.
 - **DIYA-039** Bind approvals to exact payload digest and target (2026-10-18): diya_actions args_hash; tests/test_google_write.py::test_a_changed_event_is_not_what_was_approved and the Stage 4 tests. Approval is bound to the kind and the exact arguments, including the frozen event time.
+- **DIYA-044** Red-team tool use against prompt injection (2026-10-18): tests/test_red_team.py (8): with a model scripted to obey every injected instruction, calendar text, a web page and an email cannot make a proposal, a task, a reminder or a memory fact; the guard was removed once to confirm the test fails. Shows the code does not rely on the model resisting. A real model's behaviour is a separate question.
+- **DIYA-045** Add network and file root allowlists (2026-10-18): tests/test_list_files_allowlist.py (dot-dot and symlink escapes refused), tests/test_tool_allowlist.py and tests/test_boundary.py (hosts), tests/test_google_write.py (fixed Google hosts). The symlink case is skipped on this Windows account (no privilege) and runs in CI on Linux.
 - **DIYA-046** Keep tokens out of model prompts and audit logs (2026-10-18): tests/test_journal.py (secret-named arguments hidden); tests/test_google_write.py::test_no_tool_lets_the_model_choose_a_host_a_url_or_a_token. No model-facing path carries a token. A program running as the same Windows user could still ask DPAPI.
+- **DIYA-047** Add emergency kill switch (2026-10-18): diya_pause.py; Pause/Resume on the Status page; tests/test_pause.py (10); docs/PAUSE_DESIGN.md. Stops approved actions, automations and Diya writing first. Reminders keep firing on purpose.
 - **DIYA-053** Handle unknown write outcomes and duplicate retries (2026-10-18): ActionUncertain -> status unknown, never sent again; tests/test_google_write.py and tests/test_connector_tools.py. The calendar event id is made from the request, so a second try cannot make a second event.
 - **DIYA-061** Implement OAuth authorization code + PKCE as appropriate (2026-10-18): diya_google_calendar.pkce_pair; tests/test_secrets.py: challenge sent first, matching verifier sent with the code; state check in tests/test_google_calendar.py. No OpenID nonce: no ID token is requested. Stand-in Google only.
 - **DIYA-062** Support incremental per-app read/write scopes (2026-10-18): diya_google_write.GOOGLE_WRITE: one connector, one scope, one Connect per service; tests/test_google_write.py. Stand-in Google only.
 - **DIYA-063** Use secure Windows credential vault or encrypted tokens (2026-10-18): diya_secrets.py (DPAPI); tests/test_secrets.py incl. a real Windows round trip; docs/SECRETS_DESIGN.md. Windows only. A program running as the same user can still ask DPAPI.
 - **DIYA-068** Fix permitted Google API hosts and safe request bounds (2026-10-18): tests/test_google_write.py: no tool parameter names a host, url or token; every address is a fixed Google host. Calendar, Tasks, Drive, Docs adapters. Stand-in Google only.
 
-## In progress (11)
+## In progress (12)
 
 - **DIYA-005** Snapshot local database and all configuration before schema changes (2026-10-18). Not encrypted and not offline: a copy of backups/ on another disk is Dinesh's step.
 - **DIYA-021** Add outbox leases, retry and unique keys (2026-10-18). No lease column: one drain at a time in one process. Dreaming's separate pass is guarded by memory_captures, not a lease.
 - **DIYA-024** Implement forgetting and derived-index purge (2026-10-18). A forgotten fact's TEXT stays in the trail on purpose (so Restore works); only a secret's text is not kept. A hard purge is not built.
+- **DIYA-042** Provide approve/deny/revoke controls (2026-10-18). There is no separate 'revoke an approved action': approval runs the action at once. Pausing before approving covers the gap.
 - **DIYA-051** Implement append-only normalized tool/event journal (2026-10-18). Tool calls and code-decided flows are recorded. Not yet: model requests, policy decisions and one correlation id across them.
 - **DIYA-056** Publish activity feed and action receipt detail (2026-10-18). Approved actions' receipts are still on the Actions page; one combined feed is not built.
 - **DIYA-065** Implement revocation, invalid_grant and reconnect UX (2026-10-18). Disconnect revokes at Google (last card only). Not built: pausing dependent jobs when Google revokes from its side (invalid_grant).

@@ -33,6 +33,8 @@ export default function StatusPage() {
   const [data, setData] = useState(null)
   const [problem, setProblem] = useState('')
   const [stale, setStale] = useState('') // the once-a-minute look failed: kept apart so it never wipes what is shown
+  const [switching, setSwitching] = useState(false) // the pause switch is being changed
+  const [switchProblem, setSwitchProblem] = useState('')
 
   const load = useCallback(async (first) => {
     let status
@@ -56,6 +58,20 @@ export default function StatusPage() {
       setStale(describeLoadFailure(status))
     }
   }, [])
+
+  // The pause switch (docs/PAUSE_DESIGN.md): one press stops Diya acting on her own, one press lets her go on. Nothing is hidden: the line says what stops and what does not.
+  async function changePause(pausing) {
+    setSwitching(true)
+    setSwitchProblem('')
+    try {
+      const response = await (pausing ? fetch('/api/pause', { method: 'POST' }) : fetch('/api/resume', { method: 'POST' }))
+      if (!response.ok) setSwitchProblem(describeLoadFailure(response.status))
+    } catch {
+      setSwitchProblem(describeLoadFailure(undefined))
+    }
+    await load(false)
+    setSwitching(false)
+  }
 
   useEffect(() => {
     load(true)
@@ -101,6 +117,19 @@ export default function StatusPage() {
                     {item.label} <span className={`status-state status-state--${item.status}`}>{WORDS[item.status] || item.status}</span>
                   </p>
                   <p className="memory-dim">{item.text}</p>
+                  {item.name === 'pause' && (
+                    <p>
+                      <button type="button" className="cta" disabled={switching} onClick={() => changePause(item.status === 'ok')}>
+                        {item.status === 'ok' ? 'Pause Diya' : 'Resume Diya'}
+                      </button>
+                      {switchProblem && (
+                        <span className="memory-dim" role="alert">
+                          {' '}
+                          {switchProblem}
+                        </span>
+                      )}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
