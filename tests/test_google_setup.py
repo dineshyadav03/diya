@@ -28,7 +28,8 @@ SECRET = "GOCSPX-abcDEF_123-xyz9876543210"
 @pytest.fixture
 def config(tmp_path):
     return dataclasses.replace(diya_config.load_config({}), connector_tokens_dir=str(tmp_path / "tokens"), connectors_log_path=str(tmp_path / "c.log"),
-                               google_client_id="", google_client_secret="", db_path=str(tmp_path / "g.db"), profile_path=str(tmp_path / "p.txt"), require_token=False)
+                               google_client_id="", google_client_secret="", db_path=str(tmp_path / "g.db"), profile_path=str(tmp_path / "p.txt"), require_token=False,
+                               protect_secrets=False)  # these tests read the stored file as it is; tests/test_secrets.py is about the protected one
 
 
 # ---- the storage ----------------------------------------------------------------------------------------------------------------

@@ -15,6 +15,8 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+import diya_secrets
+
 _NAME = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 AUTH_KINDS = ("token", "oauth")
 
@@ -53,6 +55,7 @@ class Connector:
     validate: object = None  # token-kind only: callable(token) -> None, raises ConnectorError
     oauth_connect: object = None  # oauth-kind only: callable(config) -> None, raises ConnectorError
     setup: object = None  # a Setup, for a connector that needs something given once (a client id and secret) before it can connect; None for the rest
+    revoke: object = None  # callable(config, token) -> bool: takes the permission back at the service itself when the owner disconnects (Google); None for a connector that has no such step
 
     def __post_init__(self):
         if not _NAME.fullmatch(self.name):
@@ -82,29 +85,46 @@ def _token_path(config, name):
 
 
 def is_connected(config, name):
-    return os.path.exists(_token_path(config, name))
+    """Is there a sign-in that can be used? One that cannot be decrypted here (a protected file copied from another Windows user or machine) counts as none: reconnecting is the way out."""
+    return read_token(config, name) is not None
+
+
+def _protecting(config):
+    return getattr(config, "protect_secrets", True) and diya_secrets.available()
 
 
 def read_token(config, name):
-    """The stored token, or None if this connector has never been connected (or was disconnected)."""
+    """The stored token, or None if this connector has never been connected (or was disconnected, or its file cannot be decrypted here). A token stored before secrets were protected (plain text) is
+    read as it is and rewritten protected, once (docs/SECRETS_DESIGN.md)."""
     try:
         with open(_token_path(config, name), encoding="utf-8") as f:
-            return f.read().strip() or None
+            stored = f.read().strip()
     except FileNotFoundError:
         return None
+    token = diya_secrets.unprotect(stored) if stored else None
+    if token and _protecting(config) and not diya_secrets.is_protected(stored):
+        try:
+            _write_token(config, name, token)
+        except OSError:
+            pass  # a folder that cannot be written to still gives its token; it stays plain
+    return token or None
 
 
-def store_token(config, name, token):
-    """Write `name`'s credential to its own file, atomically -- the part of connecting that is the
-    same whether the credential was pasted (a token-kind connector) or came out of an OAuth exchange
-    (an oauth-kind one, docs/CONNECTORS_DESIGN.md, D6): validation differs by connector, storage does
-    not. Logs the same "connected" line either way."""
+def _write_token(config, name, token):
     os.makedirs(config.connector_tokens_dir, exist_ok=True)
     path = _token_path(config, name)
     temporary = path + ".tmp"
     with open(temporary, "w", encoding="utf-8", newline="\n") as f:
-        f.write(token + "\n")
+        f.write(diya_secrets.protect(token, _protecting(config)) + "\n")
     os.replace(temporary, path)  # never leaves a half-written file where a real token was
+
+
+def store_token(config, name, token):
+    """Write `name`'s credential to its own file, atomically, protected for this Windows user where the system can (docs/SECRETS_DESIGN.md) -- the part of connecting that is the
+    same whether the credential was pasted (a token-kind connector) or came out of an OAuth exchange
+    (an oauth-kind one, docs/CONNECTORS_DESIGN.md, D6): validation differs by connector, storage does
+    not. Logs the same "connected" line either way."""
+    _write_token(config, name, token)
     log_call(config, name, "connected", True)
 
 
@@ -134,6 +154,25 @@ def disconnect(config, name):
         removed = False
     log_call(config, name, "disconnected", True, detail=None if removed else "was not connected")
     return removed
+
+
+def revoke_and_disconnect(config, connector):
+    """Disconnect, and where the service has a way, take the permission back there too, so that removing the sign-in here is not only forgetting it here. True: the service was told and agreed.
+    False: it could not be reached or refused, so the permission can still be removed by hand at the service. None: this connector has no such step, or the step was left for later (Google: another Google
+    card still uses the same app). Nothing is raised: disconnecting always happens."""
+    revoked = None
+    if connector.revoke is not None:
+        token = read_token(config, connector.name)
+        if token is not None:
+            try:
+                answer = connector.revoke(config, token)  # None: not now (another connector still uses the same app's permission)
+                revoked = None if answer is None else bool(answer)
+            except Exception:  # noqa: BLE001 -- whatever the service did, the sign-in here is removed below
+                revoked = False
+    disconnect(config, connector.name)
+    if revoked is not None:
+        log_call(config, connector.name, "permission revoked at the service", revoked)
+    return revoked
 
 
 def log_call(config, name, action, ok, detail=None):

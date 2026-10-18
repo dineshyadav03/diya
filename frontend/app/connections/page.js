@@ -132,7 +132,12 @@ export default function ConnectionsPage() {
     settle(
       () => fetch(`/api/connections/${connector.name}/disconnect`, { method: 'POST' }),
       connector.name,
-      () => `Disconnected from ${connector.label}.`,
+      (body) =>
+        body.revoked === true
+          ? `Disconnected from ${connector.label}, and Google was told to forget the permission.`
+          : body.revoked === false
+            ? `Disconnected from ${connector.label} here. Google did not confirm that it forgot the permission: you can remove Diya at myaccount.google.com/permissions.`
+            : `Disconnected from ${connector.label}.`,
     )
   }
 

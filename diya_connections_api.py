@@ -4,7 +4,8 @@
     POST /api/connections/{name}/connect      a token-kind connector: {"token": ...}. An oauth-kind
                                                one (unit C3): no body -- this call runs the whole
                                                browser flow itself and blocks until it finishes.
-    POST /api/connections/{name}/disconnect   remove a connector's stored credential (idempotent)
+    POST /api/connections/{name}/disconnect   remove a connector's stored credential (idempotent), and where the service has a way (Google) take the permission back there too:
+                                               the answer says `revoked` true (done), false (could not be confirmed) or null (nothing to do, or left for the last Google card)
     POST /api/connections/{name}/setup        {"values": {"client_id": ..., "client_secret": ...}}: what a connector needs given once before it can connect (Google's client id
                                                and secret); checked for shape, stored, and never sent back. 409 for a connector that needs none.
     POST /api/connections/{name}/clear-setup  forget what the page stored for it, and disconnect it (a sign-in belongs to the app it was made with)
@@ -85,6 +86,6 @@ def register(app, config, agent, connectors=diya_connectors.CONNECTORS):
 
     @app.post("/api/connections/{name}/disconnect")
     def disconnect(name: str):
-        find(name)
-        diya_connectors.disconnect(config, name)
-        return {"connectors": diya_connectors.status(config, connectors)}
+        connector = find(name)
+        revoked = diya_connectors.revoke_and_disconnect(config, connector)  # also takes the permission back at the service where it can; always disconnects
+        return {"connectors": diya_connectors.status(config, connectors), "revoked": revoked}

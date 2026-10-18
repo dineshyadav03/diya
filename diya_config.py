@@ -127,6 +127,8 @@ class Config:
     repo_study: bool = True  # DIYA_REPO_STUDY
     # Looking through the person's Gmail when asked, read-only, once connected on the Connections page (diya_google_mail.py, docs/GMAIL_DESIGN.md). DIYA_MAIL=0 turns it off.
     mail: bool = True  # DIYA_MAIL
+    # Connector sign-ins and Google's client secret are stored encrypted for this Windows user (DPAPI) instead of as plain text (diya_secrets.py, docs/SECRETS_DESIGN.md). DIYA_PROTECT_SECRETS=0 keeps them plain.
+    protect_secrets: bool = True  # DIYA_PROTECT_SECRETS
     # With a second, suspicious privacy judge (DIYA_PRIVACY_MODEL), its "unsure" no longer holds a fact back when the main model says OK (docs/AUTO_MEMORY_DESIGN.md, 8.5): measured on the owner's own messages the
     # suspicious judge said "unsure" about half of ordinary facts and nothing was remembered. DIYA_PRIVACY_UNSURE_ASKS=1 brings the old, stricter behaviour back.
     privacy_unsure_asks: bool = False  # DIYA_PRIVACY_UNSURE_ASKS
@@ -295,7 +297,7 @@ def load_config(env=None) -> Config:
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
                         ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
-                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("categories", "DIYA_CATEGORIES"), ("repo_study", "DIYA_REPO_STUDY"), ("mail", "DIYA_MAIL"), ("knowledge_chat", "DIYA_KNOWLEDGE_CHAT"), ("mcp", "DIYA_MCP"), ("privacy_unsure_asks", "DIYA_PRIVACY_UNSURE_ASKS")):
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("categories", "DIYA_CATEGORIES"), ("repo_study", "DIYA_REPO_STUDY"), ("mail", "DIYA_MAIL"), ("protect_secrets", "DIYA_PROTECT_SECRETS"),("knowledge_chat", "DIYA_KNOWLEDGE_CHAT"), ("mcp", "DIYA_MCP"), ("privacy_unsure_asks", "DIYA_PRIVACY_UNSURE_ASKS")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag

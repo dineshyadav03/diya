@@ -82,7 +82,7 @@ def connector_for(name):
     setup = diya_connectors.Setup(
         fields=diya_google_calendar.SETUP.fields, steps=_steps(api, scope), state=diya_google_calendar.client_state, save=diya_google_calendar.save_client, clear=diya_google_calendar.clear_client
     )
-    return diya_connectors.Connector(name=name, label=label, description=description, auth_kind="oauth", implemented=True, oauth_connect=connect, setup=setup)
+    return diya_connectors.Connector(name=name, label=label, description=description, auth_kind="oauth", implemented=True, oauth_connect=connect, setup=setup, revoke=diya_google_calendar.revoke_for(name))
 
 
 def connectors():

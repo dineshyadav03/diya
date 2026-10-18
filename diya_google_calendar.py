@@ -18,6 +18,8 @@ owner's, never committed, never sent back to the page, like every other credenti
 """
 from __future__ import annotations
 
+import base64
+import hashlib
 import http.server
 import json
 import os
@@ -30,10 +32,12 @@ from datetime import datetime, timezone
 import httpx
 
 import diya_connectors
+import diya_secrets
 from diya_connectors import ConnectorError
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
+REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 SCOPE = "https://www.googleapis.com/auth/calendar.readonly"  # read-only (D2): nothing here can write
 CALLBACK_TIMEOUT = 120  # seconds to let the owner finish in their browser
@@ -76,7 +80,15 @@ def _wait_for_redirect(timeout):
     return server.server_address[1], wait
 
 
-def _authorization_url(client_id, redirect_uri, state, scope=SCOPE):
+def pkce_pair():
+    """A fresh PKCE (RFC 7636) verifier and its S256 challenge: Google gets the challenge when the sign-in starts and the verifier when the code is exchanged, so a code someone else caught on the
+    loopback port is no use to them without the verifier, which never leaves this process."""
+    verifier = secrets.token_urlsafe(64)
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
+    return verifier, challenge
+
+
+def _authorization_url(client_id, redirect_uri, state, scope=SCOPE, challenge=None):
     params = {
         "client_id": client_id,
         "redirect_uri": redirect_uri,
@@ -86,6 +98,8 @@ def _authorization_url(client_id, redirect_uri, state, scope=SCOPE):
         "prompt": "consent",  # otherwise a returning owner may not be issued a refresh token at all
         "state": state,
     }
+    if challenge:
+        params.update({"code_challenge": challenge, "code_challenge_method": "S256"})
     return f"{AUTH_URL}?{urllib.parse.urlencode(params)}"
 
 
@@ -112,13 +126,39 @@ def _stored_client(config):
     """The client id and secret pasted on the Connections page, or None (nothing stored, or a file that is not what save_client writes)."""
     try:
         with open(_client_file(config), encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, ValueError):
+            stored = f.read()
+    except OSError:
+        return None
+    text = diya_secrets.unprotect(stored.strip())  # None: protected for another Windows user or damaged
+    try:
+        data = json.loads(text) if text else None
+    except ValueError:
         return None
     if not isinstance(data, dict):
         return None
     client_id, client_secret = str(data.get("client_id") or "").strip(), str(data.get("client_secret") or "").strip()
-    return (client_id, client_secret) if client_id and client_secret else None
+    if not (client_id and client_secret):
+        return None
+    if getattr(config, "protect_secrets", True) and diya_secrets.available() and not diya_secrets.is_protected(stored.strip()):
+        try:
+            _write_client(config, client_id, client_secret)  # a file from before secrets were protected: rewritten protected, once
+        except OSError:
+            pass
+    return client_id, client_secret
+
+
+def _write_client(config, client_id, client_secret):
+    os.makedirs(config.connector_tokens_dir, exist_ok=True)
+    path = _client_file(config)
+    temporary = path + ".tmp"
+    text = json.dumps({"client_id": client_id, "client_secret": client_secret})
+    with open(temporary, "w", encoding="utf-8", newline="\n") as f:
+        f.write(diya_secrets.protect(text, getattr(config, "protect_secrets", True)) + "\n")
+    try:
+        os.chmod(temporary, 0o600)  # a no-op for most of what Windows means by permissions; the folder is the owner's own either way
+    except OSError:
+        pass
+    os.replace(temporary, path)
 
 
 def client_state(config):
@@ -136,20 +176,27 @@ def save_client(config, values):
         raise ConnectorError("that does not look like a Google client ID: it is a long text that ends in .apps.googleusercontent.com")
     if not CLIENT_SECRET_SHAPE.fullmatch(client_secret):
         raise ConnectorError("that does not look like a Google client secret: letters, digits, - and _ only, no spaces")
-    os.makedirs(config.connector_tokens_dir, exist_ok=True)
-    path = _client_file(config)
-    temporary = path + ".tmp"
-    with open(temporary, "w", encoding="utf-8", newline="\n") as f:
-        f.write(json.dumps({"client_id": client_id, "client_secret": client_secret}) + "\n")
-    try:
-        os.chmod(temporary, 0o600)  # a no-op for most of what Windows means by permissions; the folder is the owner's own either way
-    except OSError:
-        pass
-    os.replace(temporary, path)
+    _write_client(config, client_id, client_secret)
 
 
 # The other Google connectors that sign in with this client: forgetting it signs them out too (a sign-in belongs to the app it was made with).
 SHARING_CLIENT = ("google_mail", "google_calendar_edit", "google_tasks", "google_drive_files")
+ALL_GOOGLE = ("google_calendar",) + SHARING_CLIENT
+
+
+def revoke_for(name):
+    """The `revoke` step of one Google connector (diya_connectors.Connector.revoke): tell Google to forget its permission. True if Google confirmed, False if it could not be reached or refused. None, and
+    nothing sent, while another Google card is still connected: Google may treat the permissions of one app as one, so revoking now could sign the others out. The last card to be disconnected revokes."""
+    def revoke(config, token):
+        if any(other != name and diya_connectors.is_connected(config, other) for other in ALL_GOOGLE):
+            return None
+        try:
+            response = httpx.post(REVOKE_URL, data={"token": token}, timeout=NETWORK_TIMEOUT)
+        except httpx.HTTPError:
+            return False
+        return response.status_code == 200
+
+    return revoke
 
 
 def clear_client(config):
@@ -198,7 +245,7 @@ def connect(config, open_browser=webbrowser.open):
 
 
 def connect_to(config, scope, token_name, open_browser=webbrowser.open):
-    """The whole flow, one call, for any Google read-only scope (Calendar, Gmail): opens the owner's browser, waits for them to finish, stores the
+    """The whole flow, one call, for any Google scope (Calendar, Gmail, the adding ones): opens the owner's browser (with a PKCE challenge, RFC 7636), waits for them to finish, stores the
     refresh token under `token_name` (docs/CONNECTORS_DESIGN.md, D6). Raises ConnectorError, and stores nothing, at any
     failed step -- a cancelled or failed attempt never leaves a half-connected state."""
     client_id, client_secret = _client_credentials(config)
@@ -206,7 +253,8 @@ def connect_to(config, scope, token_name, open_browser=webbrowser.open):
     port, wait = _wait_for_redirect(CALLBACK_TIMEOUT)
     redirect_uri = f"http://127.0.0.1:{port}"
     state = secrets.token_urlsafe(16)
-    open_browser(_authorization_url(client_id, redirect_uri, state, scope))
+    verifier, challenge = pkce_pair()
+    open_browser(_authorization_url(client_id, redirect_uri, state, scope, challenge))
 
     result = wait()
     if "error" in result:
@@ -218,7 +266,7 @@ def connect_to(config, scope, token_name, open_browser=webbrowser.open):
 
     tokens = _exchange({
         "client_id": client_id, "client_secret": client_secret, "code": result["code"],
-        "redirect_uri": redirect_uri, "grant_type": "authorization_code",
+        "redirect_uri": redirect_uri, "grant_type": "authorization_code", "code_verifier": verifier,
     })
     refresh_token = tokens.get("refresh_token")
     if not refresh_token:

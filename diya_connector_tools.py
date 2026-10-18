@@ -332,9 +332,11 @@ def real_connectors(config):
         Connector(name="todoist", label="Todoist", description="List your open tasks, and add one when you approve it.",
                  auth_kind="token", implemented=True, validate=todoist_validate),
         Connector(name="google_calendar", label="Google Calendar", description="Read your upcoming events.",
-                 auth_kind="oauth", implemented=True, oauth_connect=diya_google_calendar.connect, setup=diya_google_calendar.SETUP),
+                 auth_kind="oauth", implemented=True, oauth_connect=diya_google_calendar.connect, setup=diya_google_calendar.SETUP,
+                 revoke=diya_google_calendar.revoke_for("google_calendar")),
         Connector(name="google_mail", label="Gmail", description="Look through your mail when you ask. Read-only: it can never send, change or delete a message.",
-                 auth_kind="oauth", implemented=True, oauth_connect=diya_google_mail.connect, setup=diya_google_mail.SETUP),
+                 auth_kind="oauth", implemented=True, oauth_connect=diya_google_mail.connect, setup=diya_google_mail.SETUP,
+                 revoke=diya_google_calendar.revoke_for("google_mail")),
         *diya_google_write.connectors(),
     )
 
