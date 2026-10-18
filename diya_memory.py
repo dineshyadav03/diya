@@ -37,6 +37,7 @@ ACTORS = ("cli", "api", "import", "system", "auto")  # "auto": decided by code u
 ASK_PREFIX = "ask:"  # the flag the memory policy leaves on a candidate it is going to ask about: ask:<kind>:<reason> (docs/AUTO_MEMORY_DESIGN.md)
 FLAG_SOURCE_PREFIX = "source_message:"  # the flag the checks leave naming the person's message a fact best matches (diya_checks.FLAG_SOURCE_MESSAGE)
 SECRET_PLACEHOLDER = "(not kept: it looked like a secret)"  # what stands in for the text of a fact that was a secret
+PURGED_PLACEHOLDER = "(forgotten for good)"  # what stands in for the text of a fact the person had forgotten for good (docs/FORGET_DESIGN.md)
 
 # action -> (the status a fact must be in, the status it ends up in)
 ACTIONS = {
@@ -68,6 +69,7 @@ EVENT_STATUS = {
     "edited": None,
     "flagged": None,  # the advisory checks changed what they say about a fact; never its status
     "retagged": None,  # who the fact is about changed (docs/PERSON_MEMORY_DESIGN.md); never its status
+    "purged": "rejected",  # forgotten for good (docs/FORGET_DESIGN.md): the words are gone; only that a fact was here, and when, is kept
 }
 
 MAX_PERSON_CHARS = 60
@@ -692,6 +694,30 @@ class Memory:
             conn.execute("UPDATE facts SET status = 'accepted' WHERE id = ?", (old_id,))
             self._event(conn, old_id, "restored", actor, now, json.dumps({"undid": new_id}, sort_keys=True))
         return old_id
+
+    def purge(self, fact_id, actor):
+        """Forget a fact for good (docs/FORGET_DESIGN.md, decision 234). Unlike `retire` (which keeps the words so that Restore works), this takes the words out: the fact's text, the line it was read from,
+        what links it to a message or a person, and the words kept in its own history are replaced, and the questions about it and the vector made from it are deleted. What is left is that a fact
+        with this number was here and was forgotten, and when and by whom. Any status. Returns the words it had, so the caller can take them out of the places this class does not own (the staged queue).
+        Raises UnknownFact; a fact already forgotten for good is refused (IllegalTransition)."""
+        _check_actor(actor)
+        with self._write() as conn:
+            conn.execute("PRAGMA secure_delete = ON")  # what is replaced or deleted is overwritten in the file, not left in free space for a tool to read back
+            row = conn.execute("SELECT status, text, flags FROM facts WHERE id = ?", (fact_id,)).fetchone()
+            if row is None:
+                raise UnknownFact(f"there is no fact {fact_id}")
+            status, old_text, _flags = row
+            if old_text == PURGED_PLACEHOLDER:
+                raise IllegalTransition(f"fact {fact_id} was already forgotten for good")
+            conn.execute(
+                "UPDATE facts SET status = 'rejected', text = ?, text_key = ?, raw = NULL, flags = '[]', batch_first = NULL, batch_last = NULL, person_id = NULL, model = NULL WHERE id = ?",
+                (PURGED_PLACEHOLDER, text_key(PURGED_PLACEHOLDER), fact_id),
+            )
+            conn.execute("UPDATE fact_events SET detail = NULL WHERE fact_id = ?", (fact_id,))  # the old wording was kept in the history of edits and replacements
+            conn.execute("DELETE FROM memory_questions WHERE fact_id = ?", (fact_id,))
+            conn.execute("DELETE FROM fact_embeddings WHERE fact_id = ?", (fact_id,))
+            self._event(conn, fact_id, "purged", actor, _now(), json.dumps({"was": status}, sort_keys=True))
+        return old_text
 
     def discard_secret(self, fact_id, kind, actor):
         """Reject a candidate that is, or names, a secret, and do not keep what it said: its text and the line it came from are replaced,

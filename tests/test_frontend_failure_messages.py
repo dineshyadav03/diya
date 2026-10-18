@@ -393,11 +393,11 @@ def test_the_memory_page_only_ever_renders_what_it_is_given_as_text():
 
 def test_the_memory_page_changes_things_only_with_posts_to_its_own_api_paths_and_never_builds_a_url_from_typed_text():
     source = MEMORY.read_text(encoding="utf-8")
-    assert source.count("method: 'POST'") == 5  # decide, edit, add, ingest, replace
+    assert source.count("method: 'POST'") == 6  # decide, edit, add, ingest, replace, forget for good
     for other in ("method: 'PUT'", "method: 'DELETE'", "method: 'PATCH'", 'method: "'):
         assert other not in source, other
     targets = re.findall(r"fetch\(\s*([`'\"])(.*?)\1", source)
-    assert len(targets) == 7  # the list, one fact's detail, and the five changes
+    assert len(targets) == 8  # the list, one fact's detail, and the six changes
     for _quote, target in targets:
         assert target.startswith("/api/memory"), target
         assert "typed" not in target and "text" not in target and "editing" not in target, target  # ids and actions only

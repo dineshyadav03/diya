@@ -26,6 +26,7 @@ import diya_connections_api
 import diya_connector_tools
 import diya_intent
 import diya_dreaming_api
+import diya_forget_api
 import diya_permissions_api
 import diya_health_api
 import diya_journal_api
@@ -544,6 +545,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
         return StreamingResponse(lines(), media_type="application/x-ndjson", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
     # Reviewing what Dreaming staged (docs/STAGE2_DESIGN.md, unit 6): the same rules as diya_review.py.
+    diya_forget_api.register(app, config, agent)  # forgetting for good (docs/FORGET_DESIGN.md): before the memory routes, whose generic {action} would answer first
     diya_memory_api.register(app, config, agent)
     diya_questions_api.register(app, config, agent)  # the questions Diya raises herself (docs/AUTO_MEMORY_DESIGN.md, D5 and unit A5)
     diya_proactive_api.register(app, config, agent)  # what Diya wrote first (docs/PROACTIVE_DESIGN.md)

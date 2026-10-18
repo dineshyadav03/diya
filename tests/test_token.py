@@ -85,6 +85,7 @@ def client_for(tmp_path, require=None):
     asked = memory.add_candidate("seeded private fact", batch_first=1, batch_last=1, position=3, model="m", extracted_at="2026-01-01T00:00:00+00:00", raw="- seeded private fact")
     memory.set_flags(asked, ["ask:sensitive:model_private"], "system")
     diya_questions.Questions(agent.store).refill(memory, agent.now())  # question 1, about fact 6
+    memory.add_manual("seeded fact to forget", "cli")  # fact 7: the forget-for-good route has its own, since it cannot be undone
     agent.store.add_reminder("seeded reminder")  # and one reminder (id 1), for the same reason
     agent.tasks.add("seeded task")  # and two tasks: an open one (id 1) to tick off, a finished one (id 2) to put back
     agent.tasks.complete(agent.tasks.add("seeded finished task")["id"])
@@ -119,14 +120,16 @@ except ImportError:
 
 def ok_for(path):
     """What a request with the right token may answer. Web Push needs the optional cryptography package: without it every push route but /status answers 409 and says why."""
-    # The rename route has no chat to rename here (a seeded chat would break every test that expects the app to have made none): "there is no chat 1" is the route answering, past the token.
-    return OK + ((409,) if path.startswith("/api/push/") and path != "/api/push/status" and not HAVE_PUSH_CRYPTO else ()) + ((404,) if path == "/api/threads/1/rename" else ())
+    # The rename and forget routes have no chat or message here (a seeded chat would break every test that expects the app to have made none): "there is no chat 1" is the route answering, past the token.
+    return OK + ((409,) if path.startswith("/api/push/") and path != "/api/push/status" and not HAVE_PUSH_CRYPTO else ()) + ((404,) if path in ("/api/threads/1/rename", "/api/messages/1/forget") else ())
 
 
 def concrete_path(path):
     """A route's path with a real id and action in place of its parameters."""
     return (path.replace("{question_id}", "1")
            .replace("/api/memory/{fact_id}/undo-replace", "/api/memory/4/undo-replace")
+           .replace("/api/memory/{fact_id}/forget-for-good", "/api/memory/7/forget-for-good")
+           .replace("/api/messages/{message_id}/forget", "/api/messages/1/forget")
            .replace("/api/memory/{fact_id}/replace", "/api/memory/3/replace")  # fact 1 is accepted by an earlier route; this one has its own pair
            .replace("/api/reminders/{reminder_id}/snooze", "/api/reminders/2/snooze")  # reminder 1 is done by an earlier route
            .replace("/api/scheduled/{series_id}/resume", "/api/scheduled/2/resume")  # each change has its own seeded repeating reminder
@@ -159,6 +162,8 @@ ENDPOINTS = [
     ("POST", "/api/pause", {"json": {"reason": "testing"}}),
     ("POST", "/api/resume", {}),
     ("GET", "/api/permissions", {}),
+    ("POST", "/api/memory/7/forget-for-good", {}),
+    ("POST", "/api/messages/1/forget", {"json": {"dry_run": True}}),
     ("POST", "/api/categories", {"json": {"action": "add", "name": "School"}}),
     ("GET", "/api/memory", {}),
     ("GET", "/api/memory/1", {}),

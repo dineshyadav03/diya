@@ -15,7 +15,7 @@ DIYA-020,Done,Claude,2026-10-18,tests/test_hog_regression.py::test_told_once_the
 DIYA-021,In progress,Claude,2026-10-18,"capture_queue: message id is the unique key, 3 tries, tests/test_capture_queue.py","No lease column: one drain at a time in one process. Dreaming's separate pass is guarded by memory_captures, not a lease."
 DIYA-022,Done,Claude,2026-10-18,"diya_provenance.py, tests/test_provenance.py (32), docs/PROVENANCE_DESIGN.md; the Memory page already shows each fact's source message, history, actor and time",On request ('how do you know that?') and on the Memory page; not appended to every reply.
 DIYA-023,Done,Claude,2026-10-18,tests/test_hog_regression.py::test_a_correction_replaces_it_and_the_old_one_stays_in_the_trail; tests/test_recall.py vector purge,
-DIYA-024,In progress,Claude,2026-10-18,diya_recall.vectors purges vectors of facts that are not accepted; tests/test_recall.py,A forgotten fact's TEXT stays in the trail on purpose (so Restore works); only a secret's text is not kept. A hard purge is not built.
+DIYA-024,Done,Claude,2026-10-18,"Memory.purge removes text, source line, links, event history, questions and vector; the staged file is cleaned; secure_delete overwrites the words in the file; tests/test_forget.py, tests/test_recall.py",Retire/Forget (words kept so Restore works) still exists; Forget for good is the real deletion. Older backups still hold the words until they rotate out.
 DIYA-025,Done,Claude,2026-10-18,tests/test_hog_regression.py (mail saying 'your dog is Max' changes nothing); docs/GMAIL_DESIGN.md: mail is read with no tools,Only the person's own words become accepted memory.
 DIYA-026,Done,Claude,2026-10-18,"tests/test_hog_regression.py: next turn, history cut, cold restart, correction, forgetting, malicious email",
 DIYA-028,Done,Claude,2026-10-18,tests/test_dreaming.py: a staging failure leaves the checkpoint alone; a crash between staging and checkpoint cannot duplicate the batch,
@@ -35,6 +35,7 @@ DIYA-051,In progress,Claude,2026-10-18,"tool_journal (append-only triggers), Act
 DIYA-052,In progress,Claude,2026-10-18,"diya_google_write._read_back: event, task, folder and document are asked for again by id and compared with what was approved; a failed or different read is 'unknown'; tests/test_google_write.py",Google writes only (stand-in). The Todoist task is not read back yet.
 DIYA-053,Done,Claude,2026-10-18,"ActionUncertain -> status unknown, never sent again; tests/test_google_write.py and tests/test_connector_tools.py","The calendar event id is made from the request, so a second try cannot make a second event."
 DIYA-056,In progress,Claude,2026-10-18,Activity page (tools and flows) and its Dreaming section; docs/ACTIVITY_JOURNAL_DESIGN.md,Approved actions' receipts are still on the Actions page; one combined feed is not built.
+DIYA-059,Done,Dinesh,2026-10-18,"docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18)","Personal Google account; single user; the app stays an unverified 'In production' OAuth app with Google's warning screen, which is expected for one's own app."
 DIYA-060,In progress,Claude,2026-10-18,"Connections page: services, what each can do, the permission asked, per-service Connect, Disconnect with revoke",Accounts are not shown (the email is not kept) and there is one Google account only.
 DIYA-061,Done,Claude,2026-10-18,"diya_google_calendar.pkce_pair; tests/test_secrets.py: challenge sent first, matching verifier sent with the code; state check in tests/test_google_calendar.py",No OpenID nonce: no ID token is requested. Stand-in Google only.
 DIYA-062,Done,Claude,2026-10-18,"diya_google_write.GOOGLE_WRITE: one connector, one scope, one Connect per service; tests/test_google_write.py",Stand-in Google only.
@@ -49,13 +50,15 @@ DIYA-087,In progress,Both,2026-10-18,diya_google_write.folder_kind with read-bac
 DIYA-093,In progress,Both,2026-10-18,diya_google_write.doc_kind with read-back of title and text; tests/test_google_write.py,"Create and a line of text, read back (stand-in). Needs Dinesh's real-account try."
 DIYA-097,In progress,Both,2026-10-18,diya_google_write.google_tasks_list; tests/test_google_write.py,Lists open tasks in the default list only (stand-in). Needs Dinesh's real-account try.
 DIYA-098,In progress,Both,2026-10-18,diya_google_write.task_kind with read-back; tests/test_google_write.py,"Create and read-back only (stand-in): complete, update, move, delete are not built."
-DIYA-226,Not started,Dinesh,2026-10-18,,Owner decision (blueprint Part XII).
-DIYA-227,Not started,Dinesh,2026-10-18,,Owner decision (blueprint Part XII).
-DIYA-228,Not started,Dinesh,2026-10-18,,Owner decision (blueprint Part XII).
-DIYA-229,Not started,Dinesh,2026-10-18,,Owner decision (blueprint Part XII).
-DIYA-230,Not started,Dinesh,2026-10-18,,Owner decision (blueprint Part XII). Windows DPAPI is the current vault; the decision is whether that is enough.
-DIYA-231,Not started,Dinesh,2026-10-18,,Owner decision (blueprint Part XII).
-DIYA-232,Not started,Dinesh,2026-10-18,,Owner decision (blueprint Part XII). Today everything is local.
-DIYA-233,Not started,Dinesh,2026-10-18,,Owner decision (blueprint Part XII).
-DIYA-234,Not started,Dinesh,2026-10-18,,Owner decision (blueprint Part XII).
-DIYA-235,Not started,Dinesh,2026-10-18,,Owner decision (blueprint Part XII).
+DIYA-099,Done,Dinesh,2026-10-18,"docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18)","Settled by decision 229: Diya is the master, one way only (Google Tasks receives approved tasks). No two-way sync to design."
+DIYA-214,In progress,Claude,2026-10-18,Forget for good (messages and facts) with tests/test_forget.py; revoke on disconnect (tests/test_secrets.py),Delete and revocation are built. Export of the data is not (the Memory page already exports facts as a profile file).
+DIYA-226,Done,Dinesh,2026-10-18,"docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18)","Decided: only for the owner now. Later, similar copies for others, each named and personalised by them."
+DIYA-227,Done,Dinesh,2026-10-18,"docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18)",Decided: a personal Google account.
+DIYA-228,Done,Dinesh,2026-10-18,"docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18)",Decided: ask every time until the owner says to override. No standing grants are built or switched on until then.
+DIYA-229,Done,Dinesh,2026-10-18,"docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18)",Decided: Diya's own database is the master; Google Tasks only receives what the owner approves.
+DIYA-230,Done,Dinesh,2026-10-18,"docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18)",Decided: Windows DPAPI is enough. Advice to turn on Windows device encryption and copy backups to another disk stands.
+DIYA-231,Needs verification,Dinesh,2026-10-18,"docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18)","The answer was 'yes' to 'should Diya use email and Drive for memory?'. Recorded as the careful reading: yes, opt-in per source, nothing from mail becomes a fact on its own. Please confirm that is what you meant (the suggestion in the question was no)."
+DIYA-232,Done,Dinesh,2026-10-18,"docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18)",Decided: local only.
+DIYA-233,Done,Claude,2026-10-18,"docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18), section 'The code lane policy'","The owner gave Claude the decision. Read other people's code, never run it; run only Diya's own repo in a fenced throwaway copy; results are proposals only."
+DIYA-234,Done,Both,2026-10-18,"Decision in docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18); feature built: diya_forget.py, Memory.purge, Forget for good on the Memory page and Forget this in the chat; tests/test_forget.py (14); docs/FORGET_DESIGN.md",Keep everything by default; merges undoable; and delete/forget for good now exists. Backups made earlier keep old words until they rotate out.
+DIYA-235,Done,Dinesh,2026-10-18,docs/MONTHLY_CHECKS.md,Decided: every month. First due 2026-11-18. Diya can remind you: say 'remind me on the 18th of every month ...'.

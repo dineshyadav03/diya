@@ -5,15 +5,15 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 
 | Status | Tasks |
 |---|---|
-| Not started | 178 |
-| Needs verification | 10 |
+| Not started | 165 |
+| Needs verification | 11 |
 | Research queue | 63 |
 | In progress | 14 |
 | Blocked | 0 |
-| Done | 33 |
+| Done | 45 |
 | Deferred | 0 |
 
-## Done (33)
+## Done (45)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -28,6 +28,7 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-020** Expose immediately asserted facts on the next turn (2026-10-18): tests/test_hog_regression.py::test_told_once_the_dog_reaches_the_model_on_the_next_turn
 - **DIYA-022** Distinguish user-approved facts from provisional claims (2026-10-18): diya_provenance.py, tests/test_provenance.py (32), docs/PROVENANCE_DESIGN.md; the Memory page already shows each fact's source message, history, actor and time. On request ('how do you know that?') and on the Memory page; not appended to every reply.
 - **DIYA-023** Implement correction and supersession (2026-10-18): tests/test_hog_regression.py::test_a_correction_replaces_it_and_the_old_one_stays_in_the_trail; tests/test_recall.py vector purge
+- **DIYA-024** Implement forgetting and derived-index purge (2026-10-18): Memory.purge removes text, source line, links, event history, questions and vector; the staged file is cleaned; secure_delete overwrites the words in the file; tests/test_forget.py, tests/test_recall.py. Retire/Forget (words kept so Restore works) still exists; Forget for good is the real deletion. Older backups still hold the words until they rotate out.
 - **DIYA-025** Implement external-source memory promotion gate (2026-10-18): tests/test_hog_regression.py (mail saying 'your dog is Max' changes nothing); docs/GMAIL_DESIGN.md: mail is read with no tools. Only the person's own words become accepted memory.
 - **DIYA-026** Write Hog next-turn/cold-restart/truncated-history test (2026-10-18): tests/test_hog_regression.py: next turn, history cut, cold restart, correction, forgetting, malicious email
 - **DIYA-028** Validate existing dreaming staged checkpoint semantics (2026-10-18): tests/test_dreaming.py: a staging failure leaves the checkpoint alone; a crash between staging and checkpoint cannot duplicate the batch
@@ -43,17 +44,27 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-047** Add emergency kill switch (2026-10-18): diya_pause.py; Pause/Resume on the Status page; tests/test_pause.py (10); docs/PAUSE_DESIGN.md. Stops approved actions, automations and Diya writing first. Reminders keep firing on purpose.
 - **DIYA-048** Create user-visible preview for remote writes (2026-10-18): Actions page: risk level, what it reaches, how far it can be undone, which connection it uses, under the exact arguments; tests/test_google_write.py, docs/PERMISSIONS_DESIGN.md. No recipient is shown because nothing Diya can do reaches another person yet; the Google account's email is not kept (DIYA-066).
 - **DIYA-053** Handle unknown write outcomes and duplicate retries (2026-10-18): ActionUncertain -> status unknown, never sent again; tests/test_google_write.py and tests/test_connector_tools.py. The calendar event id is made from the request, so a second try cannot make a second event.
+- **DIYA-059** Choose supported Google account types and deployment audience (2026-10-18): docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18). Personal Google account; single user; the app stays an unverified 'In production' OAuth app with Google's warning screen, which is expected for one's own app.
 - **DIYA-061** Implement OAuth authorization code + PKCE as appropriate (2026-10-18): diya_google_calendar.pkce_pair; tests/test_secrets.py: challenge sent first, matching verifier sent with the code; state check in tests/test_google_calendar.py. No OpenID nonce: no ID token is requested. Stand-in Google only.
 - **DIYA-062** Support incremental per-app read/write scopes (2026-10-18): diya_google_write.GOOGLE_WRITE: one connector, one scope, one Connect per service; tests/test_google_write.py. Stand-in Google only.
 - **DIYA-063** Use secure Windows credential vault or encrypted tokens (2026-10-18): diya_secrets.py (DPAPI); tests/test_secrets.py incl. a real Windows round trip; docs/SECRETS_DESIGN.md. Windows only. A program running as the same user can still ask DPAPI.
 - **DIYA-068** Fix permitted Google API hosts and safe request bounds (2026-10-18): tests/test_google_write.py: no tool parameter names a host, url or token; every address is a fixed Google host. Calendar, Tasks, Drive, Docs adapters. Stand-in Google only.
 - **DIYA-072** Create Google account permissions overview (2026-10-18): GET /api/permissions and the Connections page: what each connection can and cannot do, the permission asked for, what Google said it granted, since when, last used, last approved action; tests/test_permissions.py (12), docs/PERMISSIONS_DESIGN.md. Stand-in Google for the grant record; not yet seen with a real sign-in. Sign-ins from before this show no 'granted' line.
+- **DIYA-099** Define Diya↔Google Tasks sync authority (2026-10-18): docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18). Settled by decision 229: Diya is the master, one way only (Google Tasks receives approved tasks). No two-way sync to design.
+- **DIYA-226** Decide single-user personal use vs distributed product (2026-10-18): docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18). Decided: only for the owner now. Later, similar copies for others, each named and personalised by them.
+- **DIYA-227** Decide personal Google vs Workspace account feature priority (2026-10-18): docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18). Decided: a personal Google account.
+- **DIYA-228** Decide exact standing grants and external-approval policy (2026-10-18): docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18). Decided: ask every time until the owner says to override. No standing grants are built or switched on until then.
+- **DIYA-229** Decide whether Google Tasks or Diya DB is canonical (2026-10-18): docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18). Decided: Diya's own database is the master; Google Tasks only receives what the owner approves.
+- **DIYA-230** Decide Windows token vault, device encryption and backup (2026-10-18): docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18). Decided: Windows DPAPI is enough. Advice to turn on Windows device encryption and copy backups to another disk stands.
+- **DIYA-232** Decide all-local vs optional cloud inference boundaries (2026-10-18): docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18). Decided: local only.
+- **DIYA-233** Decide Code-lane sandbox and network policy (2026-10-18): docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18), section 'The code lane policy'. The owner gave Claude the decision. Read other people's code, never run it; run only Diya's own repo in a fenced throwaway copy; results are proposals only.
+- **DIYA-234** Decide archive/chat history and category merge undo strategy (2026-10-18): Decision in docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18); feature built: diya_forget.py, Memory.purge, Forget for good on the Memory page and Forget this in the chat; tests/test_forget.py (14); docs/FORGET_DESIGN.md. Keep everything by default; merges undoable; and delete/forget for good now exists. Backups made earlier keep old words until they rotate out.
+- **DIYA-235** Decide API/version/scopes refresh cadence (2026-10-18): docs/MONTHLY_CHECKS.md. Decided: every month. First due 2026-11-18. Diya can remind you: say 'remind me on the 18th of every month ...'.
 
 ## In progress (14)
 
 - **DIYA-005** Snapshot local database and all configuration before schema changes (2026-10-18). Not encrypted and not offline: a copy of backups/ on another disk is Dinesh's step.
 - **DIYA-021** Add outbox leases, retry and unique keys (2026-10-18). No lease column: one drain at a time in one process. Dreaming's separate pass is guarded by memory_captures, not a lease.
-- **DIYA-024** Implement forgetting and derived-index purge (2026-10-18). A forgotten fact's TEXT stays in the trail on purpose (so Restore works); only a secret's text is not kept. A hard purge is not built.
 - **DIYA-042** Provide approve/deny/revoke controls (2026-10-18). There is no separate 'revoke an approved action': approval runs the action at once. Pausing before approving covers the gap.
 - **DIYA-051** Implement append-only normalized tool/event journal (2026-10-18). Tool calls and code-decided flows are recorded. Not yet: model requests, policy decisions and one correlation id across them.
 - **DIYA-052** Build independent remote-write verifier (2026-10-18). Google writes only (stand-in). The Todoist task is not read back yet.
@@ -65,8 +76,9 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-093** Implement new Doc creation and insertion (2026-10-18). Create and a line of text, read back (stand-in). Needs Dinesh's real-account try.
 - **DIYA-097** Implement Google Tasks list/task-list read (2026-10-18). Lists open tasks in the default list only (stand-in). Needs Dinesh's real-account try.
 - **DIYA-098** Implement Tasks create/complete/update/move/delete (2026-10-18). Create and read-back only (stand-in): complete, update, move, delete are not built.
+- **DIYA-214** Implement data export/delete and revocation propagation (2026-10-18). Delete and revocation are built. Export of the data is not (the Memory page already exports facts as a profile file).
 
-## Waiting for the owner (19)
+## Waiting for the owner (10)
 
 - **DIYA-005** Snapshot local database and all configuration before schema changes (2026-10-18). Not encrypted and not offline: a copy of backups/ on another disk is Dinesh's step.
 - **DIYA-012** Check one-command Windows startup (2026-10-18). python diya_run.py starts the API and UI together; starting at login is not set up. Dinesh's step.
@@ -77,13 +89,4 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-093** Implement new Doc creation and insertion (2026-10-18). Create and a line of text, read back (stand-in). Needs Dinesh's real-account try.
 - **DIYA-097** Implement Google Tasks list/task-list read (2026-10-18). Lists open tasks in the default list only (stand-in). Needs Dinesh's real-account try.
 - **DIYA-098** Implement Tasks create/complete/update/move/delete (2026-10-18). Create and read-back only (stand-in): complete, update, move, delete are not built.
-- **DIYA-226** Decide single-user personal use vs distributed product (2026-10-18). Owner decision (blueprint Part XII).
-- **DIYA-227** Decide personal Google vs Workspace account feature priority (2026-10-18). Owner decision (blueprint Part XII).
-- **DIYA-228** Decide exact standing grants and external-approval policy (2026-10-18). Owner decision (blueprint Part XII).
-- **DIYA-229** Decide whether Google Tasks or Diya DB is canonical (2026-10-18). Owner decision (blueprint Part XII).
-- **DIYA-230** Decide Windows token vault, device encryption and backup (2026-10-18). Owner decision (blueprint Part XII). Windows DPAPI is the current vault; the decision is whether that is enough.
-- **DIYA-231** Decide email/Drive indexing retention and memory promotion (2026-10-18). Owner decision (blueprint Part XII).
-- **DIYA-232** Decide all-local vs optional cloud inference boundaries (2026-10-18). Owner decision (blueprint Part XII). Today everything is local.
-- **DIYA-233** Decide Code-lane sandbox and network policy (2026-10-18). Owner decision (blueprint Part XII).
-- **DIYA-234** Decide archive/chat history and category merge undo strategy (2026-10-18). Owner decision (blueprint Part XII).
-- **DIYA-235** Decide API/version/scopes refresh cadence (2026-10-18). Owner decision (blueprint Part XII).
+- **DIYA-231** Decide email/Drive indexing retention and memory promotion (2026-10-18). The answer was 'yes' to 'should Diya use email and Drive for memory?'. Recorded as the careful reading: yes, opt-in per source, nothing from mail becomes a fact on its own. Please confirm that is what you meant (the suggestion in the question was no).

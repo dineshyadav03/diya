@@ -187,6 +187,19 @@ export async function forwardFactReplace(request, context, options) {
   return forward(request, `/api/memory/${factId}/replace`, options)
 }
 
+// Forgetting for good (docs/FORGET_DESIGN.md): a fact's words, or a message and its reply. Both ids must be whole numbers; nothing else is taken from the URL.
+export async function forwardFactPurge(request, context, options) {
+  const { fact_id: factId } = await context.params
+  if (!WHOLE_NUMBER.test(String(factId))) return errorResponse(404, 'No such fact')
+  return forward(request, `/api/memory/${factId}/forget-for-good`, options)
+}
+
+export async function forwardMessageForget(request, context, options) {
+  const { message_id: messageId } = await context.params
+  if (!WHOLE_NUMBER.test(String(messageId))) return errorResponse(404, 'No such message')
+  return forward(request, `/api/messages/${messageId}/forget`, options)
+}
+
 // The reminders page's routes (docs/PROACTIVITY_DESIGN.md, unit P3). A reminder id is a whole number; anything else
 // is turned away here instead of being pasted into the URL of the API request.
 export async function forwardReminderDone(request, context, options) {

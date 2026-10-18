@@ -234,6 +234,30 @@ export default function ChatPage() {
     }
   }
 
+  // "Forget this" on one of the person's messages (docs/FORGET_DESIGN.md): the message and Diya's reply are deleted, and with them what Diya learned from it. It asks first with the real numbers (a dry
+  // run changes nothing), because nothing can bring them back.
+  async function forgetMessage(serverId) {
+    setTagProblem('')
+    try {
+      const preview = await fetch(`/api/messages/${serverId}/forget`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ also_learned: true, dry_run: true }) })
+      const info = preview.ok ? await preview.json() : null
+      if (!info) throw new Error(`HTTP ${preview.status}`)
+      const learned = info.facts > 0 ? ` Diya will also forget the ${info.facts === 1 ? 'thing' : `${info.facts} things`} she learned from it.` : ''
+      const kept = Object.values(info.kept_and_unlinked || {}).some((n) => n > 0) ? ' A task, reminder or approved action made from it stays.' : ''
+      if (!window.confirm(`Delete this message${info.replies > 0 ? ' and Diya’s reply' : ''} for good?${learned}${kept} This cannot be undone. Backups made earlier may still hold the words until they are replaced.`)) return
+      const done = await fetch(`/api/messages/${serverId}/forget`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ also_learned: true, dry_run: false }) })
+      const report = done.ok ? await done.json() : null
+      if (!report || !Array.isArray(report.message_ids)) throw new Error(`HTTP ${done.status}`)
+      setMessages((prev) => prev.filter((m) => !report.message_ids.includes(m.serverId)))
+      setTags((shown) => {
+        const { [serverId]: _gone, ...rest } = shown
+        return rest
+      })
+    } catch {
+      setTagProblem('Couldn’t delete that. Nothing was changed.')
+    }
+  }
+
   // What Diya wrote first. A failed look shows nothing: the messages are also in the chat they were written in, which History lists.
   async function loadNotes() {
     try {
@@ -686,19 +710,24 @@ export default function ChatPage() {
               </Fragment>
             )
           }
-          if (m.role === 'user' && Number.isInteger(m.serverId) && tags[m.serverId] && categories.length > 0) {
+          if (m.role === 'user' && Number.isInteger(m.serverId)) {
             return (
               <Fragment key={m.id ?? 'h' + i}>
                 <div className="msg user">{m.text}</div>
                 <div className="msg-tag-row">
-                  <select className="msg-tag" aria-label="Category of this message" title="Change this message’s category" value={tags[m.serverId]} onChange={(e) => moveMessage(m.serverId, e.target.value)}>
-                    {categories.some((c) => c.name === tags[m.serverId]) ? null : <option value={tags[m.serverId]}>{tags[m.serverId]}</option>}
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  {tags[m.serverId] && categories.length > 0 && (
+                    <select className="msg-tag" aria-label="Category of this message" title="Change this message’s category" value={tags[m.serverId]} onChange={(e) => moveMessage(m.serverId, e.target.value)}>
+                      {categories.some((c) => c.name === tags[m.serverId]) ? null : <option value={tags[m.serverId]}>{tags[m.serverId]}</option>}
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <button type="button" className="msg-forget" title="Delete this message and Diya’s reply for good" aria-label="Forget this message for good" disabled={thinking} onClick={() => forgetMessage(m.serverId)}>
+                    Forget this
+                  </button>
                 </div>
               </Fragment>
             )

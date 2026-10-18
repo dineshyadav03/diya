@@ -102,6 +102,9 @@ function Why({ detail }) {
   )
 }
 
+// What stands in for the words of a fact that was forgotten for good (diya_memory.PURGED_PLACEHOLDER).
+const FORGOTTEN_TEXT = '(forgotten for good)'
+
 export default function MemoryPage() {
   // null = loading, false = couldn't be loaded, otherwise { summary, facts }.
   const [data, setData] = useState(null)
@@ -243,6 +246,15 @@ export default function MemoryPage() {
     ).then((ok) => ok && setTyped(''))
   }
 
+  // "Forget for good" (docs/FORGET_DESIGN.md): the words are deleted, not kept so that Restore works. It asks first, in plain words, because nothing can bring them back.
+  function forgetForGood(fact) {
+    const sure = window.confirm(
+      `Forget this for good?\n\n“${fact.text}”\n\nIts words are deleted from Diya’s memory and cannot be brought back. Backups made earlier may still hold them until they are replaced.`,
+    )
+    if (!sure) return
+    settle(() => fetch(`/api/memory/${fact.id}/forget-for-good`, { method: 'POST' }), String(fact.id), () => 'Forgotten for good.')
+  }
+
   function checkForNew() {
     settle(
       () => fetch('/api/memory/ingest', { method: 'POST' }),
@@ -258,7 +270,8 @@ export default function MemoryPage() {
   const withStatus = (status) => facts.filter((fact) => fact.status === status)
   const candidates = withStatus('candidate')
   const accepted = withStatus('accepted')
-  const rejected = withStatus('rejected')
+  const forgotten = withStatus('rejected').filter((fact) => fact.text === FORGOTTEN_TEXT) // nothing is left of these but that something was here
+  const rejected = withStatus('rejected').filter((fact) => fact.text !== FORGOTTEN_TEXT)
   const retired = withStatus('retired')
   const summary = data ? data.summary : null
   // The accepted fact a waiting one may replace, if the API says so and that fact is still accepted.
@@ -392,6 +405,7 @@ export default function MemoryPage() {
                           {button(replacedBy(fact) ? 'Keep both' : 'Accept', replacedBy(fact) ? '' : 'memory-btn--primary', () => decide(fact, 'accept', 'Accepted. Diya will know it from the next message.'), isBusy, fact)}
                           {button('Edit', '', () => setEditing({ id: fact.id, text: fact.text, original: fact.text }), isBusy, fact)}
                           {button('Reject', 'memory-btn--danger', () => decide(fact, 'reject', 'Rejected.'), isBusy, fact)}
+                          {button('Forget for good', 'memory-btn--danger', () => forgetForGood(fact), isBusy, fact)}
                         </>
                       )),
                     )}
@@ -413,10 +427,14 @@ export default function MemoryPage() {
                         {group.facts.map((fact) =>
                           factRow(
                             fact,
-                            ({ isBusy }) =>
-                              fact.by === 'auto'
-                                ? button('Undo', 'memory-btn--danger', () => decide(fact, 'retire', 'Undone: Diya will not use it from the next message.'), isBusy, fact)
-                                : button('Forget', 'memory-btn--danger', () => decide(fact, 'retire', 'Forgotten: Diya will not use it from the next message.'), isBusy, fact),
+                            ({ isBusy }) => (
+                              <>
+                                {fact.by === 'auto'
+                                  ? button('Undo', 'memory-btn--danger', () => decide(fact, 'retire', 'Undone: Diya will not use it from the next message.'), isBusy, fact)
+                                  : button('Forget', 'memory-btn--danger', () => decide(fact, 'retire', 'Forgotten: Diya will not use it from the next message.'), isBusy, fact)}
+                                {button('Forget for good', 'memory-btn--danger', () => forgetForGood(fact), isBusy, fact)}
+                              </>
+                            ),
                             true, // the heading already says who: repeating it on every fact would be noise
                           ),
                         )}
@@ -441,7 +459,7 @@ export default function MemoryPage() {
                 </form>
               </section>
 
-              {(rejected.length > 0 || retired.length > 0) && (
+              {(rejected.length > 0 || retired.length > 0 || forgotten.length > 0) && (
                 <section aria-labelledby="past">
                   <h2 id="past">Decided before</h2>
                   {retired.length > 0 && (
@@ -449,7 +467,12 @@ export default function MemoryPage() {
                       <summary>Forgotten ({retired.length})</summary>
                       <ul className="memory-list">
                         {retired.map((fact) =>
-                          factRow(fact, ({ isBusy }) => button('Remember again', '', () => decide(fact, 'restore', 'Remembered again.'), isBusy, fact)),
+                          factRow(fact, ({ isBusy }) => (
+                            <>
+                              {button('Remember again', '', () => decide(fact, 'restore', 'Remembered again.'), isBusy, fact)}
+                              {button('Forget for good', 'memory-btn--danger', () => forgetForGood(fact), isBusy, fact)}
+                            </>
+                          )),
                         )}
                       </ul>
                     </details>
@@ -459,11 +482,17 @@ export default function MemoryPage() {
                       <summary>Rejected ({rejected.length})</summary>
                       <ul className="memory-list">
                         {rejected.map((fact) =>
-                          factRow(fact, ({ isBusy }) => button('Reconsider', '', () => decide(fact, 'reopen', 'Back in the list to review.'), isBusy, fact)),
+                          factRow(fact, ({ isBusy }) => (
+                            <>
+                              {button('Reconsider', '', () => decide(fact, 'reopen', 'Back in the list to review.'), isBusy, fact)}
+                              {button('Forget for good', 'memory-btn--danger', () => forgetForGood(fact), isBusy, fact)}
+                            </>
+                          )),
                         )}
                       </ul>
                     </details>
                   )}
+                  {forgotten.length > 0 && <p className="memory-dim">{forgotten.length} forgotten for good: nothing is left of them but that something was here.</p>}
                 </section>
               )}
             </>
