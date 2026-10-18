@@ -214,6 +214,10 @@ def main(argv=None, config=None, out=None, notify=None, now=None):
     except (diya_config.ConfigError, OSError) as exc:
         print(f"diya_notify: {exc}", file=out)
         return EXIT_UNUSABLE
+    import diya_backup
+
+    if not diya_backup.guard_migration(config, say=lambda line: print(f"diya_notify: {line}", file=out)):
+        return EXIT_UNUSABLE
     if notify is None:
         if sys.platform != "win32":
             print("diya_notify: desktop notifications are only implemented for Windows here.", file=out)

@@ -526,6 +526,10 @@ def main():
             if config_error is not None:
                 print(f"[error] {config_error}")
                 return 1
+            import diya_backup
+
+            if not diya_backup.guard_migration(config):  # a schema change reaches the database only after a checked copy of it (docs/BACKUP_DESIGN.md)
+                return 1
             try:
                 dreamer = Dreamer(config)
                 run_cycle(dreamer)

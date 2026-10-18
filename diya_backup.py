@@ -242,6 +242,22 @@ def before_migrating(config, now=None):
     return make(config, now=now)
 
 
+def guard_migration(config, say=print):
+    """The rule of before_migrating for EVERY program that opens the database, not only the API's start-up: if the database has schema steps still to apply, a checked snapshot is taken first, and if it cannot
+    be made the program must not go on (this says so and returns False, with the database untouched). Returns True when it is safe to open the database. Found 2026-10-18: a scheduled job (Dreaming, the notifier)
+    loads whatever code is on disk, so a new migration reached the owner's real database through one of them with no copy taken, because the rule lived only in the API's start-up. DIYA_BACKUP=0 skips it, as there."""
+    if not getattr(config, "backup", True):
+        return True
+    try:
+        taken = before_migrating(config)
+    except BackupError as exc:
+        say(f"Diya's memory needs a schema update and a safety copy of it could not be made first ({exc}). Nothing was changed. Fix that, or set DIYA_BACKUP=0 to go on without the copy.")
+        return False
+    if taken is not None:
+        say(f"Diya's memory needed a schema update. A checked copy was made first: {taken.name}. To go back: python diya_backup.py restore {taken.path} --to NEWFILE")
+    return True
+
+
 class Daily(threading.Thread):
     """Makes a snapshot when one is due, now and then every hour, while the API runs. A daemon thread: it never keeps Diya from stopping, and a failure is printed once and never raised."""
 

@@ -7,7 +7,7 @@ and nothing it does outside the computer happens without your approval. It is on
 
 ## Where it stands (2026-10-18)
 
-Built for Windows with [Ollama](https://ollama.com), tested on a 16 GB laptop with no GPU. About 7,500 automated tests run on every push (7,495 passed at the 2026-10-18 baseline, [docs/BASELINE_2026-10-18.md](docs/BASELINE_2026-10-18.md)). Every unit the [roadmap](ROADMAP.md) has designed is built;
+Built for Windows with [Ollama](https://ollama.com), tested on a 16 GB laptop with no GPU. About 7,800 automated tests run on every push (7,761 passed on 2026-10-18; the day's starting point is in [docs/BASELINE_2026-10-18.md](docs/BASELINE_2026-10-18.md)). Every unit the [roadmap](ROADMAP.md) has designed is built;
 against the larger vision about two thirds is there (a rough estimate, areas weighted equally), and what is left is mostly what only the owner can do (accounts, a phone, hardware) plus a few features not
 designed yet. In plain terms:
 

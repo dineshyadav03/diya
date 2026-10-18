@@ -407,6 +407,10 @@ def main(argv=None, config=None, out=None, secret=None, post=post_json, clock=No
     except (diya_config.ConfigError, OSError) as exc:
         say(f"diya_telegram: {exc}")
         return EXIT_UNUSABLE
+    import diya_backup
+
+    if not diya_backup.guard_migration(config, say=lambda line: say(f"diya_telegram: {line}")):
+        return EXIT_UNUSABLE
     clock = clock or (lambda: datetime.now(timezone.utc))
     if args.set_token:
         try:

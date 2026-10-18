@@ -1514,6 +1514,14 @@ def main():
         print('  python diya.py <thread_id|new> "message"     -- send one message and exit (for scripts)')
         return
 
+    import diya_backup
+
+    try:
+        guarded = diya_config.load_config()
+    except diya_config.ConfigError:
+        guarded = None  # Agent() says what is wrong with the settings
+    if guarded is not None and not diya_backup.guard_migration(guarded):
+        return
     agent = Agent()
     warm_up_or_exit(agent)
 

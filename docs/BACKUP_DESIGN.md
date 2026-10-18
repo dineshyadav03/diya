@@ -22,3 +22,14 @@ python diya_backup.py restore FILE --to NEWPATH   # put it at a NEW path; never 
 **What it does not do.** It does not protect against deleting the whole project folder (the snapshots sit beside the database, in a folder a sync program may copy, so a OneDrive copy exists but is not a separate backup; a copy on another disk is the owner's step: `python diya_data.py move` and a copy of `backups/`). It does not include connector sign-ins (they are separate files, protected for this Windows user, and deliberately not in a backup). It cannot prove the contents are what the owner wants, only that they are intact.
 
 **Proof.** `tests/test_backup.py` (19 cases): faithful copy, consistent during a write, nothing left behind on failure, never overwritten, rotation touches only its own files, due-ness, the hourly thread never raises, checking does not change an old snapshot, restore refuses an existing path, the command line.
+
+## Every program that opens the database takes the copy first (2026-10-18, later the same day)
+
+The rule "copy before migrating" was first written into the API's start-up only. Looking at the owner's real database showed schema 23 applied at 18:28 with no snapshot between 16:52 and 19:10: a scheduled job
+(Dreaming or the notifier) had opened the database with the new code on disk and migrated it, as any program does. Nothing was harmed (migration 23 only adds a table and a column, and a failed step is rolled back
+whole), but the next migration might not be so gentle.
+
+`diya_backup.guard_migration(config)` is the rule as one function: if steps are pending, take a checked snapshot and say so; if it cannot be made, say so and return False so the program stops with the database
+untouched; with `DIYA_BACKUP=0`, skip. It is called first by the scheduled Dreaming pass, the notifier, `diya_review.py`, `diya_actions_cli.py`, the Telegram bridge and `diya.py`, as well as the API's start-up.
+Proved in `tests/test_migration_guard.py` (9). Not covered: a program that opens the database without going through one of these entry points (a one-off script of the owner's).
+

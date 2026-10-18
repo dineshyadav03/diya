@@ -209,6 +209,10 @@ def main(argv=None, config=None, out=None, err=None, kinds=None, input_fn=input)
     except diya_config.ConfigError as exc:
         print(f"diya_actions_cli: {exc}", file=err)
         return EXIT_USAGE
+    import diya_backup
+
+    if not diya_backup.guard_migration(config, say=lambda line: print(f"diya_actions_cli: {line}", file=err)):
+        return EXIT_USAGE
     actions = Actions(Store(config.db_path), config, diya_connector_tools.real_action_kinds() if kinds is None else tuple(kinds))
     try:
         return args.run(actions, config, args, out, err, input_fn)
