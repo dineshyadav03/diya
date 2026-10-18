@@ -33,6 +33,7 @@ export const NAV = [
     label: 'System',
     items: [
       { href: '/connections', name: 'Connections' },
+      { href: '/status', name: 'Status' },
       { href: '/activity', name: 'Activity' },
       { href: '/actions', name: 'Actions', badge: 'waiting' },
     ],

@@ -25,6 +25,7 @@ import diya_config
 import diya_connections_api
 import diya_connector_tools
 import diya_intent
+import diya_health_api
 import diya_journal_api
 import diya_knowledge_api
 import diya_memory_api
@@ -546,6 +547,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     diya_knowledge_api.register(app, config, agent)  # the pages made from the person's notes (docs/KNOWLEDGE_DESIGN.md)
     diya_threads_api.register(app, config, agent)  # searching and naming past chats
     diya_journal_api.register(app, config, agent)  # what Diya did with a tool or a connector (docs/ACTIVITY_JOURNAL_DESIGN.md)
+    diya_health_api.register(app, config, agent)  # is Diya well, one honest line per part (docs/HEALTH_DESIGN.md)
     diya_categories_api.register(app, config, agent, lambda: MAX_PAGE_MESSAGES)  # the one chat by category (docs/ONE_CHAT_DESIGN.md, steps 2 and 3)
     diya_push_api.register(app, config, agent)  # telling the phone by Web Push, off unless DIYA_PUSH=1 (docs/PUSH_DESIGN.md, unit P2)
     diya_reminders_api.register(app, config, agent)
@@ -604,6 +606,10 @@ def main():
     diya.warm_up_or_exit(agent)
     for line in diya.memory_startup_lines(agent) + diya.actions_startup_lines(agent):
         print(line)
+    if config.backup:  # a checked snapshot of the memory when the newest is a day old, and then once a day (diya_backup.py, docs/BACKUP_DESIGN.md)
+        import diya_backup
+
+        diya_backup.Daily(config).start()
     transcriber = WhisperTranscriber(config.whisper_model)
     transcriber.warm_up()
     if config.keep_warm:  # load the chat model now and keep it loaded, so the first message is not the slow one (docs/SPEED_DESIGN.md)

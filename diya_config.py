@@ -129,6 +129,8 @@ class Config:
     mail: bool = True  # DIYA_MAIL
     # Connector sign-ins and Google's client secret are stored encrypted for this Windows user (DPAPI) instead of as plain text (diya_secrets.py, docs/SECRETS_DESIGN.md). DIYA_PROTECT_SECRETS=0 keeps them plain.
     protect_secrets: bool = True  # DIYA_PROTECT_SECRETS
+    # A checked snapshot of the database is made by itself when the newest is a day old, while the API runs (diya_backup.py, docs/BACKUP_DESIGN.md). DIYA_BACKUP=0 turns it off.
+    backup: bool = True  # DIYA_BACKUP
     # With a second, suspicious privacy judge (DIYA_PRIVACY_MODEL), its "unsure" no longer holds a fact back when the main model says OK (docs/AUTO_MEMORY_DESIGN.md, 8.5): measured on the owner's own messages the
     # suspicious judge said "unsure" about half of ordinary facts and nothing was remembered. DIYA_PRIVACY_UNSURE_ASKS=1 brings the old, stricter behaviour back.
     privacy_unsure_asks: bool = False  # DIYA_PRIVACY_UNSURE_ASKS
@@ -163,6 +165,7 @@ class Config:
     # this directory (<name>.token), never the database and never git. One plain log of every
     # connect/disconnect/call, the same shape dream_log.txt already has for Dreaming.
     connector_tokens_dir: str = "connector_tokens"  # DIYA_CONNECTOR_TOKENS_DIR
+    backup_dir: str = "backups"  # DIYA_BACKUP_DIR: where the checked snapshots of the database go (diya_backup.py, docs/BACKUP_DESIGN.md)
     connectors_log_path: str = "connectors_log.txt"  # DIYA_CONNECTORS_LOG_PATH
     # Home Assistant is self-hosted, unlike Notion/Todoist's fixed API address, so its own address
     # is a plain setting (not a secret -- the long-lived token from the Connections page is the
@@ -223,6 +226,7 @@ _STRING_SETTINGS = {
     "host": "DIYA_HOST",
     "token_path": "DIYA_TOKEN_PATH",
     "connector_tokens_dir": "DIYA_CONNECTOR_TOKENS_DIR",
+    "backup_dir": "DIYA_BACKUP_DIR",
     "connectors_log_path": "DIYA_CONNECTORS_LOG_PATH",
     "home_assistant_url": "DIYA_HOME_ASSISTANT_URL",
     "google_client_id": "DIYA_GOOGLE_CLIENT_ID",
@@ -232,7 +236,7 @@ _STRING_SETTINGS = {
 
 # The settings whose default is a file or folder Diya writes about you: with DIYA_DATA_DIR set they default to the same name in that folder.
 _DATA_FILES = ("db_path", "knowledge_dir", "advisor_dir", "mcp_config", "profile_path", "dream_log_path", "dream_state_path", "dream_pending_path", "notify_log_path",
-               "token_path", "connector_tokens_dir", "connectors_log_path", "push_vapid_path", "telegram_token_path")
+               "token_path", "connector_tokens_dir", "connectors_log_path", "push_vapid_path", "telegram_token_path", "backup_dir")
 
 
 # The settings that are a size limit in characters, where 0 means "no limit": the setting, and what 0 means for it.
@@ -297,7 +301,7 @@ def load_config(env=None) -> Config:
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
                         ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
-                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("categories", "DIYA_CATEGORIES"), ("repo_study", "DIYA_REPO_STUDY"), ("mail", "DIYA_MAIL"), ("protect_secrets", "DIYA_PROTECT_SECRETS"),("knowledge_chat", "DIYA_KNOWLEDGE_CHAT"), ("mcp", "DIYA_MCP"), ("privacy_unsure_asks", "DIYA_PRIVACY_UNSURE_ASKS")):
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("categories", "DIYA_CATEGORIES"), ("repo_study", "DIYA_REPO_STUDY"), ("mail", "DIYA_MAIL"), ("protect_secrets", "DIYA_PROTECT_SECRETS"), ("backup", "DIYA_BACKUP"), ("knowledge_chat", "DIYA_KNOWLEDGE_CHAT"), ("mcp", "DIYA_MCP"), ("privacy_unsure_asks", "DIYA_PRIVACY_UNSURE_ASKS")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag
