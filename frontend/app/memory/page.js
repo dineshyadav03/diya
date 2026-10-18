@@ -308,6 +308,17 @@ export default function MemoryPage() {
         )}
         {fact.person && !hidePerson && <p className="memory-person-tag">About {fact.person}</p>}
         {fact.by === 'auto' && <p className="memory-auto-tag">Learned on its own</p>}
+        {fact.status === 'accepted' && fact.said_again > 0 && (
+          <p className="memory-dim">You said it again {fact.said_again === 1 ? 'once' : `${fact.said_again} times`}.</p>
+        )}
+        {fact.status === 'accepted' && fact.fades_on && (
+          <p className="memory-dim">
+            This looks like a passing state, so it fades on {fact.fades_on} unless you say it again or keep it.{' '}
+            <button type="button" className="memory-btn memory-btn--quiet" disabled={isBusy} onClick={() => decide(fact, 'keep', 'Kept: it will not fade.')} aria-label={`Keep: ${fact.text}`}>
+              Keep
+            </button>
+          </p>
+        )}
         <Flags flags={fact.flags} />
         {fact.status === 'candidate' && replacedBy(fact) && (
           <p className="memory-replaces">

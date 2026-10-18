@@ -10,6 +10,8 @@
     python diya_review.py add TEXT...       a fact you type yourself: it goes in already accepted
     python diya_review.py export            the accepted facts, as the old user_profile.txt held them
     python diya_review.py import-profile    take the old user_profile.txt in (the file is never changed)
+    python diya_review.py export-markdown [PATH]   a Markdown copy of memory (docs/MARKDOWN_MEMORY_DESIGN.md)
+    python diya_review.py restore-markdown PATH    bring back what a Markdown copy holds and memory does not
     python diya_review.py verify            check the store is consistent
     python diya_review.py judge [ID...]     ask the local model for a second opinion on candidates (advisory)
     python diya_review.py merge FROM [INTO] move every fact about FROM onto INTO (default: you)
@@ -172,6 +174,43 @@ def cmd_export(memory, config, args, out):
     return EXIT_OK
 
 
+def cmd_export_markdown(memory, config, args, out):
+    """The Markdown copy of memory (diya_markdown.py): to a file when a path is given (never over an existing file without --force), else to the screen."""
+    import diya_markdown
+
+    text = diya_markdown.export_markdown(memory)
+    if not args.path:
+        out.write(text)
+        return EXIT_OK
+    import os
+
+    if os.path.exists(args.path) and not args.force:
+        raise FactError(f"{args.path} already exists; nothing was written (--force replaces it)")
+    with open(args.path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+    print(f"Wrote {printable(args.path)}: {text.count(chr(10))} lines. It is a copy; the database is unchanged.", file=out)
+    return EXIT_OK
+
+
+def cmd_restore_markdown(memory, config, args, out):
+    """Bring back facts from a Markdown copy: only what is not already there; nothing existing is changed."""
+    import diya_markdown
+
+    try:
+        with open(args.path, encoding="utf-8") as handle:
+            text = handle.read()
+    except OSError as exc:
+        raise SourceUnreadable(f"could not read {args.path} ({exc})") from exc
+    restored, already, problems = diya_markdown.restore_markdown(memory, text)
+    print(f"Restored {restored} fact{'' if restored == 1 else 's'}; {already} {'was' if already == 1 else 'were'} already here. Nothing that was here was changed.", file=out)
+    for problem in problems[:20]:
+        print(f"  {printable(problem, 120)}", file=out)
+    if len(problems) > 20:
+        print(f"  ... and {len(problems) - 20} more lines could not be read", file=out)
+    print(_usage_line(memory), file=out)
+    return EXIT_OK
+
+
 def cmd_import_profile(memory, config, args, out):
     result = diya_memory.import_legacy_profile(memory, config, actor="import")
     print(f"Imported {result.imported} facts from {printable(config.profile_path)}; {result.already} were imported before, "
@@ -244,6 +283,13 @@ def build_parser():
     add.set_defaults(run=cmd_add)
     commands.add_parser("export", help="the accepted facts, in the old user_profile.txt format").set_defaults(run=cmd_export)
     commands.add_parser("import-profile", help="take the old user_profile.txt in; the file is never changed").set_defaults(run=cmd_import_profile)
+    export_md = commands.add_parser("export-markdown", help="a Markdown copy of memory to read or keep in Git (a copy: the database stays the truth)")
+    export_md.add_argument("path", nargs="?", default=None, help="a file to write (default: the screen)")
+    export_md.add_argument("--force", action="store_true", help="replace the file if it exists")
+    export_md.set_defaults(run=cmd_export_markdown)
+    restore_md = commands.add_parser("restore-markdown", help="bring back facts from a Markdown copy; only what is not here already, nothing is changed")
+    restore_md.add_argument("path")
+    restore_md.set_defaults(run=cmd_restore_markdown)
     commands.add_parser("verify", help="check the store is consistent").set_defaults(run=cmd_verify)
     judge = commands.add_parser("judge", help="ask the local model for a second opinion on candidates (advisory only)")
     judge.add_argument("ids", nargs="*", type=int, help="only these candidates (default: all of them)")

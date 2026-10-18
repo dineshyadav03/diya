@@ -465,6 +465,20 @@ MIGRATIONS = (
         "CREATE TRIGGER IF NOT EXISTS dream_runs_no_update BEFORE UPDATE ON dream_runs BEGIN SELECT RAISE(ABORT, 'the receipts are append-only'); END",
         "CREATE TRIGGER IF NOT EXISTS dream_runs_no_delete BEFORE DELETE ON dream_runs BEGIN SELECT RAISE(ABORT, 'the receipts are append-only'); END",
     )),
+    # Said again (docs/FADING_DESIGN.md): each time the person says something Diya already knows, the message is recorded as a mention of that fact, so the fact can say how often and when it was said (the
+    # evidence behind it, as Hindsight keeps a proof count) and what a passing state last heard from the person; and Dreaming's receipt counts the facts that faded.
+    (23, (
+        """
+        CREATE TABLE IF NOT EXISTS fact_mentions (
+            fact_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            at TEXT NOT NULL,
+            PRIMARY KEY (fact_id, message_id),
+            FOREIGN KEY (fact_id) REFERENCES facts(id)
+        )
+        """,
+        "ALTER TABLE dream_runs ADD COLUMN faded INTEGER NOT NULL DEFAULT 0",
+    )),
 )
 
 MAX_THREAD_TITLE = 80  # the longest name a chat can be given
@@ -940,7 +954,7 @@ class Store:
         conn.close()
         return [{"id": r[0], "thread_id": r[1], "role": r[2], "content": r[3]} for r in rows]
 
-    DREAM_RUN_FIELDS = ("started_at", "duration_ms", "first_message_id", "last_message_id", "messages_read", "staged", "remembered", "asked", "not_kept", "held", "replaced", "questions", "categories_sorted", "outcome", "errors")
+    DREAM_RUN_FIELDS = ("started_at", "duration_ms", "first_message_id", "last_message_id", "messages_read", "staged", "remembered", "asked", "not_kept", "held", "replaced", "questions", "categories_sorted", "outcome", "errors", "faded")
 
     def dream_run_add(self, **fields):
         """Record one Dreaming pass (a receipt). Append-only: the table refuses any change afterwards. Returns the receipt's number."""
@@ -958,7 +972,7 @@ class Store:
 
     def dream_runs_recent(self, limit=30, busy_only=True):
         """The newest receipts first. With `busy_only` the passes that read nothing and found nothing wrong are left out (they are counted by dream_idle_count)."""
-        where = "WHERE messages_read > 0 OR staged > 0 OR remembered > 0 OR asked > 0 OR not_kept > 0 OR replaced > 0 OR questions > 0 OR categories_sorted > 0 OR errors IS NOT NULL" if busy_only else ""
+        where = "WHERE messages_read > 0 OR staged > 0 OR remembered > 0 OR asked > 0 OR not_kept > 0 OR replaced > 0 OR questions > 0 OR categories_sorted > 0 OR faded > 0 OR errors IS NOT NULL" if busy_only else ""
         conn = self.connect()
         try:
             conn.row_factory = sqlite3.Row
@@ -977,7 +991,7 @@ class Store:
         try:
             return conn.execute(
                 "SELECT COUNT(*) FROM dream_runs WHERE started_at >= ? AND messages_read = 0 AND staged = 0 AND remembered = 0 AND asked = 0 AND not_kept = 0 AND replaced = 0 AND questions = 0"
-                " AND categories_sorted = 0 AND errors IS NULL", (since,),
+                " AND categories_sorted = 0 AND faded = 0 AND errors IS NULL", (since,),
             ).fetchone()[0]
         finally:
             conn.close()

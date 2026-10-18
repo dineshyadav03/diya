@@ -125,13 +125,15 @@ def describe(memory, store, fact):
         lines.append(f"You added this yourself ({_when(fact['created_at'])}).")
     elif source == "legacy_profile":
         lines.append("It came from your old profile file, which was imported when memory moved into the database.")
+    elif source == "markdown_export":
+        lines.append(f"It was restored from a Markdown copy of my memory that you exported earlier ({_when(fact['created_at'])} is when it was first taken in). Which message it was read from is not kept.")
     elif messages:
         times = store.message_times([m["id"] for m in messages])
         for message in messages:
             lines.append(f"You told me: “{printable(message['content'], QUOTE_CHARS)}” ({_when(times.get(message['id']))}).")
     else:
         lines.append("It was read from your messages, but which message is not recorded.")
-    if accepted is not None and source != "manual":
+    if accepted is not None and source not in ("manual", "markdown_export"):
         event, actor, at = accepted
         if actor == "auto":
             lines.append(f"I remembered it on my own under the memory rules ({_when(at)}); nothing asked you first, and you can undo it.")
@@ -139,6 +141,13 @@ def describe(memory, store, fact):
             lines.append(f"You accepted it ({_when(at)}).")
         else:
             lines.append(f"It was accepted by the system ({_when(at)}).")
+    if status == "accepted":
+        said = memory.mentions(fact["id"])
+        if said:
+            lines.append(f"You said it again {'once' if len(said) == 1 else f'{len(said)} times'}, most recently {_when(said[-1][1])}.")
+        faded = memory.fading().get(fact["id"])
+        if faded is not None:
+            lines.append(f"It sounds like a passing state, so it fades on {faded.astimezone().strftime('%d %b %Y')} unless you say it again or keep it.")
     if status == "retired":
         lines.append("I no longer use it: it was retired, and the Memory page can restore it.")
     elif status == "candidate":

@@ -363,6 +363,8 @@ def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIM
             if decision.reasons[0].startswith("secret:"):
                 memory.discard_secret(fact["id"], decision.reasons[0].partition(":")[2], actor)
             else:
+                if "duplicate" in decision.reasons:
+                    _said_again(memory, fact, actor, _flag_names(fact["flags"]).get(diya_checks.FLAG_DUPLICATE))
                 memory.decide(fact["id"], "reject", actor, detail)
                 _clear_ask(memory, fact["id"], actor)
             never += 1
@@ -391,7 +393,9 @@ def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIM
                 continue
             try:
                 memory.decide(fact["id"], "accept", actor, detail)
-            except diya_memory.DuplicateFact:
+            except diya_memory.DuplicateFact as duplicate:
+                # Said again: not ignored, counted. The fact Diya already knows gets this message as a mention (docs/FADING_DESIGN.md), which renews one that would fade and is the evidence behind it.
+                _said_again(memory, fact, actor, duplicate.twin)
                 memory.decide(fact["id"], "reject", actor, {"lane": LANE_NEVER, "reasons": ["duplicate"]})
                 _clear_ask(memory, fact["id"], actor)
                 never += 1
@@ -410,6 +414,16 @@ def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIM
             _mark_ask(memory, fact, decision.kind, decision.reasons[0], actor)
             asked += 1
     return Report(remembered, asked, never, held, replaced)
+
+
+def _said_again(memory, fact, actor, twin):
+    """The person said again what Diya already knows: the message becomes a mention of the fact that says it (docs/FADING_DESIGN.md), which renews one that would fade. Nothing happens, and nothing
+    fails, when the twin is not an accepted fact (it may itself still be waiting) or the message the words came from is not recorded."""
+    import diya_memory
+
+    message = diya_memory.source_message_id(fact)
+    if str(twin).isdigit() and message is not None:
+        memory.reinforce(int(twin), message, actor)
 
 
 def _replace_now(memory, fact, old_id, actor):

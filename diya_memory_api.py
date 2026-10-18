@@ -8,7 +8,7 @@ memory page. The rules are diya_memory's, the same ones the command line applies
     GET  /api/memory/learned?message_id=N   what memory did with one message of the person's, and whether it is still being read
     POST /api/memory/{id}/replace     {"old_id": ...}  accept this waiting fact and retire the accepted one it replaces, together
     POST /api/memory/{id}/undo-replace   take a correction back: retire this fact and remember the one it replaced again, together
-    POST /api/memory/{id}/{action}    accept | reject | reopen | retire | restore, or edit with {"text": ...}
+    POST /api/memory/{id}/{action}    accept | reject | reopen | retire | restore | keep (a fact that would fade is kept for good), or edit with {"text": ...}
     POST /api/memory/merge            {"from_name": ..., "into_name": ...|null}  move a person's facts onto
                                        another name, or back to no one in particular (null); never automatic,
                                        never deletes from_name's own row (docs/PERSON_MEMORY_DESIGN.md, D3)
@@ -110,9 +110,11 @@ def register(app, config, agent):
             "automatic": automatic(memory),
         }
 
-    def public(fact, actors=None):
+    def public(fact, actors=None, fading=None, said=None):
         if actors is None:  # one fact on its own (a list passes the actors it has already asked for, once)
-            actors = diya_memory.open_memory(agent.store, agent.config).accepting_actors()
+            memory = diya_memory.open_memory(agent.store, agent.config)
+            actors, fading, said = memory.accepting_actors(), memory.fading(), memory.mention_counts()
+        fades = (fading or {}).get(fact["id"])
         return {
             "id": fact["id"],
             "text": printable(fact["text"]),
@@ -125,13 +127,16 @@ def register(app, config, agent):
             "replaces": diya_memory.replaced_fact_id(fact["flags"]) if fact["status"] == "candidate" else None,
             # who accepted it: "auto" for what Diya took on its own, "you" for what a person accepted, typed or imported; None until accepted
             "by": None if fact["id"] not in actors else "auto" if actors[fact["id"]] == "auto" else "you",
+            # when a passing state fades unless it is said again or kept (docs/FADING_DESIGN.md), as a date; None for one that does not fade; and how many times the person said it again
+            "fades_on": fades.astimezone().strftime("%Y-%m-%d") if fades is not None else None,
+            "said_again": (said or {}).get(fact["id"], 0),
         }
 
     @app.get("/api/memory")
     def list_facts():
         memory = diya_memory.open_memory(agent.store, agent.config)
-        actors = memory.accepting_actors()
-        return {"summary": summary(memory), "facts": [public(fact, actors) for fact in memory.facts()]}
+        actors, fading, said = memory.accepting_actors(), memory.fading(), memory.mention_counts()
+        return {"summary": summary(memory), "facts": [public(fact, actors, fading, said) for fact in memory.facts()]}
 
     def will_be_read(message_id):
         """Is this message of the person's still going to be read for facts (automatic memory on, a message worth reading or a request to forget,
@@ -249,7 +254,7 @@ def register(app, config, agent):
     @app.post("/api/memory/{fact_id}/{action}")
     def decide(fact_id: int, action: str, body: TextBody | None = None):
         _check_id(fact_id)
-        if action != "edit" and action not in diya_memory.ACTIONS:
+        if action not in ("edit", "keep") and action not in diya_memory.ACTIONS:
             raise HTTPException(status_code=404, detail=f"there is no action {printable(action)}")
         memory = diya_memory.open_memory(agent.store, agent.config)
         try:
@@ -260,6 +265,8 @@ def register(app, config, agent):
                 if cleaned is None:
                     raise InvalidFact("there is nothing left of that text once it is cleaned up")
                 memory.edit(fact_id, cleaned.text, "api", expected_text=body.expected_text)
+            elif action == "keep":
+                memory.keep(fact_id, "api")
             else:
                 memory.decide(fact_id, action, "api")
         except FactError as exc:

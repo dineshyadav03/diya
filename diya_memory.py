@@ -69,6 +69,8 @@ EVENT_STATUS = {
     "edited": None,
     "flagged": None,  # the advisory checks changed what they say about a fact; never its status
     "retagged": None,  # who the fact is about changed (docs/PERSON_MEMORY_DESIGN.md); never its status
+    "reinforced": None,  # the person said it again (docs/FADING_DESIGN.md): never changes its status
+    "kept": None,  # the person said "keep it": it no longer fades
     "purged": "rejected",  # forgotten for good (docs/FORGET_DESIGN.md): the words are gone; only that a fact was here, and when, is kept
 }
 
@@ -109,6 +111,8 @@ class ChangedUnderYou(IllegalTransition):
 
 
 class DuplicateFact(FactError):
+    twin = None  # the number of the accepted fact that already says it, when known (docs/FADING_DESIGN.md: it is reinforced, not ignored)
+
     """An accepted fact already says the same thing."""
 
 
@@ -292,18 +296,20 @@ class IngestReport:
 def open_memory(store, config):
     """The fact store as the settings say: with relevance recall on (DIYA_RECALL), as many characters may be kept as DIYA_MEMORY_STORE_CHARS and the model is told the facts for each message; with it
     off, the room is the limit of what is kept, as it was before."""
-    return Memory(store, store_limit=config.memory_store_chars if getattr(config, "recall", False) else None)
+    return Memory(store, store_limit=config.memory_store_chars if getattr(config, "recall", False) else None, fades=bool(getattr(config, "auto_memory", True)))
 
 
 class Memory:
     """The fact store, bound to one `diya_db.Store`. Each call uses its own short-lived connection,
     as Store does."""
 
-    def __init__(self, store, store_limit=None):
+    def __init__(self, store, store_limit=None, fades=True):
         """`store_limit` is how many characters of facts may be KEPT (accepted); None is MAX_PROFILE_CHARS, the room the model is told in one message, which is what it always was. With relevance recall
-        (docs/RECALL_DESIGN.md) more can be kept than is told, and open_memory() gives it from the settings."""
+        (docs/RECALL_DESIGN.md) more can be kept than is told, and open_memory() gives it from the settings. `fades` is whether passing states fade (docs/FADING_DESIGN.md): open_memory() turns it
+        off when automatic memory is off, because then nothing is retired for the person, so no date should be promised."""
         self.store = store
         self._store_limit = store_limit
+        self.fades = fades
 
     @property
     def store_limit(self):
@@ -488,8 +494,11 @@ class Memory:
 
             facts = [{"id": r[0], "text": r[1], "text_key": r[2], "person": r[3]} for r in conn.execute(
                 "SELECT f.id, f.text, f.text_key, p.name FROM facts f LEFT JOIN people p ON p.id = f.person_id WHERE f.status = 'accepted' ORDER BY f.id").fetchall()]
-        chosen = diya_recall.choose(facts, query, MAX_PROFILE_CHARS, lambda picked: render_grouped([(f["text"], f["person"]) for f in picked]), store=self.store, embed=embed, model=model)
-        return render_grouped([(f["text"], f["person"]) for f in chosen])
+        chosen = diya_recall.choose(facts, query, MAX_PROFILE_CHARS - PARTIAL_NOTE_ROOM, lambda picked: render_grouped([(f["text"], f["person"]) for f in picked]), store=self.store, embed=embed, model=model)
+        text = render_grouped([(f["text"], f["person"]) for f in chosen])
+        if len(chosen) < len(facts):  # honest about being partial (supermemory's company-brain says "this is not the complete set"): the model must not read what is missing as what is not known
+            text += "\n" + partial_note(len(facts) - len(chosen))
+        return text
 
     def has_legacy_import(self):
         """Has the old profile ever been taken in? True whatever became of those facts since, so a fact
@@ -596,6 +605,43 @@ class Memory:
             used = len(render_grouped(self._accepted_with_person(conn)))
         return ImportResult(imported, already, duplicates, used, used > MAX_PROFILE_CHARS)
 
+    def restore_exported(self, items, actor="import"):
+        """Bring back facts from a Markdown copy of this memory (diya_markdown.py): `items` are dicts with text, status ('accepted' or 'retired'), person, created_at (an aware ISO moment), by, message,
+        said and kept. Only what is not already here comes in, all or none; a fact is skipped when an accepted, retired or turned-down fact already has the same words (a decision made here is not undone by
+        a file), so a restore can be run again and never changes or removes anything. Each comes in with an `imported` event whose detail says where it came from and who had taken it in before, so the trail
+        records the authority without claiming it: the restore is by the importer, never by the person on an earlier date. The number of the message it was read from stays in that detail only: in another
+        database it would name a different message. Exempt from the size limits, like the old profile import: a memory that was once kept is not thrown away because a limit is new. Returns (restored, already)."""
+        _check_actor(actor)
+        restored = already = 0
+        with self._write() as conn:
+            for item in items:
+                text, status = item["text"], item["status"]
+                check_text(text)
+                if status not in ("accepted", "retired"):
+                    raise InvalidFact(f"only an accepted or a retired fact can be restored, got {status!r}")
+                key = text_key(text)
+                if conn.execute("SELECT 1 FROM facts WHERE text_key = ? AND status IN ('accepted', 'retired', 'rejected')", (key,)).fetchone():  # a decision already made here (even "no") is not undone by a file
+                    already += 1
+                    continue
+                now = _now()
+                person_id = None
+                if item.get("person") is not None:
+                    check_person_name(item["person"])
+                    person_id = self._person_id_for(conn, item["person"], now)
+                cur = conn.execute(
+                    "INSERT INTO facts (text, text_key, status, source, flags, created_at, person_id) VALUES (?, ?, 'accepted', 'markdown_export', '[]', ?, ?)",
+                    (text, key, item.get("created_at") or now, person_id),
+                )
+                detail = json.dumps({"from": "markdown export", "originally": item.get("by", "you"), "message": item.get("message"), "said_again": item.get("said", 0)}, sort_keys=True)
+                self._event(conn, cur.lastrowid, "imported", actor, now, detail)
+                if status == "retired":
+                    conn.execute("UPDATE facts SET status = 'retired' WHERE id = ?", (cur.lastrowid,))
+                    self._event(conn, cur.lastrowid, "retired", actor, now, json.dumps({"from": "markdown export"}))
+                elif item.get("kept"):
+                    self._event(conn, cur.lastrowid, "kept", actor, now)
+                restored += 1
+        return restored, already
+
     # ---- deciding ----
     def decide(self, fact_id, action, actor, detail=None):
         """Apply `action` (accept, reject, reopen, retire or restore) to a fact. Raises FactError, and
@@ -694,6 +740,92 @@ class Memory:
             conn.execute("UPDATE facts SET status = 'accepted' WHERE id = ?", (old_id,))
             self._event(conn, old_id, "restored", actor, now, json.dumps({"undid": new_id}, sort_keys=True))
         return old_id
+
+    # ---- said again, and fading (docs/FADING_DESIGN.md) ----
+    def reinforce(self, fact_id, message_id, actor="auto"):
+        """The person said an accepted fact again, in this message: record it as a mention (once per message), which renews a fact that would fade. Returns True if it was newly recorded, False if this
+        message was already counted or the fact is not accepted."""
+        _check_actor(actor)
+        with self._write() as conn:
+            row = conn.execute("SELECT status FROM facts WHERE id = ?", (fact_id,)).fetchone()
+            if row is None or row[0] != "accepted" or not _is_int(message_id):
+                return False
+            now = _now()
+            cur = conn.execute("INSERT OR IGNORE INTO fact_mentions (fact_id, message_id, at) VALUES (?, ?, ?)", (fact_id, message_id, now))
+            if cur.rowcount:
+                self._event(conn, fact_id, "reinforced", actor, now, json.dumps({"message": message_id}))
+            return bool(cur.rowcount)
+
+    def mentions(self, fact_id):
+        """[(message id, when)] for each time the person said this fact again, oldest first."""
+        with self._read() as conn:
+            return conn.execute("SELECT message_id, at FROM fact_mentions WHERE fact_id = ? ORDER BY at, message_id", (fact_id,)).fetchall()
+
+    def mention_counts(self):
+        """{fact id: how many times the person said it again}."""
+        with self._read() as conn:
+            return dict(conn.execute("SELECT fact_id, COUNT(*) FROM fact_mentions GROUP BY fact_id").fetchall())
+
+    def keep(self, fact_id, actor):
+        """Keep an accepted fact: it no longer fades. Only an accepted fact; keeping twice changes nothing. Raises UnknownFact or IllegalTransition."""
+        _check_actor(actor)
+        with self._write() as conn:
+            row = conn.execute("SELECT status FROM facts WHERE id = ?", (fact_id,)).fetchone()
+            if row is None:
+                raise UnknownFact(f"there is no fact {fact_id}")
+            if row[0] != "accepted":
+                raise IllegalTransition(f"fact {fact_id} is {row[0]}; only a fact Diya knows can be kept")
+            if self._is_kept(conn, fact_id):
+                return
+            self._event(conn, fact_id, "kept", actor, _now())
+
+    def is_kept(self, fact_id):
+        """Has the person kept this fact, so that it does not fade?"""
+        with self._read() as conn:
+            return self._is_kept(conn, fact_id)
+
+    @staticmethod
+    def _is_kept(conn, fact_id):
+        """Kept = a 'kept' event after the last time it became accepted (a restore starts it again)."""
+        row = conn.execute(
+            "SELECT 1 FROM fact_events k WHERE k.fact_id = ? AND k.event = 'kept' AND k.id > COALESCE((SELECT MAX(a.id) FROM fact_events a WHERE a.fact_id = ? AND a.event IN ('accepted', 'restored', 'added', 'imported')), 0)",
+            (fact_id, fact_id),
+        ).fetchone()
+        return row is not None
+
+    def fading(self, now=None):
+        """{fact id: when it fades (aware datetime)} for every accepted fact that fades and was not kept (diya_fade). The clock starts from the latest of: when the fact was taken in, each time it was said
+        again, and when it was last restored."""
+        import diya_fade
+
+        found = {}
+        if not self.fades:
+            return found
+        with self._read() as conn:
+            rows = conn.execute("SELECT id, text, created_at FROM facts WHERE status = 'accepted'").fetchall()
+            for fact_id, text, created in rows:
+                if diya_fade.fade_rule(text) is None or self._is_kept(conn, fact_id):
+                    continue
+                times = [datetime.fromisoformat(created)]
+                times += [datetime.fromisoformat(at) for (at,) in conn.execute("SELECT at FROM fact_mentions WHERE fact_id = ?", (fact_id,))]
+                times += [datetime.fromisoformat(at) for (at,) in conn.execute("SELECT at FROM fact_events WHERE fact_id = ? AND event IN ('restored', 'accepted', 'imported')", (fact_id,))]
+                found[fact_id] = diya_fade.fades_on(text, times)
+        return found
+
+    def fade_due(self, now=None, actor="auto"):
+        """Retire the accepted facts whose time has come (they are retired with a reason, not deleted: Restore brings one back). Returns the ids retired."""
+        from datetime import timezone as _tz
+
+        moment = now or datetime.now(_tz.utc)
+        retired = []
+        for fact_id, when in self.fading().items():
+            if when is not None and when <= moment:
+                try:
+                    self.decide(fact_id, "retire", actor, {"lane": "fade", "reasons": ["forget_horizon"]})
+                    retired.append(fact_id)
+                except FactError:
+                    pass  # someone retired it a moment ago
+        return retired
 
     def purge(self, fact_id, actor):
         """Forget a fact for good (docs/FORGET_DESIGN.md, decision 234). Unlike `retire` (which keeps the words so that Restore works), this takes the words out: the fact's text, the line it was read from,
@@ -945,7 +1077,9 @@ class Memory:
             "SELECT id FROM facts WHERE status = 'accepted' AND text_key = ? AND id != ?", (text_key(text), own)
         ).fetchone()
         if twin:
-            raise DuplicateFact(f"fact {twin[0]} says the same thing and is already accepted")
+            duplicate = DuplicateFact(f"fact {twin[0]} says the same thing and is already accepted")
+            duplicate.twin = twin[0]
+            raise duplicate
         others = Memory._accepted_with_person(conn, exclude_id=own)
         used = len(render_grouped(others))
         total = len(render_grouped(others + [(text, person)]))
@@ -1076,6 +1210,24 @@ def profile_lines_not_in_memory(memory, config):
 
 
 # ---- showing facts to a person (the command line and the web UI share these) ---------------------
+
+
+PARTIAL_NOTE_ROOM = 160  # room kept free for the note below, so that what is told never goes over MAX_PROFILE_CHARS
+
+
+def partial_note(omitted):
+    """The line saying that what is told is not everything, so that what is missing is never read as unknown (supermemory's company-brain does the same: "not the complete set")."""
+    return f"({omitted} more facts are not shown here. If asked about something not listed, say it may not be in view, not that you were never told.)"
+
+
+def source_message_id(fact):
+    """The number of the person's message a fact was read from, as far as the record says: the one the checks matched best, or the only one it was read from; None when it is not recorded."""
+    for flag in fact["flags"]:
+        if flag.startswith(FLAG_SOURCE_PREFIX) and flag[len(FLAG_SOURCE_PREFIX):].isdigit():
+            return int(flag[len(FLAG_SOURCE_PREFIX):])
+    if fact.get("batch_first") is not None and fact["batch_first"] == fact.get("batch_last"):
+        return fact["batch_first"]
+    return None
 
 
 def replaced_fact_id(flags):

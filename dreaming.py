@@ -79,7 +79,7 @@ class Dreamer:
     @staticmethod
     def _new_receipt():
         return {"first_message_id": None, "last_message_id": None, "messages_read": 0, "staged": 0, "remembered": 0, "asked": 0, "not_kept": 0, "held": 0, "replaced": 0, "questions": 0,
-                "categories_sorted": 0, "outcome": "nothing new", "errors": []}
+                "categories_sorted": 0, "faded": 0, "outcome": "nothing new", "errors": []}
 
     def _error(self, text):
         """An error in the log, and in the receipt: a pass that went wrong says so in both."""
@@ -382,6 +382,21 @@ class Dreamer:
         except Exception as exc:  # noqa: BLE001 -- the log is where a headless run says what went wrong
             self._error(f"Memory on its own failed ({exc}). Nothing was changed past what is above; will retry next cycle.")
 
+    def fade_old_facts(self):
+        """With automatic memory on, a fact that said it was a passing state ("for now", "currently reading", "right now") and has not been said again for as long as that state lasts is retired by itself
+        (docs/FADING_DESIGN.md): it stays in the trail, shows on the Memory page as forgotten, and "Remember again" brings it back; "Keep" ends the fading. Never stops Dreaming: a failure is written to the log."""
+        if not self.config.auto_memory:
+            return
+        try:
+            import diya_memory
+
+            retired = diya_memory.open_memory(self.store, self.config).fade_due()
+            if retired:
+                self.receipt["faded"] = len(retired)
+                print(f"Faded {len(retired)} fact(s) that were passing states and were not said again (the Memory page can bring one back).")
+        except Exception as exc:  # noqa: BLE001 -- the log is where a headless run says what went wrong
+            self._error(f"Fading old facts failed ({type(exc).__name__}: {exc}). Nothing was changed past what is above; will retry next cycle.")
+
     def _privacy_judge(self):
         """`private(fact)` for the memory policy: the model's most cautious answer to "is this private?" about the fact and about the message of the
         person's it was taken from (what the checks recorded as its source), each message asked about once however many facts came from it."""
@@ -478,6 +493,7 @@ def run_cycle(dreamer):
     try:
         dreamer.dream_cycle()
         dreamer.remember_on_its_own()
+        dreamer.fade_old_facts()
         dreamer.look_for_categories()
     except BaseException as exc:
         dreamer.receipt["errors"].append(f"the pass stopped: {type(exc).__name__}: {exc}")

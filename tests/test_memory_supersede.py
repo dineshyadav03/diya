@@ -366,7 +366,7 @@ def test_the_generic_action_route_still_does_not_know_replace_as_an_action():
 def test_the_replace_route_has_its_own_proxy_file_and_is_not_one_of_the_plain_actions():
     proxy = (ROOT / "frontend" / "lib" / "proxy.mjs").read_text(encoding="utf-8")
     route = (ROOT / "frontend" / "app" / "api" / "memory" / "[fact_id]" / "replace" / "route.js").read_text(encoding="utf-8")
-    assert "new Set(['accept', 'reject', 'reopen', 'retire', 'restore', 'edit'])" in proxy  # the plain actions are the ones the API has, unchanged
+    assert "new Set(['accept', 'reject', 'reopen', 'retire', 'restore', 'edit', 'keep'])" in proxy  # the plain actions are the ones the API has (keep: a fact that would fade is kept, docs/FADING_DESIGN.md)
     assert "export const POST = (request, context) => forwardFactReplace(request, context)" in route and "force-dynamic" in route
     assert "export const GET" not in route
 

@@ -121,8 +121,20 @@ def test_without_relevance_the_old_facts_fall_out_which_is_what_recall_fixes(mem
 
 def test_what_is_told_is_in_the_order_the_facts_were_kept(memory):
     fill(memory)
-    out = told(memory, "my keys and my dog").splitlines()
+    out = [line for line in told(memory, "my keys and my dog").splitlines() if not line.startswith("(")]  # the closing note is not a fact
     assert out == sorted(out, key=lambda line: memory.render().splitlines().index(line))
+
+
+def test_a_partial_view_says_so_and_stays_inside_the_room(memory):
+    fill(memory)
+    out = told(memory, "tell me about my job")
+    assert out.splitlines()[-1] == diya_memory.partial_note(len(memory.facts()) - (len(out.splitlines()) - 1))  # it counts what is not shown
+    assert "never told" in out and len(out) <= 500
+
+
+def test_a_whole_view_has_no_note(memory):
+    memory.add_manual("Name is Alex.", "api")
+    assert "not shown" not in memory.render_for_model()
 
 
 def test_lasting_facts_about_the_person_are_always_told_even_when_the_question_is_about_something_else(memory):
