@@ -429,6 +429,52 @@ def is_todoist_task_request(text):
     return names_todoist(text) and is_task_request(text)
 
 
+# ---- did the person ask for something to be added to their Google account? (docs/GOOGLE_WRITE_DESIGN.md) ----
+#
+# Same rule as the Todoist task: a proposal is only recorded, never performed, but a small model proposes things nobody asked for, and a page of cards to turn down teaches clicking without reading. So each
+# kind of Google write is proposed only when the latest message asks for exactly that thing, in these words; missing an unusual phrasing is the safe direction (they can say it again plainly).
+_GOOGLE_TASKS = re.compile(r"\bgoogle\s+tasks?\b", re.IGNORECASE)
+_ADD_VERB = re.compile(r"\b(?:add|put|create|make|schedule|book|block|save|log|enter|record|jot\s+down|set\s+up)\b", re.IGNORECASE)
+_CALENDAR_WORD = re.compile(r"\bcalendar\b", re.IGNORECASE)
+_BOOK_AN_EVENT = re.compile(r"\b(?:schedule|book|set\s+up|block)\s+(?:in\s+)?(?:an?\s+|the\s+|my\s+)?(?:\w+\s+){0,3}?(?:meeting|appointment|event|session|interview|class|lecture)\b", re.IGNORECASE)
+_DRIVE_WORD = re.compile(r"\b(?:google\s+)?drive\b", re.IGNORECASE)
+_FOLDER_WORD = re.compile(r"\bfolder\b", re.IGNORECASE)
+_GOOGLE_DOC = re.compile(r"\bgoogle\s+(?:docs?|documents?)\b", re.IGNORECASE)
+
+
+def names_google_tasks(text):
+    """True if the message says Google Tasks. A task asked for by name in Google Tasks is Google's, as one asked for in Todoist is Todoist's: decided here, in code."""
+    return isinstance(text, str) and _GOOGLE_TASKS.search(text) is not None
+
+
+def _asks_to_add(text):
+    """A message that gives an instruction to add something: it has an adding word, and is not a question about how, not a refusal ("don't add ..."), and not a reminder."""
+    if not isinstance(text, str):
+        return False
+    text = text.replace(chr(0x2019), "'")
+    return bool(_ADD_VERB.search(text)) and not _TASK_QUESTION.match(text) and not _TASK_NEGATED.search(text) and not is_reminder_request(text)
+
+
+def asks_for_google_task(text):
+    """True if the message asks for a task in Google Tasks, by name ("add buy milk to my Google Tasks")."""
+    return names_google_tasks(text) and _asks_to_add(text)
+
+
+def asks_to_add_calendar_event(text):
+    """True if the message asks for an event on the calendar ("put the dentist on my calendar for friday at 5pm", "schedule a meeting with Sam tomorrow at 10"). Not a look at the calendar, not a reminder."""
+    return _asks_to_add(text) and (_CALENDAR_WORD.search(text) is not None or _BOOK_AN_EVENT.search(text) is not None)
+
+
+def asks_for_drive_folder(text):
+    """True if the message asks for a folder in Google Drive ("make a folder called Exams in my Drive")."""
+    return _asks_to_add(text) and _FOLDER_WORD.search(text) is not None and _DRIVE_WORD.search(text) is not None
+
+
+def asks_for_google_doc(text):
+    """True if the message asks for a Google Doc, by name ("create a Google Doc called Study plan")."""
+    return _asks_to_add(text) and _GOOGLE_DOC.search(text) is not None
+
+
 def said_in(phrase, text):
     """Is `phrase` (a due date, say) among the person's own words? Whole words, any capitals, spaces and the full stop or
     comma after it ignored -- "tomorrow" in "add it for Tomorrow." yes, "day" in "Monday" no. Anything that is not text,

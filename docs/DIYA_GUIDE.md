@@ -141,6 +141,7 @@ You must point `DIYA_NOTES_DIR` at a folder of your own; Diya does not look anyw
 |---|---|---|
 | Google Calendar (read) | set up from the Connections page with your own Google app | **never tried for real** |
 | Todoist (read, and one write) | a task is only proposed when your message names Todoist, and waits for Approve | **never tried for real** |
+| Google writes (calendar event, Google Task, Drive folder, Google Doc) | each its own Connections card and its own narrow scope; proposed only when you ask for exactly that, shown with the time read from your words, run once after you press Approve (`docs/GOOGLE_WRITE_DESIGN.md`) | tested against a stand-in Google; **never tried for real** |
 | Notion, Home Assistant (read) | a pasted token | **never tried for real** |
 | Approvals | the Actions page shows exactly what would happen; an append-only trail records every step | tested |
 | MCP servers | you add a server (`python diya_mcp.py add`), look at it (`check`), and approve its read-only tools one at a time; the model sees the description you approved, a changed tool is not called, results are read and never obeyed | tested against a real server built with the official SDK; no third-party server tried |

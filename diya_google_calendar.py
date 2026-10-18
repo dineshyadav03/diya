@@ -148,10 +148,16 @@ def save_client(config, values):
     os.replace(temporary, path)
 
 
+# The other Google connectors that sign in with this client: forgetting it signs them out too (a sign-in belongs to the app it was made with).
+SHARING_CLIENT = ("google_mail", "google_calendar_edit", "google_tasks", "google_drive_files")
+
+
 def clear_client(config):
     """Forget what the page stored. True if there was something. What the DIYA_GOOGLE_* settings say is the owner's to change, not this page's. The client is Google's and is shared by every Google
     connector (Calendar, Gmail), and a sign-in belongs to the app it was made with, so Gmail is disconnected with it (the framework disconnects the connector whose card was used)."""
-    diya_connectors.disconnect(config, "google_mail")
+    for name in SHARING_CLIENT:
+        if diya_connectors.is_connected(config, name):
+            diya_connectors.disconnect(config, name)
     try:
         os.remove(_client_file(config))
         return True

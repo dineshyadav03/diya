@@ -390,6 +390,11 @@ TASK_IS_TODOISTS = (
     "propose_todoist_task when Todoist is connected. If it is not connected, tell them to connect it on the Connections "
     "page, or to ask again without naming Todoist."
 )
+TASK_IS_GOOGLES = (
+    "Not added to the to-do list inside Diya: the user named Google Tasks, so this is for Google Tasks, which is proposed with "
+    "propose_google_task when Google Tasks is connected. If it is not connected, tell them to connect it on the Connections "
+    "page, or to ask again without naming Google Tasks."
+)
 MAX_TASKS_SHOWN = 30  # how many tasks one list_tasks answer shows
 # list_tasks says whose list it is: asked for "my Todoist tasks" while Todoist was not connected, the model was measured
 # showing this list as if it were Todoist's, and once saying Todoist's list was empty.
@@ -934,10 +939,14 @@ class Agent:
         in_turn = getattr(self._turn, "active", False)
         said = self._turn.user_text if in_turn else None
         if in_turn:
+            if diya_intent.asks_for_google_task(said):  # said first: "add x to my Google Tasks" is not a phrase is_task_request knows, and "not asked" would be the wrong thing to tell the model
+                return TASK_IS_GOOGLES
             if not diya_intent.is_task_request(said):
                 return TASK_NOT_ASKED
             if diya_intent.names_todoist(said):
                 return TASK_IS_TODOISTS
+            if diya_intent.names_google_tasks(said):
+                return TASK_IS_GOOGLES
         if isinstance(due, str) and not due.strip():
             due = None  # an empty optional argument is no argument
         notes = []

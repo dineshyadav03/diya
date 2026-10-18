@@ -382,8 +382,8 @@ def test_the_connections_page_says_todoist_can_add_a_task_only_when_you_approve_
     assert descriptions["todoist"] == "List your open tasks, and add one when you approve it."
 
 
-def test_the_real_registry_is_exactly_the_todoist_task_and_its_tool_proposes_only():
-    kinds = real_action_kinds()
+def test_the_real_registry_has_the_todoist_task_and_its_tool_proposes_only():
+    kinds = [k for k in real_action_kinds() if k.connector == "todoist"]
     assert [(k.name, k.connector, k.tool_name, k.label) for k in kinds] == [
         ("todoist_add_task", "todoist", "propose_todoist_task", "Add a Todoist task")]
     function = kinds[0].tool["function"]
@@ -419,7 +419,7 @@ def test_the_original_arguments_are_not_changed_by_leaving_something_out():
 def test_the_real_kind_uses_the_task_request_guard_and_the_due_phrase_check():
     import diya_intent
 
-    (kind,) = real_action_kinds()
+    (kind,) = [k for k in real_action_kinds() if k.connector == "todoist"]
     assert kind.asked is diya_intent.is_todoist_task_request
     assert kind.prepare is diya_connector_tools.todoist_add_task_prepare
 
@@ -641,7 +641,7 @@ def test_it_cannot_be_proposed_at_all_while_todoist_is_not_connected(config):
 
 def test_real_connectors_are_all_implemented(config):
     connectors = real_connectors(config)
-    assert {c.name for c in connectors} == {"home_assistant", "notion", "todoist", "google_calendar", "google_mail"}
+    assert {c.name for c in connectors} == {"home_assistant", "notion", "todoist", "google_calendar", "google_mail", "google_calendar_edit", "google_tasks", "google_drive_files"}
     assert all(c.implemented for c in connectors)
     token_ones = [c for c in connectors if not c.name.startswith("google_")]
     assert all(c.auth_kind == "token" and c.validate is not None for c in token_ones)
@@ -652,7 +652,7 @@ def test_real_connectors_are_all_implemented(config):
 
 def test_tool_specs_match_the_real_connector_names(config):
     names = {name for name, _spec, _func in tool_specs(config)}
-    assert names == {"home_assistant", "notion", "todoist", "google_calendar"}
+    assert names == {"home_assistant", "notion", "todoist", "google_calendar", "google_tasks"}
 
 
 def test_every_tool_spec_names_a_real_function_that_is_callable(config):

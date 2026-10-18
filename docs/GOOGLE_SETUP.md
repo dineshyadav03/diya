@@ -27,6 +27,18 @@ Diya only asks to read your calendar (`calendar.readonly`); nothing here can cha
 The page, the storage and the checks are tested; the sign-in flow was tested against a stand-in for Google. **Nobody has signed in through it against the real Google yet.** If the sign-in stops, the exact
 message on the page is what is needed.
 
+## Adding things: events, tasks, folders, documents (each when you approve it)
+
+Diya can also *add* to your Google account, one thing at a time, only after you press Approve on the Actions page. Each is its own card on the Connections page with its own narrow permission, so you switch on only what you want:
+
+| Card | Enable this API in the project | Add this scope under *Data access* |
+|---|---|---|
+| Google Calendar (add events) | Google Calendar API (already on) | `https://www.googleapis.com/auth/calendar.events` |
+| Google Tasks | Google Tasks API | `https://www.googleapis.com/auth/tasks` |
+| Google Drive and Docs (new things) | Google Drive API **and** Google Docs API | `https://www.googleapis.com/auth/drive.file` |
+
+The Client ID and secret you pasted are shared; press **Connect** on each card you want. `drive.file` lets Diya see only files she made herself, never the rest of your Drive. Nothing is edited or deleted, and no mail is sent or invites go out. What each does, how it is kept safe, and what is not verified against a real account: `docs/GOOGLE_WRITE_DESIGN.md`.
+
 ## Gmail too (read-only)
 
 The same Google app serves Gmail: in the same project enable the **Gmail API**, add the scope `https://www.googleapis.com/auth/gmail.readonly` under *Data access*, and press **Connect** on the Gmail card (the Client ID and secret you pasted for Calendar are shared). Diya can then look through your mail when you ask and can never send, change or delete any. What it does and does not do, and what is not yet tried against a real account: `docs/GMAIL_DESIGN.md`.

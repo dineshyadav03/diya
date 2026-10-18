@@ -99,6 +99,9 @@ def client(config):
     return TestClient(diya_web.create_app(config, agent, object()), base_url="https://localhost")
 
 
+SHARE_GOOGLES_CLIENT = ("google_calendar", "google_mail", "google_calendar_edit", "google_tasks", "google_drive_files")
+
+
 def google(client):
     return next(c for c in client.get("/api/connections").json()["connectors"] if c["name"] == "google_calendar")
 
@@ -108,7 +111,7 @@ def test_the_list_says_whether_google_is_set_up_with_the_steps_and_never_the_val
     assert entry["setup"]["done"] is False and entry["setup"]["from"] is None
     assert [f["name"] for f in entry["setup"]["fields"]] == ["client_id", "client_secret"] and [f["secret"] for f in entry["setup"]["fields"]] == [False, True]
     assert len(entry["setup"]["steps"]) == 5 and "In production" in " ".join(entry["setup"]["steps"])
-    assert all("setup" not in c for c in client.get("/api/connections").json()["connectors"] if c["name"] not in ("google_calendar", "google_mail"))  # the others have none; Gmail shares Google's
+    assert all("setup" not in c for c in client.get("/api/connections").json()["connectors"] if c["name"] not in SHARE_GOOGLES_CLIENT)  # the others have none; the other Google ones share Google's
     saved = client.post("/api/connections/google_calendar/setup", json={"values": {"client_id": ID, "client_secret": SECRET}})
     assert saved.status_code == 200 and google(client)["setup"]["done"] is True and google(client)["setup"]["from"] == "file"
     assert ID not in saved.text and SECRET not in saved.text and SECRET not in client.get("/api/connections").text
@@ -139,7 +142,8 @@ def test_the_real_registry_gives_google_its_setup_and_the_rest_none(config):
     import diya_google_mail
 
     assert real["google_calendar"].setup is gcal.SETUP and real["google_mail"].setup is diya_google_mail.SETUP  # Gmail shares Google's client with Calendar
-    assert all(c.setup is None for name, c in real.items() if name not in ("google_calendar", "google_mail"))
+    assert all(c.setup is None for name, c in real.items() if name not in SHARE_GOOGLES_CLIENT)
+    assert all(real[name].setup.fields == gcal.SETUP.fields and real[name].setup.state is gcal.client_state for name in SHARE_GOOGLES_CLIENT)  # one client id and secret for all of them
 
 
 # ---- the page ----------------------------------------------------------------------------------------------------------------

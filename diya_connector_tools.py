@@ -20,6 +20,7 @@ import httpx
 import diya_connectors
 import diya_google_calendar
 import diya_google_mail
+import diya_google_write
 import diya_intent
 from diya_actions import ActionFailed, ActionKind, ActionUncertain, InvalidArgs
 from diya_connectors import Connector, ConnectorError
@@ -316,7 +317,7 @@ def todoist_add_task_kind():
 def real_action_kinds():
     """Every kind of action Diya actually has, ready to hand to Agent (action_kinds=): each a write the owner approves
     one at a time on the Actions page. Lives here, beside the connectors, because a kind needs its connector."""
-    return (todoist_add_task_kind(),)
+    return (todoist_add_task_kind(), *diya_google_write.action_kinds())
 
 
 # ---- wiring: the registry and the tool specs -----------------------------------------------------
@@ -334,6 +335,7 @@ def real_connectors(config):
                  auth_kind="oauth", implemented=True, oauth_connect=diya_google_calendar.connect, setup=diya_google_calendar.SETUP),
         Connector(name="google_mail", label="Gmail", description="Look through your mail when you ask. Read-only: it can never send, change or delete a message.",
                  auth_kind="oauth", implemented=True, oauth_connect=diya_google_mail.connect, setup=diya_google_mail.SETUP),
+        *diya_google_write.connectors(),
     )
 
 
@@ -385,4 +387,5 @@ def tool_specs(config):
                 "parameters": {"type": "object", "properties": {}, "required": []},
             },
         }, diya_google_calendar.list_events(config)),
+        *diya_google_write.read_tool_specs(config),
     )
