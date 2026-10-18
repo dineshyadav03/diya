@@ -38,6 +38,16 @@ def ping_ollama(config):
         return False, []
 
 
+def _ago(hours):
+    if hours < 1:
+        return "less than an hour ago"
+    if hours < 2:
+        return "1 hour ago"
+    if hours < 48:
+        return f"{int(hours)} hours ago"
+    return f"{int(hours // 24)} days ago"
+
+
 def _item(name, label, status, text):
     return {"name": name, "label": label, "status": status, "text": printable(text, 240)}
 
@@ -84,16 +94,27 @@ def _reading(config, store):
     return _item("reading", "Reading messages for facts", "ok", f"Nothing is waiting. Since this queue began: {backlog.get('done', 0)} read, {backlog.get('skipped', 0)} not worth reading.")
 
 
-def _dreaming(config, now):
-    try:
-        modified = datetime.fromtimestamp(os.path.getmtime(config.dream_log_path))
-    except OSError:
-        return _item("dreaming", "Dreaming (the nightly tidy-up)", "warn", "Has not run yet, or its log is not where it is expected.")
-    hours = max(0.0, (now - modified).total_seconds() / 3600)
-    when = f"{int(hours)} hours ago" if hours < 48 else f"{int(hours // 24)} days ago"
+def _dreaming(config, store, now):
+    """When Dreaming last ran, from its own receipts (docs/DREAMING_RECEIPTS_DESIGN.md) and, for a run from before there were receipts, from the log file's time. A last pass that went wrong is said."""
+    label = "Dreaming (the nightly tidy-up)"
+    last = store.dream_last_run()
+    if last is not None:
+        try:
+            ran = datetime.fromisoformat(last["started_at"]).astimezone().replace(tzinfo=None)
+        except ValueError:
+            ran = None
+    else:
+        try:
+            ran = datetime.fromtimestamp(os.path.getmtime(config.dream_log_path))
+        except OSError:
+            return _item("dreaming", label, "warn", "Has not run yet, or its log is not where it is expected.")
+    hours = max(0.0, (now - ran).total_seconds() / 3600) if ran is not None else 0.0
+    when = _ago(hours)
     if hours > DREAM_STALE_HOURS:
-        return _item("dreaming", "Dreaming (the nightly tidy-up)", "warn", f"Last ran {when}. If it should run every day, its scheduled task may have stopped.")
-    return _item("dreaming", "Dreaming (the nightly tidy-up)", "ok", f"Last ran {when}.")
+        return _item("dreaming", label, "warn", f"Last ran {when}. If it should run every day, its scheduled task may have stopped.")
+    if last is not None and last["errors"]:
+        return _item("dreaming", label, "warn", f"Last ran {when} and something went wrong in that pass: see the Activity page. Its checkpoint did not move past what failed, so the next pass tries again.")
+    return _item("dreaming", label, "ok", f"Last ran {when}.")
 
 
 def _connections(config):
@@ -119,7 +140,7 @@ def _backup(config, now):
     if latest is None:
         return _item("backup", "Backup of the memory", "warn", "No backup yet. One is made when the API starts, then once a day, or by hand: python diya_backup.py make")
     hours = diya_backup.age_hours(latest, now)
-    when = f"{int(hours)} hours ago" if hours < 48 else f"{int(hours // 24)} days ago"
+    when = _ago(hours)
     if hours > BACKUP_STALE_HOURS:
         return _item("backup", "Backup of the memory", "warn", f"The newest backup is {when}. A new one is made while the API runs; if Diya has not been running, start it.")
     return _item("backup", "Backup of the memory", "ok", f"The newest backup was made {when}, and was checked when it was made.")
@@ -154,7 +175,7 @@ def collect(config, store, now=None, ping=ping_ollama):
         ("database", "Memory (database)", lambda: _database(config, store)),
         ("model", "Chat model", lambda: _model(config, ping)),
         ("reading", "Reading messages for facts", lambda: _reading(config, store)),
-        ("dreaming", "Dreaming (the nightly tidy-up)", lambda: _dreaming(config, moment)),
+        ("dreaming", "Dreaming (the nightly tidy-up)", lambda: _dreaming(config, store, moment)),
         ("connections", "Connections", lambda: _connections(config)),
         ("backup", "Backup of the memory", lambda: _backup(config, moment)),
         ("secrets", "Sign-ins at rest", lambda: _secrets(config)),

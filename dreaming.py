@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sys
+import time
 import traceback
 from datetime import datetime, timezone
 
@@ -73,6 +74,17 @@ class Dreamer:
         self.config = config or diya_config.load_config()
         self.store = store or diya_db.Store(self.config.db_path)
         self._client = client
+        self.receipt = self._new_receipt()  # what this pass did, written as a row of dream_runs when it ends (docs/DREAMING_RECEIPTS_DESIGN.md)
+
+    @staticmethod
+    def _new_receipt():
+        return {"first_message_id": None, "last_message_id": None, "messages_read": 0, "staged": 0, "remembered": 0, "asked": 0, "not_kept": 0, "held": 0, "replaced": 0, "questions": 0,
+                "categories_sorted": 0, "outcome": "nothing new", "errors": []}
+
+    def _error(self, text):
+        """An error in the log, and in the receipt: a pass that went wrong says so in both."""
+        self.receipt["errors"].append(text)
+        print(f"[error] {text}")
 
     @property
     def client(self):
@@ -154,6 +166,7 @@ class Dreamer:
 
         if not user_messages:
             print("Nothing new to dream about.")
+            self.receipt["outcome"] = "nothing new"
             return
 
         # What memory already read the moment it was said (unit A4) is not read a second time; and with automatic memory on, a message that only
@@ -167,9 +180,11 @@ class Dreamer:
             if not user_messages:
                 self.save_last_dreamed_id(new_messages[-1]["id"])
                 print("Everything new was already read live, or only asks something.")
+                self.receipt.update(first_message_id=new_messages[0]["id"], last_message_id=new_messages[-1]["id"], outcome="everything new was already read live, or only asks something")
                 return
 
         first_message_id, last_message_id = new_messages[0]["id"], new_messages[-1]["id"]
+        self.receipt.update(first_message_id=first_message_id, last_message_id=last_message_id, messages_read=len(user_messages))
 
         # A batch always starts at the first message after the checkpoint, and batches never
         # overlap, so a record with this first id means the batch was staged but the process
@@ -179,7 +194,8 @@ class Dreamer:
             already = self._find_staged(first_message_id)
         except OSError as exc:
             # Can't tell whether this batch was staged already, so stage nothing this cycle.
-            print(f"[error] Could not read the review queue ({exc}). Checkpoint left unchanged; will retry next cycle.")
+            self._error(f"Could not read the review queue ({exc}). Checkpoint left unchanged; will retry next cycle.")
+            self.receipt["outcome"] = "could not tell whether this batch was staged"
             return
         if already is not None:
             self.save_last_dreamed_id(already["last_message_id"])
@@ -187,6 +203,7 @@ class Dreamer:
                 f"Messages {already['first_message_id']}-{already['last_message_id']} were already "
                 "staged; checkpoint advanced, nothing staged again."
             )
+            self.receipt["outcome"] = "already staged: the checkpoint moved, nothing staged again"
             return
 
         # Extraction-only, deliberately: the model never sees or has to reproduce the existing
@@ -197,7 +214,8 @@ class Dreamer:
         try:
             response = self._ask_for_facts([m["content"] for m in user_messages])
         except Exception as exc:
-            print(f"[error] Could not reach the model ({exc}). Will retry next cycle.")
+            self._error(f"Could not reach the model ({exc}). Will retry next cycle.")
+            self.receipt["outcome"] = "the model could not be reached: the checkpoint did not move"
             return
 
         new_facts = response.choices[0].message.content.strip()
@@ -331,6 +349,7 @@ class Dreamer:
                     except diya_categories.CategoryError:
                         pass
             if done:
+                self.receipt["categories_sorted"] = done
                 print(f"Categories: sorted {done} message(s) that were in none.")
             today = (now or datetime.now()).strftime("%Y-%m-%d")
             if book.state("category_ideas_on") != today and not book.open_suggestions():
@@ -338,7 +357,7 @@ class Dreamer:
                 made = diya_category_ideas.suggest(book, self.client, self.config.model)
                 print("Categories: I have a new category to suggest to you." if made else "Categories: nothing stood out that the categories do not cover.")
         except Exception as exc:  # noqa: BLE001 -- the log is where a headless run says what went wrong
-            print(f"[error] Sorting into categories failed ({type(exc).__name__}: {exc}). What was sorted is kept; will retry next cycle.")
+            self._error(f"Sorting into categories failed ({type(exc).__name__}: {exc}). What was sorted is kept; will retry next cycle.")
 
     def remember_on_its_own(self):
         """When DIYA_AUTO_MEMORY is on, carry what is staged into the store and put every candidate in its lane (diya_autonomy.apply):
@@ -353,6 +372,7 @@ class Dreamer:
             ingested = diya_memory.ingest_queue(memory, self.config, actor="system")
             done = self._put_in_lanes(memory)
             questions = self._refill_questions(memory)
+            self.receipt.update(remembered=done.remembered, asked=done.asked, not_kept=done.never, held=done.held, replaced=done.replaced, questions=questions)
             print(
                 f"Memory on its own: {done.remembered} remembered, {done.asked} to ask about, {done.never} not kept, "
                 f"{done.held} held (profile full); {ingested.new} newly taken in from the staged queue"
@@ -360,7 +380,7 @@ class Dreamer:
                 + (f"; {questions} new questions to put to you." if questions else ".")
             )
         except Exception as exc:  # noqa: BLE001 -- the log is where a headless run says what went wrong
-            print(f"[error] Memory on its own failed ({exc}). Nothing was changed past what is above; will retry next cycle.")
+            self._error(f"Memory on its own failed ({exc}). Nothing was changed past what is above; will retry next cycle.")
 
     def _privacy_judge(self):
         """`private(fact)` for the memory policy: the model's most cautious answer to "is this private?" about the fact and about the message of the
@@ -416,6 +436,7 @@ class Dreamer:
         if not new_facts or new_facts.upper().startswith("NONE"):
             self.save_last_dreamed_id(last_message_id)
             print("No genuine new facts found.")
+            self.receipt["outcome"] = "read the messages, found no new facts"
             return
 
         record = {
@@ -431,12 +452,40 @@ class Dreamer:
         try:
             self._append_pending(record)
         except Exception as exc:
-            print(f"[error] Could not stage the new facts ({exc}). Checkpoint left unchanged; will retry next cycle.")
+            self._error(f"Could not stage the new facts ({exc}). Checkpoint left unchanged; will retry next cycle.")
+            self.receipt["outcome"] = "could not stage the facts: the checkpoint did not move"
             return
         self.save_last_dreamed_id(last_message_id)
+        self.receipt.update(staged=len(record["facts"]), outcome="staged facts for the memory policy")
 
         print("New facts staged for review (not added to profile):")
         print(new_facts)
+
+def _write_receipt(dreamer, started, began):
+    """The pass's receipt (one row of dream_runs). Never raises: a receipt that cannot be written must not make a pass fail."""
+    try:
+        receipt = dict(dreamer.receipt)
+        errors = receipt.pop("errors")
+        dreamer.store.dream_run_add(started_at=started.isoformat(), duration_ms=int((time.monotonic() - began) * 1000), errors=json.dumps(errors) if errors else None, **receipt)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[error] The receipt for this pass could not be written ({type(exc).__name__}: {exc}).")
+
+
+def run_cycle(dreamer):
+    """One whole scheduled pass: read, remember on its own, sort into categories, and write the receipt for it, whatever happened."""
+    started, began = datetime.now(timezone.utc), time.monotonic()
+    dreamer.receipt = dreamer._new_receipt()
+    try:
+        dreamer.dream_cycle()
+        dreamer.remember_on_its_own()
+        dreamer.look_for_categories()
+    except BaseException as exc:
+        dreamer.receipt["errors"].append(f"the pass stopped: {type(exc).__name__}: {exc}")
+        dreamer.receipt["outcome"] = "the pass stopped with an error"
+        raise
+    finally:
+        _write_receipt(dreamer, started, began)
+
 
 def main():
     """The scheduled entry point: one cycle, with all output going to the log file.
@@ -463,9 +512,7 @@ def main():
                 return 1
             try:
                 dreamer = Dreamer(config)
-                dreamer.dream_cycle()
-                dreamer.remember_on_its_own()
-                dreamer.look_for_categories()
+                run_cycle(dreamer)
             except Exception:
                 traceback.print_exc()
                 return 1

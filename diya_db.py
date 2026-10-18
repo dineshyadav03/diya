@@ -440,6 +440,31 @@ MIGRATIONS = (
         "CREATE TRIGGER IF NOT EXISTS tool_journal_no_update BEFORE UPDATE ON tool_journal BEGIN SELECT RAISE(ABORT, 'the journal is append-only'); END",
         "CREATE TRIGGER IF NOT EXISTS tool_journal_no_delete BEFORE DELETE ON tool_journal BEGIN SELECT RAISE(ABORT, 'the journal is append-only'); END",
     )),
+    # Dreaming's receipts (DIYA-030, docs/DREAMING_RECEIPTS_DESIGN.md): one row per scheduled pass saying what it read, staged, did and whether anything went wrong. Append-only like the journal.
+    (22, (
+        """
+        CREATE TABLE IF NOT EXISTS dream_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT NOT NULL,
+            duration_ms INTEGER NOT NULL,
+            first_message_id INTEGER,
+            last_message_id INTEGER,
+            messages_read INTEGER NOT NULL DEFAULT 0,
+            staged INTEGER NOT NULL DEFAULT 0,
+            remembered INTEGER NOT NULL DEFAULT 0,
+            asked INTEGER NOT NULL DEFAULT 0,
+            not_kept INTEGER NOT NULL DEFAULT 0,
+            held INTEGER NOT NULL DEFAULT 0,
+            replaced INTEGER NOT NULL DEFAULT 0,
+            questions INTEGER NOT NULL DEFAULT 0,
+            categories_sorted INTEGER NOT NULL DEFAULT 0,
+            outcome TEXT NOT NULL,
+            errors TEXT
+        )
+        """,
+        "CREATE TRIGGER IF NOT EXISTS dream_runs_no_update BEFORE UPDATE ON dream_runs BEGIN SELECT RAISE(ABORT, 'the receipts are append-only'); END",
+        "CREATE TRIGGER IF NOT EXISTS dream_runs_no_delete BEFORE DELETE ON dream_runs BEGIN SELECT RAISE(ABORT, 'the receipts are append-only'); END",
+    )),
 )
 
 MAX_THREAD_TITLE = 80  # the longest name a chat can be given
@@ -900,6 +925,60 @@ class Store:
         ).fetchall()
         conn.close()
         return [{"id": r[0], "thread_id": r[1], "role": r[2], "content": r[3]} for r in rows]
+
+    DREAM_RUN_FIELDS = ("started_at", "duration_ms", "first_message_id", "last_message_id", "messages_read", "staged", "remembered", "asked", "not_kept", "held", "replaced", "questions", "categories_sorted", "outcome", "errors")
+
+    def dream_run_add(self, **fields):
+        """Record one Dreaming pass (a receipt). Append-only: the table refuses any change afterwards. Returns the receipt's number."""
+        unknown = set(fields) - set(self.DREAM_RUN_FIELDS)
+        if unknown:
+            raise ValueError(f"a Dreaming receipt has no {', '.join(sorted(unknown))}")
+        conn = self.connect()
+        try:
+            names = [n for n in self.DREAM_RUN_FIELDS if n in fields]
+            cur = conn.execute(f"INSERT INTO dream_runs ({', '.join(names)}) VALUES ({', '.join('?' for _ in names)})", [fields[n] for n in names])
+            conn.commit()
+            return cur.lastrowid
+        finally:
+            conn.close()
+
+    def dream_runs_recent(self, limit=30, busy_only=True):
+        """The newest receipts first. With `busy_only` the passes that read nothing and found nothing wrong are left out (they are counted by dream_idle_count)."""
+        where = "WHERE messages_read > 0 OR staged > 0 OR remembered > 0 OR asked > 0 OR not_kept > 0 OR replaced > 0 OR questions > 0 OR categories_sorted > 0 OR errors IS NOT NULL" if busy_only else ""
+        conn = self.connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            return [dict(row) for row in conn.execute(f"SELECT * FROM dream_runs {where} ORDER BY id DESC LIMIT ?", (int(limit),))]
+        finally:
+            conn.close()
+
+    def dream_last_run(self):
+        """The newest receipt of any kind, or None."""
+        found = self.dream_runs_recent(1, busy_only=False)
+        return found[0] if found else None
+
+    def dream_idle_count(self, since):
+        """How many passes since `since` (ISO text) found nothing to do."""
+        conn = self.connect()
+        try:
+            return conn.execute(
+                "SELECT COUNT(*) FROM dream_runs WHERE started_at >= ? AND messages_read = 0 AND staged = 0 AND remembered = 0 AND asked = 0 AND not_kept = 0 AND replaced = 0 AND questions = 0"
+                " AND categories_sorted = 0 AND errors IS NULL", (since,),
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+    def message_times(self, ids):
+        """{message id: when it was saved (ISO text)} for those messages. Read-only."""
+        ids = [int(i) for i in ids]
+        if not ids:
+            return {}
+        conn = self.connect()
+        try:
+            marks = ",".join("?" for _ in ids)
+            return dict(conn.execute(f"SELECT id, created_at FROM messages WHERE id IN ({marks})", ids).fetchall())
+        finally:
+            conn.close()
 
     def captured_message_ids(self, ids):
         """Which of the message `ids` memory has already taken in live (a set). Read-only."""

@@ -29,6 +29,7 @@ import diya_google_mail
 import diya_journal
 import diya_repostudy
 import diya_memory
+import diya_provenance
 import diya_recall
 import diya_schedule
 import diya_tasks
@@ -1167,6 +1168,17 @@ class Agent:
             return None
         return LOOKUP_PROMPT + "\n" + results
 
+    def _where_from(self, question, messages):
+        """The answer to "how do you know ...?", built from the record by diya_provenance, or None when the question is not that kind (the chat then goes on as it would have). Never raises: a memory that
+        cannot be read is no reason for the chat to fail."""
+        if not isinstance(question, str) or diya_provenance.asks_where_from(question) is None:
+            return None
+        previous = next((m.get("content") for m in reversed(messages[:-1]) if isinstance(m, dict) and m.get("role") == "assistant" and isinstance(m.get("content"), str)), None)
+        try:
+            return diya_provenance.explain(diya_memory.open_memory(self.store, self.config), self.store, question, previous)
+        except Exception:  # noqa: BLE001
+            return None
+
     def _pages_note(self, question, on_event=None):
         """For a question about what the person's own notes say about a name that has a page: that page's sentences, as a note for the model (NOTES_PAGE_PROMPT and the sentences), or None if the question
         is not that kind, no page is about that name, or the page cannot be read (the chat then goes on as it would have). Tells the page the notes were searched."""
@@ -1239,6 +1251,12 @@ class Agent:
         their website") it is searched for and answered again, so the person is not sent off to look it up themselves (docs/LOOKUP_DESIGN.md)."""
         question = _last_user_text(messages)
         searched = False  # a search was already made for this question, whatever it found: it is not made twice
+        if only_tools is None:
+            started = time.monotonic()
+            where_from = self._where_from(question, messages)
+            if where_from is not None:  # "how do you know that?": answered by code from the memory's own record, never by the model (docs/PROVENANCE_DESIGN.md)
+                self._journal("explain_memory", {"question": question}, "ok", result=where_from, started=started, kind="flow")
+                return where_from, []
         if only_tools is None and self.config.knowledge_chat:
             started = time.monotonic()
             note = self._pages_note(question, on_event)

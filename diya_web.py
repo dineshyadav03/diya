@@ -25,6 +25,7 @@ import diya_config
 import diya_connections_api
 import diya_connector_tools
 import diya_intent
+import diya_dreaming_api
 import diya_health_api
 import diya_journal_api
 import diya_knowledge_api
@@ -549,6 +550,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     diya_knowledge_api.register(app, config, agent)  # the pages made from the person's notes (docs/KNOWLEDGE_DESIGN.md)
     diya_threads_api.register(app, config, agent)  # searching and naming past chats
     diya_journal_api.register(app, config, agent)  # what Diya did with a tool or a connector (docs/ACTIVITY_JOURNAL_DESIGN.md)
+    diya_dreaming_api.register(app, config, agent)  # what Dreaming's scheduled passes read and did (docs/DREAMING_RECEIPTS_DESIGN.md)
     diya_health_api.register(app, config, agent)  # is Diya well, one honest line per part (docs/HEALTH_DESIGN.md)
     diya_categories_api.register(app, config, agent, lambda: MAX_PAGE_MESSAGES)  # the one chat by category (docs/ONE_CHAT_DESIGN.md, steps 2 and 3)
     diya_push_api.register(app, config, agent)  # telling the phone by Web Push, off unless DIYA_PUSH=1 (docs/PUSH_DESIGN.md, unit P2)

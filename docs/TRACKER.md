@@ -5,15 +5,15 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 
 | Status | Tasks |
 |---|---|
-| Not started | 192 |
+| Not started | 190 |
 | Needs verification | 10 |
 | Research queue | 63 |
 | In progress | 11 |
 | Blocked | 0 |
-| Done | 22 |
+| Done | 24 |
 | Deferred | 0 |
 
-## Done (22)
+## Done (24)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -26,10 +26,12 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-018** Design explicit memory store taxonomy (2026-10-18): docs/MEMORY_TAXONOMY.md. Names the kinds and says honestly that skills/procedures and per-fact forget_after do not exist yet.
 - **DIYA-019** Make memory capture outbox atomic with message commit (2026-10-18): Store.add_message(capture=True); tests/test_capture_queue.py::test_a_message_and_its_reading_job_are_saved_in_one_transaction
 - **DIYA-020** Expose immediately asserted facts on the next turn (2026-10-18): tests/test_hog_regression.py::test_told_once_the_dog_reaches_the_model_on_the_next_turn
+- **DIYA-022** Distinguish user-approved facts from provisional claims (2026-10-18): diya_provenance.py, tests/test_provenance.py (32), docs/PROVENANCE_DESIGN.md; the Memory page already shows each fact's source message, history, actor and time. On request ('how do you know that?') and on the Memory page; not appended to every reply.
 - **DIYA-023** Implement correction and supersession (2026-10-18): tests/test_hog_regression.py::test_a_correction_replaces_it_and_the_old_one_stays_in_the_trail; tests/test_recall.py vector purge
 - **DIYA-025** Implement external-source memory promotion gate (2026-10-18): tests/test_hog_regression.py (mail saying 'your dog is Max' changes nothing); docs/GMAIL_DESIGN.md: mail is read with no tools. Only the person's own words become accepted memory.
 - **DIYA-026** Write Hog next-turn/cold-restart/truncated-history test (2026-10-18): tests/test_hog_regression.py: next turn, history cut, cold restart, correction, forgetting, malicious email
 - **DIYA-028** Validate existing dreaming staged checkpoint semantics (2026-10-18): tests/test_dreaming.py: a staging failure leaves the checkpoint alone; a crash between staging and checkpoint cannot duplicate the batch
+- **DIYA-030** Emit per-Dreaming-run receipts (2026-10-18): dream_runs table (migration 22), dreaming.run_cycle, GET /api/dreaming, Activity page section; tests/test_dream_receipts.py (14); docs/DREAMING_RECEIPTS_DESIGN.md. Run id, message range, staged, remembered/asked/not kept/held/replaced, errors, duration. No merges yet because Dreaming does not merge.
 - **DIYA-039** Bind approvals to exact payload digest and target (2026-10-18): diya_actions args_hash; tests/test_google_write.py::test_a_changed_event_is_not_what_was_approved and the Stage 4 tests. Approval is bound to the kind and the exact arguments, including the frozen event time.
 - **DIYA-046** Keep tokens out of model prompts and audit logs (2026-10-18): tests/test_journal.py (secret-named arguments hidden); tests/test_google_write.py::test_no_tool_lets_the_model_choose_a_host_a_url_or_a_token. No model-facing path carries a token. A program running as the same Windows user could still ask DPAPI.
 - **DIYA-053** Handle unknown write outcomes and duplicate retries (2026-10-18): ActionUncertain -> status unknown, never sent again; tests/test_google_write.py and tests/test_connector_tools.py. The calendar event id is made from the request, so a second try cannot make a second event.
@@ -44,7 +46,7 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-021** Add outbox leases, retry and unique keys (2026-10-18). No lease column: one drain at a time in one process. Dreaming's separate pass is guarded by memory_captures, not a lease.
 - **DIYA-024** Implement forgetting and derived-index purge (2026-10-18). A forgotten fact's TEXT stays in the trail on purpose (so Restore works); only a secret's text is not kept. A hard purge is not built.
 - **DIYA-051** Implement append-only normalized tool/event journal (2026-10-18). Tool calls and code-decided flows are recorded. Not yet: model requests, policy decisions and one correlation id across them.
-- **DIYA-056** Publish activity feed and action receipt detail (2026-10-18). Receipts for approved actions are on the Actions page; one combined feed is not built.
+- **DIYA-056** Publish activity feed and action receipt detail (2026-10-18). Approved actions' receipts are still on the Actions page; one combined feed is not built.
 - **DIYA-065** Implement revocation, invalid_grant and reconnect UX (2026-10-18). Disconnect revokes at Google (last card only). Not built: pausing dependent jobs when Google revokes from its side (invalid_grant).
 - **DIYA-081** Implement Calendar event create and readback (2026-10-18). Create works against a stand-in; the event is not read back from Google separately. Needs Dinesh's real-account try.
 - **DIYA-087** Implement upload/create folder/file/copy (2026-10-18). Folder create only (stand-in). Upload, file create and copy are not built. Needs Dinesh's real-account try.
