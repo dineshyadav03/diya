@@ -1,0 +1,27 @@
+# What Diya keeps, and what each kind of thing is allowed to be (2026-10-18; DIYA-018)
+
+The blueprint asks for the kinds of stored thing to be named, so that "memory" does not mean six different things in one sentence. This lists each kind, **where it lives in the code today**, who can write it, how much the model may trust it, and how it is forgotten. It describes what is built, not what is hoped for.
+
+| Kind | What it is | Where | Who writes it | Trust | Forgetting |
+|---|---|---|---|---|---|
+| **Conversation** | The one chat: every message, with its time and its category | `threads`, `messages`, `message_categories`, `app_state` (the main chat's id) | The person (by sending), Diya (replies) | A record of what was said, not of what is true | Messages are kept; the History page can rename, nothing deletes them |
+| **Working** | What the model is shown for *this* turn: the system message, the facts chosen for the message (`diya_recall`), the recent history cut to `DIYA_HISTORY_CHARS`, tool results | Built per turn in `diya.Agent`; not stored | Code assembles it; nothing is saved | Lasts one turn | Gone when the turn ends |
+| **Accepted memory** | Facts about the person that count as true: what was typed by them, said plainly and judged safe, or approved | `facts` (status `accepted`), `people`, trail in `fact_events` | The person (typing, approving), or the automatic lane for plain statements the person made | The model is told these as what it knows; the person can see and undo each | Retired with a reason and Restore; the trail is kept. A secret is not kept at all (its text is replaced) |
+| **Provisional** | Facts read from a message but held back: asked, doubted, in conflict, sensitive, stale | `facts` (status `candidate`, with `ask:` flags), `memory_questions` | The reader (`dreaming`), never the model alone | Never told to the model as true | Dropped when the person says no; expire unasked |
+| **Rules of refusal** | What must never be remembered or must be asked about | `never` table, the privacy judges, the lanes in `diya_autonomy` | The person ("don't remember that"), code | Binding | Only the person lifts a rule |
+| **Episodic** | What happened and when | `messages` (times), `memory_captures` (which message led to how many facts), `tool_journal` (what Diya did with a tool or account, append-only), `fact_events`, `action_events` | Code | A log, not a belief | Append-only where it says so (journal, events); not edited |
+| **Commitments** | Things the person wants done or remembered *later* | `reminders`, `reminder_series`, `tasks`, `automations`, pending `actions` | The person | Instructions of the owner | Ticked off, snoozed, cancelled by the person |
+| **Knowledge** | Pages built **by code** from the person's own sentences and notes, with their sources, and the notes folder itself | `knowledge/` (git-ignored), `DIYA_NOTES_DIR`, `diya_knowledge.py` | Code, from text the person wrote | Quoted from the person; not inferred | Rebuilt from the notes; a page is deleted by deleting its source |
+| **Cache (derived)** | Anything computed from the above that can be rebuilt | `fact_embeddings` (a vector per fact), the in-memory notes index | Code | Never a source of truth; only used to choose *which* accepted facts to tell | Rebuilt on change; **purged for a fact that is no longer accepted** (DIYA-024) |
+| **Dreaming** | The scheduled pass that reads what was said since last time and stages candidates | `dream_state.json` (the checkpoint), `dream_pending.jsonl` (the staged batch), `dream_log.txt` | The scheduled job | Its output is **provisional** until the lanes or the person accept it | The checkpoint moves only after the staging is on disk (`tests/test_dreaming.py`) |
+| **Skills / procedures** | Fixed, repeatable sequences Diya can run | Not built (the harness's tools live in code; MCP tools only after the person approves each, `mcp_servers.json`) | n/a | n/a | n/a |
+
+## Three rules that hold across all of them
+
+1. **Only the person's own words become accepted memory.** What comes from mail, the web, a repository or a document is read by a model with no tools and never promoted to a fact (`tests/test_hog_regression.py` has the mail case).
+2. **A cache is never the truth.** Deleting `fact_embeddings` loses nothing that cannot be rebuilt; a derived row for a fact that is retired or rejected is removed, so a forgotten thing does not linger as a vector.
+3. **A log is not a belief.** The journal and the trail say what happened; they are not told to the model as facts.
+
+## Honest gaps
+
+Nothing is stored that distinguishes **stable** facts ("studies medicine") from **recent** ones ("exam on Friday") except by a fact's own wording and the retirement of past events; there is no per-fact `forget_after`. **Skills / procedures** (DIYA-171) do not exist yet. A **semantic response cache** (blueprint U25) does not exist and is not planned until a benchmark shows it is safe (DIYA-196).

@@ -127,7 +127,10 @@ def make(config, keep=KEEP, now=None):
         raise BackupError(f"there is no database at {config.db_path} to copy")
     moment = now or datetime.now()
     name = f"diya-{moment:%Y%m%d-%H%M%S}.db"
-    os.makedirs(config.backup_dir, exist_ok=True)
+    try:
+        os.makedirs(config.backup_dir, exist_ok=True)
+    except OSError as exc:
+        raise BackupError(f"the backup folder {config.backup_dir} could not be made ({exc})")
     target = os.path.join(config.backup_dir, name)
     if os.path.exists(target):
         raise BackupError(f"{name} already exists; a snapshot is never overwritten")
@@ -143,7 +146,7 @@ def make(config, keep=KEEP, now=None):
         if problems:
             raise BackupError("the snapshot was not kept: " + "; ".join(problems))
         os.replace(part, target)
-    except sqlite3.Error as exc:
+    except (sqlite3.Error, OSError) as exc:
         raise BackupError(f"the snapshot could not be made ({exc})")
     finally:
         if os.path.exists(part):
@@ -206,6 +209,37 @@ def restore(snapshot_path, target):
         os.remove(target)
         raise BackupError("the restored copy did not pass its check, so it was removed: " + "; ".join(problems))
     return target
+
+
+def pending_migrations(path):
+    """The versions of the schema this program would add to the database at `path`: [] when it is up to date or does not exist yet (a new database has nothing to lose), every version when the file has
+    no record of any. Reads only; never changes the file."""
+    import diya_db
+
+    if not os.path.isfile(path):
+        return []
+    try:
+        conn = _readonly(path)
+        try:
+            has = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'migrations'").fetchone()
+            applied = {row[0] for row in conn.execute("SELECT version FROM migrations")} if has else set()
+            empty = not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table'").fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return []  # not a database it can read: the migration would fail by itself and say so; there is nothing to snapshot
+    if empty:
+        return []
+    return [version for version, _statements in diya_db.MIGRATIONS if version not in applied]
+
+
+def before_migrating(config, now=None):
+    """The migration policy (DIYA-016): the schema only moves forward, each step in one transaction that is rolled back whole if it fails (diya_db.apply_migrations), and BEFORE any step is applied to a
+    database that has data, a checked snapshot of it is taken, so that the way back is `python diya_backup.py restore` of that snapshot. Returns the Snapshot, or None when there was nothing to migrate.
+    BackupError when the snapshot could not be made: the caller then does not migrate."""
+    if not pending_migrations(config.db_path):
+        return None
+    return make(config, now=now)
 
 
 class Daily(threading.Thread):

@@ -135,3 +135,34 @@ def test_the_queue_is_in_the_database_schema_as_a_migration(tmp_path):
     conn = Store(str(tmp_path / "m.db")).connect()
     assert conn.execute("SELECT COUNT(*) FROM capture_queue").fetchone()[0] == 0
     conn.close()
+
+
+def test_a_message_and_its_reading_job_are_saved_in_one_transaction(store):
+    """DIYA-019: there is no moment at which the message is saved and the job to read it is not. If the job cannot be written, the message is not saved either."""
+    thread = store.create_thread("t")
+    first = store.add_message(thread, "user", "I have a dog named Hog", capture=True)
+    assert store.pending_captures() == [first]
+    assert store.add_message(thread, "assistant", "ok", capture=True) and store.pending_captures() == [first]  # only the person's messages are queued
+    conn = store.connect()
+    conn.execute("DROP TABLE capture_queue")  # the queue cannot be written
+    conn.commit()
+    conn.close()
+    before = len(store.get_messages(thread))
+    with pytest.raises(Exception):
+        store.add_message(thread, "user", "this must not be saved without its job", capture=True)
+    assert len(store.get_messages(thread)) == before
+    assert store.add_message(thread, "user", "no capture asked, so the queue is not needed")  # unchanged behaviour when capture is off
+
+
+def test_a_retry_puts_the_job_back_if_a_restart_lost_it(tmp_path):
+    client, agent, _ = parts(tmp_path)
+    thread = agent.store.create_thread("t")
+    message = agent.store.add_message(thread, "user", "I have a dog named Hog")  # saved without a job, as if it had been lost
+    assert agent.store.pending_captures() == []
+    client.post("/api/chat", json={"message": "I have a dog named Hog", "thread_id": thread})
+    conn = agent.store.connect()
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM capture_queue WHERE message_id = ?", (message,)).fetchone()[0] == 1  # the message was reused, and its job is there
+        assert conn.execute("SELECT COUNT(*) FROM messages WHERE role = 'user'").fetchone()[0] == 1
+    finally:
+        conn.close()

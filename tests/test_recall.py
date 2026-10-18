@@ -375,3 +375,25 @@ def test_the_migration_that_makes_the_table_is_numbered_sixteen():
 
     assert [number for number, _ in diya_db.MIGRATIONS][-1] >= 16
     assert any(number == 16 and any("fact_embeddings" in statement for statement in statements) for number, statements in diya_db.MIGRATIONS)
+
+
+def test_the_vector_of_a_fact_that_is_no_longer_accepted_is_removed(store, memory):
+    """DIYA-024: a derived vector goes when the fact stops being one the model is told, so a forgotten thing does not linger as an embedding."""
+    kept = memory.add_manual("Has a job at the dog shelter", "api")
+    gone = memory.add_manual("Owns a dog named Rocky", "api")
+    def accepted():
+        return [{"id": f["id"], "text": f["text"], "text_key": diya_memory.text_key(f["text"])} for f in memory.facts("accepted")]
+
+    diya_recall.vectors(store, accepted(), fake_embed, "m")
+
+    def stored():
+        conn = store.connect()
+        try:
+            return {row[0] for row in conn.execute("SELECT fact_id FROM fact_embeddings")}
+        finally:
+            conn.close()
+
+    assert stored() == {kept, gone}
+    memory.decide(gone, "retire", "api")
+    diya_recall.vectors(store, accepted(), fake_embed, "m")
+    assert stored() == {kept}

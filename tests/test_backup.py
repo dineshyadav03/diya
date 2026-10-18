@@ -225,3 +225,77 @@ def test_the_settings(tmp_path):
     assert diya_config.load_config({}).backup is True and diya_config.load_config({}).backup_dir == "backups"
     assert diya_config.load_config({"DIYA_BACKUP": "0"}).backup is False
     assert diya_config.load_config({"DIYA_BACKUP_DIR": str(tmp_path)}).backup_dir == str(tmp_path)
+
+
+# ---- the migration policy (DIYA-016) ---------------------------------------------------------------------------------------------------------
+
+def old_database(path, upto):
+    """A database made by an older program: only the first `upto` schema versions applied, with a message in it."""
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)")
+    for version, statements in diya_db.MIGRATIONS[:upto]:
+        for statement in statements:
+            conn.execute(statement)
+        conn.execute("INSERT INTO migrations (version, applied_at) VALUES (?, 'then')", (version,))
+    conn.execute("INSERT INTO threads (title, created_at) VALUES ('t', 'then')")
+    conn.execute("INSERT INTO messages (thread_id, role, content, created_at) VALUES (1, 'user', 'an old message', 'then')")
+    conn.commit()
+    conn.close()
+
+
+def versions(path):
+    conn = sqlite3.connect(path)
+    try:
+        return [row[0] for row in conn.execute("SELECT version FROM migrations ORDER BY version")]
+    finally:
+        conn.close()
+
+
+def test_nothing_is_pending_for_a_missing_empty_or_current_database(config, tmp_path):
+    assert bk.pending_migrations(str(tmp_path / "none.db")) == []
+    assert bk.pending_migrations(config.db_path) == []  # the fixture's database is current
+    empty = tmp_path / "empty.db"
+    sqlite3.connect(empty).close()
+    assert bk.pending_migrations(str(empty)) == [] and bk.before_migrating(dataclasses.replace(config, db_path=str(empty))) is None
+    junk = tmp_path / "junk.db"
+    junk.write_text("not a database")
+    assert bk.pending_migrations(str(junk)) == []
+
+
+def test_an_older_database_gets_a_checked_snapshot_before_it_is_migrated_and_the_snapshot_is_the_way_back(config, tmp_path):
+    old = str(tmp_path / "old.db")
+    old_database(old, upto=3)
+    older = dataclasses.replace(config, db_path=old)
+    assert bk.pending_migrations(old) == [v for v, _ in diya_db.MIGRATIONS if v > 3]
+    taken = bk.before_migrating(older, now=T0)
+    assert taken is not None and versions(taken.path) == [1, 2, 3] and bk.check(taken.path) == []
+    diya_db.Store(old).get_messages(1)  # now the program opens it, and migrates
+    assert versions(old) == [v for v, _ in diya_db.MIGRATIONS] and bk.pending_migrations(old) == []
+    assert bk.before_migrating(older, now=T0 + timedelta(minutes=1)) is None  # up to date now: no second copy
+    back = bk.restore(taken.path, str(tmp_path / "rolled-back.db"))  # the way back
+    assert versions(back) == [1, 2, 3] and rows(back, "messages") == 1
+
+
+def test_a_migration_that_fails_changes_nothing(tmp_path, monkeypatch):
+    old = str(tmp_path / "old.db")
+    old_database(old, upto=3)
+    broken = diya_db.MIGRATIONS[:3] + ((diya_db.MIGRATIONS[3][0], ("CREATE TABLE fine_so_far (a)", "THIS IS NOT SQL")),) + diya_db.MIGRATIONS[4:]
+    monkeypatch.setattr(diya_db, "MIGRATIONS", broken)
+    with pytest.raises(sqlite3.Error):
+        diya_db.Store(old).get_messages(1)
+    assert versions(old) == [1, 2, 3] and rows(old, "messages") == 1
+    conn = sqlite3.connect(old)
+    try:
+        assert conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'fine_so_far'").fetchone() is None  # the half that worked was rolled back too
+    finally:
+        conn.close()
+
+
+def test_the_snapshot_that_could_not_be_made_stops_the_migration_in_the_start_up(config, tmp_path, monkeypatch):
+    """The API start-up refuses to migrate a database it could not first copy (the owner can start with DIYA_BACKUP=0 to go on without)."""
+    old = str(tmp_path / "old.db")
+    old_database(old, upto=3)
+    older = dataclasses.replace(config, db_path=old, backup_dir=str(tmp_path / "file-not-folder"))
+    (tmp_path / "file-not-folder").write_text("a file where the backup folder should be")
+    with pytest.raises(bk.BackupError):
+        bk.before_migrating(older)

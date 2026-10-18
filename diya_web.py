@@ -449,9 +449,11 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
         retry = bool(saved) and saved[-1]["role"] == "user" and saved[-1]["content"] == req.message
         earlier = saved[:-1] if retry else saved
         history = agent.with_profile([{"role": m["role"], "content": m["content"]} for m in earlier])
-        message_id = saved[-1]["id"] if retry else agent.store.add_message(thread_id, "user", req.message)
-        if config.auto_memory:
-            agent.store.enqueue_capture(message_id)  # written down before the turn is answered: a restart cannot lose it, and the reading that follows takes it in its turn
+        # With automatic memory on, the job to read the message for facts is written in the same transaction as the message (DIYA-019): written down before the turn is answered, so a restart
+        # cannot lose it, and the reading that follows takes it in its turn. A retry reuses the message, whose job is already there (and is put there if a restart lost it).
+        message_id = saved[-1]["id"] if retry else agent.store.add_message(thread_id, "user", req.message, capture=config.auto_memory)
+        if retry and config.auto_memory:
+            agent.store.enqueue_capture(message_id)
         history.append({"role": "user", "content": req.message})
         return thread_id, history, message_id
 
@@ -602,6 +604,16 @@ def main():
         else:
             print("DIYA_REQUIRE_TOKEN=0: nothing requires it.")
 
+    if config.backup:  # the way back from a schema change is a checked snapshot taken first (diya_backup.before_migrating, docs/BACKUP_DESIGN.md)
+        import diya_backup
+
+        try:
+            taken = diya_backup.before_migrating(config)
+        except diya_backup.BackupError as exc:
+            print(f"Diya's memory needs a schema update and a safety copy of it could not be made first ({exc}). Nothing was changed. Fix that, or start with DIYA_BACKUP=0 to go on without the copy.", file=sys.stderr)
+            sys.exit(1)
+        if taken is not None:
+            print(f"Diya's memory needs a schema update. A checked copy was made first: {taken.name}. To go back, restore it: python diya_backup.py restore {taken.path} --to NEWFILE")
     agent = diya.Agent(config)
     diya.warm_up_or_exit(agent)
     for line in diya.memory_startup_lines(agent) + diya.actions_startup_lines(agent):

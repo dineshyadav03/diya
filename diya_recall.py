@@ -57,6 +57,9 @@ def vectors(store, facts, embed, model):
     """The embedding of each fact, `{fact_id: vector}`: from the table when it is there for these words, made (and kept) when not. `embed(text)` raises if it cannot."""
     conn = store.connect()
     try:
+        # A vector is derived from a fact's words, so it goes when the fact stops being one the model is told (retired, rejected, forgotten): a forgotten thing must not linger as a vector (DIYA-024).
+        conn.execute("DELETE FROM fact_embeddings WHERE fact_id IN (SELECT id FROM facts WHERE status != 'accepted')")
+        conn.commit()
         kept = {row[0]: (row[1], row[2]) for row in conn.execute("SELECT fact_id, text_key, vector FROM fact_embeddings WHERE model = ?", (model,)).fetchall()}
         out = {}
         for fact in facts:

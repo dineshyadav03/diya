@@ -798,16 +798,22 @@ class Store:
         finally:
             conn.close()
 
-    def add_message(self, thread_id, role, content):
+    def add_message(self, thread_id, role, content, capture=False):
+        """Save a message and return its id. With `capture`, the person's message is also put in the queue to be read for facts IN THE SAME TRANSACTION (DIYA-019): there is no moment at which the
+        message is saved and the job to read it is not, so a crash between the two cannot lose the reading."""
         conn = self.connect()
         now = datetime.now(timezone.utc).isoformat()
-        cur = conn.execute(
-            "INSERT INTO messages (thread_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-            (thread_id, role, content, now),
-        )
-        conn.commit()
-        message_id = cur.lastrowid
-        conn.close()
+        try:
+            cur = conn.execute(
+                "INSERT INTO messages (thread_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                (thread_id, role, content, now),
+            )
+            message_id = cur.lastrowid
+            if capture and role == "user":
+                conn.execute("INSERT OR IGNORE INTO capture_queue (message_id, created_at) VALUES (?, ?)", (message_id, now))
+            conn.commit()
+        finally:
+            conn.close()
         return message_id
 
     def get_history(self, thread_id):

@@ -584,3 +584,27 @@ def test_the_list_says_so_when_nothing_is_connected_or_google_cannot_be_reached(
     assert gw.google_tasks_list(signed_in)().startswith("Couldn't reach Google Tasks")
     diya_connectors.disconnect(signed_in, TASKS)
     assert gw.google_tasks_list(signed_in)() == "Google Tasks is not connected."
+
+
+# ---- where a request can go (DIYA-068) -------------------------------------------------------------------------------------------------------
+
+def test_no_tool_lets_the_model_choose_a_host_a_url_or_a_token(config):
+    """The model's only inputs are words: titles, times, names. Nothing it can say names an address, a header or a credential."""
+    forbidden = {"url", "uri", "host", "endpoint", "token", "access_token", "refresh_token", "authorization", "headers", "api_key", "key", "secret", "base_url", "domain"}
+    specs = [kind.tool for kind in gw.action_kinds()] + [spec for _name, spec, _func in gw.read_tool_specs(None)]
+    assert len(specs) == 5
+    for spec in specs:
+        assert not forbidden & set(spec["function"]["parameters"]["properties"]), spec["function"]["name"]
+
+
+def test_every_google_address_this_module_can_call_is_a_fixed_google_host():
+    addresses = [gw.CALENDAR_API, gw.TASKS_API, gw.DRIVE_API, gw.DOCS_API]
+    hosts = {a.split("/")[2] for a in addresses}
+    assert hosts == {"www.googleapis.com", "tasks.googleapis.com", "docs.googleapis.com"} and all(a.startswith("https://") for a in addresses)
+
+
+def test_an_address_built_from_what_google_answered_is_never_followed(signed_in, monkeypatch):
+    """A link in Google's answer is shown to the person as text; the next request is always to the module's own address (a document's address is built from a checked id)."""
+    google = Google(monkeypatch, reply(200, {"documentId": "doc_ID-1234567890", "title": "Plan", "next": "https://evil.example/steal"}), reply(200, {}))
+    gw.doc_execute(signed_in, {"title": "Plan", "body": "text"})
+    assert all(call["url"].startswith(gw.DOCS_API) for call in google.calls)
