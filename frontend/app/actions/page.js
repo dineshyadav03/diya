@@ -202,6 +202,12 @@ export default function ActionsPage() {
                         <p className="memory-text">{action.summary}</p>
                         <p className="memory-dim">{action.label}</p>
                         <Fields fields={action.fields} />
+                        {action.preview && (
+                          <p className="memory-dim action-preview">
+                            Risk level {action.preview.tier} of 4: {action.preview.tier_words}. It reaches {action.preview.reaches}. Undo: {action.preview.undo}.
+                            {action.preview.uses ? ` Uses: ${action.preview.uses.replace(/ connected$/, '')}.` : ''}
+                          </p>
+                        )}
                         {action.tainted && (
                           <p className="action-caution">
                             Diya read from {sourceWords(action.taint_sources)} before proposing this. That text is not

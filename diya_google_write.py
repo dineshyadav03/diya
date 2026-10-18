@@ -72,6 +72,13 @@ def _steps(api, scope):
     )
 
 
+ACCESS = {
+    "google_calendar_edit": ("Adds an event, just for you, to your calendar, but only when you approve that one event.", "Cannot invite anyone, and cannot change or delete events."),
+    "google_tasks": ("Lists your open Google Tasks.", "Adds a task, but only when you approve that one task.", "Cannot complete, change or delete tasks."),
+    "google_drive_files": ("Makes a folder or a new Google Doc, but only when you approve that one.", "Can see only the files and folders Diya made herself, never the rest of your Drive.", "Cannot share, move or delete anything."),
+}
+
+
 def connector_for(name):
     """The Connector for one of them (the Connections page offers it; docs/CONNECTORS_DESIGN.md)."""
     label, description, scope, api = GOOGLE_WRITE[name]
@@ -82,7 +89,7 @@ def connector_for(name):
     setup = diya_connectors.Setup(
         fields=diya_google_calendar.SETUP.fields, steps=_steps(api, scope), state=diya_google_calendar.client_state, save=diya_google_calendar.save_client, clear=diya_google_calendar.clear_client
     )
-    return diya_connectors.Connector(name=name, label=label, description=description, auth_kind="oauth", implemented=True, oauth_connect=connect, setup=setup, revoke=diya_google_calendar.revoke_for(name))
+    return diya_connectors.Connector(name=name, label=label, description=description, auth_kind="oauth", implemented=True, oauth_connect=connect, setup=setup, revoke=diya_google_calendar.revoke_for(name), scope=scope, access=ACCESS[name])
 
 
 def connectors():

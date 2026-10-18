@@ -326,17 +326,22 @@ def real_connectors(config):
     """Every connector Diya actually has, ready to hand to diya_web.create_app()."""
     return (
         Connector(name="home_assistant", label="Home Assistant", description="Search entity states from a local instance.",
-                 auth_kind="token", implemented=True, validate=home_assistant_validate(config)),
+                 auth_kind="token", implemented=True, validate=home_assistant_validate(config),
+                 access=("Reads the state of the devices you ask about.", "Cannot switch, lock or change anything.")),
         Connector(name="notion", label="Notion", description="Search pages and databases you connect.",
-                 auth_kind="token", implemented=True, validate=notion_validate),
+                 auth_kind="token", implemented=True, validate=notion_validate,
+                 access=("Searches the pages and databases you shared with the integration.", "Cannot edit, create or delete pages.")),
         Connector(name="todoist", label="Todoist", description="List your open tasks, and add one when you approve it.",
-                 auth_kind="token", implemented=True, validate=todoist_validate),
+                 auth_kind="token", implemented=True, validate=todoist_validate,
+                 access=("Lists your open tasks.", "Adds a task to your Inbox, but only when you approve that one task.", "Cannot change, complete or delete tasks.")),
         Connector(name="google_calendar", label="Google Calendar", description="Read your upcoming events.",
                  auth_kind="oauth", implemented=True, oauth_connect=diya_google_calendar.connect, setup=diya_google_calendar.SETUP,
-                 revoke=diya_google_calendar.revoke_for("google_calendar")),
+                 revoke=diya_google_calendar.revoke_for("google_calendar"), scope=diya_google_calendar.SCOPE,
+                 access=("Reads your upcoming calendar events.", "Cannot add, change or delete events (adding is the separate 'add events' card).")),
         Connector(name="google_mail", label="Gmail", description="Look through your mail when you ask. Read-only: it can never send, change or delete a message.",
                  auth_kind="oauth", implemented=True, oauth_connect=diya_google_mail.connect, setup=diya_google_mail.SETUP,
-                 revoke=diya_google_calendar.revoke_for("google_mail")),
+                 revoke=diya_google_calendar.revoke_for("google_mail"), scope=diya_google_mail.SCOPE,
+                 access=("Looks through your mail when you ask.", "Cannot send, draft, change, label or delete a message.")),
         *diya_google_write.connectors(),
     )
 

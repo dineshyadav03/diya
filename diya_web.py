@@ -26,6 +26,7 @@ import diya_connections_api
 import diya_connector_tools
 import diya_intent
 import diya_dreaming_api
+import diya_permissions_api
 import diya_health_api
 import diya_journal_api
 import diya_knowledge_api
@@ -559,6 +560,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     diya_schedule_api.register(app, config, agent)  # repeating reminders and snooze (docs/SCHEDULE_DESIGN.md, unit R4)
     diya_brief_api.register(app, config, agent)  # the day: what is due, overdue and coming (docs/SCHEDULE_DESIGN.md, unit R5)
     diya_connections_api.register(app, config, agent, connectors=connectors)
+    diya_permissions_api.register(app, config, agent, connectors)  # what each connection can do, since when, last used (docs/PERMISSIONS_DESIGN.md)
     # Deciding what Diya proposed (docs/ACTIONS_DESIGN.md, unit A3): the agent carries the action store and its kinds.
     diya_actions_api.register(app, config, agent)
 

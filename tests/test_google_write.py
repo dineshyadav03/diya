@@ -728,3 +728,26 @@ def test_a_read_back_failure_is_unknown_in_the_approval_system_and_is_never_run_
     with pytest.raises(diya_actions.IllegalTransition):
         actions.run(action["id"])
     assert len(google.calls) == 2  # the write and the one read back; nothing again
+
+
+# ---- what the owner is told about the risk before approving (DIYA-048) -------------------------------------------------------------------------
+
+def test_a_waiting_google_action_carries_its_risk_its_reach_and_how_far_it_can_be_undone(signed_in):
+    from fastapi.testclient import TestClient
+
+    import diya_web
+
+    class Quiet:
+        def transcribe(self, path):
+            return ""
+
+    config = dataclasses.replace(signed_in, require_token=False, profile_path=signed_in.db_path + ".p")
+    agent = diya.Agent(config, client=FakeClient())
+    agent.actions.propose("google_tasks_add", {"title": "Renew the bus pass"})
+    agent.actions.propose("google_drive_make_folder", {"name": "Exams"})
+    client = TestClient(diya_web.create_app(config, agent, Quiet()), base_url="https://localhost")
+    shown = {a["kind"]: a for a in client.get("/api/actions").json()["pending"]}
+    tasks = shown["google_tasks_add"]["preview"]
+    assert tasks["tier"] == 2 and "adds something private to the person's own account" in tasks["tier_words"]
+    assert tasks["reaches"] == "tasks.googleapis.com (only when approved)" and tasks["undo"].startswith("by hand in Google Tasks") and tasks["uses"] == "Google Tasks connected"
+    assert shown["google_drive_make_folder"]["preview"]["uses"] == "Google Drive and Docs connected"

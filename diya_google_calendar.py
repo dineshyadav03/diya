@@ -275,6 +275,7 @@ def connect_to(config, scope, token_name, open_browser=webbrowser.open):
             "at https://myaccount.google.com/permissions and try again"
         )
     diya_connectors.store_token(config, token_name, refresh_token)
+    diya_connectors.store_granted(config, token_name, tokens.get("scope"))  # what Google says it granted, shown on the permissions page
 
 
 def _access_token(config):

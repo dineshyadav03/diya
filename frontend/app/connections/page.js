@@ -26,6 +26,7 @@ export default function ConnectionsPage() {
   const [error, setError] = useState('')
   const [tokenInputs, setTokenInputs] = useState({}) // name -> the pasted-token form's current text
   const [setupInputs, setSetupInputs] = useState({}) // name -> { field name -> what has been typed in that box of the one-time setup form }
+  const [permissions, setPermissions] = useState({}) // name -> what that connection can do, since when, when last used (docs/PERMISSIONS_DESIGN.md); empty if it could not be read: the page works without it
 
   const load = useCallback(async (first) => {
     let status
@@ -50,9 +51,20 @@ export default function ConnectionsPage() {
     return false
   }, [])
 
+  const loadPermissions = useCallback(async () => {
+    try {
+      const response = await fetch('/api/permissions')
+      const body = response.ok ? await readJson(response) : null
+      if (body && Array.isArray(body.connectors)) setPermissions(Object.fromEntries(body.connectors.map((item) => [item.name, item])))
+    } catch {
+      // an extra: if it cannot be read, the cards show what they always showed
+    }
+  }, [])
+
   useEffect(() => {
     load(true)
-  }, [load])
+    loadPermissions()
+  }, [load, loadPermissions])
 
   async function settle(request, name, describe) {
     setBusy(name)
@@ -76,6 +88,7 @@ export default function ConnectionsPage() {
     setNotice(describe(body))
     setData(body)
     setBusy('')
+    loadPermissions()
   }
 
   function connectWithToken(event, connector) {
@@ -188,6 +201,44 @@ export default function ConnectionsPage() {
                       <li key={connector.name} className="memory-fact" data-status={connector.connected ? 'accepted' : 'candidate'}>
                         <p className="memory-text">{connector.label}</p>
                         <p className="memory-dim">{connector.description}</p>
+                        {permissions[connector.name] && (
+                          <div className="connection-access">
+                            <p className="memory-dim">What this connection can do:</p>
+                            <ul>
+                              {permissions[connector.name].access.map((line) => (
+                                <li key={line} className="memory-dim">
+                                  {line}
+                                </li>
+                              ))}
+                            </ul>
+                            {permissions[connector.name].scope && (
+                              <p className="memory-dim">
+                                The permission it asks the service for: <code>{permissions[connector.name].scope}</code>
+                              </p>
+                            )}
+                            {connector.connected && permissions[connector.name].granted && (
+                              <p className="memory-dim">
+                                {permissions[connector.name].granted_matches === false
+                                  ? 'Google says it granted something different from what was asked: '
+                                  : 'Google confirmed it granted: '}
+                                <code>{permissions[connector.name].granted.join(' ')}</code>
+                              </p>
+                            )}
+                            {connector.connected && permissions[connector.name].since && (
+                              <p className="memory-dim">Connected since {new Date(permissions[connector.name].since).toLocaleString()}.</p>
+                            )}
+                            {connector.connected && (
+                              <p className="memory-dim">
+                                {permissions[connector.name].last_used
+                                  ? `Last used ${new Date(permissions[connector.name].last_used.at).toLocaleString()}: ${permissions[connector.name].last_used.what}${permissions[connector.name].last_used.ok ? '' : ' (did not work)'}.`
+                                  : 'Not used yet.'}
+                                {permissions[connector.name].last_action
+                                  ? ` Last approved action: ${permissions[connector.name].last_action.summary} (${permissions[connector.name].last_action.status}, ${new Date(permissions[connector.name].last_action.at).toLocaleString()}).`
+                                  : ''}
+                              </p>
+                            )}
+                          </div>
+                        )}
                         <p className="memory-person-tag">{connector.connected ? 'Connected' : 'Not connected'}</p>
                         {connector.connected ? (
                           <div className="memory-actions">

@@ -27,6 +27,7 @@ from pydantic import BaseModel, StrictBool
 
 import diya_actions
 import diya_connectors
+import diya_catalog
 import diya_pause
 from diya_actions import ActionError, HashMismatch, IllegalTransition, InvalidArgs, Paused, UnknownAction
 from diya_memory import printable
@@ -76,6 +77,14 @@ def register(app, config, agent):
         kind = diya_actions.by_name(agent.actions.kinds, kind_name)
         return kind.label if kind is not None else kind_name
 
+    def preview_of(kind_name):
+        """What the owner is told about the risk before approving (DIYA-048), from the catalog (diya_catalog.py): how far it can be undone, what it reaches, which connection it uses. None for a kind the catalog does not know."""
+        kind = diya_actions.by_name(agent.actions.kinds, kind_name)
+        entry = diya_catalog.CATALOG.get(kind.tool_name) if kind is not None and kind.tool_name else None
+        if entry is None:
+            return None
+        return {"tier": entry.tier, "tier_words": printable(diya_catalog.TIERS[entry.tier]), "reaches": printable(entry.network), "undo": printable(entry.reversible), "uses": printable(entry.needs)}
+
     def public(action):
         return {
             "id": action["id"],
@@ -88,6 +97,7 @@ def register(app, config, agent):
             "args_hash": action["args_hash"],
             "tainted": action["tainted"],
             "taint_sources": [printable(source) for source in action["taint_sources"]],
+            "preview": preview_of(action["kind"]),
             "thread_id": action["thread_id"],
             "message_id": action["message_id"],
             "created_at": printable(action["created_at"]),

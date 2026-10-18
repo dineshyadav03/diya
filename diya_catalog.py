@@ -44,7 +44,8 @@ class Entry:
     reversible: str  # "n/a" for a read; otherwise how it is undone
     approval: str  # "none" or "owner approves each action"
     untrusted_output: bool  # does what comes back contain words someone else wrote (so it must never be obeyed)?
-    needs: str = ""  # the connector or setting it needs
+    needs: str = ""  # the connector or setting it needs, in words
+    connector: str = ""  # the connector's name (diya_connectors), so the permissions page can say what each connection was last used for
 
 
 E = Entry
@@ -57,17 +58,17 @@ CATALOG = {e.name: e for e in (
     E("list_reminders", "tool", 0, "lists Diya's reminders", "none", "n/a", "none", False),
     E("add_task", "tool", 1, "adds a task to Diya's own to-do list", "none", "the person ticks it off on the Tasks page", "none", False),
     E("list_tasks", "tool", 0, "lists Diya's own tasks", "none", "n/a", "none", False),
-    E("search_home_assistant", "tool", 0, "searches the states of the person's Home Assistant", "the person's own Home Assistant address", "n/a", "none", True, "Home Assistant connected"),
-    E("search_notion", "tool", 0, "searches the person's connected Notion", "api.notion.com", "n/a", "none", True, "Notion connected"),
-    E("list_todoist_tasks", "tool", 0, "lists open tasks in Todoist", "api.todoist.com", "n/a", "none", True, "Todoist connected"),
-    E("list_calendar_events", "tool", 0, "lists the next events on the person's Google Calendar", "www.googleapis.com", "n/a", "none", True, "Google Calendar connected"),
-    E("list_google_tasks", "tool", 0, "lists open Google Tasks", "tasks.googleapis.com", "n/a", "none", True, "Google Tasks connected"),
-    E("propose_todoist_task", "proposal", 2, "proposes a task in the person's Todoist Inbox", "api.todoist.com (only when approved)", "by hand in Todoist: Diya cannot remove it", "owner approves each action", False, "Todoist connected"),
-    E("propose_calendar_event", "proposal", 2, "proposes an event, just for the person, on their Google Calendar", "www.googleapis.com (only when approved)", "by hand in Google Calendar: Diya cannot remove it", "owner approves each action", False, "Google Calendar (add events) connected"),
-    E("propose_google_task", "proposal", 2, "proposes a task in the person's Google Tasks", "tasks.googleapis.com (only when approved)", "by hand in Google Tasks: Diya cannot remove it", "owner approves each action", False, "Google Tasks connected"),
-    E("propose_drive_folder", "proposal", 2, "proposes a new folder at the top of the person's Google Drive", "www.googleapis.com (only when approved)", "by hand in Google Drive: Diya cannot remove it", "owner approves each action", False, "Google Drive and Docs connected"),
-    E("propose_google_doc", "proposal", 2, "proposes a new Google Doc with at most a line of text", "docs.googleapis.com (only when approved)", "by hand in Google Drive: Diya cannot remove it", "owner approves each action", False, "Google Drive and Docs connected"),
-    E("read_mail", "flow", 0, "looks through the person's Gmail when they ask; the answer is written by a model with no tools", "gmail.googleapis.com", "n/a", "none", True, "Gmail connected"),
+    E("search_home_assistant", "tool", 0, "searches the states of the person's Home Assistant", "the person's own Home Assistant address", "n/a", "none", True, "Home Assistant connected", "home_assistant"),
+    E("search_notion", "tool", 0, "searches the person's connected Notion", "api.notion.com", "n/a", "none", True, "Notion connected", "notion"),
+    E("list_todoist_tasks", "tool", 0, "lists open tasks in Todoist", "api.todoist.com", "n/a", "none", True, "Todoist connected", "todoist"),
+    E("list_calendar_events", "tool", 0, "lists the next events on the person's Google Calendar", "www.googleapis.com", "n/a", "none", True, "Google Calendar connected", "google_calendar"),
+    E("list_google_tasks", "tool", 0, "lists open Google Tasks", "tasks.googleapis.com", "n/a", "none", True, "Google Tasks connected", "google_tasks"),
+    E("propose_todoist_task", "proposal", 2, "proposes a task in the person's Todoist Inbox", "api.todoist.com (only when approved)", "by hand in Todoist: Diya cannot remove it", "owner approves each action", False, "Todoist connected", "todoist"),
+    E("propose_calendar_event", "proposal", 2, "proposes an event, just for the person, on their Google Calendar", "www.googleapis.com (only when approved)", "by hand in Google Calendar: Diya cannot remove it", "owner approves each action", False, "Google Calendar (add events) connected", "google_calendar_edit"),
+    E("propose_google_task", "proposal", 2, "proposes a task in the person's Google Tasks", "tasks.googleapis.com (only when approved)", "by hand in Google Tasks: Diya cannot remove it", "owner approves each action", False, "Google Tasks connected", "google_tasks"),
+    E("propose_drive_folder", "proposal", 2, "proposes a new folder at the top of the person's Google Drive", "www.googleapis.com (only when approved)", "by hand in Google Drive: Diya cannot remove it", "owner approves each action", False, "Google Drive and Docs connected", "google_drive_files"),
+    E("propose_google_doc", "proposal", 2, "proposes a new Google Doc with at most a line of text", "docs.googleapis.com (only when approved)", "by hand in Google Drive: Diya cannot remove it", "owner approves each action", False, "Google Drive and Docs connected", "google_drive_files"),
+    E("read_mail", "flow", 0, "looks through the person's Gmail when they ask; the answer is written by a model with no tools", "gmail.googleapis.com", "n/a", "none", True, "Gmail connected", "google_mail"),
     E("mail_write_refused", "flow", 0, "answers a request to send, change or delete mail with the fact that access is read-only", "none", "n/a", "none", False),
     E("study_repo", "flow", 0, "reads a public GitHub repository the person names and shows the evidence", "api.github.com, raw.githubusercontent.com", "n/a", "none", True),
     E("explain_memory", "flow", 0, "says where a remembered fact came from, from the memory's own record", "none", "n/a", "none", False),

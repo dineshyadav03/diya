@@ -101,7 +101,7 @@ def test_a_pending_action_comes_back_with_everything_the_page_shows(world):
         "id": action["id"], "kind": "add_task", "label": "Add a task",
         "summary": "Add the task 'buy milk'", "status": "pending",
         "fields": [{"name": "title", "value": "buy milk"}],
-        "args_hash": action["args_hash"], "tainted": True, "taint_sources": ["web_search", "search_notion"],
+        "args_hash": action["args_hash"], "tainted": True, "taint_sources": ["web_search", "search_notion"], "preview": None,  # a kind the catalog does not know has no risk text
         "thread_id": 4, "message_id": 9,
         "created_at": "2026-10-04T10:00:00Z", "expires_at": "2026-10-05T10:00:00Z",
         "decided_at": None, "executed_at": None, "result": None,

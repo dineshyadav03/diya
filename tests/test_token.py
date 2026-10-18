@@ -158,6 +158,7 @@ ENDPOINTS = [
     ("GET", "/api/dreaming", {}),
     ("POST", "/api/pause", {"json": {"reason": "testing"}}),
     ("POST", "/api/resume", {}),
+    ("GET", "/api/permissions", {}),
     ("POST", "/api/categories", {"json": {"action": "add", "name": "School"}}),
     ("GET", "/api/memory", {}),
     ("GET", "/api/memory/1", {}),

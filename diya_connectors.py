@@ -55,6 +55,8 @@ class Connector:
     validate: object = None  # token-kind only: callable(token) -> None, raises ConnectorError
     oauth_connect: object = None  # oauth-kind only: callable(config) -> None, raises ConnectorError
     setup: object = None  # a Setup, for a connector that needs something given once (a client id and secret) before it can connect; None for the rest
+    access: tuple = ()  # what this connection can do, one plain sentence each (the permissions page shows them as they are)
+    scope: str = ""  # the permission it asks the service for, as the service names it ("" for a pasted token)
     revoke: object = None  # callable(config, token) -> bool: takes the permission back at the service itself when the owner disconnects (Google); None for a connector that has no such step
 
     def __post_init__(self):
@@ -152,8 +154,36 @@ def disconnect(config, name):
         removed = True
     except FileNotFoundError:
         removed = False
+    try:
+        os.remove(_granted_path(config, name))
+    except OSError:
+        pass
     log_call(config, name, "disconnected", True, detail=None if removed else "was not connected")
     return removed
+
+
+def _granted_path(config, name):
+    return os.path.join(config.connector_tokens_dir, f"{name}.granted")
+
+
+def store_granted(config, name, scope_text):
+    """Remember which permissions the service SAID it granted when the sign-in finished (Google's token answer lists them), so the permissions page can show what was actually granted and not only what was
+    asked for. Not a secret (it names permissions, not a credential). A missing or empty answer stores nothing."""
+    if not isinstance(scope_text, str) or not scope_text.strip():
+        return
+    os.makedirs(config.connector_tokens_dir, exist_ok=True)
+    with open(_granted_path(config, name), "w", encoding="utf-8", newline=chr(10)) as f:
+        f.write(" ".join(scope_text.split()) + chr(10))
+
+
+def read_granted(config, name):
+    """The permissions the service said it granted, as a list, or None when it did not say (or the sign-in is from before this was kept)."""
+    try:
+        with open(_granted_path(config, name), encoding="utf-8") as f:
+            found = f.read().split()
+    except OSError:
+        return None
+    return found or None
 
 
 def revoke_and_disconnect(config, connector):

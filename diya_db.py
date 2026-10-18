@@ -765,6 +765,20 @@ class Store:
         finally:
             conn.close()
 
+    def journal_last(self, tools):
+        """The newest journal row whose tool is one of `tools`, as a dict, or None."""
+        tools = list(tools)
+        if not tools:
+            return None
+        conn = self.connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            marks = ",".join("?" for _ in tools)
+            row = conn.execute(f"SELECT * FROM tool_journal WHERE tool IN ({marks}) ORDER BY id DESC LIMIT 1", tools).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
     def journal_counts(self, since):
         """{status: how many} of the entries written at or after `since` (an ISO time)."""
         conn = self.connect()
