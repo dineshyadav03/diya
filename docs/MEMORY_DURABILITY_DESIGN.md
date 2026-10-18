@@ -15,3 +15,7 @@
 **Measured with the real models** (2026-10-18, `diya-chat`, privacy judge `qwen2.5:3b`): the memory question-and-answer bench went from 28/30 to 32/33 (`docs/MEMORY_BENCH.md`), and the live safety bench is re-run after this change because a correction path was loosened (result recorded there).
 
 **Not done.** A visible "reading..." state in the UI; retry of `failed` messages from a button (`Store.retry_capture` exists, nothing calls it yet).
+
+## Two windows, one memory (DIYA-032)
+
+The Memory page can be open on a laptop and a phone while the scheduled pass changes facts too. Every change to a fact is made in one transaction that first checks the fact is in the state the change applies to, so a decision (accept, reject, retire...) made on a fact something else already decided is **refused with a 409**, never flipped back. Rewording a waiting fact now also carries **the wording the person saw** (`expected_text`): if the fact has changed since, the edit is refused (`ChangedUnderYou`, HTTP 409: "was changed since you opened it, so your edit was not saved. Reload the page...") and nothing is written, instead of silently overwriting the other change. Two edits sent at the same moment cannot both win. An older client that sends no `expected_text` behaves as before. Proof: `tests/test_memory_concurrency.py` (7 cases, including two threads released together).

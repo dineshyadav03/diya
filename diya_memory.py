@@ -102,6 +102,10 @@ class IllegalTransition(FactError):
     """The fact is not in a status that action applies to."""
 
 
+class ChangedUnderYou(IllegalTransition):
+    """The fact was changed by something else (another window, the scheduled pass) after the person opened it, so their edit would silently overwrite that change. Nothing was written."""
+
+
 class DuplicateFact(FactError):
     """An accepted fact already says the same thing."""
 
@@ -771,9 +775,10 @@ class Memory:
                 (since,),
             ).fetchone()[0]
 
-    def edit(self, fact_id, text, actor):
+    def edit(self, fact_id, text, actor, expected_text=None):
         """Reword a candidate before deciding on it. The previous wording stays in the event. A model's second
-        opinion (a `verifier:` flag) was about the old wording, so it is dropped, and the event says which."""
+        opinion (a `verifier:` flag) was about the old wording, so it is dropped, and the event says which. With `expected_text` (the wording the
+        person saw when they started), an edit is refused, ChangedUnderYou, if the words are no longer those: last-write-wins is never silent (DIYA-032)."""
         _check_actor(actor)
         check_text(text)
         with self._write() as conn:
@@ -783,6 +788,8 @@ class Memory:
             status, old, flags = row
             if status != "candidate":
                 raise IllegalTransition(f"fact {fact_id} is {status}; only a candidate can be edited")
+            if expected_text is not None and old != expected_text:
+                raise ChangedUnderYou(f"fact {fact_id} was changed since you opened it, so your edit was not saved. Reload the page to see the new wording, then edit that")
             flags = json.loads(flags)
             stale = [flag for flag in flags if flag.startswith(VERIFIER_PREFIX)]
             detail = {"from": old}

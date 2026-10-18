@@ -140,6 +140,31 @@ def _link(data, key):
     return f" {link}" if isinstance(link, str) and link.startswith("https://") and len(link) <= 300 else ""
 
 
+_REMOTE_ID = re.compile(r"[A-Za-z0-9_-]{5,128}")
+
+
+def _read_back(config, connector, url, what, check, params=None):
+    """The independent check that a write really happened (DIYA-052): Google's answer to the write is not taken as proof; the thing is asked for again by its id, and what comes back must be what was
+    asked for. `check(data)` returns "" when it is, else a few words saying what is different. Anything else (the read failing, a different thing) is ActionUncertain: it may well be there, it is not
+    confirmed, and the person is told to look. Returns what came back."""
+    try:
+        data = _json(_send(config, connector, "GET", url, params=params, what=what, ok=(200,)))
+    except (ActionFailed, ActionUncertain):
+        raise ActionUncertain(f"Google said {what} was made, but reading it back to check did not work, so it is not confirmed. Look in Google, then record what you found.")
+    problem = check(data) if data else "an empty answer"
+    if problem:
+        raise ActionUncertain(f"Google said {what} was made, but reading it back showed {problem}, so it is not confirmed. Look in Google, then record what you found.")
+    return data
+
+
+def _same_moment(google_text, our_iso):
+    """Is Google's RFC 3339 time (any offset) the same moment as our UTC text?"""
+    try:
+        return datetime.fromisoformat(str(google_text).replace("Z", "+00:00")) == datetime.fromisoformat(our_iso.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return False
+
+
 def _clean_title(value, what):
     if not isinstance(value, str) or not value.strip():
         raise InvalidArgs(f"{what} needs a name, in words")
@@ -220,7 +245,20 @@ def event_execute(config, args):
     data = _json(response)
     if data.get("id") != body["id"] or data.get("status") not in ("confirmed", "tentative"):
         raise ActionUncertain("Google answered, but not with the event that was asked for, so it may or may not be on your calendar. Look in Google Calendar, then record what you found.")
-    return f"Added to your Google Calendar: {args['title']}, {_local(args['start'])}, for {args.get('duration_minutes', 60)} minutes.{_link(data, 'htmlLink')}"
+
+    def check(found):
+        if found.get("summary") != args["title"]:
+            return "a different title"
+        if not _same_moment((found.get("start") or {}).get("dateTime"), args["start"]) or not _same_moment((found.get("end") or {}).get("dateTime"), body["end"]["dateTime"]):
+            return "a different time"
+        if found.get("status") not in ("confirmed", "tentative"):
+            return "an event that is not on the calendar"
+        if found.get("attendees"):
+            return "guests, and nobody was to be invited"
+        return ""
+
+    verified = _read_back(config, "google_calendar_edit", f"{CALENDAR_API}/{body['id']}", "the event", check)
+    return f"Added to your Google Calendar and read back to check: {args['title']}, {_local(args['start'])}, for {args.get('duration_minutes', 60)} minutes.{_link(verified, 'htmlLink') or _link(data, 'htmlLink')}"
 
 
 def event_kind():
@@ -283,7 +321,21 @@ def task_execute(config, args):
     data = _json(_send(config, "google_tasks", "POST", TASKS_API, body=body, what="the task", ok=(200, 201)))
     if data.get("title") != args["title"]:
         raise ActionUncertain("Google answered, but not with the task that was asked for, so it may or may not be in your list. Look in Google Tasks, then record what you found.")
-    return f"Added to your Google Tasks: {args['title']}.{_link(data, 'webViewLink')}"
+    task_id = data.get("id")
+    if not isinstance(task_id, str) or not _REMOTE_ID.fullmatch(task_id):
+        raise ActionUncertain("Google said the task was made but gave no usable id to check it by, so it is not confirmed. Look in Google Tasks, then record what you found.")
+
+    def check(found):
+        if found.get("title") != args["title"] or found.get("deleted"):
+            return "a different task"
+        if found.get("status") != "needsAction":
+            return "a task that is not open"
+        if args.get("due") and not str(found.get("due", "")).startswith(args["due"]):
+            return "a different due day"
+        return ""
+
+    verified = _read_back(config, "google_tasks", f"{TASKS_API}/{task_id}", "the task", check)
+    return f"Added to your Google Tasks and read back to check: {args['title']}.{_link(verified, 'webViewLink') or _link(data, 'webViewLink')}"
 
 
 def task_kind():
@@ -341,7 +393,17 @@ def folder_execute(config, args):
     data = _json(response)
     if data.get("mimeType") != FOLDER_TYPE or data.get("name") != args["name"]:
         raise ActionUncertain("Google answered, but not with the folder that was asked for, so it may or may not be in your Drive. Look in Google Drive, then record what you found.")
-    return f"Made the folder {args['name']} in your Google Drive.{_link(data, 'webViewLink')}"
+    folder_id = data.get("id")
+    if not isinstance(folder_id, str) or not _REMOTE_ID.fullmatch(folder_id):
+        raise ActionUncertain("Google said the folder was made but gave no usable id to check it by, so it is not confirmed. Look in Google Drive, then record what you found.")
+
+    def check(found):
+        if found.get("name") != args["name"] or found.get("mimeType") != FOLDER_TYPE:
+            return "a different folder"
+        return "a folder in the bin" if found.get("trashed") else ""
+
+    verified = _read_back(config, "google_drive_files", f"{DRIVE_API}/{folder_id}", "the folder", check, params={"fields": "id,name,mimeType,trashed,webViewLink"})
+    return f"Made the folder {args['name']} in your Google Drive and read it back to check.{_link(verified, 'webViewLink') or _link(data, 'webViewLink')}"
 
 
 def folder_kind():
@@ -372,6 +434,17 @@ def doc_render(args):
     return f"Make a new Google Doc called {args['title']}" + (f", starting with: {shown}" if shown else ", empty")
 
 
+def _document_text(document):
+    """All the text in a Google Doc as the Docs API returns it (paragraphs of text runs)."""
+    parts = []
+    for element in ((document.get("body") or {}).get("content") or []):
+        for run in (((element or {}).get("paragraph") or {}).get("elements") or []):
+            text = ((run or {}).get("textRun") or {}).get("content")
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts)
+
+
 def doc_execute(config, args):
     made = _json(_send(config, "google_drive_files", "POST", DOCS_API, body={"title": args["title"]}, what="the document", ok=(200,)))
     document_id = made.get("documentId")
@@ -384,7 +457,16 @@ def doc_execute(config, args):
         except (ActionFailed, ActionUncertain) as exc:
             # The document exists: this is neither a clean failure nor a clean success. It is said so, with where it is.
             raise ActionUncertain(f"The document was made but its text could not be put in it ({exc}). It is here:{link}")
-    return f"Made the Google Doc {args['title']}.{link}"
+
+    def check(found):
+        if found.get("title") != args["title"]:
+            return "a different title"
+        if args.get("body") and args["body"] not in _document_text(found):
+            return "the text missing"
+        return ""
+
+    _read_back(config, "google_drive_files", f"{DOCS_API}/{document_id}", "the document", check)
+    return f"Made the Google Doc {args['title']} and read it back to check.{link}"
 
 
 def doc_kind():

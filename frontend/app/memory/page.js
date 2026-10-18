@@ -216,13 +216,13 @@ export default function MemoryPage() {
 
   function saveEdit(event) {
     event.preventDefault()
-    const { id, text } = editing
+    const { id, text, original } = editing
     settle(
       () =>
         fetch(`/api/memory/${id}/edit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, expected_text: original }),
         }),
       String(id),
       () => 'Reworded.',
@@ -280,7 +280,7 @@ export default function MemoryPage() {
               id={`edit-${fact.id}`}
               className="memory-input"
               value={editing.text}
-              onChange={(e) => setEditing({ id: fact.id, text: e.target.value })}
+              onChange={(e) => setEditing({ id: fact.id, text: e.target.value, original: editing.original })}
               autoFocus
             />
             <button type="submit" className="memory-btn memory-btn--primary" disabled={isBusy || !editing.text.trim()}>
@@ -390,7 +390,7 @@ export default function MemoryPage() {
                         <>
                           {replacedBy(fact) && button('Replace the old one', 'memory-btn--primary', () => replace(fact, replacedBy(fact)), isBusy, fact)}
                           {button(replacedBy(fact) ? 'Keep both' : 'Accept', replacedBy(fact) ? '' : 'memory-btn--primary', () => decide(fact, 'accept', 'Accepted. Diya will know it from the next message.'), isBusy, fact)}
-                          {button('Edit', '', () => setEditing({ id: fact.id, text: fact.text }), isBusy, fact)}
+                          {button('Edit', '', () => setEditing({ id: fact.id, text: fact.text, original: fact.text }), isBusy, fact)}
                           {button('Reject', 'memory-btn--danger', () => decide(fact, 'reject', 'Rejected.'), isBusy, fact)}
                         </>
                       )),

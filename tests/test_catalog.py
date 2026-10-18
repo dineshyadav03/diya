@@ -153,8 +153,11 @@ def test_google_requests_are_made_only_by_send_and_send_is_called_only_from_the_
     path = ROOT / "diya_google_write.py"
     assert enclosing_functions(path, calls_attr(("httpx", "request"))) == {"_send"}
     callers = enclosing_functions(path, lambda call: isinstance(call.func, ast.Name) and call.func.id == "_send")
-    assert callers and all(name.endswith("_execute") for name in callers), callers
-    assert callers == {"event_execute", "task_execute", "folder_execute", "doc_execute"}
+    assert callers == {"event_execute", "task_execute", "folder_execute", "doc_execute", "_read_back"}, callers  # _read_back only asks for the new thing again (a GET)
+    read_back_callers = enclosing_functions(path, lambda call: isinstance(call.func, ast.Name) and call.func.id == "_read_back")
+    assert read_back_callers and all(name.endswith("_execute") for name in read_back_callers), read_back_callers
+    source = path.read_text(encoding="utf-8")
+    assert 'def _read_back' in source and '"GET", url, params=params' in source  # and it can only read
 
 
 def test_the_todoist_task_is_created_only_by_the_function_that_runs_after_an_approval():

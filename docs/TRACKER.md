@@ -5,15 +5,15 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 
 | Status | Tasks |
 |---|---|
-| Not started | 183 |
+| Not started | 181 |
 | Needs verification | 10 |
 | Research queue | 63 |
-| In progress | 12 |
+| In progress | 13 |
 | Blocked | 0 |
-| Done | 30 |
+| Done | 31 |
 | Deferred | 0 |
 
-## Done (30)
+## Done (31)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -32,6 +32,7 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-026** Write Hog next-turn/cold-restart/truncated-history test (2026-10-18): tests/test_hog_regression.py: next turn, history cut, cold restart, correction, forgetting, malicious email
 - **DIYA-028** Validate existing dreaming staged checkpoint semantics (2026-10-18): tests/test_dreaming.py: a staging failure leaves the checkpoint alone; a crash between staging and checkpoint cannot duplicate the batch
 - **DIYA-030** Emit per-Dreaming-run receipts (2026-10-18): dream_runs table (migration 22), dreaming.run_cycle, GET /api/dreaming, Activity page section; tests/test_dream_receipts.py (14); docs/DREAMING_RECEIPTS_DESIGN.md. Run id, message range, staged, remembered/asked/not kept/held/replaced, errors, duration. No merges yet because Dreaming does not merge.
+- **DIYA-032** Add cross-session revision/concurrent edit control (2026-10-18): Memory.edit(expected_text) / ChangedUnderYou, status-checked decisions; tests/test_memory_concurrency.py (7 incl. two simultaneous edits); docs/MEMORY_DURABILITY_DESIGN.md. Covers the Memory page and the scheduled pass. Other pages (reminders, tasks) have no edit-in-place that could overwrite.
 - **DIYA-036** Define tiered action authority model (2026-10-18): docs/AUTHORITY_MODEL.md (generated from diya_catalog.py): tiers 0 to 4, what each means, and which exist. Tiers 3 (external-facing) and 4 (destructive) are defined but nothing at those tiers is built.
 - **DIYA-037** Build central authority broker for every write (2026-10-18): tests/test_catalog.py: the only code that can send data out is named with a reason; Google and Todoist requests are made only inside the execute functions; kind.execute is called in exactly one place (diya_actions.run), which refuses unless approved. A static guarantee about today's code: a new write path fails the test until it is declared. There is no external-facing tier yet to enforce.
 - **DIYA-038** Create typed tool schemas and side-effect catalog (2026-10-18): diya_catalog.CATALOG: every tool, proposal and flow with tier, effect, hosts reached, undo, approval and whether its output holds other people's words; tests/test_catalog.py fails for an undeclared or stale entry. Parameter schemas are the tools' own; no tool takes an address, header or credential.
@@ -46,20 +47,21 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-063** Use secure Windows credential vault or encrypted tokens (2026-10-18): diya_secrets.py (DPAPI); tests/test_secrets.py incl. a real Windows round trip; docs/SECRETS_DESIGN.md. Windows only. A program running as the same user can still ask DPAPI.
 - **DIYA-068** Fix permitted Google API hosts and safe request bounds (2026-10-18): tests/test_google_write.py: no tool parameter names a host, url or token; every address is a fixed Google host. Calendar, Tasks, Drive, Docs adapters. Stand-in Google only.
 
-## In progress (12)
+## In progress (13)
 
 - **DIYA-005** Snapshot local database and all configuration before schema changes (2026-10-18). Not encrypted and not offline: a copy of backups/ on another disk is Dinesh's step.
 - **DIYA-021** Add outbox leases, retry and unique keys (2026-10-18). No lease column: one drain at a time in one process. Dreaming's separate pass is guarded by memory_captures, not a lease.
 - **DIYA-024** Implement forgetting and derived-index purge (2026-10-18). A forgotten fact's TEXT stays in the trail on purpose (so Restore works); only a secret's text is not kept. A hard purge is not built.
 - **DIYA-042** Provide approve/deny/revoke controls (2026-10-18). There is no separate 'revoke an approved action': approval runs the action at once. Pausing before approving covers the gap.
 - **DIYA-051** Implement append-only normalized tool/event journal (2026-10-18). Tool calls and code-decided flows are recorded. Not yet: model requests, policy decisions and one correlation id across them.
+- **DIYA-052** Build independent remote-write verifier (2026-10-18). Google writes only (stand-in). The Todoist task is not read back yet.
 - **DIYA-056** Publish activity feed and action receipt detail (2026-10-18). Approved actions' receipts are still on the Actions page; one combined feed is not built.
 - **DIYA-065** Implement revocation, invalid_grant and reconnect UX (2026-10-18). Disconnect revokes at Google (last card only). Not built: pausing dependent jobs when Google revokes from its side (invalid_grant).
-- **DIYA-081** Implement Calendar event create and readback (2026-10-18). Create works against a stand-in; the event is not read back from Google separately. Needs Dinesh's real-account try.
-- **DIYA-087** Implement upload/create folder/file/copy (2026-10-18). Folder create only (stand-in). Upload, file create and copy are not built. Needs Dinesh's real-account try.
-- **DIYA-093** Implement new Doc creation and insertion (2026-10-18). Create and a line of text (stand-in). Needs Dinesh's real-account try.
+- **DIYA-081** Implement Calendar event create and readback (2026-10-18). Create plus read-back (title, start, end, no guests) against a stand-in. Needs Dinesh's real-account try.
+- **DIYA-087** Implement upload/create folder/file/copy (2026-10-18). Folder create and read-back only (stand-in). Upload, file create and copy are not built. Needs Dinesh's real-account try.
+- **DIYA-093** Implement new Doc creation and insertion (2026-10-18). Create and a line of text, read back (stand-in). Needs Dinesh's real-account try.
 - **DIYA-097** Implement Google Tasks list/task-list read (2026-10-18). Lists open tasks in the default list only (stand-in). Needs Dinesh's real-account try.
-- **DIYA-098** Implement Tasks create/complete/update/move/delete (2026-10-18). Create only (stand-in): complete, update, move, delete are not built.
+- **DIYA-098** Implement Tasks create/complete/update/move/delete (2026-10-18). Create and read-back only (stand-in): complete, update, move, delete are not built.
 
 ## Waiting for the owner (19)
 
@@ -67,11 +69,11 @@ Updated 2026-10-18. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-012** Check one-command Windows startup (2026-10-18). python diya_run.py starts the API and UI together; starting at login is not set up. Dinesh's step.
 - **DIYA-074** Validate current Gmail search/thread/body/metadata reads on live test account (2026-10-18). Gmail read-only is built and tested with a stand-in. Dinesh's step: connect Gmail and try it (docs/GMAIL_DESIGN.md).
 - **DIYA-080** Verify Calendar list/search/free-busy/events reading (2026-10-18). Calendar reading exists (upcoming events); search and free/busy do not. Dinesh's step: connect and try.
-- **DIYA-081** Implement Calendar event create and readback (2026-10-18). Create works against a stand-in; the event is not read back from Google separately. Needs Dinesh's real-account try.
-- **DIYA-087** Implement upload/create folder/file/copy (2026-10-18). Folder create only (stand-in). Upload, file create and copy are not built. Needs Dinesh's real-account try.
-- **DIYA-093** Implement new Doc creation and insertion (2026-10-18). Create and a line of text (stand-in). Needs Dinesh's real-account try.
+- **DIYA-081** Implement Calendar event create and readback (2026-10-18). Create plus read-back (title, start, end, no guests) against a stand-in. Needs Dinesh's real-account try.
+- **DIYA-087** Implement upload/create folder/file/copy (2026-10-18). Folder create and read-back only (stand-in). Upload, file create and copy are not built. Needs Dinesh's real-account try.
+- **DIYA-093** Implement new Doc creation and insertion (2026-10-18). Create and a line of text, read back (stand-in). Needs Dinesh's real-account try.
 - **DIYA-097** Implement Google Tasks list/task-list read (2026-10-18). Lists open tasks in the default list only (stand-in). Needs Dinesh's real-account try.
-- **DIYA-098** Implement Tasks create/complete/update/move/delete (2026-10-18). Create only (stand-in): complete, update, move, delete are not built.
+- **DIYA-098** Implement Tasks create/complete/update/move/delete (2026-10-18). Create and read-back only (stand-in): complete, update, move, delete are not built.
 - **DIYA-226** Decide single-user personal use vs distributed product (2026-10-18). Owner decision (blueprint Part XII).
 - **DIYA-227** Decide personal Google vs Workspace account feature priority (2026-10-18). Owner decision (blueprint Part XII).
 - **DIYA-228** Decide exact standing grants and external-approval policy (2026-10-18). Owner decision (blueprint Part XII).

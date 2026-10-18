@@ -77,6 +77,35 @@ def made_event(args=EVENT, **changes):
     return reply(200, body)
 
 
+def event_read_back(args=EVENT, **changes):
+    """What Google says when the event is asked for again by its id."""
+    body = {"id": gw.event_id(args), "status": "confirmed", "summary": args["title"], "start": {"dateTime": args["start"]}, "end": {"dateTime": "2026-10-23T13:00:00Z"},
+            "htmlLink": "https://www.google.com/calendar/event?eid=abc"}
+    body.update(changes)
+    return reply(200, body)
+
+
+def task_made(title="Renew pass", **changes):
+    return reply(200, dict({"id": "task_ID_1234", "title": title, "webViewLink": "https://tasks.google.com/task/abc"}, **changes))
+
+
+def task_read_back(title="Renew pass", **changes):
+    return reply(200, dict({"id": "task_ID_1234", "title": title, "status": "needsAction", "webViewLink": "https://tasks.google.com/task/abc"}, **changes))
+
+
+def folder_made(name="Exams", **changes):
+    return reply(200, dict({"id": "folder_ID_1234", "name": name, "mimeType": gw.FOLDER_TYPE, "webViewLink": "https://drive.google.com/drive/folders/1"}, **changes))
+
+
+def doc_made(title="Plan", **changes):
+    return reply(200, dict({"documentId": "doc_ID-1234567890", "title": title}, **changes))
+
+
+def doc_read_back(title="Plan", text=None, **changes):
+    content = [{"paragraph": {"elements": [{"textRun": {"content": text + "\n"}}]}}] if text else []
+    return reply(200, dict({"documentId": "doc_ID-1234567890", "title": title, "body": {"content": content}}, **changes))
+
+
 # ---- the registry -------------------------------------------------------------------------------------------------------------------------
 
 def test_there_are_three_connectors_each_with_its_own_narrow_scope_and_googles_one_client(config):
@@ -274,16 +303,17 @@ def test_the_event_id_is_made_from_the_request_and_is_one_google_accepts():
 # ---- running them: what is sent ----------------------------------------------------------------------------------------------------------
 
 def test_an_event_is_sent_to_the_primary_calendar_with_nobody_invited_and_no_mail_sent(signed_in, monkeypatch):
-    google = Google(monkeypatch, made_event())
+    google = Google(monkeypatch, made_event(), event_read_back())
     said = gw.event_execute(signed_in, EVENT)
-    (call,) = google.calls
+    call, check = google.calls
+    assert (check["method"], check["url"]) == ("GET", f"{gw.CALENDAR_API}/{gw.event_id(EVENT)}")  # asked for again by its id: the answer to the write is not taken as proof
     assert call["method"] == "POST" and call["url"] == gw.CALENDAR_API and call["params"] == {"sendUpdates": "none"}
     assert call["headers"] == {"Authorization": f"Bearer access-{CAL}"} and call["timeout"] == gw.NETWORK_TIMEOUT
     assert call["json"] == {
         "id": gw.event_id(EVENT), "summary": "AI study session", "start": {"dateTime": START, "timeZone": "UTC"}, "end": {"dateTime": "2026-10-23T13:00:00Z", "timeZone": "UTC"},
     }
     assert "attendees" not in call["json"]
-    assert said.startswith("Added to your Google Calendar: AI study session") and "for 90 minutes" in said and "https://www.google.com/calendar/event?eid=abc" in said
+    assert said.startswith("Added to your Google Calendar and read back to check: AI study session") and "for 90 minutes" in said and "https://www.google.com/calendar/event?eid=abc" in said
 
 
 def test_an_event_that_is_already_there_from_an_earlier_try_is_not_made_twice(signed_in, monkeypatch):
@@ -313,12 +343,13 @@ def test_an_answer_that_is_not_the_event_leaves_it_unknown(signed_in, monkeypatc
 
 
 def test_a_task_is_sent_with_its_notes_and_due_day_only_when_there_are_some(signed_in, monkeypatch):
-    google = Google(monkeypatch, reply(200, {"title": "Renew pass", "webViewLink": "https://tasks.google.com/task/abc"}), reply(200, {"title": "Plain"}))
+    google = Google(monkeypatch, task_made(), task_read_back(due="2026-10-23T00:00:00.000Z"), task_made("Plain"), task_read_back("Plain"))
     said = gw.task_execute(signed_in, {"title": "Renew pass", "notes": "bring the id", "due": "2026-10-23"})
     gw.task_execute(signed_in, {"title": "Plain"})
     assert google.calls[0]["url"] == gw.TASKS_API and google.calls[0]["json"] == {"title": "Renew pass", "notes": "bring the id", "due": "2026-10-23T00:00:00.000Z"}
-    assert google.calls[1]["json"] == {"title": "Plain"} and google.calls[0]["headers"] == {"Authorization": f"Bearer access-{TASKS}"}
-    assert said == "Added to your Google Tasks: Renew pass. https://tasks.google.com/task/abc"
+    assert (google.calls[1]["method"], google.calls[1]["url"]) == ("GET", f"{gw.TASKS_API}/task_ID_1234")
+    assert google.calls[2]["json"] == {"title": "Plain"} and google.calls[0]["headers"] == {"Authorization": f"Bearer access-{TASKS}"}
+    assert said == "Added to your Google Tasks and read back to check: Renew pass. https://tasks.google.com/task/abc"
 
 
 def test_a_task_answer_that_is_not_the_task_leaves_it_unknown(signed_in, monkeypatch):
@@ -328,11 +359,12 @@ def test_a_task_answer_that_is_not_the_task_leaves_it_unknown(signed_in, monkeyp
 
 
 def test_a_folder_is_made_at_the_top_of_drive_and_nothing_is_shared(signed_in, monkeypatch):
-    google = Google(monkeypatch, reply(200, {"id": "1", "name": "Exams", "mimeType": gw.FOLDER_TYPE, "webViewLink": "https://drive.google.com/drive/folders/1"}))
+    google = Google(monkeypatch, folder_made(), folder_made(trashed=False))
     said = gw.folder_execute(signed_in, {"name": "Exams"})
-    (call,) = google.calls
+    call, check = google.calls
+    assert (check["method"], check["url"]) == ("GET", f"{gw.DRIVE_API}/folder_ID_1234")
     assert call["url"] == gw.DRIVE_API and call["json"] == {"name": "Exams", "mimeType": gw.FOLDER_TYPE} and "parents" not in call["json"] and "permissions" not in call["json"]
-    assert said == "Made the folder Exams in your Google Drive. https://drive.google.com/drive/folders/1"
+    assert said == "Made the folder Exams in your Google Drive and read it back to check. https://drive.google.com/drive/folders/1"
 
 
 def test_a_folder_answer_that_is_not_the_folder_leaves_it_unknown(signed_in, monkeypatch):
@@ -342,18 +374,18 @@ def test_a_folder_answer_that_is_not_the_folder_leaves_it_unknown(signed_in, mon
 
 
 def test_a_document_is_made_then_given_its_text_and_its_address_is_built_by_code(signed_in, monkeypatch):
-    google = Google(monkeypatch, reply(200, {"documentId": "doc_ID-1234567890", "title": "Plan"}), reply(200, {}))
+    google = Google(monkeypatch, doc_made(), reply(200, {}), doc_read_back(text="Week one: revise maths"))
     said = gw.doc_execute(signed_in, {"title": "Plan", "body": "Week one: revise maths"})
-    assert [c["url"] for c in google.calls] == [gw.DOCS_API, f"{gw.DOCS_API}/doc_ID-1234567890:batchUpdate"]
+    assert [c["url"] for c in google.calls] == [gw.DOCS_API, f"{gw.DOCS_API}/doc_ID-1234567890:batchUpdate", f"{gw.DOCS_API}/doc_ID-1234567890"]
     assert google.calls[0]["json"] == {"title": "Plan"}
     assert google.calls[1]["json"] == {"requests": [{"insertText": {"location": {"index": 1}, "text": "Week one: revise maths"}}]}
-    assert said == "Made the Google Doc Plan. https://docs.google.com/document/d/doc_ID-1234567890/edit"
+    assert said == "Made the Google Doc Plan and read it back to check. https://docs.google.com/document/d/doc_ID-1234567890/edit"
 
 
-def test_a_document_with_no_text_is_one_request(signed_in, monkeypatch):
-    google = Google(monkeypatch, reply(200, {"documentId": "doc_ID-1234567890", "title": "Plan"}))
+def test_a_document_with_no_text_is_one_write_and_a_read_back(signed_in, monkeypatch):
+    google = Google(monkeypatch, doc_made(), doc_read_back())
     gw.doc_execute(signed_in, {"title": "Plan"})
-    assert len(google.calls) == 1
+    assert [c["method"] for c in google.calls] == ["POST", "GET"]
 
 
 def test_a_document_whose_text_could_not_be_put_in_is_unknown_and_says_where_it_is(signed_in, monkeypatch):
@@ -438,18 +470,18 @@ def test_a_request_that_may_have_reached_google_leaves_it_unknown(signed_in, mon
 # ---- the whole flow, through the approval system --------------------------------------------------------------------------------------
 
 def test_proposing_and_approving_send_nothing_and_running_sends_exactly_once(signed_in, monkeypatch):
-    google = Google(monkeypatch, made_event())
+    google = Google(monkeypatch, made_event(), event_read_back())
     actions = Actions(Store(signed_in.db_path), signed_in, gw.action_kinds())
     action = actions.propose("google_calendar_add_event", EVENT)
     assert google.calls == [] and action["summary"] == gw.event_render(EVENT)
     actions.approve(action["id"], action["args_hash"], "ui")
     assert google.calls == []
     done = actions.run(action["id"])
-    assert done["status"] == "succeeded" and done["result"].startswith("Added to your Google Calendar") and len(google.calls) == 1
+    assert done["status"] == "succeeded" and done["result"].startswith("Added to your Google Calendar") and [c["method"] for c in google.calls] == ["POST", "GET"]  # one write, one read back
     assert actions.verify_integrity() == []
     with pytest.raises(diya_actions.IllegalTransition):
         actions.run(action["id"])
-    assert len(google.calls) == 1
+    assert len(google.calls) == 2
 
 
 def test_an_event_whose_request_may_have_got_through_is_unknown_and_is_never_sent_again(signed_in, monkeypatch):
@@ -605,6 +637,94 @@ def test_every_google_address_this_module_can_call_is_a_fixed_google_host():
 
 def test_an_address_built_from_what_google_answered_is_never_followed(signed_in, monkeypatch):
     """A link in Google's answer is shown to the person as text; the next request is always to the module's own address (a document's address is built from a checked id)."""
-    google = Google(monkeypatch, reply(200, {"documentId": "doc_ID-1234567890", "title": "Plan", "next": "https://evil.example/steal"}), reply(200, {}))
+    google = Google(monkeypatch, doc_made(next="https://evil.example/steal"), reply(200, {}), doc_read_back(text="text"))
     gw.doc_execute(signed_in, {"title": "Plan", "body": "text"})
     assert all(call["url"].startswith(gw.DOCS_API) for call in google.calls)
+
+
+# ---- the independent read-back (DIYA-052) -------------------------------------------------------------------------------------------------------
+
+def test_a_write_counts_only_after_the_thing_is_asked_for_again_and_is_what_was_asked_for(signed_in, monkeypatch):
+    """Google's answer to the write is not proof. Each kind asks for the new thing by its id, in a second request, and compares it with what the owner approved."""
+    cases = [
+        (gw.event_execute, EVENT, [made_event(), event_read_back()], 2), (gw.task_execute, {"title": "Renew pass"}, [task_made(), task_read_back()], 2),
+        (gw.folder_execute, {"name": "Exams"}, [folder_made(), folder_made(trashed=False)], 2), (gw.doc_execute, {"title": "Plan"}, [doc_made(), doc_read_back()], 2),
+    ]
+    for function, args, answers, expected in cases:
+        google = Google(monkeypatch, *answers)
+        function(signed_in, args)
+        assert [c["method"] for c in google.calls] == ["POST", "GET"] and len(google.calls) == expected
+
+
+@pytest.mark.parametrize("changes, why", [
+    ({"summary": "Something else"}, "a different title"), ({"start": {"dateTime": "2026-10-24T11:30:00Z"}}, "a different time"), ({"end": {"dateTime": "2026-10-23T12:00:00Z"}}, "a different time"),
+    ({"status": "cancelled"}, "an event that is not on the calendar"), ({"attendees": [{"email": "someone@example.com"}]}, "guests, and nobody was to be invited"), ({"start": {}}, "a different time"),
+])
+def test_an_event_that_reads_back_differently_is_not_confirmed(signed_in, monkeypatch, changes, why):
+    Google(monkeypatch, made_event(), event_read_back(**changes))
+    with pytest.raises(ActionUncertain, match=f"reading it back showed {why}.*not confirmed.*Look in Google"):
+        gw.event_execute(signed_in, EVENT)
+
+
+def test_the_same_moment_in_another_offset_is_the_same_event(signed_in, monkeypatch):
+    Google(monkeypatch, made_event(), event_read_back(start={"dateTime": "2026-10-23T17:00:00+05:30"}, end={"dateTime": "2026-10-23T18:30:00+05:30"}))
+    assert gw.event_execute(signed_in, EVENT).startswith("Added to your Google Calendar and read back")
+
+
+@pytest.mark.parametrize("answer", [reply(404, {"error": {"message": "Not Found"}}), reply(500), reply(200, {}), reply(403), httpx.ReadTimeout("slow"), httpx.ConnectError("down")])
+def test_a_read_back_that_fails_leaves_it_unknown_not_failed_and_not_succeeded(signed_in, monkeypatch, answer):
+    """It may well be there: it is not confirmed. 'Unknown' means it is never sent again, and the person is told to look."""
+    Google(monkeypatch, made_event(), answer)
+    with pytest.raises(ActionUncertain, match="not confirmed|did not work|empty answer"):
+        gw.event_execute(signed_in, EVENT)
+
+
+@pytest.mark.parametrize("read_back, why", [
+    (task_read_back("Another"), "a different task"), (task_read_back(status="completed"), "a task that is not open"), (task_read_back(deleted=True), "a different task"),
+])
+def test_a_task_that_reads_back_differently_is_not_confirmed(signed_in, monkeypatch, read_back, why):
+    Google(monkeypatch, task_made(), read_back)
+    with pytest.raises(ActionUncertain, match=f"reading it back showed {why}"):
+        gw.task_execute(signed_in, {"title": "Renew pass"})
+
+
+def test_a_task_due_day_that_does_not_read_back_is_not_confirmed(signed_in, monkeypatch):
+    Google(monkeypatch, task_made(), task_read_back(due="2026-10-24T00:00:00.000Z"))
+    with pytest.raises(ActionUncertain, match="a different due day"):
+        gw.task_execute(signed_in, {"title": "Renew pass", "due": "2026-10-23"})
+
+
+@pytest.mark.parametrize("made", [reply(200, {"title": "Renew pass"}), reply(200, {"id": "../../x", "title": "Renew pass"}), reply(200, {"id": "ab", "title": "Renew pass"})])
+def test_a_write_that_gives_no_usable_id_cannot_be_checked_and_makes_no_second_request(signed_in, monkeypatch, made):
+    google = Google(monkeypatch, made)
+    with pytest.raises(ActionUncertain, match="no usable id to check it by"):
+        gw.task_execute(signed_in, {"title": "Renew pass"})
+    assert len(google.calls) == 1
+
+
+@pytest.mark.parametrize("read_back, why", [
+    (folder_made("Other"), "a different folder"), (folder_made(mimeType="text/plain"), "a different folder"), (folder_made(trashed=True), "a folder in the bin"),
+])
+def test_a_folder_that_reads_back_differently_is_not_confirmed(signed_in, monkeypatch, read_back, why):
+    Google(monkeypatch, folder_made(), read_back)
+    with pytest.raises(ActionUncertain, match=f"reading it back showed {why}"):
+        gw.folder_execute(signed_in, {"name": "Exams"})
+
+
+@pytest.mark.parametrize("read_back, why", [(doc_read_back("Other", text="Week one"), "a different title"), (doc_read_back(text="Something else entirely"), "the text missing"), (doc_read_back(), "the text missing")])
+def test_a_document_that_reads_back_differently_is_not_confirmed(signed_in, monkeypatch, read_back, why):
+    Google(monkeypatch, doc_made(), reply(200, {}), read_back)
+    with pytest.raises(ActionUncertain, match=f"reading it back showed {why}"):
+        gw.doc_execute(signed_in, {"title": "Plan", "body": "Week one"})
+
+
+def test_a_read_back_failure_is_unknown_in_the_approval_system_and_is_never_run_again(signed_in, monkeypatch):
+    google = Google(monkeypatch, made_event(), reply(500))
+    actions = Actions(Store(signed_in.db_path), signed_in, gw.action_kinds())
+    action = actions.propose("google_calendar_add_event", EVENT)
+    actions.approve(action["id"], action["args_hash"], "ui")
+    done = actions.run(action["id"])
+    assert done["status"] == "unknown" and "not confirmed" in done["result"]
+    with pytest.raises(diya_actions.IllegalTransition):
+        actions.run(action["id"])
+    assert len(google.calls) == 2  # the write and the one read back; nothing again

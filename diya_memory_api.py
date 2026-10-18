@@ -59,6 +59,7 @@ _STATUS = ((UnknownFact, 404), (UnknownPerson, 404), (IllegalTransition, 409), (
 
 class TextBody(BaseModel):
     text: str
+    expected_text: str | None = None  # the wording the person saw when they started editing: an edit over a fact that has changed since is refused (DIYA-032)
 
 
 class ReplaceBody(BaseModel):
@@ -258,7 +259,7 @@ def register(app, config, agent):
                 cleaned = normalise_fact(body.text)
                 if cleaned is None:
                     raise InvalidFact("there is nothing left of that text once it is cleaned up")
-                memory.edit(fact_id, cleaned.text, "api")
+                memory.edit(fact_id, cleaned.text, "api", expected_text=body.expected_text)
             else:
                 memory.decide(fact_id, action, "api")
         except FactError as exc:
