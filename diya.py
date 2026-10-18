@@ -5,6 +5,7 @@ import os
 import pathlib
 import sqlite3
 import sys
+import time
 import threading
 import urllib.parse
 import uuid
@@ -25,6 +26,7 @@ import diya_intent
 import diya_knowledge
 import diya_mcp
 import diya_google_mail
+import diya_journal
 import diya_repostudy
 import diya_memory
 import diya_recall
@@ -1116,6 +1118,7 @@ class Agent:
         self._turn.user_text = _last_user_text(messages)
         self._turn.thread_id = thread_id
         self._turn.message_id = message_id
+        self._turn.unattended = only_tools is not None
         self._turn.reads = []
         self._turn.note = "\n\n".join(part for part in (self._done_note(self._turn.user_text), ABOUT_DIYA_NOTE if diya_intent.asks_about_diya(self._turn.user_text) else None) if part) or None if only_tools is None else None
         self._turn.active = True
@@ -1228,14 +1231,20 @@ class Agent:
         question = _last_user_text(messages)
         searched = False  # a search was already made for this question, whatever it found: it is not made twice
         if only_tools is None and self.config.knowledge_chat:
+            started = time.monotonic()
             note = self._pages_note(question, on_event)
             if note:
+                self._journal("search_notes", {"question": question}, "ok", result=note, started=started, kind="flow")
                 answer, _ = self._answer_from(messages, note, on_event)
                 return answer, ["search_notes"]
         if only_tools is None and self.config.mail:
+            started = time.monotonic()
             mail = self._mail_study(question, on_event)
             if mail is not None:
                 note, report = mail
+                refused = note is None and report == MAIL_READ_ONLY
+                self._journal("mail_write_refused" if refused else "read_mail", {"question": question}, "refused" if refused else "ok" if note is not None else "error", result=note or report, started=started,
+                              kind="flow", note=None if note is not None else report)
                 if note is None:
                     return report, []  # not connected, refused, or a request to write: the sentence says it, and the model is not asked
                 try:
@@ -1244,9 +1253,11 @@ class Agent:
                     answer = "The model did not answer, so here is only what was found."
                 return f"{answer}\n\n{report}", ["read_mail"]
         if only_tools is None and self.config.repo_study:
+            started = time.monotonic()
             studied = self._repo_study(question, on_event)
             if studied is not None:
                 note, report = studied
+                self._journal("study_repo", {"question": question}, "ok" if note is not None else "error", result=note or report, started=started, kind="flow", note=None if note is not None else report)
                 if note is None:
                     return report, ["study_repo"]  # could not be read: the sentence says why, and the model is not asked
                 try:
@@ -1256,13 +1267,17 @@ class Agent:
                 return f"{answer}\n\n{report}", ["study_repo"]
         if only_tools is None and self.config.lookup and diya_intent.wants_lookup(question):
             searched = True
+            started = time.monotonic()
             note = self._lookup_note(question, on_event)
+            self._journal("web_search", {"question": question}, "ok" if note else "error", result=note, started=started, kind="flow", note=None if note else "the search found nothing or could not run")
             if note:
                 answer, _ = self._answer_from(messages, note, on_event)
                 return answer, ["web_search"]
         answer, tools_called = self._ask_loop(messages, on_event, only_tools)
         if only_tools is None and self.config.lookup and not searched and not tools_called and diya_intent.is_lookup_question(question) and diya_intent.gave_up(answer):
+            started = time.monotonic()
             note = self._lookup_note(question, on_event)
+            self._journal("web_search", {"question": question}, "ok" if note else "error", result=note, started=started, kind="flow", note="after the model gave up")
             if note:
                 if on_event is not None:
                     on_event("reset", None)  # what was shown so far was the giving up
@@ -1324,6 +1339,7 @@ class Agent:
         function = self._functions.get(name) or (self._mcp.function(name) if isinstance(name, str) else None)
         if function is None or (strict and name not in offered):
             available = ", ".join(sorted(offered)) or "none"
+            self._journal(str(name), {}, "refused", note="no such tool, or not offered in this run")
             return f"Error: there is no tool called {str(name)[:60]!r}. The tools you can use now: {available}."
         if name not in self._proposal_tools and name not in OWN_LIST_TOOLS:
             # What a proposal later in this turn will say it came after (docs/ACTIONS_DESIGN.md, D6): every
@@ -1334,14 +1350,26 @@ class Agent:
             args = _tool_arguments(call.function.arguments)
         except ValueError as exc:
             print(f"  [tool error] {name}: {exc}")
+            self._journal(name, {}, "error", note="the arguments could not be used")
             return f"Error: the arguments for {name} could not be used ({exc}). Call it again with a JSON object."
         print(f"  [tool call] {name}({args})")
+        started = time.monotonic()
         try:
-            return function(**args)
+            result = function(**args)
         except Exception as exc:
             result = f"Error: {exc}"
             print(f"  [tool error] {result}")
+            self._journal(name, args, "error", result=result, started=started, note=type(exc).__name__)
             return result
+        self._journal(name, args, "error" if isinstance(result, str) and result.startswith("Error:") else "ok", result=result, started=started)
+        return result
+
+    def _journal(self, tool, args, status, *, result=None, started=None, kind="tool", note=None):
+        """One entry in the activity journal (diya_journal): what was done, in which chat and for which message, unattended or not. Never raises."""
+        diya_journal.record(
+            self.store, tool, args, status, kind=kind, origin="unattended" if getattr(self._turn, "unattended", False) else "chat", thread_id=getattr(self._turn, "thread_id", None),
+            message_id=getattr(self._turn, "message_id", None), result=result, seconds=None if started is None else time.monotonic() - started, note=note,
+        )
 
 
 # ---- entry-point helpers (the programs that own the console call these, not import) ----

@@ -344,9 +344,20 @@ def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIM
     remembered = asked = never = held = replaced = 0
     for fact in memory.facts("candidate"):
         decision = decide(fact, auto_recent=recent, breaker_open=breaker_open, limit=limit)
-        if decision.lane == LANE_ASK and decision.reasons and decision.reasons[0].startswith("similar:") and adds is not None and adds(fact):
+        similar_ask = decision.lane == LANE_ASK and bool(decision.reasons) and decision.reasons[0].startswith("similar:")
+        if similar_ask and adds is not None and adds(fact):
             fact = dict(fact, flags=[f for f in fact["flags"] if not f.startswith(("similar:", "ask:conflict:similar:"))])  # "another": it is not a copy, whatever the words look like
             decision = decide(fact, auto_recent=recent, breaker_open=breaker_open, limit=limit)
+        elif similar_ask and corrects is not None and replaces is not None and corrects(fact):
+            # A correction nearly always looks like what it corrects ("Actually his name is Hogg, not Hog"), so the similar check would hold every one of them up. Found by the Hog regression
+            # (2026-10-18). The person's words say they are correcting, so the model is asked which fact it replaces; only a clear answer replaces it, and anything else leaves the fact waiting as before.
+            trial = dict(fact, flags=[f for f in fact["flags"] if not f.startswith(("similar:", "ask:conflict:similar:"))])
+            if decide(trial, auto_recent=recent, breaker_open=breaker_open, limit=limit).lane == LANE_REMEMBER and _privacy(trial, private) == "ok":
+                replacement = _replacement(trial, replaces)
+                if replacement.answer == "replaces" and _replace_now(memory, fact, replacement.fact_id, actor):
+                    replaced += 1
+                    recent += 1
+                    continue
         detail = {"lane": decision.lane, "reasons": list(decision.reasons)}
         if decision.lane == LANE_NEVER:
             if decision.reasons[0].startswith("secret:"):

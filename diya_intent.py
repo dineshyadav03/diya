@@ -303,8 +303,10 @@ def is_worth_capturing(text):
     text = text.strip().replace("\u2019", "'")
     if not text or len(text) > MAX_CHARS or "?" in text:
         return False
-    # A correction often starts with something else ("no, I live in Pune", "actually I work at a bank"): it is read if it says something about the person
-    if not (_FIRST_PERSON.match(text) or _KEEP_THIS.match(text) or (is_correction(text) and _SAYS_SOMETHING_OF_ME.search(text))):
+    # A correction often starts with something else ("no, I live in Pune", "actually I work at a bank"): it is read if it says something about the person, or, since a correction names the thing it
+    # corrects by a pronoun ("Actually his name is Hogg, not Hog": the Hog regression, 2026-10-18), if it is a real sentence (four words or more: not "no thanks"). Capture then gives the model the
+    # message before it, so that "his" is somebody (dreaming.Dreamer.capture_message).
+    if not (_FIRST_PERSON.match(text) or _KEEP_THIS.match(text) or (is_correction(text) and (_SAYS_SOMETHING_OF_ME.search(text) or len(text.split()) >= 4))):
         return False
     if _REQUEST_ANYWHERE.search(text) or _REMINDER_REQUEST.search(text) or is_task_request(text):
         return False

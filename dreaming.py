@@ -234,7 +234,12 @@ class Dreamer:
             if not diya_intent.is_worth_capturing(found[0]["content"]):
                 return None
             try:
-                answer = (self._ask_for_facts([found[0]["content"]]).choices[0].message.content or "").strip()
+                said = [found[0]["content"]]
+                if diya_intent.is_correction(said[0]) and not diya_intent._SAYS_SOMETHING_OF_ME.search(said[0]):  # "Actually his name is Hogg, not Hog": who is "his"? the message before says
+                    earlier = self.store.previous_user_message(message_id)
+                    if earlier:
+                        said = [earlier[:SOURCE_JUDGE_CHARS], said[0]]
+                answer = (self._ask_for_facts(said).choices[0].message.content or "").strip()
             except Exception as exc:  # noqa: BLE001 -- the model is down or busy: leave the message to the scheduled pass
                 print(f"[capture] could not ask the model ({exc}); the scheduled pass will read message {message_id}.", file=sys.stderr)
                 return None

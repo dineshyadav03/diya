@@ -25,6 +25,7 @@ import diya_config
 import diya_connections_api
 import diya_connector_tools
 import diya_intent
+import diya_journal_api
 import diya_knowledge_api
 import diya_memory_api
 import diya_automations_api
@@ -232,6 +233,8 @@ class BodyLimitMiddleware:
         await PlainTextResponse(message, status_code=413)(scope, receive, send)
 
 
+MAX_CAPTURE_TRIES = 3  # how many times a message that could not be read (the model was down) is tried before it is left to the scheduled pass
+CAPTURE_BATCH = 50  # how many waiting messages are looked at in one go
 MAX_PAGE_MESSAGES = 300  # how many of the one chat's newest messages the page is given; the rest are one "earlier" away
 
 
@@ -388,21 +391,53 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
 
     reading_for_facts = threading.Lock()
 
-    def read_for_facts(message_id):
-        """After a reply has been sent: let memory read the person's message for facts at once (docs/AUTO_MEMORY_DESIGN.md, unit A4). One at a time,
-        and a message that finds one already running is skipped, not queued: the scheduled Dreaming pass reads it within the half hour, and a chat
-        must never wait behind this. Only asked for with automatic memory on (and capture_message itself does nothing without it)."""
-        if not reading_for_facts.acquire(blocking=False):
-            return
+    def read_one(dreamer, message_id):
+        """Read one queued message for facts and settle its place in the queue: done (it is read), skipped (nothing in it worth keeping), or left waiting (the model could not be asked), which after
+        MAX_CAPTURE_TRIES tries is left to the scheduled pass."""
+        store = agent.store
         try:
-            import dreaming
-
-            dreaming.Dreamer(config, client=agent.client, store=agent.store).capture_message(message_id)
-        except Exception:  # capture_message does not raise; if something outside it does, the chat is long since answered and must stay so
+            if store.captured_message_ids([message_id]):  # the scheduled pass got there first
+                return store.finish_capture(message_id, "done")
+            found = [m for m in store.get_messages_between(message_id, message_id) if m["role"] == "user"]
+            if not found or not (diya_intent.is_worth_capturing(found[0]["content"]) or diya_intent.forget_target(found[0]["content"]) is not None):
+                return store.finish_capture(message_id, "skipped")
+            dreamer.capture_message(message_id)
+            if store.captured_message_ids([message_id]):
+                return store.finish_capture(message_id, "done")
+            tries = store.retry_capture(message_id, "the model could not be asked")
+        except Exception as exc:  # a failure here must never be what breaks a chat
             print("[capture] reading for facts failed:", file=sys.stderr)
             traceback.print_exc()
-        finally:
-            reading_for_facts.release()
+            tries = store.retry_capture(message_id, f"{type(exc).__name__}")
+        if tries >= MAX_CAPTURE_TRIES:
+            store.finish_capture(message_id, "failed", "tried and could not read it; the scheduled pass reads it")
+
+    def read_for_facts(message_id=None):
+        """After a reply has been sent: let memory read what the person said for facts at once (docs/AUTO_MEMORY_DESIGN.md unit A4, docs/MEMORY_DURABILITY_DESIGN.md). Every message is already in the
+        capture queue, put there when it was saved. One reader at a time, and the one reading takes everything that is waiting, one message after another, looking again before it lets go: a message that
+        arrives while another is being read is no longer skipped, it is read next. A chat never waits for this. Only with automatic memory on."""
+        while True:
+            if not reading_for_facts.acquire(blocking=False):
+                return  # the reader will take it: it looks again before it stops
+            try:
+                import dreaming
+
+                dreamer = dreaming.Dreamer(config, client=agent.client, store=agent.store)
+                tried = set()
+                while True:
+                    waiting = [i for i in agent.store.pending_captures(CAPTURE_BATCH) if i not in tried]
+                    if not waiting:
+                        break
+                    for waiting_id in waiting:
+                        tried.add(waiting_id)
+                        read_one(dreamer, waiting_id)
+            except Exception:  # nothing here is allowed to reach the person
+                print("[capture] reading for facts failed:", file=sys.stderr)
+                traceback.print_exc()
+            finally:
+                reading_for_facts.release()
+            if not [i for i in agent.store.pending_captures(CAPTURE_BATCH) if i not in tried]:
+                return  # nothing arrived while the place was being let go of
 
     def start_turn(req):
         """The part of a chat turn that comes before the model: the chat (a new one if none was named), the history, and the person's message saved. Returns (thread_id, history, message_id)."""
@@ -414,6 +449,8 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
         earlier = saved[:-1] if retry else saved
         history = agent.with_profile([{"role": m["role"], "content": m["content"]} for m in earlier])
         message_id = saved[-1]["id"] if retry else agent.store.add_message(thread_id, "user", req.message)
+        if config.auto_memory:
+            agent.store.enqueue_capture(message_id)  # written down before the turn is answered: a restart cannot lose it, and the reading that follows takes it in its turn
         history.append({"role": "user", "content": req.message})
         return thread_id, history, message_id
 
@@ -508,6 +545,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     diya_automations_api.register(app, config, agent)  # what Diya does on a schedule for the person (docs/AUTOMATIONS_DESIGN.md)
     diya_knowledge_api.register(app, config, agent)  # the pages made from the person's notes (docs/KNOWLEDGE_DESIGN.md)
     diya_threads_api.register(app, config, agent)  # searching and naming past chats
+    diya_journal_api.register(app, config, agent)  # what Diya did with a tool or a connector (docs/ACTIVITY_JOURNAL_DESIGN.md)
     diya_categories_api.register(app, config, agent, lambda: MAX_PAGE_MESSAGES)  # the one chat by category (docs/ONE_CHAT_DESIGN.md, steps 2 and 3)
     diya_push_api.register(app, config, agent)  # telling the phone by Web Push, off unless DIYA_PUSH=1 (docs/PUSH_DESIGN.md, unit P2)
     diya_reminders_api.register(app, config, agent)

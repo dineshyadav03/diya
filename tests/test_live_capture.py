@@ -537,14 +537,15 @@ def test_memory_failing_does_not_break_the_chat_it_follows(chat_parts, monkeypat
     assert response.status_code == 200 and response.json()["answer"] == "Noted."
 
 
-def test_a_message_that_finds_a_read_already_running_is_skipped_not_queued(chat_parts):
+def test_a_message_that_arrives_while_a_read_is_running_is_read_next_not_skipped(chat_parts):
+    """This was the gap the engineering blueprint pointed at (2026-10-18): the second message used to be skipped and left to the scheduled pass, up to half an hour later."""
     import threading
 
     started, release = threading.Event(), threading.Event()
 
     class Slow(ByQuestionClient):
         def _create(self, model, messages, tools=None, **options):
-            if self.kind_of(messages) == "extraction":
+            if self.kind_of(messages) == "extraction" and not started.is_set():
                 started.set()
                 release.wait(5)
             return super()._create(model, messages, tools, **options)
@@ -553,11 +554,12 @@ def test_a_message_that_finds_a_read_already_running_is_skipped_not_queued(chat_
     first = threading.Thread(target=lambda: client.post("/api/chat", json={"message": "I like tea in the morning"}))
     first.start()
     assert started.wait(5)  # the first read is running, holding the one place
-    client.post("/api/chat", json={"message": "I play badminton on Sundays"})  # finds it taken: skipped
+    client.post("/api/chat", json={"message": "I play badminton on Sundays"})  # finds it taken: it waits in the queue and the reader takes it
     release.set()
     first.join(10)
-    assert len(model.asked("extraction")) == 1
-    assert [f["text"] for f in Memory(agent.store).facts()] == ["likes tea in the morning"]
+    assert len(model.asked("extraction")) == 2
+    assert sorted(f["text"] for f in Memory(agent.store).facts()) == ["likes tea in the morning", "plays badminton on Sundays"]
+    assert agent.store.capture_backlog() == {"done": 2}
 
 
 def test_after_a_read_the_place_is_free_again(chat_parts):

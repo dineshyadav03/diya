@@ -153,6 +153,7 @@ ENDPOINTS = [
     ("POST", "/api/threads/1/rename", {"json": {"title": "A name"}}),
     ("GET", "/api/history/1", {}),
     ("GET", "/api/categories", {}),
+    ("GET", "/api/journal", {}),
     ("POST", "/api/categories", {"json": {"action": "add", "name": "School"}}),
     ("GET", "/api/memory", {}),
     ("GET", "/api/memory/1", {}),

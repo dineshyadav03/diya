@@ -401,6 +401,45 @@ MIGRATIONS = (
         )
         """,
     )),
+    # 20: the capture queue (docs/MEMORY_DURABILITY_DESIGN.md). Every message the person sends is written here the moment it is saved, and read for facts by whoever is reading, one at a time, until
+    # nothing is waiting. Until now a message that arrived while another was being read was skipped and left to the scheduled pass, up to half an hour later. `state`: pending, done, skipped (nothing
+    # worth keeping in it), failed (tried three times; the scheduled pass still reads it).
+    (20, (
+        """
+        CREATE TABLE IF NOT EXISTS capture_queue (
+            message_id INTEGER PRIMARY KEY,
+            state TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            done_at TEXT,
+            last_error TEXT,
+            FOREIGN KEY (message_id) REFERENCES messages(id)
+        )
+        """,
+    )),
+    # 21: the activity journal (docs/ACTIVITY_JOURNAL_DESIGN.md): one row for everything Diya did with a tool or a connector, never changed and never deleted (two triggers make the database itself
+    # refuse an UPDATE or a DELETE). The arguments are kept as a digest and a short preview with secrets hidden; the result is not kept, only how long it was.
+    (21, (
+        """
+        CREATE TABLE IF NOT EXISTS tool_journal (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            at TEXT NOT NULL,
+            tool TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            origin TEXT NOT NULL,
+            thread_id INTEGER,
+            message_id INTEGER,
+            args_digest TEXT,
+            args_preview TEXT,
+            status TEXT NOT NULL,
+            result_chars INTEGER,
+            duration_ms INTEGER,
+            note TEXT
+        )
+        """,
+        "CREATE TRIGGER IF NOT EXISTS tool_journal_no_update BEFORE UPDATE ON tool_journal BEGIN SELECT RAISE(ABORT, 'the journal is append-only'); END",
+        "CREATE TRIGGER IF NOT EXISTS tool_journal_no_delete BEFORE DELETE ON tool_journal BEGIN SELECT RAISE(ABORT, 'the journal is append-only'); END",
+    )),
 )
 
 MAX_THREAD_TITLE = 80  # the longest name a chat can be given
@@ -660,6 +699,104 @@ class Store:
         more = len(rows) > int(limit)
         rows = rows[1:] if more else rows
         return [{"id": row_id, "role": role, "content": content} for row_id, role, content in rows], more
+
+    def previous_user_message(self, message_id):
+        """The text of the person's message just before this one in the same chat, or None."""
+        conn = self.connect()
+        try:
+            row = conn.execute(
+                "SELECT p.content FROM messages m JOIN messages p ON p.thread_id = m.thread_id AND p.id < m.id AND p.role = 'user' WHERE m.id = ? ORDER BY p.id DESC LIMIT 1", (int(message_id),)
+            ).fetchone()
+            return row[0] if row else None
+        finally:
+            conn.close()
+
+    # --- the activity journal (append-only) ---
+
+    def journal_add(self, *, tool, kind, origin, thread_id, message_id, args_digest, args_preview, status, result_chars, duration_ms, note):
+        conn = self.connect()
+        try:
+            cur = conn.execute(
+                "INSERT INTO tool_journal (at, tool, kind, origin, thread_id, message_id, args_digest, args_preview, status, result_chars, duration_ms, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (datetime.now(timezone.utc).isoformat(), tool, kind, origin, thread_id, message_id, args_digest, args_preview, status, result_chars, duration_ms, note),
+            )
+            conn.commit()
+            return cur.lastrowid
+        finally:
+            conn.close()
+
+    def journal_recent(self, limit=50, tool=None):
+        """The newest entries first, as dicts."""
+        conn = self.connect()
+        try:
+            sql = "SELECT id, at, tool, kind, origin, thread_id, message_id, args_digest, args_preview, status, result_chars, duration_ms, note FROM tool_journal"
+            args = []
+            if tool is not None:
+                sql += " WHERE tool = ?"
+                args.append(str(tool))
+            rows = conn.execute(sql + " ORDER BY id DESC LIMIT ?", args + [int(limit)]).fetchall()
+            names = ("id", "at", "tool", "kind", "origin", "thread_id", "message_id", "args_digest", "args_preview", "status", "result_chars", "duration_ms", "note")
+            return [dict(zip(names, row)) for row in rows]
+        finally:
+            conn.close()
+
+    def journal_counts(self, since):
+        """{status: how many} of the entries written at or after `since` (an ISO time)."""
+        conn = self.connect()
+        try:
+            return dict(conn.execute("SELECT status, COUNT(*) FROM tool_journal WHERE at >= ? GROUP BY status", (since,)).fetchall())
+        finally:
+            conn.close()
+
+    # --- the capture queue ---
+
+    def enqueue_capture(self, message_id):
+        """Put a message of the person's in the queue to be read for facts. Once only: a message already there (read or not) is left as it is."""
+        conn = self.connect()
+        try:
+            conn.execute("INSERT OR IGNORE INTO capture_queue (message_id, created_at) VALUES (?, ?)", (int(message_id), datetime.now(timezone.utc).isoformat()))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def pending_captures(self, limit=50):
+        """The ids of the messages still waiting to be read, oldest first."""
+        conn = self.connect()
+        try:
+            return [row[0] for row in conn.execute("SELECT message_id FROM capture_queue WHERE state = 'pending' ORDER BY message_id LIMIT ?", (int(limit),))]
+        finally:
+            conn.close()
+
+    def finish_capture(self, message_id, state, error=None):
+        """A message has been dealt with: done, skipped or failed."""
+        conn = self.connect()
+        try:
+            conn.execute(
+                "UPDATE capture_queue SET state = ?, done_at = ?, last_error = ? WHERE message_id = ?",
+                (state, datetime.now(timezone.utc).isoformat(), None if error is None else str(error)[:300], int(message_id)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def retry_capture(self, message_id, error=None):
+        """A try that did not work: count it. Returns how many tries the message has had."""
+        conn = self.connect()
+        try:
+            conn.execute("UPDATE capture_queue SET attempts = attempts + 1, last_error = ? WHERE message_id = ?", (None if error is None else str(error)[:300], int(message_id)))
+            conn.commit()
+            row = conn.execute("SELECT attempts FROM capture_queue WHERE message_id = ?", (int(message_id),)).fetchone()
+            return row[0] if row else 0
+        finally:
+            conn.close()
+
+    def capture_backlog(self):
+        """{state: how many} of everything in the queue."""
+        conn = self.connect()
+        try:
+            return dict(conn.execute("SELECT state, COUNT(*) FROM capture_queue GROUP BY state").fetchall())
+        finally:
+            conn.close()
 
     def add_message(self, thread_id, role, content):
         conn = self.connect()

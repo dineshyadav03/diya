@@ -41,6 +41,10 @@ CASES = [
     case("update", ["I live in Delhi.", "I moved to Mumbai last month."], "Where do I live?", [["mumbai"]], facts_not=["delhi"]),
     case("update", ["My phone is an old Android.", "I just bought an iPhone."], "What phone do I have?", [["iphone"]], facts_not=["android"]),
     case("update", ["I always drink coffee in the morning.", "Actually I switched to tea, I stopped drinking coffee."], "What do I drink in the morning?", [["tea"]], gap=True),
+    # --- correction by a pronoun: the thing corrected is named by "his", "she", "he", so the message before it says who (the Hog regression, 2026-10-18)
+    case("update", ["I got another dog named Hog.", "Actually his name is Hogg, not Hog."], "What is my new dog's name?", [["hogg"]]),
+    case("update", ["My brother works at a bank.", "Actually he works at a hospital now."], "Where does my brother work?", [["hospital"]]),
+    case("update", ["I live in Delhi.", "No, I actually live in Mumbai now."], "Which city do I live in?", [["mumbai"]], facts_not=["delhi"]),
     # --- addition: a new thing is IN ADDITION to the old one
     case("addition", ["I have a dog named Rocky.", "I got another dog named Hog."], "What are my dogs called?", [["rocky"], ["hog"]]),
     case("addition", ["I play the guitar.", "I also started learning the violin."], "Which instruments do I play?", [["guitar"], ["violin"]]),

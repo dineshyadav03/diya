@@ -33,6 +33,24 @@ All four failures had **one cause**, found by printing why the new fact was left
 - **A second dog was held up for looking like the first** ("has a dog named Hog" resembles "dog named Rocky", and the `similar` check, which is about copies, asked). The person's own words, "another dog", say it adds; `diya_autonomy.apply(adds=...)` now lets such a fact past the *similar* check (not past a privacy or any other check).
 - **Safety did not move.** The earlier safety measurement (`diya_autonomy_bench.py`, 80 messages in 8 days, read live, `diya-chat` with `qwen2.5:3b` judging privacy) was run again and is **CLEAN**: secret kept 0, order accepted 0, the assistant's own words accepted 0, sensitive accepted 0, known fact wrongly replaced 0. Updates in that bench: asked 1, replaced 2, one wrong fact extracted ("using a Mac" from "I'm using a Mac now, my laptop is a MacBook Air": a poor extraction, not a wrong replacement).
 
+## Round 3 (2026-10-18): the Hog regression, the capture queue and 33 cases
+
+The owner's "I got another dog named Hog" was the first real failure. Writing it as a permanent test (`tests/test_hog_regression.py`) found two more bugs, both fixed (`docs/MEMORY_DURABILITY_DESIGN.md`): **a correction with a pronoun ("Actually his name is Hogg, not Hog") was never read**, and a correction that looks like the fact it corrects was **held for a question** by the copy check. Three correction cases were added to the bench (30 to 33) and the run repeated with the real models:
+
+| Kind | Round 3 |
+|---|---|
+| recall | 10 / 10 |
+| update (now including pronoun corrections) | 7 / 7 |
+| addition | 2 / 2 |
+| person, noise, privacy | 3 / 3, 2 / 2, 3 / 3 |
+| abstain | 3 / 3 |
+| similar | 2 / 3 |
+| **All** | **32 / 33 (96%)** |
+
+**The safety measurement was repeated after the correction path was loosened** (`diya_autonomy_bench.py`, 80 messages in 8 days, read live, `diya-chat` with `qwen2.5:3b` judging privacy): **CLEAN**. Secret kept 0, order accepted 0, the assistant's own words accepted 0, sensitive accepted 0, code-sensitive accepted 0, **known fact wrongly replaced 0**. Plain facts 21 of 24 remembered (88%), 18 of 18 sensitive asked, 10 of 10 secrets discarded, 13 of 13 small talk ignored. Updates: asked 1, replaced 2, one wrong *extraction* ("The user no longer lives in Delhi" for "I moved to Pune last month, so I no longer live in Delhi": a negation kept instead of the new fact; not a wrong replacement).
+
+The one miss ("When is my maths exam?" with a guitar exam on Friday and a maths exam on Tuesday in memory) is **the model, not the memory**: memory held both facts correctly, and `diya-chat` answered "Friday" by mixing the two. It is a look-alike-fact reading error that a bigger model would probably not make; it is not a staleness or storage defect. The two update failures listed below (grounding of "I just bought an iPhone", the negation-only extraction) passed in this run; I did not investigate why, and one run of a small model is not evidence that they are fixed, so they stay listed as open.
+
 ## What still fails (and why)
 
 - **"I just bought an iPhone" after "my phone is an old Android".** The extractor wrote "Owns an iPhone", a rewording the grounding check could not tie to the message (`ungrounded`), so it was asked instead of replaced. The fix is in the grounding check or the extraction wording, not in the update rule; not done.
