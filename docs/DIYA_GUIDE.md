@@ -560,6 +560,7 @@ What nearly everyone has now: local models, memory across chats, scheduled promp
 | `DIYA_RECALL`, `DIYA_MEMORY_STORE_CHARS` | on, 20000 | relevance recall, and how much may be kept |
 | `DIYA_LOOKUP`, `DIYA_KNOWLEDGE_CHAT`, `DIYA_MCP` | on | web lookups, answers from notes pages, MCP tools |
 | `DIYA_CATEGORIES` | on | each message you send is put in one category after the reply (`docs/ONE_CHAT_DESIGN.md`); `0` stops the sorting |
+| `DIYA_MAIL` | on | once Gmail is connected, "any email from the college?" looks through the mail, read-only (`docs/GMAIL_DESIGN.md`) |
 | `DIYA_REPO_STUDY` | on | "study https://github.com/owner/repo" reads a public repository, read-only, and shows the evidence (`docs/REPO_STUDY_DESIGN.md`) |
 | `DIYA_DATA_DIR` | beside the code | one folder for everything Diya writes about you |
 | `DIYA_TOKEN`, `DIYA_UI_PASSCODE` | generated / unset | the API token the UI sends, and the page's login |

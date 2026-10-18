@@ -19,6 +19,7 @@ import httpx
 
 import diya_connectors
 import diya_google_calendar
+import diya_google_mail
 import diya_intent
 from diya_actions import ActionFailed, ActionKind, ActionUncertain, InvalidArgs
 from diya_connectors import Connector, ConnectorError
@@ -331,6 +332,8 @@ def real_connectors(config):
                  auth_kind="token", implemented=True, validate=todoist_validate),
         Connector(name="google_calendar", label="Google Calendar", description="Read your upcoming events.",
                  auth_kind="oauth", implemented=True, oauth_connect=diya_google_calendar.connect, setup=diya_google_calendar.SETUP),
+        Connector(name="google_mail", label="Gmail", description="Look through your mail when you ask. Read-only: it can never send, change or delete a message.",
+                 auth_kind="oauth", implemented=True, oauth_connect=diya_google_mail.connect, setup=diya_google_mail.SETUP),
     )
 
 

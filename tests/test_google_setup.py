@@ -108,7 +108,7 @@ def test_the_list_says_whether_google_is_set_up_with_the_steps_and_never_the_val
     assert entry["setup"]["done"] is False and entry["setup"]["from"] is None
     assert [f["name"] for f in entry["setup"]["fields"]] == ["client_id", "client_secret"] and [f["secret"] for f in entry["setup"]["fields"]] == [False, True]
     assert len(entry["setup"]["steps"]) == 5 and "In production" in " ".join(entry["setup"]["steps"])
-    assert all("setup" not in c for c in client.get("/api/connections").json()["connectors"] if c["name"] != "google_calendar")  # the others have none
+    assert all("setup" not in c for c in client.get("/api/connections").json()["connectors"] if c["name"] not in ("google_calendar", "google_mail"))  # the others have none; Gmail shares Google's
     saved = client.post("/api/connections/google_calendar/setup", json={"values": {"client_id": ID, "client_secret": SECRET}})
     assert saved.status_code == 200 and google(client)["setup"]["done"] is True and google(client)["setup"]["from"] == "file"
     assert ID not in saved.text and SECRET not in saved.text and SECRET not in client.get("/api/connections").text
@@ -136,7 +136,10 @@ def test_forgetting_the_app_also_disconnects_google_because_the_sign_in_belongs_
 
 def test_the_real_registry_gives_google_its_setup_and_the_rest_none(config):
     real = {c.name: c for c in diya_connector_tools.real_connectors(config)}
-    assert real["google_calendar"].setup is gcal.SETUP and all(c.setup is None for name, c in real.items() if name != "google_calendar")
+    import diya_google_mail
+
+    assert real["google_calendar"].setup is gcal.SETUP and real["google_mail"].setup is diya_google_mail.SETUP  # Gmail shares Google's client with Calendar
+    assert all(c.setup is None for name, c in real.items() if name not in ("google_calendar", "google_mail"))
 
 
 # ---- the page ----------------------------------------------------------------------------------------------------------------

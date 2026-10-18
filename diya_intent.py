@@ -468,6 +468,44 @@ _NOTES_WRITE = re.compile(
 MAX_NOTES_QUESTION_CHARS = 300
 
 
+# ---- is the person asking about their own mail? (docs/GMAIL_DESIGN.md) ----
+#
+# Code decides, in words, so that a question about mail is read by the code that reads mail and answered by a model with no tools. A request to WRITE, send or delete mail is recognised too, and answered
+# with the plain fact that Diya's access is read-only. A miss only means the model answers as it always did.
+_MAIL_WORD = re.compile(r"\b(?:e-?mails?|inbox|gmail|mails|mail)\b", re.IGNORECASE)
+_MAIL_READ = re.compile(
+    r"\b(?:check|read|show|find|search|look|any|anything|did|has|have|had|latest|newest|new|unread|recent|summari[sz]e|what|which|who|when|list|open|see|got|received|waiting|from|about|regarding)\b", re.IGNORECASE
+)
+_MAIL_NOT_ABOUT_MINE = re.compile(
+    r"\bhow\s+(?:do|does|did|to|can)\b[^?]*\b(?:work|works|set\s*up|use)\b|\bwhat\s+(?:is|are)\s+(?:an?\s+)?(?:e-?mail|gmail|inbox)\b|\bhistory\s+of\b|\b(?:my\s+)?e-?mail\s+(?:address|id|password)\b|\b(?:connect|link|set\s*up)\b",
+    re.IGNORECASE,
+)
+_MAIL_WRITE_AT_START = re.compile(r"^\W*(?:please\s+)?(?:(?:can|could|will|would)\s+you\s+)?(?:send|write|draft|compose|forward|delete|archive|trash|unsubscribe|mark|label|move|reply|respond)\b", re.IGNORECASE)
+_MAIL_WRITE_ANYWHERE = re.compile(r"\b(?:send|write|draft|compose)\s+(?:an?\s+|the\s+|my\s+|some\s+)?(?:e-?mail|mail|message|reply)\b|\b(?:delete|archive|trash)\s+(?:all\s+|my\s+|the\s+|that\s+|this\s+)?(?:e-?mails?|mails?|messages?)\b", re.IGNORECASE)
+MAX_MAIL_QUESTION_CHARS = 300
+
+
+def _mail_text(text):
+    if not isinstance(text, str) or not text.strip() or len(text) > MAX_MAIL_QUESTION_CHARS or "\n" in text.strip():
+        return None
+    return text.replace("\u2019", "'")
+
+
+def wants_mail_written(text):
+    """True for a request to send, write, reply to, delete or file mail ("send an email to mum", "delete all my emails"): Diya can read mail and nothing else."""
+    text = _mail_text(text)
+    return text is not None and _MAIL_WORD.search(text) is not None and (_MAIL_WRITE_AT_START.search(text) is not None or _MAIL_WRITE_ANYWHERE.search(text) is not None)
+
+
+def asks_about_mail(text):
+    """True for a short question or request to look through the person's own mail ("any email from the college?", "what did the bank email say", "check my inbox"). Not a request to write mail, not
+    a question about mail in general ("what is gmail", "how does email work", "what is my email address"), and not about connecting it (asks_about_diya)."""
+    text = _mail_text(text)
+    if text is None or wants_mail_written(text):
+        return False
+    return _MAIL_WORD.search(text) is not None and _MAIL_NOT_ABOUT_MINE.search(text) is None and _MAIL_READ.search(text) is not None
+
+
 def repo_to_study(text):
     """(owner, repo) if the message gives a GitHub repository address and asks for it to be studied, explained or looked into; else None (diya_repostudy.wants_study)."""
     import diya_repostudy

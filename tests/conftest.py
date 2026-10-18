@@ -23,6 +23,7 @@ def isolated_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("DIYA_DB_PATH", str(tmp_path / "test.db"))
     monkeypatch.setenv("DIYA_PROFILE_PATH", str(tmp_path / "profile.txt"))
     monkeypatch.setenv("DIYA_PROACTIVE", "0")  # the notifier writing first (diya_proactive.py) would add messages to every notifier test's database; tests/test_proactive.py turns it on
+    monkeypatch.setenv("DIYA_MAIL", "0")  # a test must not read a mailbox because a message says "email"; tests/test_google_mail.py turns it on with a stand-in Gmail
     monkeypatch.setenv("DIYA_REPO_STUDY", "0")  # a test must not read GitHub because a message holds a repository address; tests/test_repostudy.py turns it on with a stand-in fetch
     monkeypatch.setenv("DIYA_CATEGORIES", "0")  # sorting each exchange asks the model once more; tests/test_categories*.py turn it on
     monkeypatch.setenv("DIYA_RECALL", "0")  # the memory's old limit (what is kept is what is told) is what the many tests of it assume; tests/test_recall.py turns recall on

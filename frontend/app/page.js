@@ -24,6 +24,7 @@ const TOOL_LABELS = {
   list_tasks: 'checked your tasks',
   list_files: 'listed files',
   study_repo: 'studied a repository',
+  read_mail: 'looked through your mail',
 }
 
 // A tool of an MCP server the person approved (docs/MCP_DESIGN.md) is named mcp_<server>_<tool>: the chip says a program outside Diya was used, and which one.

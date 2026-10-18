@@ -43,6 +43,7 @@ TOOL_CATEGORY = {
     "list_files": "About Diya",
     "web_search": "Learning",
     "study_repo": "Learning",
+    "read_mail": "About me",
 }
 _WEATHER = re.compile(r"\b(?:weather|temperature|forecast|raining|rain|sunny|humidity)\b", re.IGNORECASE)
 _TRYING_IT_OUT = re.compile(r"\b(?:check|checks|test|tests|testing|sanity|verification|verify|still\s+working)\b", re.IGNORECASE)

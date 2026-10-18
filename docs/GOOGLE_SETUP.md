@@ -26,3 +26,7 @@ Diya only asks to read your calendar (`calendar.readonly`); nothing here can cha
 
 The page, the storage and the checks are tested; the sign-in flow was tested against a stand-in for Google. **Nobody has signed in through it against the real Google yet.** If the sign-in stops, the exact
 message on the page is what is needed.
+
+## Gmail too (read-only)
+
+The same Google app serves Gmail: in the same project enable the **Gmail API**, add the scope `https://www.googleapis.com/auth/gmail.readonly` under *Data access*, and press **Connect** on the Gmail card (the Client ID and secret you pasted for Calendar are shared). Diya can then look through your mail when you ask and can never send, change or delete any. What it does and does not do, and what is not yet tried against a real account: `docs/GMAIL_DESIGN.md`.

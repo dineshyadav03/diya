@@ -76,12 +76,12 @@ def _wait_for_redirect(timeout):
     return server.server_address[1], wait
 
 
-def _authorization_url(client_id, redirect_uri, state):
+def _authorization_url(client_id, redirect_uri, state, scope=SCOPE):
     params = {
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": SCOPE,
+        "scope": scope,
         "access_type": "offline",
         "prompt": "consent",  # otherwise a returning owner may not be issued a refresh token at all
         "state": state,
@@ -149,7 +149,9 @@ def save_client(config, values):
 
 
 def clear_client(config):
-    """Forget what the page stored. True if there was something. What the DIYA_GOOGLE_* settings say is the owner's to change, not this page's."""
+    """Forget what the page stored. True if there was something. What the DIYA_GOOGLE_* settings say is the owner's to change, not this page's. The client is Google's and is shared by every Google
+    connector (Calendar, Gmail), and a sign-in belongs to the app it was made with, so Gmail is disconnected with it (the framework disconnects the connector whose card was used)."""
+    diya_connectors.disconnect(config, "google_mail")
     try:
         os.remove(_client_file(config))
         return True
@@ -185,15 +187,20 @@ SETUP = diya_connectors.Setup(
 
 
 def connect(config, open_browser=webbrowser.open):
-    """The whole flow, one call: opens the owner's browser, waits for them to finish, stores the
-    refresh token (docs/CONNECTORS_DESIGN.md, D6). Raises ConnectorError, and stores nothing, at any
+    """Connect Google Calendar: connect_to with the read-only calendar scope."""
+    return connect_to(config, SCOPE, "google_calendar", open_browser)
+
+
+def connect_to(config, scope, token_name, open_browser=webbrowser.open):
+    """The whole flow, one call, for any Google read-only scope (Calendar, Gmail): opens the owner's browser, waits for them to finish, stores the
+    refresh token under `token_name` (docs/CONNECTORS_DESIGN.md, D6). Raises ConnectorError, and stores nothing, at any
     failed step -- a cancelled or failed attempt never leaves a half-connected state."""
     client_id, client_secret = _client_credentials(config)
 
     port, wait = _wait_for_redirect(CALLBACK_TIMEOUT)
     redirect_uri = f"http://127.0.0.1:{port}"
     state = secrets.token_urlsafe(16)
-    open_browser(_authorization_url(client_id, redirect_uri, state))
+    open_browser(_authorization_url(client_id, redirect_uri, state, scope))
 
     result = wait()
     if "error" in result:
@@ -213,14 +220,18 @@ def connect(config, open_browser=webbrowser.open):
             "Google did not return a refresh token -- if you've connected before, remove Diya's access "
             "at https://myaccount.google.com/permissions and try again"
         )
-    diya_connectors.store_token(config, "google_calendar", refresh_token)
+    diya_connectors.store_token(config, token_name, refresh_token)
 
 
 def _access_token(config):
-    """A fresh access token for the stored refresh token, or None if there is no connection or Google
+    return access_token(config, "google_calendar")
+
+
+def access_token(config, token_name):
+    """A fresh access token for the refresh token stored under `token_name`, or None if there is no connection or Google
     refuses the refresh (the same "not connected" answer either way -- the tool has nothing useful to
     say about *why* a refresh failed that the owner can act on mid-conversation)."""
-    refresh_token = diya_connectors.read_token(config, "google_calendar")
+    refresh_token = diya_connectors.read_token(config, token_name)
     if refresh_token is None:
         return None
     try:

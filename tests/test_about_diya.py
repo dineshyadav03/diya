@@ -34,7 +34,7 @@ def test_an_ordinary_message_is_not_taken_for_one(text):
 
 def test_the_note_lists_only_what_is_built_where_it_is_and_what_was_never_tried():
     note = diya.ABOUT_DIYA_NOTE
-    for must in ("Connections page", "Google Calendar", "docs/GOOGLE_SETUP.md", "Memory page", "Automations page", "Knowledge", "have not yet been tried with real accounts", "cannot read their email", "press Approve"):
+    for must in ("Connections page", "Google Calendar", "docs/GOOGLE_SETUP.md", "Memory page", "Automations page", "Knowledge", "have not yet been tried with real accounts", "Gmail, which she can only read", "cannot read their Google Drive", "press Approve"):
         assert must in note, must
     assert len(note) < 1800  # it is read in the turns that ask for it, on a small model
 

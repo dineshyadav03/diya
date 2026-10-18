@@ -641,12 +641,13 @@ def test_it_cannot_be_proposed_at_all_while_todoist_is_not_connected(config):
 
 def test_real_connectors_are_all_implemented(config):
     connectors = real_connectors(config)
-    assert {c.name for c in connectors} == {"home_assistant", "notion", "todoist", "google_calendar"}
+    assert {c.name for c in connectors} == {"home_assistant", "notion", "todoist", "google_calendar", "google_mail"}
     assert all(c.implemented for c in connectors)
-    token_ones = [c for c in connectors if c.name != "google_calendar"]
+    token_ones = [c for c in connectors if not c.name.startswith("google_")]
     assert all(c.auth_kind == "token" and c.validate is not None for c in token_ones)
-    google = diya_connectors.by_name(connectors, "google_calendar")
-    assert google.auth_kind == "oauth" and google.oauth_connect is not None
+    for name in ("google_calendar", "google_mail"):  # both sign in through Google's own page
+        google = diya_connectors.by_name(connectors, name)
+        assert google.auth_kind == "oauth" and google.oauth_connect is not None
 
 
 def test_tool_specs_match_the_real_connector_names(config):
