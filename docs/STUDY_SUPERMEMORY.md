@@ -59,3 +59,28 @@ All **observed** in `apps/docs/concepts/how-it-works.mdx`, `graph-memory.mdx`, `
 - **REA was not run.** `npx rea-agents setup` registers an MCP server and writes into agent configuration; its static analyser runs third-party code from the npm registry on this computer. REA's own skill file says not to use it on a complete source repository, and setup needs the owner's approval. If the owner wants it run anyway, say so and say which command.
 - **Supermemory's code was not cloned or run.** Files were read through the GitHub API as text: about 15 of 938 (the README, six concept and architecture documents, four MCP tool files, the MCP client, two files of the framework wrapper).
 - **The MCP tools' server side, the memory-graph visualiser (`packages/memory-graph`), the Python SDKs and the benchmark were not read.**
+
+## 8. Second reading, 2026-10-18: the open `company-brain`, the docs of "Supermemory local", and what was built
+
+The owner asked for supermemory to be the first priority. Method as before: **observed** = read from a named file, **inferred** = a guess with its basis, **not established**. Files were fetched as text through the GitHub API into a scratch folder outside the project; nothing was cloned, installed or run.
+
+**Observed, licences rechecked today** (`gh api`): `supermemoryai/supermemory` MIT; `supermemoryai/company-brain` Apache-2.0 (both may be copied from, with the notice kept); last pushed 2026-10-18 and 2026-10-02.
+
+**Observed — "Supermemory local" is a closed binary** (the self-hosting docs: `overview.mdx`, `local-vs-enterprise.mdx`, `providers.mdx`, `docker.mdx`): it runs the same API at `localhost:6767`, works with Ollama (the docs recommend `gpt-oss:20b`) and local embeddings, but "the server binary is not open source", it is "free within its lite license limit", and it is installed with `npx` or a `curl | bash` installer or a Docker image. **Decision:** not downloaded, not run. It would be a closed component holding the owner's memory, and the whole point of Diya is that the owner can read every line that decides what is remembered. If the owner wants it measured against Diya anyway, that needs their explicit yes, a separate empty folder, and no real data.
+
+**Observed — `company-brain` is the part of their memory logic that *is* public** (TypeScript, Slack bot on Cloudflare Workers; `src/brain/memory/*.ts`, `src/memory/*.ts`; 16 files read). What it does, and what Diya did with each:
+
+| In company-brain (file) | Diya |
+|---|---|
+| Capture policy says transient facts "get a forget horizon so they fade on their own" and a repeat should "reinforce/update the existing memory instead of adding a duplicate: that renews it" (`profile-config.ts`) | **Built:** `diya_fade.py`, `fact_mentions`, Keep — `docs/FADING_DESIGN.md` |
+| A partial recall ends with "Showing N of M+ matching memories — this is not the complete set" (`profile-recall.ts`, token budget 20k) | **Built:** a partial view now says how many facts are not shown and that "not listed" means "may not be in view" |
+| Each memory is one self-contained note with title, sources, `eventDate`, 1–3 tags; content stamped `DOCUMENT_DATE`; id is a hash of date + key + content so a rewrite is idempotent (`writeback.ts`) | Diya already keeps source message, dates and a text key that stops duplicates; the self-contained-note shape fits the **Knowledge pages**, not facts. Nothing to add now |
+| Entity resolution with aliases; a node splits at 125 memories (`entities.ts`, `split.ts`) | Not built. Aliases would help "Hog / Hogg" style corrections, but Diya's person tags already cover the owner's case. **Deferred** (reopen when the owner's people list is long enough to need it) |
+| Buckets (preferences / patterns / tasks) and a labels-only "topic map" outline (`tree.ts`) | Not built. The Memory page already groups by person; a topic outline is a presentation change. **Deferred** |
+| Ambient profile ordered by most-corroborated then newest | Partly: recall puts lasting facts first and newest next. "Most said again" is now countable (`fact_mentions`) and could rank facts later — only worth doing if real use shows the ordering matters |
+| Never store what a connected tool already owns (mail, calendar) | Already Diya's rule (read from the tool, not copied into memory) |
+
+**Inferred:** the memory *engine* (extraction model, graph, ranking) is still the closed part; `company-brain` calls it as a service. So "build supermemory for us" can only mean what is above: take the published policy ideas, not the engine.
+
+**Not established:** the benchmark claims of section 5 are still the project's own; nothing here measures Diya against them.
+

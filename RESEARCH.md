@@ -151,6 +151,8 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
   Python/SQLite/local; `company-brain` is TypeScript/Cloudflare/multi-tenant) and wrong scale, and it
   would break cross-cutting note 4. Revisit only once Diya's memory outgrows a single embedding lookup
   and a 2,000-character profile, or a faster/better model changes the gate-benchmark numbers.
+- **Rechecked 2026-10-18:** company-brain is Apache-2.0, 1,015 stars, last pushed 2026-10-02 (`gh api`). Its source was read (16 files): the capture policy's "decay unless reinforced" and its "not the complete set" note on partial recall were taken
+  (`docs/FADING_DESIGN.md`); nothing else. Decision and links in `docs/RESEARCH_REVIEWS_2026-10-18.md` (task DIYA-274).
 
 ### 11. Personal connector landscape (calendar, email, tasks, local smart-home, messaging)
 
@@ -336,6 +338,8 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
   warns against, and Diya's own differentiation (entry 1) is that a person reviews every fact before
   the model sees it -- a design choice, not a limitation Hindsight's "learns automatically" framing
   would necessarily preserve.
+- **Rechecked 2026-10-18:** MIT, 51,036 stars, last pushed 2026-10-17. README read in full: observations carry evidence and a proof count (taken as "You said it again N times"), and an opt-in Memory Defense scans for secrets (Diya's own
+  secret check already refuses them). The side-by-side run is deferred until the owner's memory is large enough to measure. Decision in `docs/RESEARCH_REVIEWS_2026-10-18.md` (task DIYA-278).
 
 ### 15. SkillOpt (Microsoft) -- validation-gated self-editing skills
 
@@ -754,6 +758,8 @@ Stage numbers refer to the [roadmap](ROADMAP.md).
   was worse at deciding); Diya uses hooks. (e) The code sample is supermemory's hosted API: the owner's facts would leave the computer, so it is a reference for shape only.
 - **Action:** no build from this entry alone. It feeds the plan in `docs/RESEARCH_PLAN_2026-10.md` (units D1 time-aware facts, partly done the same day; R1 relevance recall, when the memory
   grows; K1 a knowledge base from the owner's documents).
+- **Reviewed 2026-10-18:** no build from the guide itself; it fed time-aware facts, relevance recall, the knowledge base, and now fading (`docs/FADING_DESIGN.md`). Layers are in `docs/MEMORY_TAXONOMY.md`. The long-term evaluation waits for months of real use.
+  Decision in `docs/RESEARCH_REVIEWS_2026-10-18.md` (task DIYA-292).
 
 ### 29. Sentient OS (open source, AGPL-3.0, macOS only): "your computer catches up with you overnight"
 
@@ -921,7 +927,8 @@ Not comparable and left out: coding agents (OpenHands, Open Interpreter), browse
   install nothing; but reading Claude Code's session files means it would read these very conversations, and downloading and running a program is the owner's decision. I have not.
 - **Rules about other AI agents using it:** none found in `CONTRIBUTING.md` (read whole), `SECURITY.md` or the README. The licence is Apache-2.0: its code could be reused with the notice kept; none will
   be, because the language and the job are different.
-- **Action:** unit **J1** (a tool-call journal, with the Rule-of-Two table as its test) added to `docs/RESEARCH_PLAN_2026-10.md`; no code yet.
+- **Action:** unit **J1** (a tool-call journal, with the Rule-of-Two table as its test) added to `docs/RESEARCH_PLAN_2026-10.md`; the journal itself has since been built (`diya_journal.py`, `docs/ACTIVITY_JOURNAL_DESIGN.md`, `tests/test_journal.py`); the Rule-of-Two sequence table is still not written.
+- **Rechecked 2026-10-18:** Apache-2.0, 1,126 stars, last pushed 2026-10-16. Decision and links in `docs/RESEARCH_REVIEWS_2026-10-18.md` (task DIYA-298).
 
 ## Cross-cutting
 

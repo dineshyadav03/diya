@@ -5,22 +5,28 @@ and nothing it does outside the computer happens without your approval. It is on
 
 ![The chat: a greeting, a question about something ticked off, a lookup on the web, an automation made from one sentence](docs/screenshot-chat.png)
 
-## Where it stands (2026-10-14)
+## Where it stands (2026-10-18)
 
-Built for Windows with [Ollama](https://ollama.com), tested on a 16 GB laptop with no GPU. About 6,800 automated tests run on every push. Every unit the [roadmap](ROADMAP.md) has designed is built;
+Built for Windows with [Ollama](https://ollama.com), tested on a 16 GB laptop with no GPU. About 7,500 automated tests run on every push (7,495 passed at the 2026-10-18 baseline, [docs/BASELINE_2026-10-18.md](docs/BASELINE_2026-10-18.md)). Every unit the [roadmap](ROADMAP.md) has designed is built;
 against the larger vision about two thirds is there (a rough estimate, areas weighted equally), and what is left is mostly what only the owner can do (accounts, a phone, hardware) plus a few features not
 designed yet. In plain terms:
 
 | | |
 |---|---|
-| **Built and tested, but only lightly used** | chat with streaming replies and a voice; tap-to-talk; reminders, repeating reminders, tasks, the Today page; Diya writing to you first; automations; reviewed memory, with automatic memory switched on; general questions answered with a web lookup |
-| **Built, but never tried against the real thing** | the Google Calendar sign-in, Todoist, Home Assistant and Notion; push notifications to a phone; the Telegram bot; the one-command launcher's install step |
+| **Built and tested, run against the real model** | chat with streaming replies; reminders, repeating reminders, tasks; automations; reviewed memory with automatic memory switched on; proposals that wait for approval |
+| **Built and tested on Diya's own code** | the pause switch, the Status page, checked backups, the activity journal, "how do you know that?", forgetting for good, facts that fade unless said again, a Markdown copy of memory |
+| **Built, tested only with stand-ins** | tap-to-talk, general questions answered from the web, Dreaming, the Today page and Diya writing first, notes as Knowledge pages, MCP tools |
+| **Built, never tried against the real thing** | Google Calendar, Gmail and the Google writes (parked: no Google project can be created right now), Todoist, Home Assistant and Notion; push notifications to a phone; the Telegram bot |
 | **Built, switched off until you choose** | the desktop notifier's schedule, Dreaming's schedule, the phone channels, every connector |
-| **Not built** | Diya writing her own tools; call handling; a streaming voice pipeline; a second source for the knowledge base, such as your calendar or mail (pages from your notes, a Knowledge page and chat answers from them are built; [the plan](docs/RESEARCH_PLAN_2026-10.md)); the Mac mini (deferred) |
+| **Not built** | Diya writing her own tools; call handling; a streaming voice pipeline; a second source for the knowledge base such as your mail ([the plan](docs/RESEARCH_PLAN_2026-10.md)); the Mac mini (deferred) |
 
-**An honest note on use.** Most of the messages Diya has had were typed while it was being built and tested. It has not yet been a daily assistant: answers take 10 to 30 seconds on this CPU, a model
-this small is clearly weaker than the free cloud assistants, and nothing real (a notes folder, a calendar, a phone) is connected yet. Everything above is built and tested, mostly on invented data,
-so how well it holds up in everyday life is not known. [docs/DIYA_GUIDE.md](docs/DIYA_GUIDE.md) is the long, plain account of what it is, what it lacks and how it was built.
+[docs/CAPABILITIES.md](docs/CAPABILITIES.md) is the same list one capability at a time, with the code, the tests, the date they last passed and a label for what kind of proof it is, and a test fails if it goes stale:
+**Live** (run against the real model, Windows or database, with the evidence named), **Own code** (depends on nothing outside Diya, tested as it is), **Stand-in** (only ever run against a scripted or fake outside thing) and
+**Untried** (its real service or device has never been touched). The task sheet behind the next phase is [docs/TRACKER.md](docs/TRACKER.md): 298 planned pieces, and which are done, with the evidence.
+
+**An honest note on use.** Until the middle of October most of the messages Diya had were typed while it was being built and tested. The owner has now started to use it day to day, and nothing about that use is
+measured yet: answers take 10 to 30 seconds on this CPU, a model this small is clearly weaker than the free cloud assistants, and no real calendar, mail or phone is connected, so how well it holds up in
+everyday life is still being learned. [docs/DIYA_GUIDE.md](docs/DIYA_GUIDE.md) is the long, plain account of what it is, what it lacks and how it was built.
 
 Stage 0 of the roadmap (safety and reproducibility) is 17 of 20 items done; the other three are blocked by tools or were decided against, and say so in [ROADMAP.md](ROADMAP.md).
 [PRODUCT_VISION.md](PRODUCT_VISION.md) says what each part does today and what was never tried for real.
@@ -34,7 +40,11 @@ sent, and it moves on to another microphone). Ask it anything: a question that n
 
 **It remembers, and you stay in charge.** Facts it picks up from your chats wait for review, and the model is told only what you accepted. With *automatic memory* on (it is, here) plain facts are taken
 in on their own, marked, and can be undone with one press; anything private, doubtful or that may replace what it knew becomes a question in the chat. A fact whose day has passed is asked about, not
-kept for ever. When the memory outgrows what fits in one message, the model is told the facts closest to what you just said. You can correct it ("no, I live in Pune") or make it forget ("forget that").
+kept for ever, and a fact that says it is a passing state ("for now", "currently reading") fades unless you say it again or press Keep. When the memory outgrows what fits in one message, the model is told the
+facts closest to what you just said, and is told that it is not everything. You can correct it ("no, I live in Pune"), make it forget ("forget that"), or delete a message or a fact for good.
+
+**You can see why it knows something.** Ask "how do you know I have a dog?" and the answer comes from the record, not from the model: your own words, the date, whether you accepted it or Diya took it on her own, and how
+to undo it. `python diya_review.py export-markdown` writes everything it knows as a plain Markdown file to read or keep in Git, and `restore-markdown` brings it back ([docs/MARKDOWN_MEMORY_DESIGN.md](docs/MARKDOWN_MEMORY_DESIGN.md)).
 
 ![The Today page](docs/screenshot-today.png)
 
@@ -46,11 +56,16 @@ writes it). Diya writes first: a good morning with your day, an evening check-in
 **Automations.** Say "every morning at 8am tell me the weather in Pune" (in the chat or on the page) and it does that on schedule and writes you the answer. A run can only read (the weather, the web, your
 notes, reminders and tasks); it can never save or send anything.
 
-**It can reach outside, only when you let it.** Connectors for Google Calendar, Todoist, Home Assistant and Notion (off until you connect them; Google is set up from the Connections page, see
-[docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md)). The one thing Diya may change outside the computer is a Todoist task, and only after you press Approve on exactly what is shown.
+**It can reach outside, only when you let it.** Connectors for Google Calendar and Gmail, Todoist, Home Assistant and Notion (off until you connect them; Google is set up from the Connections page, see
+[docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md)). Diya may change something outside the computer (a Todoist task, a Google Calendar event or task) only after you press Approve on exactly what is shown, with its risk, what
+it reaches and how far it can be undone; a Google change counts as done only after Diya has read it back. None of these has been tried against a real account.
 
 **How it stays safe.** It listens on this computer only and needs an access token (and an optional passcode for the page); it has no shell tool, no skills marketplace and no generic page fetcher; the
-model proposes and code decides ([why](docs/GATE_BENCHMARK.md)); an unattended run is read-only; text from the web is read, never obeyed.
+model proposes and code decides ([why](docs/GATE_BENCHMARK.md)); an unattended run is read-only; text from the web, mail and calendars is read, never obeyed (a test assumes the model obeys every injected instruction and checks
+that nothing leaves); saved sign-ins are encrypted with Windows; a **Pause** switch on the Status page stops every action, automation and message at once.
+
+**You can check on it.** The Status page says what is working and what is not (the model, the database, backups, Dreaming, the reading queue); backups are checked by restoring them, and a snapshot is taken before any
+database change; Dreaming leaves a receipt for every pass; the Activity page lists every tool Diya used and what it did for you, and cannot be edited.
 
 ## Is this like other projects?
 
@@ -123,18 +138,20 @@ Nothing below happens on its own; each is a step only you can take (an account, 
 - `web_search` is not covered by the outbound-host allowlist that limits weather to Open-Meteo.
 - Models are pulled by tag, not pinned (Ollama cannot pin by digest).
 - The optional model check on a staged fact is the same small model that proposed it: a hint, never a decision.
-- The microphone, the phone channels and the Google sign-in were built and tested against stand-ins only.
+- The microphone, the phone channels and every Google feature were built and tested against stand-ins only; Google is parked until a Google project can be created.
+- Facts that fade are recognised by a short list of phrases, on purpose: a passing state written another way stays until you retire it.
 
 ## Docs
 
 For the whole story in one place (what it is, what it can do, where it falls short, how it is built, how it was built, the research and the products like it) read [docs/DIYA_GUIDE.md](docs/DIYA_GUIDE.md). Otherwise start with [PRODUCT_VISION.md](PRODUCT_VISION.md) (what it is today) and [ROADMAP.md](ROADMAP.md) (what is planned and done). Then by topic:
 
-- **Memory:** [staged facts and review](docs/STAGE2_DESIGN.md), [people](docs/PERSON_MEMORY_DESIGN.md), [automatic memory](docs/AUTO_MEMORY_DESIGN.md), [Dreaming](docs/dreaming.md).
+- **Memory:** [staged facts and review](docs/STAGE2_DESIGN.md), [people](docs/PERSON_MEMORY_DESIGN.md), [automatic memory](docs/AUTO_MEMORY_DESIGN.md), [Dreaming](docs/dreaming.md) and [its receipts](docs/DREAMING_RECEIPTS_DESIGN.md), [what each kind of memory is](docs/MEMORY_TAXONOMY.md), ["how do you know that?"](docs/PROVENANCE_DESIGN.md), [fading](docs/FADING_DESIGN.md), [forgetting for good](docs/FORGET_DESIGN.md), [the Markdown copy](docs/MARKDOWN_MEMORY_DESIGN.md).
 - **Your day:** [reminders](docs/PROACTIVITY_DESIGN.md), [repeating reminders](docs/SCHEDULE_DESIGN.md), [tasks](docs/TASKS_DESIGN.md), [Diya writes first](docs/PROACTIVE_DESIGN.md), [automations](docs/AUTOMATIONS_DESIGN.md).
 - **Talking:** [speed](docs/SPEED_DESIGN.md), [streaming](docs/STREAMING_DESIGN.md), [voice](docs/VOICE_DESIGN.md), [answering general questions](docs/LOOKUP_DESIGN.md), [the interface](docs/UI_DESIGN.md).
 - **Outside the computer:** [connectors](docs/CONNECTORS_DESIGN.md), [Google setup](docs/GOOGLE_SETUP.md), [approvals](docs/ACTIONS_DESIGN.md), [push](docs/PUSH_DESIGN.md), [Telegram](docs/TELEGRAM_DESIGN.md), [phone channel](docs/PHONE_CHANNEL_DESIGN.md), [LAN mode](docs/lan.md).
-- **Trust:** [access token and the boundary](docs/STAGE1_DESIGN.md), [UI login](docs/UI_LOGIN_DESIGN.md), [the October audit](docs/AUDIT_2026-10-10.md).
-- **Research and plans:** [RESEARCH.md](RESEARCH.md) (33 dated entries), [Diya next to the projects like it](docs/COMPARISON.md), [the research plan](docs/RESEARCH_PLAN_2026-10.md), [model benchmark](docs/MODEL_BENCHMARK.md), [the gate benchmark](docs/GATE_BENCHMARK.md).
+- **Trust:** [access token and the boundary](docs/STAGE1_DESIGN.md), [UI login](docs/UI_LOGIN_DESIGN.md), [the October audit](docs/AUDIT_2026-10-10.md), [who may do what](docs/AUTHORITY_MODEL.md) and [what each connection may do](docs/PERMISSIONS_DESIGN.md), [the pause switch](docs/PAUSE_DESIGN.md), [saved sign-ins](docs/SECRETS_DESIGN.md), [backups](docs/BACKUP_DESIGN.md), [the Status page](docs/HEALTH_DESIGN.md).
+- **The next phase:** [the owner's decisions of 2026-10-18](docs/DECISIONS_2026-10-18.md), [the task sheet](docs/TRACKER.md), [what Diya can do, with the proof](docs/CAPABILITIES.md), [the monthly checks](docs/MONTHLY_CHECKS.md), [studies of supermemory and REA](docs/STUDY_SUPERMEMORY.md).
+- **Research and plans:** [RESEARCH.md](RESEARCH.md) (34 dated entries; the 2026-10-18 reviews are in [docs/RESEARCH_REVIEWS_2026-10-18.md](docs/RESEARCH_REVIEWS_2026-10-18.md)), [Diya next to the projects like it](docs/COMPARISON.md), [the research plan](docs/RESEARCH_PLAN_2026-10.md), [model benchmark](docs/MODEL_BENCHMARK.md), [the gate benchmark](docs/GATE_BENCHMARK.md).
 
 ## Architecture
 
