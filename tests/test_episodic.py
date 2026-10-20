@@ -346,3 +346,45 @@ def test_dreaming_indexes_an_older_chat_a_batch_at_a_time(tmp_path):
 def test_the_settings_know_the_switch():
     assert diya_config.load_config({}).episodic is True
     assert diya_config.load_config({"DIYA_EPISODIC": "0"}).episodic is False
+
+
+# ---- a slow embedding model never holds up a chat ------------------------------------------------------------------------
+
+
+def test_a_slow_embedding_model_costs_one_short_wait_and_then_none_for_a_while(tmp_path, monkeypatch):
+    import time as clock
+
+    client = FakeClient([text_reply("Answer one."), text_reply("Answer two.")])
+    config, agent = build(tmp_path, client)
+    agent.store.add_message(agent.store.main_thread(), "user", EXAM)
+    ep.index_new(agent.store, embed_words, config.embed_model)
+    calls = []
+
+    def slow(text):
+        calls.append(text)
+        clock.sleep(1.5)  # a cold model on a computer that is out of memory
+        return embed_words(text)
+
+    agent.embed = slow
+    monkeypatch.setattr(diya, "EMBED_TURN_SECONDS", 0.2)
+    question = [{"role": "user", "content": "when is my pharmacology exam?"}]
+    started = clock.monotonic()
+    answer, _ = agent.ask(list(question), thread_id=agent.store.main_thread(), message_id=999)
+    first = clock.monotonic() - started
+    assert answer == "Answer one." and ep.NOTE_HEAD not in system_of(client) and first < 1.2  # the chat did not wait for the 1.5 seconds
+    started = clock.monotonic()
+    agent.ask(list(question), thread_id=agent.store.main_thread(), message_id=999)
+    assert clock.monotonic() - started < 0.5 and len(calls) == 1  # and for a minute it does not even ask again
+
+
+def test_a_quick_embedding_is_used_and_a_failing_one_is_passed_on(tmp_path):
+    config, agent = build(tmp_path, FakeClient())
+    agent.embed = embed_words
+    assert agent.embed_in_time("when is my exam") == embed_words("when is my exam")
+
+    def broken(text):
+        raise ConnectionError("down")
+
+    agent.embed = broken
+    with pytest.raises(ConnectionError):
+        agent.embed_in_time("when is my exam")

@@ -477,6 +477,8 @@ ABOUT_DIYA_NOTE = (
     "computer unless they press Approve."
 )
 MAX_DONE_SHOWN = 15  # how many ticked-off reminders, and how many tasks, a question about what they did is given
+EMBED_TURN_SECONDS = 6.0  # the longest a chat waits for the embedding model to help it (earlier words, a playbook): a cold or starved computer gets the chat without the extra, not a long wait
+EMBED_COOLDOWN_SECONDS = 60.0  # and after one such timeout it is not asked again for this long
 # Added to an automation's run (Agent.briefing, docs/AUTOMATIONS_DESIGN.md): the person set this up earlier and is not there to answer, so no question back, and only what a tool found.
 BRIEFING_PROMPT = (
     "The user set up this task earlier to run by itself on a schedule, and they are not waiting at the keyboard. Do the task now with the tools you have (they only read), then write the "
@@ -684,6 +686,31 @@ class Agent:
     def embed(self, text):
         return self.client.embeddings.create(model=self.config.embed_model, input=text).data[0].embedding
 
+    def embed_in_time(self, text):
+        """The embedding of `text`, but for the helpers that must never hold up a chat (finding earlier words, picking a playbook): it waits at most EMBED_TURN_SECONDS, and raises TimeoutError if the embedding model
+        is slower (cold, or the computer is out of memory). After a timeout it does not ask again for EMBED_COOLDOWN_SECONDS, so a struggling computer costs one short wait, not one on every message. The model
+        client's own timeout is ten minutes, which is right for answering and far too long for an extra."""
+        now = time.monotonic()
+        if now < getattr(self, "_embed_cooldown_until", 0.0):
+            raise TimeoutError("the embedding model was too slow a moment ago")
+        box = {}
+
+        def run():
+            try:
+                box["value"] = self.embed(text)
+            except BaseException as exc:  # noqa: BLE001 -- handed back to the caller below
+                box["error"] = exc
+
+        worker = threading.Thread(target=run, name="embed-in-time", daemon=True)
+        worker.start()
+        worker.join(EMBED_TURN_SECONDS)
+        if worker.is_alive():
+            self._embed_cooldown_until = time.monotonic() + EMBED_COOLDOWN_SECONDS
+            raise TimeoutError(f"the embedding model did not answer within {EMBED_TURN_SECONDS} seconds")
+        if "error" in box:
+            raise box["error"]
+        return box["value"]
+
     # ---- memory (Milestone 3): an in-memory index of the notes folder ----
     @property
     def notes(self):
@@ -886,7 +913,7 @@ class Agent:
                 return None
             chosen, rest = diya_playbooks.named(playbooks, text)
             if chosen is None:
-                chosen = diya_playbooks.pick(playbooks, text, self.embed, self.config.embed_model)
+                chosen = diya_playbooks.pick(playbooks, text, self.embed_in_time, self.config.embed_model)
             if chosen is None:
                 return None
             self._journal("use_playbook", {"name": chosen["name"], "by": "name" if rest or f"@{chosen['name']}" in text.lower() else "meaning"}, "ok", kind="flow")
@@ -901,7 +928,7 @@ class Agent:
             return None
         try:
             already = [m.get("content") for m in messages if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str)]
-            found = diya_episodic.search(self.store, self.embed, self.config.embed_model, text, exclude_ids=() if message_id is None else (message_id,), already=already)
+            found = diya_episodic.search(self.store, self.embed_in_time, self.config.embed_model, text, exclude_ids=() if message_id is None else (message_id,), already=already)
             return diya_episodic.note(found)
         except Exception:  # noqa: BLE001
             return None
