@@ -6,9 +6,9 @@ Updated 2026-10-20. The blueprint's task sheet has 298 tasks; the progress is ke
 | Status | Tasks |
 |---|---|
 | Not started | 154 |
-| Needs verification | 7 |
+| Needs verification | 6 |
 | Research queue | 52 |
-| In progress | 14 |
+| In progress | 15 |
 | Blocked | 0 |
 | Done | 71 |
 | Deferred | 0 |
@@ -87,7 +87,7 @@ Updated 2026-10-20. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-027** Add memory provenance recall benchmark (2026-10-20): tests/test_provenance_bench.py (4): 32 questions about 16 invented facts made by the real pipeline, plus 8 about things never said: 32 of 32 correct, 0 wrong attribution, 0 missed, 0 of 8 invented a history, and a corrected fact is said to be no longer used. The first run found two defects (one common shared word attached the wrong history; a live fact hid the retired one) and diya_provenance._matching was fixed; numbers before and after in docs/PROVENANCE_DESIGN.md.. Invented data and the wordings the question patterns recognise; no language model writes these answers, so it measures the code.
 - **DIYA-010** Define user acceptance journeys with realistic fixtures (2026-10-20): docs/ACCEPTANCE_JOURNEYS.md and tests/test_journeys.py (11): ten whole workflows through the real HTTP routes with a scripted model and a stand-in Google: tell her something, correct it, forget it (and for good), a reminder by your own words, a task, an automation, a Google Task that waits for your press and is read back, pause and resume, a checked backup and restore, memory out as Markdown and a repository and back; each with what you must see and the failure it must survive; a test fails if the document and the tests disagree.. Scripted model: they test the chain, not the quality of a real model's answers. Calendar and Gmail reads, voice and the phone channels have no journey because they have never run for real.
 
-## In progress (14)
+## In progress (15)
 
 - **DIYA-005** Snapshot local database and all configuration before schema changes (2026-10-18). Not encrypted and not offline: a copy of backups/ on another disk is Dinesh's step.
 - **DIYA-021** Add outbox leases, retry and unique keys (2026-10-18). No lease column: one drain at a time in one process. Dreaming's separate pass is guarded by memory_captures, not a lease.
@@ -103,6 +103,7 @@ Updated 2026-10-20. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-097** Implement Google Tasks list/task-list read (2026-10-18). Lists open tasks in the default list only (stand-in). Needs Dinesh's real-account try.
 - **DIYA-098** Implement Tasks create/complete/update/move/delete (2026-10-18). Create and read-back only (stand-in): complete, update, move, delete are not built.
 - **DIYA-214** Implement data export/delete and revocation propagation (2026-10-18). Delete and revocation are built. Export of the data is not (the Memory page already exports facts as a profile file).
+- **DIYA-017** Add failure/latency monitoring baseline (2026-10-20). NOT done: the sheet asks for CPU and memory to be LOGGED; they are shown when the page is opened and not recorded over time. 'Done' waits for that.
 
 ## Waiting for the owner (10)
 

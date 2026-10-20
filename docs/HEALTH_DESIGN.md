@@ -21,3 +21,15 @@
 **Proof.** `tests/test_health.py` (13 cases) with a stand-in Ollama; and the report was run against a private copy of the owner's real database.
 
 **Not done.** Per-connector "last successful call" and quota; a history of states over time; a push notification when something turns bad. The "Dreaming" line uses the log file's modification time, which is an approximation of "ran": it does not know whether the run found anything.
+
+## Added 2026-10-20 (task DIYA-017): how fast answers come, the oldest waiting job, and the computer itself
+
+* **How fast answers come** (`turn_stats`, migration 25): every chat turn, plain or streamed, leaves one row of NUMBERS: which route, how long it took in milliseconds, whether it worked, how many tools it called. No
+  word of anyone's is in the table (a test checks its columns), the newest 5,000 rows are kept, and a record that cannot be written never fails a chat. The Status line says, for the last 7 days: how many answers,
+  how long half of them took or less, how long 19 in 20 took or less, and how many failed. It is a warning when three of the last ten failed and bad when the last five did.
+* **The oldest waiting job**: the "Reading messages for facts" line now says how long the message that has waited longest has waited.
+* **This computer** (`diya_machine.py`): memory free of the total, how busy the processor was over a quarter of a second, and how much memory Diya's API holds, taken when the page is opened and not stored. Windows
+  through the system's own calls, Linux through /proc, anything else says it cannot tell. A warning under a gigabyte free, because the models are then pushed out of memory and every answer is slow.
+  On this laptop when first tried: 4.2 of 15.7 GB free, processor 15% busy, the API holding 16 MB.
+* **Not done:** CPU and memory are shown when the page is opened, not logged over time, so a spike an hour ago is not on the record. The sheet's wording asks for them "logged"; that part is open.
+

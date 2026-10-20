@@ -491,6 +491,20 @@ MIGRATIONS = (
         )
         """,
     )),
+    # How fast answers come and whether they fail (docs/HEALTH_DESIGN.md, task DIYA-017): one row per chat turn with its length in milliseconds, whether it worked and how many tools it called. NOTHING the person or
+    # Diya said is kept here, only numbers and a time, so it can be shown and exported without being personal. The newest rows are kept (Store.turn_stat_add prunes).
+    (25, (
+        """
+        CREATE TABLE IF NOT EXISTS turn_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            at TEXT NOT NULL,
+            route TEXT NOT NULL,
+            ms INTEGER NOT NULL,
+            ok INTEGER NOT NULL,
+            tools INTEGER NOT NULL DEFAULT 0
+        )
+        """,
+    )),
 )
 
 MAX_THREAD_TITLE = 80  # the longest name a chat can be given
@@ -852,6 +866,49 @@ class Store:
             conn.commit()
             row = conn.execute("SELECT attempts FROM capture_queue WHERE message_id = ?", (int(message_id),)).fetchone()
             return row[0] if row else 0
+        finally:
+            conn.close()
+
+    # --- how fast answers come (numbers only: no text is kept) ---
+
+    TURN_STATS_KEPT = 5000
+
+    def turn_stat_add(self, route, ms, ok, tools=0):
+        """Record one chat turn: which route, how long it took, whether it worked, how many tools it called. Keeps the newest TURN_STATS_KEPT rows. Never raises: a record that cannot be written is no reason for a chat to fail."""
+        try:
+            conn = self.connect()
+            try:
+                conn.execute("INSERT INTO turn_stats (at, route, ms, ok, tools) VALUES (?, ?, ?, ?, ?)",
+                             (datetime.now(timezone.utc).isoformat(), str(route)[:20], max(0, int(ms)), 1 if ok else 0, max(0, int(tools))))
+                conn.execute("DELETE FROM turn_stats WHERE id <= (SELECT MAX(id) FROM turn_stats) - ?", (self.TURN_STATS_KEPT,))
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def turn_stats_since(self, since):
+        """[(ms, ok)] of the turns at or after `since` (an ISO time), oldest first."""
+        conn = self.connect()
+        try:
+            return [(ms, bool(ok)) for ms, ok in conn.execute("SELECT ms, ok FROM turn_stats WHERE at >= ? ORDER BY id", (since,)).fetchall()]
+        finally:
+            conn.close()
+
+    def turn_stats_last(self, count):
+        """[ok] of the newest `count` turns, newest first."""
+        conn = self.connect()
+        try:
+            return [bool(row[0]) for row in conn.execute("SELECT ok FROM turn_stats ORDER BY id DESC LIMIT ?", (count,)).fetchall()]
+        finally:
+            conn.close()
+
+    def oldest_pending_capture(self):
+        """When the message that has waited longest to be read for facts was queued (an ISO time), or None."""
+        conn = self.connect()
+        try:
+            row = conn.execute("SELECT MIN(created_at) FROM capture_queue WHERE state = 'pending'").fetchone()
+            return row[0] if row else None
         finally:
             conn.close()
 

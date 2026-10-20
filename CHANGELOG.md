@@ -8,6 +8,8 @@ which migration it carries; the table below the notes says what each migration h
   right message was found 20 times in 20 and the chat model went from 1 right answer in 20 to 20 in 20 (`docs/EPISODIC_DESIGN.md`). *Migration 24.* `DIYA_EPISODIC=0` turns it off.
 * **"Forget everything about <a topic>"** now retires the facts that say all of the topic's words (at most 8), not only a person's; each can be taken back from the line under the reply.
 * **Memory as an Agent Memory Repo** (`python diya_review.py export-repo FOLDER`): `MEMORY.md` plus one note per person, in the open format Devin's memory uses. (`docs/MEMORY_REPO_DESIGN.md`)
+* **"How fast answers come" on the Status page**: the middle and the slow end of the last 7 days of answers, and how many failed, from numbers only (no text is kept); and how long the oldest message has waited to be
+  read for facts. A **"This computer" line** says how much memory is free, how busy the processor is and how much Diya's API holds, and warns under a gigabyte free. *Migration 25.*
 * **Playbooks**: steps you write once in `playbooks/<name>/SKILL.md` (Devin's open Agent Skills layout) and hand to the model with `@name` or when a request is close in meaning. They grant no tool and skip no approval.
   A read-only Playbooks page lists them and any file that cannot be used. (`docs/PLAYBOOKS_DESIGN.md`)
 * Forgetting a message or a fact for good now also removes the record of the times a fact was said again.
@@ -70,6 +72,7 @@ taken** (`diya_backup.before_migrating`); if the snapshot cannot be made, Diya d
 | 22 | Dreaming's receipts (append-only) | `docs/DREAMING_RECEIPTS_DESIGN.md` |
 | 23 | mentions (a fact said again) and a count of facts that faded | `docs/FADING_DESIGN.md` |
 | 24 | the embedding of each message you sent (a cache) | `docs/EPISODIC_DESIGN.md` |
+| 25 | how long each chat turn took and whether it worked (numbers only) | `docs/HEALTH_DESIGN.md` |
 
 `MIGRATIONS` in `diya_db.py` is the authority on the exact numbers.
 

@@ -8,6 +8,7 @@ import secrets
 import sys
 import tempfile
 import threading
+import time
 import traceback
 
 import openai
@@ -480,6 +481,10 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
             return diya_intent.is_worth_capturing(req.message) or diya_intent.forget_target(req.message) is not None
         return False
 
+    def record_turn(route, started, ok, tools_called):
+        """The length of a chat turn and whether it worked, as numbers only (Store.turn_stat_add): what the Status page's "How fast answers come" is made of."""
+        agent.store.turn_stat_add(route, (time.monotonic() - started) * 1000, ok, len(tools_called or []))
+
     def failure_of(exc):
         """(status, the fixed words) for an exception out of agent.ask, and the trace left in the console."""
         if isinstance(exc, openai.OpenAIError):  # nothing listening, a timeout, an error from Ollama itself
@@ -492,11 +497,14 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     @app.post("/api/chat")
     def chat(req: ChatRequest, background: BackgroundTasks):
         thread_id, history, message_id = start_turn(req)
+        started = time.monotonic()
         try:
             answer, tools_called = agent.ask(history, thread_id=thread_id, message_id=message_id)
         except Exception as exc:
+            record_turn("chat", started, False, [])
             status, detail = failure_of(exc)
             return JSONResponse({"detail": detail, "thread_id": thread_id}, status_code=status)
+        record_turn("chat", started, True, tools_called)
         reading = end_turn(thread_id, message_id, req, answer)
         background.add_task(sort_exchange, message_id, req.message, tools_called)  # after the response is on its way, never before it
         background.add_task(index_for_recall, message_id)
@@ -515,10 +523,13 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
         events = queue.Queue()
 
         def work():
+            started = time.monotonic()
             try:
                 answer, tools_called = agent.ask(history, thread_id=thread_id, message_id=message_id, on_event=lambda kind, payload: events.put((kind, payload)))
+                record_turn("stream", started, True, tools_called)
                 reading = end_turn(thread_id, message_id, req, answer)
             except Exception as exc:
+                record_turn("stream", started, False, [])
                 events.put(("error", failure_of(exc)))
                 return
             events.put(("done", {"thread_id": thread_id, "answer": answer, "tools_called": tools_called, "message_id": message_id, "reading": reading}))

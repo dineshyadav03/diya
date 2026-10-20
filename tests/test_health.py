@@ -47,7 +47,7 @@ def by_name(report):
 def test_every_part_is_reported_in_a_fixed_order_with_a_sentence(world):
     config, store = world
     report = health.collect(config, store, now=NOW, ping=up)
-    assert [i["name"] for i in report["items"]] == ["api", "pause", "database", "model", "reading", "dreaming", "connections", "backup", "secrets", "tools"]
+    assert [i["name"] for i in report["items"]] == ["api", "pause", "database", "model", "machine", "reading", "dreaming", "connections", "backup", "secrets", "tools", "answers"]
     assert all(i["status"] in ("ok", "warn", "bad", "off") and i["text"] and i["label"] for i in report["items"]) and report["overall"] in ("ok", "warn", "bad")
 
 
@@ -180,4 +180,4 @@ def test_the_route_returns_the_report(world):
 
     client = TestClient(app, base_url="https://localhost")
     body = client.get("/api/health").json()
-    assert body["overall"] in ("ok", "warn", "bad") and len(body["items"]) == 10
+    assert body["overall"] in ("ok", "warn", "bad") and len(body["items"]) == 12

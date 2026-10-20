@@ -30,6 +30,9 @@ def isolated_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("DIYA_CATEGORIES", "0")  # sorting each exchange asks the model once more; tests/test_categories*.py turn it on
     monkeypatch.setenv("DIYA_RECALL", "0")  # the memory's old limit (what is kept is what is told) is what the many tests of it assume; tests/test_recall.py turns recall on
     monkeypatch.setenv("DIYA_EPISODIC", "0")  # finding earlier messages by meaning asks the embedding model; tests/test_episodic.py turns it on with a stand-in
+    import diya_machine
+
+    monkeypatch.setattr(diya_machine, "sample", lambda *a, **k: None)  # sampling the processor takes a quarter of a second and the answer is the machine's, not the test's; tests/test_machine.py asks for real
     monkeypatch.setenv("DIYA_PLAYBOOKS", "0")  # a playbook folder on the machine running the tests must not change a test's prompt; tests/test_playbooks.py turns them on with a folder of its own
     monkeypatch.setenv("DIYA_LOOKUP", "0")  # a test must not search the real web because a scripted answer says "I don't know"; tests/test_lookup.py turns it on with a stand-in search
     monkeypatch.setenv("DIYA_KEEP_WARM", "0")  # a test that starts the API must not ask the real Ollama to load or keep a model (diya_warm.py)

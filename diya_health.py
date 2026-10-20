@@ -18,6 +18,7 @@ import httpx
 
 import diya_backup
 import diya_connectors
+import diya_machine
 import diya_pause
 import diya_secrets
 import diya_warm
@@ -99,7 +100,14 @@ def _reading(config, store):
     if failed:
         return _item("reading", "Reading messages for facts", "bad", f"{failed} message(s) could not be read after several tries; {pending} waiting.")
     if pending:
-        return _item("reading", "Reading messages for facts", "warn", f"{pending} message(s) are waiting to be read. They are read in order, one at a time.")
+        oldest = store.oldest_pending_capture()
+        waited = ""
+        try:
+            minutes = int((datetime.now(timezone.utc) - datetime.fromisoformat(oldest)).total_seconds() // 60)
+            waited = f" The oldest has waited {minutes} minute{'' if minutes == 1 else 's'}." if minutes >= 1 else ""
+        except (TypeError, ValueError):
+            pass
+        return _item("reading", "Reading messages for facts", "warn", f"{pending} message(s) are waiting to be read. They are read in order, one at a time.{waited}")
     return _item("reading", "Reading messages for facts", "ok", f"Nothing is waiting. Since this queue began: {backlog.get('done', 0)} read, {backlog.get('skipped', 0)} not worth reading.")
 
 
@@ -155,6 +163,49 @@ def _backup(config, now):
     return _item("backup", "Backup of the memory", "ok", f"The newest backup was made {when}, and was checked when it was made.")
 
 
+LOW_MEMORY_GB = 1.0
+
+
+def _machine(sample):
+    """Memory free, how busy the processor is, and what Diya's API holds (diya_machine): so that a slow answer can be told from a broken one. A warning when less than a gigabyte of memory is free, because the
+    models are then pushed out of memory and every answer gets slow."""
+    found = sample()
+    text = diya_machine.describe(found)
+    if text is None:
+        return _item("machine", "This computer", "off", "This system cannot be asked how much memory is free or how busy the processor is.")
+    if found["ram_free"] < LOW_MEMORY_GB * diya_machine.GB:
+        return _item("machine", "This computer", "warn", text + " Memory is nearly full: close something, or answers will be slow while the model is pushed in and out.")
+    return _item("machine", "This computer", "ok", text)
+
+
+def _seconds(ms):
+    return f"{ms / 1000:.0f} s" if ms >= 1000 else "under a second"
+
+
+def _answers(store, now):
+    """How fast answers come and whether they fail, from numbers only (turn_stats: no text is kept): the last 7 days, the middle and the slow end, and the failures. Bad when the last five all failed; a warning
+    when three of the last ten did."""
+    since = (now.astimezone(timezone.utc) - timedelta(days=7)).isoformat()
+    turns = store.turn_stats_since(since)
+    if not turns:
+        return _item("answers", "How fast answers come", "ok", "No answers have been timed in the last 7 days.")
+    worked = sorted(ms for ms, ok in turns if ok)
+    failed = sum(1 for _, ok in turns if not ok)
+    recent = store.turn_stats_last(10)
+    parts = [f"Last 7 days: {len(turns)} answer{'' if len(turns) == 1 else 's'}"]
+    if worked:
+        median = worked[len(worked) // 2]
+        slow = worked[min(len(worked) - 1, int(len(worked) * 0.95))]
+        parts.append(f"half took {_seconds(median)} or less, 19 in 20 took {_seconds(slow)} or less")
+    parts.append(f"{failed} failed" if failed else "none failed")
+    text = "; ".join(parts) + "."
+    if len(recent) >= 5 and not any(recent[:5]):
+        return _item("answers", "How fast answers come", "bad", text + " The last five did not work: is the chat model running?")
+    if len(recent) >= 5 and sum(1 for ok in recent if not ok) >= 3:
+        return _item("answers", "How fast answers come", "warn", text + " Three of the last ten did not work.")
+    return _item("answers", "How fast answers come", "ok", text)
+
+
 def _secrets(config):
     if config.protect_secrets and diya_secrets.available():
         return _item("secrets", "Sign-ins at rest", "ok", "Connector sign-ins are stored encrypted for this Windows user.")
@@ -176,7 +227,7 @@ def _tools(store, now):
     return _item("tools", "Tools and accounts", "ok", f"{total} tool call(s) in the last day, none failed." if total else "No tool calls in the last day.")
 
 
-def collect(config, store, now=None, ping=ping_ollama):
+def collect(config, store, now=None, ping=ping_ollama, sample=None):
     """Every item, in a fixed order, and the overall state: bad if any is bad, else warn if any is, else ok ("off" counts as nothing)."""
     moment = now or datetime.now()
     parts = (
@@ -184,12 +235,14 @@ def collect(config, store, now=None, ping=ping_ollama):
         ("pause", "Pause switch", lambda: _pause(store)),
         ("database", "Memory (database)", lambda: _database(config, store)),
         ("model", "Chat model", lambda: _model(config, ping)),
+        ("machine", "This computer", lambda: _machine(sample or diya_machine.sample)),
         ("reading", "Reading messages for facts", lambda: _reading(config, store)),
         ("dreaming", "Dreaming (the nightly tidy-up)", lambda: _dreaming(config, store, moment)),
         ("connections", "Connections", lambda: _connections(config)),
         ("backup", "Backup of the memory", lambda: _backup(config, moment)),
         ("secrets", "Sign-ins at rest", lambda: _secrets(config)),
         ("tools", "Tools and accounts", lambda: _tools(store, moment)),
+        ("answers", "How fast answers come", lambda: _answers(store, moment)),
     )
     items = []
     for name, label, look in parts:
