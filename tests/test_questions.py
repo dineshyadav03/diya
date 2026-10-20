@@ -143,10 +143,10 @@ def test_the_next_day_brings_the_next_two_once_there_is_room(parts):
 def test_the_waiting_and_private_come_before_what_has_gone_stale_before_offers(parts):
     memory, questions = parts
     waiting_fact = waiting(memory, "private thing", ["ask:sensitive:model_private"])
-    old = remembered(memory, "has a dentist appointment on Friday at 3pm")  # made now: its Friday is still ahead
+    old = made_at_sunday(memory, "has a dentist appointment on Friday at 3pm")  # made on the test clock's Sunday (not on the real day: the real day moves on and made this test fail later)
     memory.decide(old, "retire", "api")
     memory.decide(old, "restore", "api")
-    gone = remembered(memory, "has an exam on 20 Oct")
+    gone = made_at_sunday(memory, "has an exam on 20 Oct")
     later = SUNDAY + timedelta(days=30)  # by then both of the others have gone stale; the waiting one still comes first
     questions.refill(memory, later)
     assert kinds(questions.open())[0] == (waiting_fact, "sensitive") and len(questions.open()) == 2
@@ -165,7 +165,7 @@ def test_a_fact_is_never_asked_about_twice_in_the_same_way(parts):
 
 def test_one_fact_can_have_one_question_of_each_kind(parts):
     memory, questions = parts
-    fact = remembered(memory, "has an exam on 20 Oct")
+    fact = made_at_sunday(memory, "has an exam on 20 Oct")  # (made on the test clock's Sunday, not on the real day the suite runs: this used to use the real day and failed on 20 October 2026 itself)
     questions.refill(memory, datetime(2026, 10, 21, 10, 0))
     assert kinds(questions.open()) == [(fact, "stale")]
 

@@ -84,3 +84,32 @@ The owner asked for supermemory to be the first priority. Method as before: **ob
 
 **Not established:** the benchmark claims of section 5 are still the project's own; nothing here measures Diya against them.
 
+
+## 9. Fourth reading, 2026-10-20: the whole memory documentation, MemoryBench, the installer, and what was built from them
+
+The owner said yes to analysing "Supermemory local" and to implementing it "with our own". **The binary was not downloaded or run** (a closed program from the internet is something I do not run, even on request); the
+installer script, the self-hosting documentation and about 20 pages of the API and concept documentation were read instead, and the measuring instrument was built for the owner to point at a server they run themselves
+(`docs/SUPERMEMORY_LOCAL_TRIAL.md`). Everything below is **observed** in the pages named unless marked.
+
+**Read (all from `apps/docs` in the MIT repository, plus the installer):** `recall/search`, `recall/memory-operations`, `recall/memory-review`, `user-profiles/buckets`,
+`concepts/rules`, `ingestion/add-memories` (first half), `overview/comparison`, `memorybench/overview`, `memorybench/memscore`, `memorybench/extend-provider`, `self-hosting/*` (overview, quickstart, docker, configuration,
+providers, embeddings, local-vs-enterprise), and https://supermemory.ai/install. **Not read:** `recall/user-profiles`, `concepts/customization`, `concepts/filtering`, `concepts/super-rag`, the connectors, the migration guides, the SDKs, the
+smfs pages, and the MemoryBench source (`supermemoryai/memorybench`, MIT).
+
+| Found in the documentation | Diya | What was done |
+|---|---|---|
+| **Hybrid search**: facts (`memory`) and source chunks (`chunk`) in one call; default `searchMode: hybrid`, `threshold` 0.3, optional `rerank` and `rewriteQuery` | Facts only; the chat window cut old words off | **Built: episodic recall** (`diya_episodic.py`, `docs/EPISODIC_DESIGN.md`): your earlier messages found by meaning; 20 of 20 found, the chat model's right answers went from 1 of 20 to 20 of 20. Rerank and query rewriting: not built (each costs another model call; the labelled set did not need them) |
+| **Forget matching**: "forget everything about X" with a mandatory `dryRun` preview, then delete by the previewed ids ("exact, bound deletes") | "Forget everything about <person>" only; a topic silently did nothing | **Built: topic forgetting** (`Dreamer._forget`): the facts that say all of the topic's words, at most 8, each undoable from the line under the reply. Diya acts and offers Undo instead of previewing, because a retired fact comes back with one press; supermemory's forget is a soft delete with no such press shown |
+| **Review of inferred memories** (`derive`): list ordered by how many memories support it, approve / decline (forgets it) / undo | Diya never derives facts (`RESEARCH.md` 26: a derived fact is a statement the owner never made) | Not taken. The *shape* (approve, decline, undo; ordered by support) is how Diya's questions already work |
+| **Profile buckets** (`preferences`, `goals`, `work`, `health`, ... ; a classifier assigns each memory; `static` / `dynamic` / `buckets` in one profile call) | Facts grouped by person; messages by category | Not built. A topic axis over facts is presentation; revisit when the Memory page has more than a screenful |
+| **Static vs dynamic profile** | One list, but passing states are now known (`diya_fade`) | Not built: marking passing facts in the prompt changes what the model sees on every turn and needs a real-model measurement first |
+| **`supportingContext`**: tell the extractor who the user is and who the assistant is, "to prevent drift" | The extraction prompt and persona carry this | Nothing to take |
+| **Send an `id` per session; resend a growing transcript and only the diff is processed** | Each message has an id and a capture row | Nothing to take |
+| **Embrace a little noise**: ~10 tokens per fact, so 50 facts is cheap; personalisation comes from distinctive details | The profile is capped at 2,000 characters unless recall is on | Consistent with recall |
+| **MemoryBench** (MIT): the same questions, pipeline and judges for every provider (LoCoMo, LongMemEval, ConvoMem); results as MemScore = accuracy / latency / context tokens; "your own memory implementation is just another provider" | Diya's own measurement is 30 invented question-and-answer cases | Not run: the datasets are large and the judge would be a 3B model, which would make the numbers meaningless. **Reported honestly:** MemScore's three-number form (accuracy, latency, tokens) is the right way to report; `diya_episodic_bench.py` and the probe use it in miniature |
+| **Self-hosting**: closed binary, "free within its lite license limit", Linux/macOS (Windows native stuck at 0.0.8), Docker image, Ollama supported, telemetry on unless disabled | n/a | Read the installer (`docs/SUPERMEMORY_LOCAL_TRIAL.md`): sha256 against a manifest from the same release, no signature, starts the server at once, stores keys in plain text. **Not run.** The probe (`scripts/probe_supermemory.py`) measures a server the owner runs in a throwaway container |
+| **Memory vs RAG, temporal truth, "loved Adidas, switched to Puma"** (comparison page, marketing) | Corrections replace and keep the trail | Nothing to take; the comparison page makes no measurable claim |
+
+**Inferred:** the engine that turns a document into memories and relations is closed, so "implement it ourselves" means the documented *behaviours*. The behaviours that fit a private, local, auditable assistant
+are built; the ones that need the engine to invent facts (derive) are refused on purpose.
+**Not established:** supermemory's extraction quality, its update and conflict handling and its LongMemEval standing, none of which this repository can show.
