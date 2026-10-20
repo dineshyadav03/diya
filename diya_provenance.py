@@ -82,12 +82,21 @@ def _when(at):
         return printable(at, 20)
 
 
+# Words too common to say which fact a question is about: "where did you learn that I own a motorcycle?" must not be answered with the fact that I own a guitar. Found by the provenance benchmark
+# (tests/test_provenance_bench.py, 2026-10-20): one shared word like this attached the wrong history to a question about something that was never said, and a live fact that shared "live" hid the
+# retired one that shared "Delhi".
+WEAK = frozenset("own live like love want use play work need make take buy bought call name new old good time day".split())
+
+
 def _matching(facts, wanted):
+    """The facts a question is about: those that share a word with it, at least one of them a word that tells facts apart (not WEAK); a question made only of such common words ("where I live") may match on
+    them, as it has nothing else to go by."""
     scored = []
+    generic = wanted <= WEAK
     for fact in facts:
-        overlap = len(wanted & _words(fact["text"]))
-        if overlap:
-            scored.append((overlap, fact["id"], fact))
+        shared = wanted & _words(fact["text"])
+        if shared and (generic or shared - WEAK):
+            scored.append((len(shared), fact["id"], fact))
     scored.sort(key=lambda item: (-item[0], -item[1]))
     return [fact for _score, _id, fact in scored[:MAX_FACTS]]
 
