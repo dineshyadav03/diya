@@ -6,14 +6,14 @@ Updated 2026-10-20. The blueprint's task sheet has 298 tasks; the progress is ke
 | Status | Tasks |
 |---|---|
 | Not started | 154 |
-| Needs verification | 8 |
+| Needs verification | 7 |
 | Research queue | 52 |
 | In progress | 14 |
 | Blocked | 0 |
-| Done | 70 |
+| Done | 71 |
 | Deferred | 0 |
 
-## Done (70)
+## Done (71)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -85,6 +85,7 @@ Updated 2026-10-20. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-249** Review U14 — Entire architecture security and safe permissions (2026-10-20): docs/RESEARCH_REVIEWS_2026-10-18.md (U14, added 2026-10-20): docs/THREAT_MODEL.md, docs/AUTHORITY_MODEL.md, tests/test_adversarial_suite.py, tests/test_red_team.py, the Pause switch, DPAPI sign-ins, the append-only journal.. Database not encrypted at rest; no dependency scan in CI (DIYA-213); the first real Google write has not happened.
 - **DIYA-013** Test graceful stop/restart after power loss (2026-10-20): tests/test_crash_restart.py (2) with real processes that are KILLED, not stopped: a process saving messages is killed mid-stream and the database passes SQLite's integrity check and Diya's own, every message has its reading job and no job lacks its message; a process killed after an approved action's outside effect began leaves it executing, a restart turns it into unknown, it is never run again and the effect happened once; a run only a moment old is left alone.. Not a real power cut: the operating system's write cache is not in play, and a disk that lies is not tested. Startup calls reconcile (diya.py) and the Actions page does too.
 - **DIYA-027** Add memory provenance recall benchmark (2026-10-20): tests/test_provenance_bench.py (4): 32 questions about 16 invented facts made by the real pipeline, plus 8 about things never said: 32 of 32 correct, 0 wrong attribution, 0 missed, 0 of 8 invented a history, and a corrected fact is said to be no longer used. The first run found two defects (one common shared word attached the wrong history; a live fact hid the retired one) and diya_provenance._matching was fixed; numbers before and after in docs/PROVENANCE_DESIGN.md.. Invented data and the wordings the question patterns recognise; no language model writes these answers, so it measures the code.
+- **DIYA-010** Define user acceptance journeys with realistic fixtures (2026-10-20): docs/ACCEPTANCE_JOURNEYS.md and tests/test_journeys.py (11): ten whole workflows through the real HTTP routes with a scripted model and a stand-in Google: tell her something, correct it, forget it (and for good), a reminder by your own words, a task, an automation, a Google Task that waits for your press and is read back, pause and resume, a checked backup and restore, memory out as Markdown and a repository and back; each with what you must see and the failure it must survive; a test fails if the document and the tests disagree.. Scripted model: they test the chain, not the quality of a real model's answers. Calendar and Gmail reads, voice and the phone channels have no journey because they have never run for real.
 
 ## In progress (14)
 
