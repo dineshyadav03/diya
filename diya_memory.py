@@ -848,6 +848,7 @@ class Memory:
             conn.execute("UPDATE fact_events SET detail = NULL WHERE fact_id = ?", (fact_id,))  # the old wording was kept in the history of edits and replacements
             conn.execute("DELETE FROM memory_questions WHERE fact_id = ?", (fact_id,))
             conn.execute("DELETE FROM fact_embeddings WHERE fact_id = ?", (fact_id,))
+            conn.execute("DELETE FROM fact_mentions WHERE fact_id = ?", (fact_id,))  # (the times it was said again, and which messages: a link to what was forgotten)
             self._event(conn, fact_id, "purged", actor, _now(), json.dumps({"was": status}, sort_keys=True))
         return old_text
 

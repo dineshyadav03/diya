@@ -3,6 +3,16 @@
 What changed for the person using Diya, newest first, from the git history (commit ids are in `git log`). It starts on 2026-10-10, when the project began to be used day to day. Each release that changes the database says
 which migration it carries; the table below the notes says what each migration holds and how to come back from one.
 
+## 2026-10-20
+* **Episodic recall.** A question is answered with the few earlier messages of yours closest in meaning to it, even if they are weeks old and no longer in the chat window. On invented data with the real models, the
+  right message was found 20 times in 20 and the chat model went from 1 right answer in 20 to 20 in 20 (`docs/EPISODIC_DESIGN.md`). *Migration 24.* `DIYA_EPISODIC=0` turns it off.
+* **"Forget everything about <a topic>"** now retires the facts that say all of the topic's words (at most 8), not only a person's; each can be taken back from the line under the reply.
+* **Memory as an Agent Memory Repo** (`python diya_review.py export-repo FOLDER`): `MEMORY.md` plus one note per person, in the open format Devin's memory uses. (`docs/MEMORY_REPO_DESIGN.md`)
+* **Playbooks**: steps you write once in `playbooks/<name>/SKILL.md` (Devin's open Agent Skills layout) and hand to the model with `@name` or when a request is close in meaning. They grant no tool and skip no approval.
+  A read-only Playbooks page lists them and any file that cannot be used. (`docs/PLAYBOOKS_DESIGN.md`)
+* Forgetting a message or a fact for good now also removes the record of the times a fact was said again.
+* `scripts/probe_supermemory.py` and `docs/SUPERMEMORY_LOCAL_TRIAL.md`: how to run supermemory's local server in a throwaway container and measure it against Diya with invented messages. Diya did not run it.
+
 ## 2026-10-18
 * **Facts fade unless said again.** A fact that says it is a passing state ("for now", "currently reading") is retired after a while unless you say it again or press Keep; a repeated sentence is now counted as a mention of the
   fact it repeats. Retired, never deleted; Restore brings it back. *Migration 23.* (`docs/FADING_DESIGN.md`)
@@ -59,6 +69,7 @@ taken** (`diya_backup.before_migrating`); if the snapshot cannot be made, Diya d
 | 21 | the activity journal (append-only) | `docs/ACTIVITY_JOURNAL_DESIGN.md` |
 | 22 | Dreaming's receipts (append-only) | `docs/DREAMING_RECEIPTS_DESIGN.md` |
 | 23 | mentions (a fact said again) and a count of facts that faded | `docs/FADING_DESIGN.md` |
+| 24 | the embedding of each message you sent (a cache) | `docs/EPISODIC_DESIGN.md` |
 
 `MIGRATIONS` in `diya_db.py` is the authority on the exact numbers.
 

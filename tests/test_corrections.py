@@ -749,3 +749,51 @@ def test_after_taking_a_correction_back_the_other_waiting_facts_are_checked_agai
     memory.supersede(new, old, "auto")
     client.post(f"/api/memory/{new}/undo-replace")
     assert f"duplicate:{old}" in memory.get(twin)["flags"]
+
+
+# --- "forget everything about <a topic>" (supermemory's forget matching, docs/STUDY_SUPERMEMORY.md section 9) ----------------------------------
+
+def test_forget_everything_about_a_topic_retires_the_facts_that_say_all_its_words(world):
+    _, store, _ = world
+    memory = Memory(store)
+    a = memory.add_manual("has an exam about anatomy in December", "api")
+    b = memory.add_manual("the anatomy exam is in room 12", "api")
+    c = memory.add_manual("likes tea", "api")
+    d = memory.add_manual("is allergic to peanuts", "api")
+    message = said(world, "forget everything about the anatomy exam")
+    assert reader(world, ByQuestionClient()).capture_message(message) == 2
+    assert [f["id"] for f in memory.facts("accepted")] == [c, d]
+    assert sorted(item["id"] for item in memory.learned_from(message)) == [a, b]  # the line under the reply lists each, so each can be taken back
+    assert memory.events(a)[-1][3] and '"asked_to_forget:person"' in memory.events(a)[-1][3]
+
+
+def test_a_topic_needs_all_its_words_not_some_of_them(world):
+    _, store, _ = world
+    memory = Memory(store)
+    exam = memory.add_manual("has an exam about anatomy in December", "api")
+    tea = memory.add_manual("likes tea", "api")
+    message = said(world, "forget everything about the physics exam")
+    assert reader(world, ByQuestionClient()).capture_message(message) == 0
+    assert memory.get(exam)["status"] == "accepted" and memory.get(tea)["status"] == "accepted"
+
+
+def test_a_topic_that_matches_too_many_facts_forgets_nothing(world):
+    import dreaming as d
+
+    _, store, _ = world
+    memory = Memory(store)
+    ids = [memory.add_manual(f"the project has part number {n}", "api") for n in range(d.FORGET_TOPIC_MAX + 1)]
+    message = said(world, "forget everything about the project")
+    assert reader(world, ByQuestionClient()).capture_message(message) == 0
+    assert all(memory.get(i)["status"] == "accepted" for i in ids)
+
+
+def test_a_topic_never_retires_a_fact_that_was_already_retired_or_is_waiting(world):
+    _, store, _ = world
+    memory = Memory(store)
+    old = memory.add_manual("the anatomy exam is in room 12", "api")
+    memory.decide(old, "retire", "api")
+    message = said(world, "forget everything about the anatomy exam")
+    assert reader(world, ByQuestionClient()).capture_message(message) == 0
+    assert memory.get(old)["status"] == "retired" and len(memory.events(old)) == 2  # added, retired: nothing new was written to it
+

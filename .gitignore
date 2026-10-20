@@ -52,3 +52,5 @@ __pycache__/
 
 # --- Personal working notes (kept locally, never published) ---
 CLAUDE.md
+# Your own playbooks (diya_playbooks.py): steps you wrote for a kind of request; the examples are in sample_playbooks/
+/playbooks/

@@ -72,6 +72,7 @@ CATALOG = {e.name: e for e in (
     E("mail_write_refused", "flow", 0, "answers a request to send, change or delete mail with the fact that access is read-only", "none", "n/a", "none", False),
     E("study_repo", "flow", 0, "reads a public GitHub repository the person names and shows the evidence", "api.github.com, raw.githubusercontent.com", "n/a", "none", True),
     E("explain_memory", "flow", 0, "says where a remembered fact came from, from the memory's own record", "none", "n/a", "none", False),
+    E("use_playbook", "flow", 0, "adds the steps of a playbook the person wrote themselves (named in the message or close in meaning) to the turn as their instructions; grants no tool and skips no approval", "none", "n/a", "none", False),
 )}
 # A flow shares a name with a tool when the same thing is done in code instead of by the model's choice: it is journalled under that name with kind="flow".
 SHARED_FLOW_NAMES = frozenset({"search_notes", "web_search"})

@@ -77,6 +77,7 @@ def script_env(config):
         "DIYA_DREAM_LOG_PATH": config.dream_log_path,
         "DIYA_DREAM_PENDING_PATH": config.dream_pending_path,
         "DIYA_OLLAMA_URL": DEAD_OLLAMA,
+        "DIYA_EPISODIC": "0",  # indexing messages for recall asks the embedding model: this test counts the requests the pass makes (tests/test_episodic.py tests that)
         "NO_PROXY": "127.0.0.1,localhost",
     }
 

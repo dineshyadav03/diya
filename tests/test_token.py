@@ -162,6 +162,7 @@ ENDPOINTS = [
     ("POST", "/api/pause", {"json": {"reason": "testing"}}),
     ("POST", "/api/resume", {}),
     ("GET", "/api/permissions", {}),
+    ("GET", "/api/playbooks", {}),
     ("POST", "/api/memory/7/forget-for-good", {}),
     ("POST", "/api/messages/1/forget", {"json": {"dry_run": True}}),
     ("POST", "/api/categories", {"json": {"action": "add", "name": "School"}}),

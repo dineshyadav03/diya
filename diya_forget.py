@@ -126,7 +126,7 @@ def forget_message(store, memory, config, message_id, also_learned=True, dry_run
     try:
         conn.execute("PRAGMA secure_delete = ON")  # the deleted words are overwritten in the file, not left in free space
         conn.execute("BEGIN IMMEDIATE")
-        for table in ("message_categories", "capture_queue", "memory_captures"):
+        for table in ("message_categories", "capture_queue", "memory_captures", "message_embeddings", "fact_mentions"):
             conn.execute(f"DELETE FROM {table} WHERE message_id IN ({marks})", ids)
         for table in ("tasks", "actions", "reminder_series"):
             conn.execute(f"UPDATE {table} SET message_id = NULL WHERE message_id IN ({marks})", ids)

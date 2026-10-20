@@ -12,6 +12,7 @@
     python diya_review.py import-profile    take the old user_profile.txt in (the file is never changed)
     python diya_review.py export-markdown [PATH]   a Markdown copy of memory (docs/MARKDOWN_MEMORY_DESIGN.md)
     python diya_review.py restore-markdown PATH    bring back what a Markdown copy holds and memory does not
+    python diya_review.py export-repo FOLDER       memory as an Agent Memory Repo: MEMORY.md + one note per person (docs/MEMORY_REPO_DESIGN.md)
     python diya_review.py verify            check the store is consistent
     python diya_review.py judge [ID...]     ask the local model for a second opinion on candidates (advisory)
     python diya_review.py merge FROM [INTO] move every fact about FROM onto INTO (default: you)
@@ -192,6 +193,18 @@ def cmd_export_markdown(memory, config, args, out):
     return EXIT_OK
 
 
+def cmd_export_repo(memory, config, args, out):
+    """Memory as an Agent Memory Repo (diya_memory_repo.py): a new folder of Markdown notes with a short MEMORY.md. A copy for reading; nothing in the database changes."""
+    import diya_memory_repo
+
+    try:
+        written = diya_memory_repo.export_repo(memory, args.folder)
+    except diya_memory_repo.RepoError as exc:
+        raise FactError(str(exc)) from exc
+    print(f"Wrote {len(written)} file{'' if len(written) == 1 else 's'} to {printable(args.folder)}: {', '.join(written)}. It is a copy; the database is unchanged.", file=out)
+    return EXIT_OK
+
+
 def cmd_restore_markdown(memory, config, args, out):
     """Bring back facts from a Markdown copy: only what is not already there; nothing existing is changed."""
     import diya_markdown
@@ -287,6 +300,9 @@ def build_parser():
     export_md.add_argument("path", nargs="?", default=None, help="a file to write (default: the screen)")
     export_md.add_argument("--force", action="store_true", help="replace the file if it exists")
     export_md.set_defaults(run=cmd_export_markdown)
+    export_repo = commands.add_parser("export-repo", help="memory as an Agent Memory Repo: a new folder of Markdown notes (MEMORY.md + one note per person) to read or keep in Git")
+    export_repo.add_argument("folder", help="a folder that does not exist yet (or is empty)")
+    export_repo.set_defaults(run=cmd_export_repo)
     restore_md = commands.add_parser("restore-markdown", help="bring back facts from a Markdown copy; only what is not here already, nothing is changed")
     restore_md.add_argument("path")
     restore_md.set_defaults(run=cmd_restore_markdown)

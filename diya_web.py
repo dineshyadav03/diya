@@ -31,6 +31,7 @@ import diya_permissions_api
 import diya_health_api
 import diya_journal_api
 import diya_knowledge_api
+import diya_playbooks_api
 import diya_memory_api
 import diya_automations_api
 import diya_proactive_api
@@ -393,6 +394,18 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
                 print("[categories] sorting failed:", file=sys.stderr)
                 traceback.print_exc()
 
+    def index_for_recall(_message_id=None):
+        """After a reply: let the messages the person has sent be found again by meaning (diya_episodic.index_new). Never raises, and never makes a chat wait."""
+        if not config.episodic:
+            return
+        try:
+            import diya_episodic
+
+            diya_episodic.index_new(agent.store, agent.embed, config.embed_model, limit=20)
+        except Exception:  # noqa: BLE001 -- an index that is late is no reason for anything to fail
+            print("[episodic] indexing failed:", file=sys.stderr)
+            traceback.print_exc()
+
     reading_for_facts = threading.Lock()
 
     def read_one(dreamer, message_id):
@@ -486,6 +499,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
             return JSONResponse({"detail": detail, "thread_id": thread_id}, status_code=status)
         reading = end_turn(thread_id, message_id, req, answer)
         background.add_task(sort_exchange, message_id, req.message, tools_called)  # after the response is on its way, never before it
+        background.add_task(index_for_recall, message_id)
         if config.auto_memory:
             background.add_task(read_for_facts, message_id)  # runs after the response is on its way, never before it
         # `message_id` and `reading` let the page ask, a little later, what memory did with the message (GET /api/memory/learned)
@@ -509,6 +523,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
                 return
             events.put(("done", {"thread_id": thread_id, "answer": answer, "tools_called": tools_called, "message_id": message_id, "reading": reading}))
             sort_exchange(message_id, req.message, tools_called)  # after the last line is on its way
+            index_for_recall(message_id)
             if config.auto_memory:
                 read_for_facts(message_id)  # after the last line is on its way, as /api/chat's background task is
 
@@ -551,6 +566,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     diya_proactive_api.register(app, config, agent)  # what Diya wrote first (docs/PROACTIVE_DESIGN.md)
     diya_automations_api.register(app, config, agent)  # what Diya does on a schedule for the person (docs/AUTOMATIONS_DESIGN.md)
     diya_knowledge_api.register(app, config, agent)  # the pages made from the person's notes (docs/KNOWLEDGE_DESIGN.md)
+    diya_playbooks_api.register(app, config, agent)  # the steps the person wrote for a kind of request, read-only (docs/PLAYBOOKS_DESIGN.md)
     diya_threads_api.register(app, config, agent)  # searching and naming past chats
     diya_journal_api.register(app, config, agent)  # what Diya did with a tool or a connector (docs/ACTIVITY_JOURNAL_DESIGN.md)
     diya_dreaming_api.register(app, config, agent)  # what Dreaming's scheduled passes read and did (docs/DREAMING_RECEIPTS_DESIGN.md)

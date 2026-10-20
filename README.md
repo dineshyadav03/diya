@@ -41,10 +41,15 @@ sent, and it moves on to another microphone). Ask it anything: a question that n
 **It remembers, and you stay in charge.** Facts it picks up from your chats wait for review, and the model is told only what you accepted. With *automatic memory* on (it is, here) plain facts are taken
 in on their own, marked, and can be undone with one press; anything private, doubtful or that may replace what it knew becomes a question in the chat. A fact whose day has passed is asked about, not
 kept for ever, and a fact that says it is a passing state ("for now", "currently reading") fades unless you say it again or press Keep. When the memory outgrows what fits in one message, the model is told the
-facts closest to what you just said, and is told that it is not everything. You can correct it ("no, I live in Pune"), make it forget ("forget that"), or delete a message or a fact for good.
+facts closest to what you just said, and is told that it is not everything. A question is also answered with the earlier messages of yours closest in meaning to it, even weeks old and long out of the chat window
+([docs/EPISODIC_DESIGN.md](docs/EPISODIC_DESIGN.md): on invented data the right message was found 20 times in 20). You can correct it ("no, I live in Pune"), make it forget ("forget that"), or delete a message or a fact for good.
+
+**Playbooks.** Steps you write once for a kind of request, in `playbooks/<name>/SKILL.md` (the open layout Devin's skills use), are handed to the model when you write `@name` or ask something close to what the playbook is
+for. A playbook grants nothing: tools and approvals stay in code. The Playbooks page lists them ([docs/PLAYBOOKS_DESIGN.md](docs/PLAYBOOKS_DESIGN.md)); `sample_playbooks/` has three to copy.
 
 **You can see why it knows something.** Ask "how do you know I have a dog?" and the answer comes from the record, not from the model: your own words, the date, whether you accepted it or Diya took it on her own, and how
-to undo it. `python diya_review.py export-markdown` writes everything it knows as a plain Markdown file to read or keep in Git, and `restore-markdown` brings it back ([docs/MARKDOWN_MEMORY_DESIGN.md](docs/MARKDOWN_MEMORY_DESIGN.md)).
+to undo it. `python diya_review.py export-markdown` writes everything it knows as a plain Markdown file to read or keep in Git, and `restore-markdown` brings it back ([docs/MARKDOWN_MEMORY_DESIGN.md](docs/MARKDOWN_MEMORY_DESIGN.md)); `export-repo FOLDER` writes it as an Agent Memory Repo, a `MEMORY.md` and a note per person
+([docs/MEMORY_REPO_DESIGN.md](docs/MEMORY_REPO_DESIGN.md)).
 
 ![The Today page](docs/screenshot-today.png)
 
@@ -145,12 +150,12 @@ Nothing below happens on its own; each is a step only you can take (an account, 
 
 For the whole story in one place (what it is, what it can do, where it falls short, how it is built, how it was built, the research and the products like it) read [docs/DIYA_GUIDE.md](docs/DIYA_GUIDE.md). Otherwise start with [PRODUCT_VISION.md](PRODUCT_VISION.md) (what it is today) and [ROADMAP.md](ROADMAP.md) (what is planned and done). Then by topic:
 
-- **Memory:** [staged facts and review](docs/STAGE2_DESIGN.md), [people](docs/PERSON_MEMORY_DESIGN.md), [automatic memory](docs/AUTO_MEMORY_DESIGN.md), [Dreaming](docs/dreaming.md) and [its receipts](docs/DREAMING_RECEIPTS_DESIGN.md), [what each kind of memory is](docs/MEMORY_TAXONOMY.md), ["how do you know that?"](docs/PROVENANCE_DESIGN.md), [fading](docs/FADING_DESIGN.md), [forgetting for good](docs/FORGET_DESIGN.md), [the Markdown copy](docs/MARKDOWN_MEMORY_DESIGN.md).
+- **Memory:** [staged facts and review](docs/STAGE2_DESIGN.md), [people](docs/PERSON_MEMORY_DESIGN.md), [automatic memory](docs/AUTO_MEMORY_DESIGN.md), [Dreaming](docs/dreaming.md) and [its receipts](docs/DREAMING_RECEIPTS_DESIGN.md), [what each kind of memory is](docs/MEMORY_TAXONOMY.md), ["how do you know that?"](docs/PROVENANCE_DESIGN.md), [fading](docs/FADING_DESIGN.md), [forgetting for good](docs/FORGET_DESIGN.md), [the Markdown copy](docs/MARKDOWN_MEMORY_DESIGN.md), [earlier messages found by meaning](docs/EPISODIC_DESIGN.md), [playbooks](docs/PLAYBOOKS_DESIGN.md), [the Agent Memory Repo export](docs/MEMORY_REPO_DESIGN.md).
 - **Your day:** [reminders](docs/PROACTIVITY_DESIGN.md), [repeating reminders](docs/SCHEDULE_DESIGN.md), [tasks](docs/TASKS_DESIGN.md), [Diya writes first](docs/PROACTIVE_DESIGN.md), [automations](docs/AUTOMATIONS_DESIGN.md).
 - **Talking:** [speed](docs/SPEED_DESIGN.md), [streaming](docs/STREAMING_DESIGN.md), [voice](docs/VOICE_DESIGN.md), [answering general questions](docs/LOOKUP_DESIGN.md), [the interface](docs/UI_DESIGN.md).
 - **Outside the computer:** [connectors](docs/CONNECTORS_DESIGN.md), [Google setup](docs/GOOGLE_SETUP.md), [approvals](docs/ACTIONS_DESIGN.md), [push](docs/PUSH_DESIGN.md), [Telegram](docs/TELEGRAM_DESIGN.md), [phone channel](docs/PHONE_CHANNEL_DESIGN.md), [LAN mode](docs/lan.md).
 - **Trust:** [access token and the boundary](docs/STAGE1_DESIGN.md), [UI login](docs/UI_LOGIN_DESIGN.md), [the October audit](docs/AUDIT_2026-10-10.md), [who may do what](docs/AUTHORITY_MODEL.md) and [what each connection may do](docs/PERMISSIONS_DESIGN.md), [the pause switch](docs/PAUSE_DESIGN.md), [saved sign-ins](docs/SECRETS_DESIGN.md), [backups](docs/BACKUP_DESIGN.md), [the Status page](docs/HEALTH_DESIGN.md).
-- **The next phase:** [the owner's decisions of 2026-10-18](docs/DECISIONS_2026-10-18.md), [the task sheet](docs/TRACKER.md), [what Diya can do, with the proof](docs/CAPABILITIES.md), [the monthly checks](docs/MONTHLY_CHECKS.md), [studies of supermemory and REA](docs/STUDY_SUPERMEMORY.md).
+- **The next phase:** [the owner's decisions of 2026-10-18](docs/DECISIONS_2026-10-18.md), [the task sheet](docs/TRACKER.md), [what Diya can do, with the proof](docs/CAPABILITIES.md), [the monthly checks](docs/MONTHLY_CHECKS.md), [studies of supermemory, REA and Devin](docs/STUDY_SUPERMEMORY.md), [Devin](docs/STUDY_DEVIN.md), and [trying supermemory's local server safely](docs/SUPERMEMORY_LOCAL_TRIAL.md).
 - **Research and plans:** [RESEARCH.md](RESEARCH.md) (34 dated entries; the 2026-10-18 reviews are in [docs/RESEARCH_REVIEWS_2026-10-18.md](docs/RESEARCH_REVIEWS_2026-10-18.md)), [Diya next to the projects like it](docs/COMPARISON.md), [the research plan](docs/RESEARCH_PLAN_2026-10.md), [model benchmark](docs/MODEL_BENCHMARK.md), [the gate benchmark](docs/GATE_BENCHMARK.md).
 
 ## Architecture

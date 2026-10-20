@@ -46,6 +46,7 @@ One press of **Pause Diya** on the Status page (or `POST /api/pause`) stops the 
 | `mail_write_refused` | flow | 0 | answers a request to send, change or delete mail with the fact that access is read-only | none | n/a | none | no | - |
 | `study_repo` | flow | 0 | reads a public GitHub repository the person names and shows the evidence | api.github.com, raw.githubusercontent.com | n/a | none | yes | - |
 | `explain_memory` | flow | 0 | says where a remembered fact came from, from the memory's own record | none | n/a | none | no | - |
+| `use_playbook` | flow | 0 | adds the steps of a playbook the person wrote themselves (named in the message or close in meaning) to the turn as their instructions; grants no tool and skips no approval | none | n/a | none | no | - |
 
 Tools of MCP servers the person added (`mcp_...`) are not listed one by one: each is read-only, approved by the person one at a time, and pinned (`docs/MCP_DESIGN.md`).
 

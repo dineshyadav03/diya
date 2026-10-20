@@ -479,6 +479,18 @@ MIGRATIONS = (
         """,
         "ALTER TABLE dream_runs ADD COLUMN faded INTEGER NOT NULL DEFAULT 0",
     )),
+    # Episodic recall (docs/EPISODIC_DESIGN.md): the embedding of each message the person sent that is worth finding again, so that what was said weeks ago can be found by meaning. The vector is a
+    # packed array of floats; the table is a cache that can always be rebuilt from `messages`, and a row goes with its message (diya_forget). Nothing here is ever sent anywhere.
+    (24, (
+        """
+        CREATE TABLE IF NOT EXISTS message_embeddings (
+            message_id INTEGER PRIMARY KEY,
+            model TEXT NOT NULL,
+            vector BLOB NOT NULL,
+            embedded_at TEXT NOT NULL
+        )
+        """,
+    )),
 )
 
 MAX_THREAD_TITLE = 80  # the longest name a chat can be given

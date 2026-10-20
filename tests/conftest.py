@@ -29,6 +29,8 @@ def isolated_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("DIYA_REPO_STUDY", "0")  # a test must not read GitHub because a message holds a repository address; tests/test_repostudy.py turns it on with a stand-in fetch
     monkeypatch.setenv("DIYA_CATEGORIES", "0")  # sorting each exchange asks the model once more; tests/test_categories*.py turn it on
     monkeypatch.setenv("DIYA_RECALL", "0")  # the memory's old limit (what is kept is what is told) is what the many tests of it assume; tests/test_recall.py turns recall on
+    monkeypatch.setenv("DIYA_EPISODIC", "0")  # finding earlier messages by meaning asks the embedding model; tests/test_episodic.py turns it on with a stand-in
+    monkeypatch.setenv("DIYA_PLAYBOOKS", "0")  # a playbook folder on the machine running the tests must not change a test's prompt; tests/test_playbooks.py turns them on with a folder of its own
     monkeypatch.setenv("DIYA_LOOKUP", "0")  # a test must not search the real web because a scripted answer says "I don't know"; tests/test_lookup.py turns it on with a stand-in search
     monkeypatch.setenv("DIYA_KEEP_WARM", "0")  # a test that starts the API must not ask the real Ollama to load or keep a model (diya_warm.py)
     # Diya's voice (diya.PERSONA) is a leading system message; with it empty `with_profile` is exactly what it was before there was a voice, which is what the many tests of the memory block's shape

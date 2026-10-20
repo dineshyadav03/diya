@@ -19,6 +19,7 @@ SOURCE_JUDGE_CHARS = 600  # how much of the person's message the privacy questio
 DREAM_MESSAGE_CHARS = 4000  # how much of one message of the person's Dreaming reads: the rest of a very long one is not looked at
 FORGET_MATCH_MIN = 0.6  # the share of the words of a "forget that ..." that a fact must contain, at least, to be taken as what is meant
 FORGET_MATCH_MARGIN = 0.2  # and how far the best fact must stand above the next, or it is not clear which is meant and nothing is forgotten
+FORGET_TOPIC_MAX = 8  # "forget everything about <a topic>" retires the facts that say all of the topic's words, but never more than this many: a topic that matches more is too broad to be a guess, and nothing is forgotten
 LIVE_POSITION_BASE = 1000  # where the slots of facts read live start: far above any batch's own (a batch is capped well below a thousand facts)
 
 EXTRACTION_PROMPT = (
@@ -280,8 +281,9 @@ class Dreamer:
     def _forget(self, message_id, target):
         """The person asked Diya to forget ("forget that I like tea", "forget everything about Maya"): retire the accepted facts that match, which is
         what forgetting is here (nothing is deleted: the trail stays and a retired fact can be remembered again). A person is matched by name, anywhere in
-        what was said; a fact by the words it shares with what was said, and only when one fact stands clearly above the rest, so that "forget that" never
-        retires the wrong thing. Marks the message read. Returns how many facts were retired (0 when nothing matched)."""
+        what was said; a name that is nobody's is a topic, and the facts that say ALL of its words are retired (at most FORGET_TOPIC_MAX of them, else none: a topic that wide
+        is not a guess to act on; supermemory previews such a forget and applies it by id, Diya acts and offers Undo on each fact, since a retired fact comes back with one press); a fact by the
+        words it shares with what was said, and only when one fact stands clearly above the rest, so that "forget that" never retires the wrong thing. Marks the message read. Returns how many facts were retired (0 when nothing matched)."""
         import diya_memory
 
         memory = diya_memory.open_memory(self.store, self.config)
@@ -291,6 +293,10 @@ class Dreamer:
             names = {fact["person"] for fact in accepted if fact["person"]}
             named = {name for name in names if re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", what, re.IGNORECASE)}
             chosen = [fact for fact in accepted if fact["person"] in named]
+            if not named:  # not a person Diya knows: a TOPIC ("forget everything about my exams"), as supermemory's "forget matching" is (docs/STUDY_SUPERMEMORY.md section 9)
+                topic = diya_checks.content_words(what)
+                found = [fact for fact in accepted if topic and topic <= diya_checks.content_words(fact["text"])]
+                chosen = found if len(found) <= FORGET_TOPIC_MAX else []
         else:
             wanted = diya_checks.content_words(what)
             ranked = sorted(((len(wanted & diya_checks.content_words(fact["text"])) / len(wanted) if wanted else 0.0, fact) for fact in accepted),
@@ -381,6 +387,22 @@ class Dreamer:
             )
         except Exception as exc:  # noqa: BLE001 -- the log is where a headless run says what went wrong
             self._error(f"Memory on its own failed ({exc}). Nothing was changed past what is above; will retry next cycle.")
+
+    def index_messages(self):
+        """Let the messages the person has sent be found again by meaning (diya_episodic.index_new): the newest pass catches up on a chat that was never indexed, BATCH messages at a time. Never stops Dreaming."""
+        if not self.config.episodic:
+            return
+        try:
+            import diya_episodic
+
+            def embed(text):
+                return self.client.embeddings.create(model=self.config.embed_model, input=text).data[0].embedding
+
+            indexed = diya_episodic.index_new(self.store, embed, self.config.embed_model)
+            if indexed:
+                print(f"Indexed {indexed} of your messages so that they can be found again by meaning.")
+        except Exception as exc:  # noqa: BLE001
+            self._error(f"Indexing messages for recall failed ({type(exc).__name__}: {exc}). Will retry next cycle.")
 
     def fade_old_facts(self):
         """With automatic memory on, a fact that said it was a passing state ("for now", "currently reading", "right now") and has not been said again for as long as that state lasts is retired by itself
@@ -494,6 +516,7 @@ def run_cycle(dreamer):
         dreamer.dream_cycle()
         dreamer.remember_on_its_own()
         dreamer.fade_old_facts()
+        dreamer.index_messages()
         dreamer.look_for_categories()
     except BaseException as exc:
         dreamer.receipt["errors"].append(f"the pass stopped: {type(exc).__name__}: {exc}")

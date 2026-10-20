@@ -27,6 +27,7 @@ export const NAV = [
       { href: '/history', name: 'History' },
       { href: '/memory', name: 'Memory' },
       { href: '/knowledge', name: 'Knowledge' },
+      { href: '/playbooks', name: 'Playbooks' },
     ],
   },
   {

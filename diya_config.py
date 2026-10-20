@@ -121,6 +121,12 @@ class Config:
     # Relevance recall (diya_recall.py, docs/RECALL_DESIGN.md): more facts may be kept than fit in one message, and the model is told the ones for the message just sent. DIYA_RECALL=0 keeps the old
     # limit (what is kept is what is told); DIYA_MEMORY_STORE_CHARS is how many characters of facts may be kept with it on.
     recall: bool = True  # DIYA_RECALL
+    # Episodic recall (diya_episodic.py, docs/EPISODIC_DESIGN.md): a question is answered with the few earlier messages of the person's closest in meaning to it, found by embedding. DIYA_EPISODIC=0 turns it off.
+    episodic: bool = True  # DIYA_EPISODIC
+    # Playbooks (diya_playbooks.py, docs/PLAYBOOKS_DESIGN.md): steps the person wrote once, in `playbooks/<name>/SKILL.md`, handed to the model for a request that names one (`@name`) or is close in meaning to what it is for.
+    # DIYA_PLAYBOOKS=0 turns them off; DIYA_PLAYBOOKS_DIR is where the files are (they are the person's own writing, so they are not moved with the data folder).
+    playbooks: bool = True  # DIYA_PLAYBOOKS
+    playbooks_dir: str = "playbooks"  # DIYA_PLAYBOOKS_DIR
     # Putting what is said into categories after each reply (diya_categories.py, docs/ONE_CHAT_DESIGN.md). DIYA_CATEGORIES=0 turns the sorting off (what was sorted stays).
     categories: bool = True  # DIYA_CATEGORIES
     # Studying a public GitHub repository when asked, read-only, with the evidence shown (diya_repostudy.py, docs/REPO_STUDY_DESIGN.md). DIYA_REPO_STUDY=0 turns it off.
@@ -204,6 +210,7 @@ _STRING_SETTINGS = {
     "ollama_url": "DIYA_OLLAMA_URL",
     "notes_dir": "DIYA_NOTES_DIR",
     "knowledge_dir": "DIYA_KNOWLEDGE_DIR",
+    "playbooks_dir": "DIYA_PLAYBOOKS_DIR",
     "advisor_dir": "DIYA_ADVISOR_DIR",
     "mcp_config": "DIYA_MCP_CONFIG",
     "profile_path": "DIYA_PROFILE_PATH",
@@ -301,7 +308,7 @@ def load_config(env=None) -> Config:
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
                         ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
-                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("categories", "DIYA_CATEGORIES"), ("repo_study", "DIYA_REPO_STUDY"), ("mail", "DIYA_MAIL"), ("protect_secrets", "DIYA_PROTECT_SECRETS"), ("backup", "DIYA_BACKUP"), ("knowledge_chat", "DIYA_KNOWLEDGE_CHAT"), ("mcp", "DIYA_MCP"), ("privacy_unsure_asks", "DIYA_PRIVACY_UNSURE_ASKS")):
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("episodic", "DIYA_EPISODIC"), ("playbooks", "DIYA_PLAYBOOKS"), ("categories", "DIYA_CATEGORIES"), ("repo_study", "DIYA_REPO_STUDY"), ("mail", "DIYA_MAIL"), ("protect_secrets", "DIYA_PROTECT_SECRETS"), ("backup", "DIYA_BACKUP"), ("knowledge_chat", "DIYA_KNOWLEDGE_CHAT"), ("mcp", "DIYA_MCP"), ("privacy_unsure_asks", "DIYA_PRIVACY_UNSURE_ASKS")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag

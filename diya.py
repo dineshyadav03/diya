@@ -22,9 +22,11 @@ import diya_config
 import diya_connector_tools
 import diya_connectors
 import diya_db
+import diya_episodic
 import diya_intent
 import diya_knowledge
 import diya_mcp
+import diya_playbooks
 import diya_google_mail
 import diya_journal
 import diya_repostudy
@@ -873,6 +875,37 @@ class Agent:
             return self._pending_reminders_text() + "\n\n" + self._done_reminders_text()
         return self._pending_reminders_text()
 
+    def _playbook_note(self, text):
+        """The person's own playbook for this request, as a note for the model (diya_playbooks.note), or None: when it is named (`@study-plan`) or, if it allows that, close in meaning to what it is for. One at a time. It
+        grants nothing: tools and approvals are the code's. Journalled by name only. Never raises: a playbook that cannot be read or matched is the chat going on without one."""
+        if not self.config.playbooks or not isinstance(text, str) or len(text.strip()) < 8:
+            return None
+        try:
+            playbooks, _ = diya_playbooks.load(self.config.playbooks_dir)
+            if not playbooks:
+                return None
+            chosen, rest = diya_playbooks.named(playbooks, text)
+            if chosen is None:
+                chosen = diya_playbooks.pick(playbooks, text, self.embed, self.config.embed_model)
+            if chosen is None:
+                return None
+            self._journal("use_playbook", {"name": chosen["name"], "by": "name" if rest or f"@{chosen['name']}" in text.lower() else "meaning"}, "ok", kind="flow")
+            return diya_playbooks.note(chosen, rest)
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _earlier_note(self, text, message_id, messages):
+        """For a question: the few earlier messages of the person's closest in meaning to it, as a note for the model (diya_episodic.note), or None when there are none, the switch is off or the embedding
+        model cannot be asked. Messages already in what the model is given are left out. Never raises: finding old words is no reason to fail a chat."""
+        if not self.config.episodic:
+            return None
+        try:
+            already = [m.get("content") for m in messages if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str)]
+            found = diya_episodic.search(self.store, self.embed, self.config.embed_model, text, exclude_ids=() if message_id is None else (message_id,), already=already)
+            return diya_episodic.note(found)
+        except Exception:  # noqa: BLE001
+            return None
+
     def _done_note(self, text):
         """For a question about something the person did: what they have ticked off, as a note for the model (DONE_NOTE_PROMPT and the list), or None if the question is not that kind or nothing has been
         ticked off. A reminder a repeating series closed unticked is not "done by them" and is left out. A store that cannot be read is no reason to fail the chat."""
@@ -1130,7 +1163,7 @@ class Agent:
         self._turn.message_id = message_id
         self._turn.unattended = only_tools is not None
         self._turn.reads = []
-        self._turn.note = "\n\n".join(part for part in (self._done_note(self._turn.user_text), ABOUT_DIYA_NOTE if diya_intent.asks_about_diya(self._turn.user_text) else None) if part) or None if only_tools is None else None
+        self._turn.note = "\n\n".join(part for part in (self._done_note(self._turn.user_text), ABOUT_DIYA_NOTE if diya_intent.asks_about_diya(self._turn.user_text) else None, self._playbook_note(self._turn.user_text), self._earlier_note(self._turn.user_text, message_id, messages)) if part) or None if only_tools is None else None
         self._turn.active = True
         try:
             return self._ask(messages, on_event, only_tools)

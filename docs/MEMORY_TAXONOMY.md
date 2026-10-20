@@ -14,7 +14,8 @@ The blueprint asks for the kinds of stored thing to be named, so that "memory" d
 | **Knowledge** | Pages built **by code** from the person's own sentences and notes, with their sources, and the notes folder itself | `knowledge/` (git-ignored), `DIYA_NOTES_DIR`, `diya_knowledge.py` | Code, from text the person wrote | Quoted from the person; not inferred | Rebuilt from the notes; a page is deleted by deleting its source |
 | **Cache (derived)** | Anything computed from the above that can be rebuilt | `fact_embeddings` (a vector per fact), the in-memory notes index | Code | Never a source of truth; only used to choose *which* accepted facts to tell | Rebuilt on change; **purged for a fact that is no longer accepted** (DIYA-024) |
 | **Dreaming** | The scheduled pass that reads what was said since last time and stages candidates | `dream_state.json` (the checkpoint), `dream_pending.jsonl` (the staged batch), `dream_log.txt` | The scheduled job | Its output is **provisional** until the lanes or the person accept it | The checkpoint moves only after the staging is on disk (`tests/test_dreaming.py`) |
-| **Skills / procedures** | Fixed, repeatable sequences Diya can run | Not built (the harness's tools live in code; MCP tools only after the person approves each, `mcp_servers.json`) | n/a | n/a | n/a |
+| **Playbooks** (procedures, in the Agent Skills layout) | Steps the person wrote for a kind of request, handed to the model for one turn; grants nothing | `playbooks/<name>/SKILL.md` (files the person writes; `sample_playbooks/` has examples), `diya_playbooks.py`; use is journalled by name | The person only; Diya never writes one | The person's own instructions, never able to widen a tool or skip an approval | Delete the file |
+| **Earlier words** (source chunks) | The person's own earlier messages, found by meaning | `message_embeddings` (a cache of vectors), `messages`; `diya_episodic.py` | Code (vectors); the person (the messages) | The person's own words, shown with their day and marked possibly out of date | A vector goes with its message |
 
 ## Three rules that hold across all of them
 
@@ -24,4 +25,4 @@ The blueprint asks for the kinds of stored thing to be named, so that "memory" d
 
 ## Honest gaps
 
-Nothing is stored that distinguishes **stable** facts ("studies medicine") from **recent** ones ("exam on Friday") except by a fact's own wording and the retirement of past events; there is no per-fact `forget_after`. **Skills / procedures** (DIYA-171) do not exist yet. A **semantic response cache** (blueprint U25) does not exist and is not planned until a benchmark shows it is safe (DIYA-196).
+Nothing is stored that distinguishes **stable** facts ("studies medicine") from **recent** ones ("exam on Friday") except by a fact's own wording and the retirement of past events; there is no per-fact `forget_after`. **Procedures** exist only as playbooks (guidance the model is handed, `docs/PLAYBOOKS_DESIGN.md`); the versioned, deterministic, tested Procedures format of DIYA-171 does not exist yet. A **semantic response cache** (blueprint U25) does not exist and is not planned until a benchmark shows it is safe (DIYA-196).
