@@ -65,7 +65,7 @@ def test_a_playbook_file_is_read():
 
 
 def test_the_defaults_and_the_formats_a_person_might_use():
-    text = "﻿---\r\ndescription: Use when I ask for something specific\r\n---\r\nDo the thing.\r\n"
+    text = chr(0xFEFF) + "---\r\ndescription: Use when I ask for something specific\r\n---\r\nDo the thing.\r\n"
     p = pb.parse(text, "my-folder")  # the name falls back to the folder's, triggers to both, a BOM and CRLF are fine
     assert p["name"] == "my-folder" and p["triggers"] == ("user", "model") and p["body"] == "Do the thing."
     assert pb.parse(STUDY.replace("[user, model]", "model"), "x")["triggers"] == ("model",)

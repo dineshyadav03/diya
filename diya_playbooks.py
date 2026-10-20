@@ -51,7 +51,7 @@ class Problem(Exception):
 
 def _frontmatter(text):
     """({key: value}, body) for a file that starts with a --- block of `key: value` lines; Problem if it does not. Only a small subset of YAML is read: plain `key: value` and a list in brackets."""
-    text = text.replace("\r\n", "\n").lstrip("﻿")
+    text = text.replace("\r\n", "\n").lstrip(chr(0xFEFF))
     if not text.startswith("---\n"):
         raise Problem("it must start with a --- block giving name, description and triggers")
     head, separator, body = text[4:].partition("\n---")
