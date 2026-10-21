@@ -113,3 +113,12 @@ def test_no_tracked_file_carries_the_markers_of_the_blueprints_pasted_third_part
         except (UnicodeDecodeError, OSError):
             continue
     assert offenders == []
+
+
+def test_the_deepseek_harness_copy_is_kept_outside_the_repository():
+    """The owner's rule of 2026-10-21 (docs/DSH_PLAN.md): build from that repository, keep it nowhere inside Diya: no submodule, no vendored folder."""
+    assert not (ROOT / ".gitmodules").exists()
+    paths = [str(path.relative_to(ROOT)).replace("\\", "/") for path in tracked()]
+    assert [p for p in paths if "deepseek-harness/" in p or p.startswith("dsh-copy/")] == []
+    assert not (ROOT / "dsh-copy").exists() and not (ROOT / "deepseek-harness").exists()
+    assert "keep it nowhere inside Diya" in (ROOT / "docs" / "DSH_PLAN.md").read_text(encoding="utf-8")

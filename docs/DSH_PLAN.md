@@ -39,6 +39,8 @@ Reviewed memory (a fact waits for the person before the model is told it), fadin
 
 ## Rules while this is done
 
+* **The owner's rule of 2026-10-21: build from that repository, but keep it nowhere inside Diya.** The copy stays at `C:\Users\dines\dsh-copy\deepseek-harness`. It is never added to this repository as a folder, a git submodule or subtree, a vendored directory or a pinned dependency. Only what we write ourselves, with its MIT notice, may sit in Diya. `tests/test_licences.py` fails if a `.gitmodules` file or a tracked path inside a `deepseek-harness` folder appears.
+
 * The copy is **read, never run, on the owner's own account**; running comes only in phase 1's isolation and only on the owner's yes in chat. Its install step runs thousands of other people's packages, so it is not run on the host.
 * No shell, browser or computer-use tool is given to a model on this computer without the owner's explicit yes for that tool, each time (the owner's decision of 2026-10-18: ask every time for external actions).
 * Code taken from it keeps its MIT notice and is named in `THIRD_PARTY_NOTICES.md` (the licence rule, `docs/LICENCES.md`). Nothing from it is in this repository yet.
