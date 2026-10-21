@@ -105,7 +105,7 @@ def test_no_tracked_file_carries_the_markers_of_the_blueprints_pasted_third_part
     for path in tracked():
         if path.suffix.lower() in {".pdf", ".png", ".jpg", ".jpeg", ".ico", ".woff", ".woff2", ".zip", ".lock"} or not path.is_file() or "node_modules" in path.parts:
             continue
-        if path.name == "test_licences.py":
+        if path.name == "test_licences.py" or str(path.relative_to(ROOT)).replace("\\", "/").startswith("harness/"):
             continue
         try:
             if marker in path.read_text(encoding="utf-8"):
@@ -115,10 +115,13 @@ def test_no_tracked_file_carries_the_markers_of_the_blueprints_pasted_third_part
     assert offenders == []
 
 
-def test_the_deepseek_harness_copy_is_kept_outside_the_repository():
-    """The owner's rule of 2026-10-21 (docs/DSH_PLAN.md): build from that repository, keep it nowhere inside Diya: no submodule, no vendored folder."""
-    assert not (ROOT / ".gitmodules").exists()
-    paths = [str(path.relative_to(ROOT)).replace("\\", "/") for path in tracked()]
-    assert [p for p in paths if "deepseek-harness/" in p or p.startswith("dsh-copy/")] == []
-    assert not (ROOT / "dsh-copy").exists() and not (ROOT / "deepseek-harness").exists()
-    assert "keep it nowhere inside Diya" in (ROOT / "docs" / "DSH_PLAN.md").read_text(encoding="utf-8")
+def test_the_harness_folder_is_a_plain_copy_that_carries_its_own_licence_and_no_link_back():
+    """The owner's rule of 2026-10-21 (docs/DSH_PLAN.md): the code is copied into Diya as its own folder, not used as a dependency and not linked to where it came from. The MIT licence that comes with
+    the code stays in the folder and in THIRD_PARTY_NOTICES.md: MIT requires the notice to travel with every copy."""
+    assert not (ROOT / ".gitmodules").exists()  # no submodule
+    assert not (ROOT / "harness" / ".git").exists() and not (ROOT / "harness" / "node_modules").exists()  # no history, nothing installed
+    licence = (ROOT / "harness" / "LICENSE").read_text(encoding="utf-8")
+    assert "MIT License" in licence and "Permission is hereby granted" in licence and "above copyright notice" in licence
+    assert "harness/LICENSE" in (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8").lower() + (ROOT / "frontend" / "package.json").read_text(encoding="utf-8").lower()
+    assert "deepseek-harness" not in pyproject and "@deepseek-ai" not in pyproject  # nothing depends on the original

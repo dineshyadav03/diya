@@ -24,7 +24,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BINARY_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".ico", ".woff", ".woff2", ".zip"}
-EXCLUDED_PREFIXES = ("tests/",)
+EXCLUDED_PREFIXES = ("tests/", "harness/")  # harness/ is another project's code kept byte for byte as it was received (its own MIT licence is in the folder); Diya's rules about its own files do not apply to it
 ADDRESS = re.compile(r"\b(10|172|192)\.\d{1,3}\.\d{1,3}\.\d{1,3}\b")
 
 

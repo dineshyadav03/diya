@@ -4,7 +4,7 @@
 
 ## What the DeepSeek harness is (read on 2026-10-21; nothing of it was run)
 
-* Source: https://github.com/deepseek-ai/deepseek-harness, **MIT**, about 256,000 stars, last push 2026-10-17. A read-only copy is at `C:\Users\dines\dsh-copy\deepseek-harness`: commit `687f282e8625c6b8d11ff58211a90524be2e4317`, 16,297 files, about 206 MB on disk. It is **outside** this repository and outside OneDrive, on purpose.
+* Source: https://github.com/deepseek-ai/deepseek-harness, **MIT**, about 256,000 stars, last push 2026-10-17. A read-only copy is at `C:\Users\dines\dsh-copy\deepseek-harness`: commit `687f282e8625c6b8d11ff58211a90524be2e4317`, 16,297 files, about 206 MB on disk. It was first kept outside this repository; on the owner's instruction it is now also copied, without history, into `harness/`.
 * **344 packages**, 96% TypeScript, on the Cordis plugin framework ("everything is a plugin"; a running setup is a tree of plugins composed from YAML profiles and bundles).
 * Its own safety page: experimental developer preview, **no security audit**, it can run model-written code and commands, load third-party plugins and reach files and credentials; use a disposable VM.
 * Windows is a first-class target in what was read (`sandbox-windows-acl`, `pwsh-local`, `pwsh-sandbox`). Local models: the model layer (`llm-pi-ai`) mentions Ollama in its catalogue; **how well a 4B model drives its tool loop was not tried.**
@@ -39,7 +39,7 @@ Reviewed memory (a fact waits for the person before the model is told it), fadin
 
 ## Rules while this is done
 
-* **The owner's rule of 2026-10-21: build from that repository, but keep it nowhere inside Diya.** The copy stays at `C:\Users\dines\dsh-copy\deepseek-harness`. It is never added to this repository as a folder, a git submodule or subtree, a vendored directory or a pinned dependency. Only what we write ourselves, with its MIT notice, may sit in Diya. `tests/test_licences.py` fails if a `.gitmodules` file or a tracked path inside a `deepseek-harness` folder appears.
+* **The owner's rule of 2026-10-21: all of the code is copied into Diya as its own folder, `harness/`, not used as a dependency and not linked to where it came from.** No git history, no submodule, nothing installed or built, nothing in `pyproject.toml` or `frontend/package.json` that depends on it. The one thing that stays with the code is its MIT licence file (`harness/LICENSE`) and the entry in `THIRD_PARTY_NOTICES.md`, because MIT requires the notice to travel with every copy. `tests/test_licences.py` checks all of that; Diya's own rules about line endings and addresses do not apply to the folder (it is kept byte for byte, `.gitattributes`).
 
 * The copy is **read, never run, on the owner's own account**; running comes only in phase 1's isolation and only on the owner's yes in chat. Its install step runs thousands of other people's packages, so it is not run on the host.
 * No shell, browser or computer-use tool is given to a model on this computer without the owner's explicit yes for that tool, each time (the owner's decision of 2026-10-18: ask every time for external actions).

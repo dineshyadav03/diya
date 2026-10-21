@@ -17,6 +17,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 BINARY_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".ico", ".woff", ".woff2", ".zip"}
 CRLF_OK_EXT = {".bat", ".cmd"}  # Windows batch files genuinely need CRLF (see .gitattributes)
 UTF8_BOM = b"\xef\xbb\xbf"
+THIRD_PARTY = ("harness/",)  # another project's code, kept byte for byte as received (its MIT licence is in the folder): Diya's rules about its own files do not apply to it
 
 
 @pytest.fixture
@@ -117,7 +118,7 @@ def test_every_tracked_text_file_is_utf8_without_a_bom_and_has_no_cr():
     for name in _git("ls-files").splitlines():
         path = ROOT / name
         ext = path.suffix.lower()
-        if ext in BINARY_EXT or not path.is_file():
+        if name.startswith(THIRD_PARTY) or ext in BINARY_EXT or not path.is_file():
             continue
         raw = path.read_bytes()
         if raw.startswith(UTF8_BOM):
@@ -168,7 +169,7 @@ def test_no_tracked_source_or_doc_contains_an_invisible_or_display_altering_char
     problems = []
     for name in _git("ls-files").splitlines():
         path = ROOT / name
-        if path.suffix.lower() not in SCANNED_EXT or not path.is_file() or "node_modules" in path.parts:
+        if name.startswith(THIRD_PARTY) or path.suffix.lower() not in SCANNED_EXT or not path.is_file() or "node_modules" in path.parts:
             continue
         try:
             text = path.read_text(encoding="utf-8")

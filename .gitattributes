@@ -20,3 +20,6 @@
 
 # Text encoding: every text file in this repo is UTF-8 without a BOM (verified byte-for-byte
 # when this file was added). tests/test_repo_hygiene.py fails if that stops being true.
+
+# harness/ is another project's code kept byte for byte as it was received: no line-ending changes.
+harness/** -text
