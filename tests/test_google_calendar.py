@@ -177,16 +177,22 @@ def test_list_events_refreshes_the_token_then_lists(config, monkeypatch):
     diya_connectors.store_token(config, "google_calendar", "a-refresh-token")
     post_calls = fake_post(monkeypatch, fake_response(200, {"access_token": "fresh-access-token"}))
 
+    from datetime import date, timedelta
+
+    soon, later = (date.today() + timedelta(days=2)).isoformat(), (date.today() + timedelta(days=3)).isoformat()  # the clock is the real one, so the dates are made from it
+
     def fake_get(url, headers=None, params=None, timeout=None):
         assert headers["Authorization"] == "Bearer fresh-access-token"
         return fake_response(200, {"items": [
-            {"summary": "Dentist", "start": {"dateTime": "2026-10-01T15:00:00Z"}},
-            {"summary": "All-day thing", "start": {"date": "2026-10-02"}},
+            {"summary": "Dentist", "start": {"dateTime": f"{soon}T15:00:00Z"}},
+            {"summary": "All-day thing", "start": {"date": later}},
+            {"summary": "Long block", "start": {"date": "2020-12-20"}, "end": {"date": "2027-01-03"}},
         ]})
 
     monkeypatch.setattr(gcal.httpx, "get", fake_get)
     result = gcal.list_events(config)()
-    assert result == "Dentist (2026-10-01T15:00:00Z)\nAll-day thing (2026-10-02)"
+    # one that began long ago and is still on says until when, so it does not read as an event from the past
+    assert result == f"Dentist ({soon}T15:00:00Z)\nAll-day thing ({later})\nLong block (started 2020-12-20, still on until 2027-01-02)"
     assert post_calls[0][1]["grant_type"] == "refresh_token"
     assert post_calls[0][1]["refresh_token"] == "a-refresh-token"
 
@@ -232,3 +238,11 @@ def test_a_refusal_from_google_names_its_reason_and_the_tab_does_not_claim_succe
     assert gc._reason(httpx.Response(400, json={"error": "invalid_grant"})) == " (invalid_grant)"
     assert gc._reason(httpx.Response(500, text="<html>not json</html>")) == "" and gc._reason(httpx.Response(400, json=[1])) == ""
     assert "Diya is connected" not in open(gc.__file__, encoding="utf-8").read()  # the loopback page is shown before the code is exchanged, so it only says that Google answered
+
+
+def test_an_event_that_began_long_ago_and_is_still_on_says_until_when():
+    import diya_google_calendar as gc
+
+    assert gc._last_day({"date": "2027-01-03"}) == "2027-01-02"  # an all-day event's end is the day AFTER its last day
+    assert gc._last_day({"dateTime": "2026-10-25T18:00:00+05:30"}) == "2026-10-25"
+    assert gc._last_day({}) == "?" and gc._last_day({"date": "not a date"}) == "?"

@@ -311,6 +311,18 @@ def access_token(config, token_name):
     return tokens.get("access_token")
 
 
+def _last_day(end):
+    """The last day an event covers, as text: a timed event's end date, or the day before an all-day event's end (Google gives that as the day AFTER the last day). "?" if it says nothing."""
+    from datetime import date, timedelta
+
+    if end.get("dateTime"):
+        return end["dateTime"][:10]
+    try:
+        return (date.fromisoformat(end["date"]) - timedelta(days=1)).isoformat()
+    except (KeyError, ValueError):
+        return "?"
+
+
 def list_events(config):
     def tool():
         token = _access_token(config)
@@ -331,10 +343,15 @@ def list_events(config):
         if not events:
             return "No upcoming events."
         lines = []
+        today = datetime.now().astimezone().date().isoformat()
         for event in events:
             start = event.get("start", {})
             when = start.get("dateTime") or start.get("date", "")
-            lines.append(f"{event.get('summary', '(no title)')} ({when})")
+            title = event.get("summary", "(no title)")
+            if when and when[:10] < today:  # it began before today and is still going: say until when, or it reads as an event from the past
+                lines.append(f"{title} (started {when[:10]}, still on until {_last_day(event.get('end', {}))})")
+            else:
+                lines.append(f"{title} ({when})")
         return "\n".join(lines)
 
     return tool
