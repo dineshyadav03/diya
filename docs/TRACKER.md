@@ -5,15 +5,15 @@ Updated 2026-10-21. The blueprint's task sheet has 298 tasks; the progress is ke
 
 | Status | Tasks |
 |---|---|
-| Not started | 145 |
+| Not started | 142 |
 | Needs verification | 6 |
 | Research queue | 30 |
 | In progress | 16 |
 | Blocked | 0 |
-| Done | 101 |
+| Done | 104 |
 | Deferred | 0 |
 
-## Done (101)
+## Done (104)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -116,6 +116,9 @@ Updated 2026-10-21. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-057** Build scheduled task restart/dedup tests (2026-10-21): tests/test_seven_days.py: 3 seeds x 7 simulated days with sleep, restarts, failing notifications and stops between showing and recording: reminders and automations made once, nothing lost. A SIMULATION, not DIYA-220's real week. A notification is shown at least once, not exactly once (twice if stopped between showing and recording).
 - **DIYA-058** Keep retries safe across multiple devices/sessions (2026-10-21): tests/test_actions_multi_process.py: six real processes on one database file run an approved action once, propose it once, and a process that dies leaves it unknown and never re-run. Two mechanisms: the hash of the kind and arguments, and the executing lease. No idempotency key is sent to a service because Diya never retries.
 - **DIYA-213** Add security and dependency scans in CI (2026-10-21): CI (run 39559122597, all steps green): pip-audit and npm audit --audit-level=high on every push; versions pinned and hashed (pyproject, requirements.lock, package-lock); tests/test_dependencies.py (7); docs/DEPENDENCIES.md; the first scans found 12+8+1+7 Python and 4 web UI advisories: fixed, or ignored with a written reason (6). On THIS computer the old packages are still installed until the owner runs pip install python-multipart==0.0.31 and npm ci in frontend; tests/test_pyproject.py is red here until then. The scans need the network: a CI run can fail because an advisory service was unreachable.
+- **DIYA-157** Implement reclassify-per-message with source/confidence (2026-10-21): diya_categories.py Book.assign: what the person chose is only ever changed by the person (a sorter's later attempt changes nothing); source is kept per message (person, code, model, continued); tests/test_category_undo_search.py (override survives the sorter, a background pass and another client). Confidence is expressed by the source, in the order person > code > model > continued; there is no numeric score.
+- **DIYA-159** Implement existing-chat backfill progress and cancellation (2026-10-21): sort_earlier already reported progress and could be stopped (tests/test_categories_manage.py); tests/test_category_undo_search.py now proves a resume sorts only what is left, makes no second row, keeps every label made and the person's move between the two passes. Progress and the stop button are on the Categories page.
+- **DIYA-202** Specify privacy-aware local/cloud routing boundary (2026-10-21): diya_config.py refuses a model address that is not this computer unless DIYA_ALLOW_REMOTE_MODEL=1; docs/LOCAL_ONLY.md; tests/test_local_only.py (22): default local, only the explicit word allows it, no program takes a model address from anywhere else. All or nothing, set in the configuration: a per-prompt approval to upload a sensitive prompt to a cloud model is NOT built and not designed.
 
 ## In progress (16)
 

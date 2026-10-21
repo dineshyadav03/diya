@@ -301,3 +301,62 @@ def test_every_thing_the_categories_api_can_do_has_a_control_on_a_page():
     pages = "\n".join(path.read_text(encoding="utf-8") for path in (root / "frontend" / "app").rglob("*.js"))
     missing = [action for action in sorted(actions) if not re.search(rf"action: '{action}'", pages)]
     assert missing == []
+
+
+# ---- what the person chose is not overwritten (task DIYA-157) and sorting the earlier chats resumes cleanly (task DIYA-159) ------------
+
+def test_what_the_person_chose_is_only_ever_changed_by_the_person(store, book):
+    _, (a,) = said(store, ["how hot is it"])
+    book.assign(a, "Learning", "person")
+    for how in ("code", "model", "continued"):
+        assert book.assign(a, "Weather", how) == "Learning"  # the sorter's attempt changes nothing and says where the message really is
+    assert book.tags([a]) == {a: "Learning"}
+    conn = store.connect()
+    try:
+        assert conn.execute("SELECT source FROM message_categories WHERE message_id = ?", (a,)).fetchone()[0] == "person"
+    finally:
+        conn.close()
+    assert book.assign(a, "Weather", "person") == "Weather"  # the person can change their own choice
+    assert cat.sort(book, None, "m", a, "how hot is it in Pune")[0] == "Weather"  # and the sorter, running again on the same words, agrees or changes nothing
+
+
+def test_the_sorters_own_work_can_still_be_redone_by_the_sorter_and_by_the_person(store, book):
+    _, (a,) = said(store, ["hello there"])
+    book.assign(a, "Chat", "continued")
+    assert book.assign(a, "Weather", "model") == "Weather"
+    assert book.assign(a, "Learning", "person") == "Learning"
+
+
+def test_what_the_person_chose_is_seen_by_any_other_client_or_session(tmp_path):
+    client, agent = page(tmp_path)
+    _, (a,) = said(agent.store, ["how hot is it"])
+    cat.Book(agent.store).assign(a, "Weather", "model")
+    client.post("/api/categories", json={"action": "assign", "message_id": a, "category": "Learning"})
+    cat.Book(agent.store).assign(a, "Weather", "model")  # a background pass tries to put it back
+    elsewhere = cat.Book(Store(agent.store.path))  # another process or device, opening the same file afresh
+    assert elsewhere.tags([a]) == {a: "Learning"}
+    assert client.get("/api/categories").json()["tags"] in ({}, {str(a): "Learning"})  # (the page only lists the newest messages of the one chat)
+
+
+def test_sorting_the_earlier_chats_resumes_without_a_second_row_or_a_lost_label(store, book):
+    import threading
+
+    import diya_category_ideas as ideas
+    from test_categories import Said
+
+    _, messages = said(store, ["hey", "hello", "hi", "yo", "sup"])
+    count = []
+    assert ideas.sort_earlier(book, Said(), "m", threading.Lock(), progress=lambda d, t: count.append(d), stop=lambda: len(count) >= 2) == 2
+    done = book.tags(messages)
+    assert len(done) == 2
+    mover = next(iter(done))
+    book.assign(mover, "Learning", "person")  # between the two passes the person moves one of the sorted messages
+    assert ideas.sort_earlier(book, Said(), "m", threading.Lock()) == 3
+    after = book.tags(messages)
+    assert len(after) == 5 and after[mover] == "Learning"  # every message is in exactly one category; the person's move survived the resume
+    assert all(after[m] == done[m] for m in done if m != mover)  # nothing already sorted was sorted again
+    conn = store.connect()
+    try:
+        assert conn.execute("SELECT COUNT(*), COUNT(DISTINCT message_id) FROM message_categories").fetchone() == (5, 5)
+    finally:
+        conn.close()

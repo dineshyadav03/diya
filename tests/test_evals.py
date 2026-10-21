@@ -76,6 +76,7 @@ def test_the_file_listing_case_expects_something_the_fixture_folder_really_conta
 def test_the_eval_agent_still_follows_the_model_settings(monkeypatch, tmp_path):
     monkeypatch.setenv("DIYA_MODEL", "some-bigger-model")
     monkeypatch.setenv("DIYA_OLLAMA_URL", "http://other-host:11434/v1")
+    monkeypatch.setenv("DIYA_ALLOW_REMOTE_MODEL", "1")  # a model on another computer is refused without this (tests/test_local_only.py)
     agent, _ = eval_agent(tmp_path)
     assert agent.config.model == "some-bigger-model"
     assert agent.config.ollama_url == "http://other-host:11434/v1"

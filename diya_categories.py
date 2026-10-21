@@ -197,11 +197,12 @@ class Book:
             now = datetime.now(timezone.utc).isoformat()
             conn.execute(
                 "INSERT INTO message_categories (message_id, category_id, source, created_at) VALUES (?, ?, ?, ?) "
-                "ON CONFLICT(message_id) DO UPDATE SET category_id = excluded.category_id, source = excluded.source, created_at = excluded.created_at",
+                "ON CONFLICT(message_id) DO UPDATE SET category_id = excluded.category_id, source = excluded.source, created_at = excluded.created_at "
+                "WHERE message_categories.source != 'person' OR excluded.source = 'person'",  # what the person chose is only ever changed by the person (task DIYA-157)
                 (int(message_id), found[0], source, now),
             )
             conn.commit()
-            return found[1]
+            return conn.execute("SELECT c.name FROM message_categories mc JOIN categories c ON c.id = mc.category_id WHERE mc.message_id = ?", (int(message_id),)).fetchone()[0]
         finally:
             conn.close()
 

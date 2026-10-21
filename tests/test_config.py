@@ -37,7 +37,7 @@ def test_defaults_are_the_previously_hardcoded_values():
 def test_every_setting_can_be_overridden():
     env = {
         "DIYA_DB_PATH": "x.db", "DIYA_MODEL": "m", "DIYA_EMBED_MODEL": "e",
-        "DIYA_OLLAMA_URL": "http://o:1/v1", "DIYA_NOTES_DIR": "n", "DIYA_PROFILE_PATH": "p.txt",
+        "DIYA_OLLAMA_URL": "http://o:1/v1", "DIYA_ALLOW_REMOTE_MODEL": "1", "DIYA_NOTES_DIR": "n", "DIYA_PROFILE_PATH": "p.txt",
         "DIYA_DREAM_LOG_PATH": "d.log", "DIYA_DREAM_STATE_PATH": "d.json",
         "DIYA_DREAM_PENDING_PATH": "q.jsonl", "DIYA_DREAM_PROFILE_MODE": "staged",
         "DIYA_WHISPER_MODEL": "small", "DIYA_HOST": "127.0.0.1", "DIYA_PORT": "9000",

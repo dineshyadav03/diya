@@ -15,6 +15,7 @@ import ipaddress
 import os
 import re
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 import diya_time
 
@@ -257,6 +258,20 @@ def ensure_data_dir(config: "Config") -> None:
         os.makedirs(config.data_dir, exist_ok=True)
 
 
+def _check_model_stays_here(url, allow):
+    """Diya's rule (docs/DECISIONS_2026-10-18.md, docs/LOCAL_ONLY.md): what the person says goes to a model on THIS computer. A model address that is not this computer is refused unless the person
+    says in so many words (DIYA_ALLOW_REMOTE_MODEL=1) that they mean to send everything they say there. A typo or a pasted setting must not do it silently."""
+    host = (urlsplit(url).hostname or "").lower()
+    if host in ("localhost", "127.0.0.1", "::1") or host.endswith(".localhost"):
+        return
+    if allow is not None and allow.lower() in _TRUE_WORDS:
+        return
+    raise ConfigError(
+        f"DIYA_OLLAMA_URL points at {host or url!r}, which is not this computer, so everything you say would be sent there. Diya keeps prompts on this computer. "
+        "If you really mean it, also set DIYA_ALLOW_REMOTE_MODEL=1."
+    )
+
+
 def load_config(env=None) -> Config:
     """Build a Config from `env` (defaults to os.environ). Blank values count as unset."""
     env = os.environ if env is None else env
@@ -270,6 +285,9 @@ def load_config(env=None) -> Config:
         value = read(name)
         if value is not None:
             values[field] = value
+
+    if "ollama_url" in values:
+        _check_model_stays_here(values["ollama_url"], read("DIYA_ALLOW_REMOTE_MODEL"))
 
     data_dir = read("DIYA_DATA_DIR")
     if data_dir is not None:
