@@ -71,6 +71,7 @@ CATALOG = {e.name: e for e in (
     E("read_mail", "flow", 0, "looks through the person's Gmail when they ask; the answer is written by a model with no tools", "gmail.googleapis.com", "n/a", "none", True, "Gmail connected", "google_mail"),
     E("mail_write_refused", "flow", 0, "answers a request to send, change or delete mail with the fact that access is read-only", "none", "n/a", "none", False),
     E("study_repo", "flow", 0, "reads a public GitHub repository the person names and shows the evidence", "api.github.com, raw.githubusercontent.com", "n/a", "none", True),
+    E("explain_connections", "flow", 0, "says which accounts are connected and what each can and cannot do, from the connection record and not from the model", "none", "n/a", "none", False),
     E("explain_memory", "flow", 0, "says where a remembered fact came from, from the memory's own record", "none", "n/a", "none", False),
     E("use_playbook", "flow", 0, "adds the steps of a playbook the person wrote themselves (named in the message or close in meaning) to the turn as their instructions; grants no tool and skips no approval", "none", "n/a", "none", False),
 )}

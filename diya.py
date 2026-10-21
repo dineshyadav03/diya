@@ -19,6 +19,7 @@ from openai import OpenAI, OpenAIError
 import diya_actions
 import diya_automations
 import diya_config
+import diya_connection_talk
 import diya_connector_tools
 import diya_connectors
 import diya_db
@@ -1228,6 +1229,16 @@ class Agent:
             return None
         return LOOKUP_PROMPT + "\n" + results
 
+    def _connection_answer(self, question):
+        """The answer to "are you connected to ...?" from the connection record (diya_connection_talk), or None when the message is not that question or names nothing Diya connects to. Never raises."""
+        subject = diya_connection_talk.asks_about_connection(question)
+        if subject is None:
+            return None
+        try:
+            return diya_connection_talk.answer(self.config, diya_connector_tools.real_connectors(self.config), subject)
+        except Exception:  # noqa: BLE001
+            return None
+
     def _where_from(self, question, messages):
         """The answer to "how do you know ...?", built from the record by diya_provenance, or None when the question is not that kind (the chat then goes on as it would have). Never raises: a memory that
         cannot be read is no reason for the chat to fail."""
@@ -1317,6 +1328,10 @@ class Agent:
             if where_from is not None:  # "how do you know that?": answered by code from the memory's own record, never by the model (docs/PROVENANCE_DESIGN.md)
                 self._journal("explain_memory", {"question": question}, "ok", result=where_from, started=started, kind="flow")
                 return where_from, []
+            connection = self._connection_answer(question)
+            if connection is not None:  # "are you connected to my calendar?": a fact in a file, so code says it and the model, which would guess, is not asked (docs/CONNECTORS_DESIGN.md)
+                self._journal("explain_connections", {"question": question}, "ok", result=connection, started=started, kind="flow")
+                return connection, []
         if only_tools is None and self.config.knowledge_chat:
             started = time.monotonic()
             note = self._pages_note(question, on_event)
