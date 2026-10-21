@@ -17,7 +17,7 @@ dependencies = [
     # (PRODUCT_VISION.md, "Web client"). Pinning it here stops that from happening again unseen.
     "starlette==1.6.0",
     "uvicorn==0.34.3",
-    "python-multipart==0.0.20",  # FastAPI needs this for File/UploadFile; never imported by name
+    "python-multipart==0.0.31",  # FastAPI needs this for File/UploadFile; never imported by name. 0.0.31 closes twelve advisories in 0.0.20 (denial of service in multipart parsing and others; found by pip-audit, 2026-10-21)
     "pydantic==2.11.5",
     "openai==1.84.0",
     "chromadb==1.5.9",

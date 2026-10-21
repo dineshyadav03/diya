@@ -25,6 +25,16 @@ jobs:
       - name: Run tests
         run: python -m pytest
 
+      # Known-vulnerability scan of what was just installed (pip-audit, from the Python Packaging Authority; task DIYA-213). It fails the build on any advisory that is not on the list below.
+      # The six ignored advisories are the ones that do not apply to how Diya uses the package, each with its reason in docs/DEPENDENCIES.md; tests/test_dependencies.py fails if this list and
+      # that page disagree.
+      - name: Audit the Python dependencies for known vulnerabilities
+        run: |
+          pip install pip-audit==2.10.1
+          pip-audit \
+            --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815 \
+            --ignore-vuln PYSEC-2026-4114 --ignore-vuln PYSEC-2026-1845
+
       # Encoding and line-ending hygiene is already a test (tests/test_text_files.py), so it runs
       # as part of the step above; no separate step needed for that one. This address scan also
       # has a pytest wrapper (tests/test_hardcoded_address_scan.py) for the ordinary local test
@@ -47,3 +57,8 @@ jobs:
         run: |
           npm ci
           npx next build
+
+      # The same for the web UI's packages: the build above installed exactly what package-lock.json says, and this fails on any high or critical advisory in it (task DIYA-213).
+      - name: Audit the web UI's packages for known vulnerabilities
+        working-directory: frontend
+        run: npm audit --audit-level=high
