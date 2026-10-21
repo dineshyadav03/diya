@@ -133,7 +133,7 @@ def test_the_history_of_main_makes_the_one_chat_on_a_new_database(web):
 def test_looking_at_an_earlier_chat_or_the_list_makes_no_chat(web):
     client, agent = web
     assert client.get("/api/threads").json() == {"threads": []}
-    assert client.get("/api/history/12").json() == {"thread_id": 12, "is_main": False, "more_before": False, "messages": []}
+    assert client.get("/api/history/12").json() == {"thread_id": 12, "is_main": False, "more_before": False, "answering": False, "messages": []}
     assert titles(agent.store) == []
 
 

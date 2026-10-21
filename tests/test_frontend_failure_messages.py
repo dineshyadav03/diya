@@ -261,7 +261,7 @@ def test_a_load_that_finishes_late_cannot_touch_a_chat_that_has_since_been_left(
     assert "const seq = ++loadSeqRef.current" in load
     assert load.count("stale()") >= 3  # before applying messages, before reporting a problem, before revealing the page
     assert "if (stale()) return" in load[load.index(".then((data)"):load.index(".catch(")]
-    assert "if (!stale()) setLoadProblem" in load
+    assert "if (!stale() && !quiet) setLoadProblem" in load  # (a quiet look-again, while Diya is still answering, shows no error banner either)
     assert "if (stale()) return" in load[load.index(".finally("):]
     assert "function handleNewChat" not in page  # there is no starting over: a later load (Try again) is the only thing that can make an earlier one stale
 
