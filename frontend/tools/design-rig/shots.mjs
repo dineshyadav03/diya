@@ -91,6 +91,21 @@ const SCENARIOS = [
     ],
   })),
   { name: 'chat-empty', path: '/', stub: {}, steps: [] },
+  // Leaving the chat while Diya is thinking and coming back: the history says she is still answering, so the page says so and looks again; when the reply is there the message goes and the reply is shown.
+  {
+    name: 'chat-still-working', path: '/', stub: { answering: true, history: [{ id: 1, role: 'user', content: 'what is on my calendar this week', at: daysAgo(0) }] },
+    steps: [
+      `await __wait(600)`,
+      `window.__shotBefore = { working: /Still working on your last message/.test(document.querySelector('#log').textContent), replies: document.querySelectorAll('#log .msg.assistant:not(.thinking-row)').length, loading: !!document.querySelector('.thread-skeleton') }`,
+      `window.__history = [{ id: 1, role: 'user', content: 'what is on my calendar this week', at: new Date().toISOString() }, { id: 2, role: 'assistant', content: 'Nothing this week.', at: new Date().toISOString() }]; window.__answering = false; await __wait(3500)`,
+    ],
+    checks: [
+      { name: 'while the server says she is still answering, the page said so, without a reply and without a loading screen', js: `!!window.__shotBefore && window.__shotBefore.working === true && window.__shotBefore.replies === 0 && window.__shotBefore.loading === false` },
+      { name: 'when the answer was there the page showed it by itself', js: `/Nothing this week/.test(document.querySelector('#log').textContent)` },
+      { name: 'and the working message went away', js: `!/Still working on your last message/.test(document.querySelector('#log').textContent)` },
+      { name: 'no error banner was shown while it looked again', js: `!document.querySelector('.empty-state[role="alert"]')` },
+    ],
+  },
   // Helpful / Not helpful sit under Diya's reply, not under the person's message (docs/FEEDBACK_DESIGN.md): two exchanges, each with its own pair of buttons straight after the reply.
   {
     name: 'chat-feedback', path: '/',
@@ -432,6 +447,7 @@ const stubSource = (stub) => `(() => {
   const sc = ${JSON.stringify(stub)};
   window.__chatMode = sc.chat || 'ok';   // ok | pending | down (network error) | 500
   window.__txMode = sc.tx || 'pending';  // pending | down | ok
+  window.__answering = !!sc.answering;  // the server says it is still answering the last message (the person left the chat and came back); a step turns it off and sets window.__history to the chat with the reply in it
   window.__historyMode = sc.historyMode || 'ok';  // ok | down | 401 | 500 | held -- how loading a saved chat's messages answers ("held" waits for window.__releaseHistory())
   window.__categoryPosts = [];  // what was sent to POST /api/categories
   window.__historyUrls = [];  // every history address asked for (the one chat is asked for by name)
@@ -458,8 +474,8 @@ const stubSource = (stub) => `(() => {
       if (hm === 'down') return Promise.reject(new TypeError('Failed to fetch'));
       if (hm === '401') return Promise.resolve(refused());
       if (hm === '500') return Promise.resolve(json({ detail: 'Internal Server Error' }, 500));
-      if (hm === 'held') return new Promise((r) => { window.__releaseHistory = () => r(json({ thread_id: 7, is_main: !sc.earlier, more_before: false, messages: sc.history || [] })); });
-      return new Promise((r) => setTimeout(() => r(json({ thread_id: 7, is_main: !sc.earlier, more_before: false, messages: sc.history || [] })), sc.historyDelay || 0));
+      if (hm === 'held') return new Promise((r) => { window.__releaseHistory = () => r(json({ thread_id: 7, is_main: !sc.earlier, more_before: false, answering: !!window.__answering, messages: window.__history || sc.history || [] })); });
+      return new Promise((r) => setTimeout(() => r(json({ thread_id: 7, is_main: !sc.earlier, more_before: false, answering: !!window.__answering, messages: window.__history || sc.history || [] })), sc.historyDelay || 0));
     }
     if (u.includes('/api/transcribe')) return window.__txMode === 'down' ? Promise.reject(new TypeError('Failed to fetch')) : window.__txMode === '401' ? Promise.resolve(refused()) : window.__txMode === '500' ? Promise.resolve(json({ detail: 'Internal Server Error' }, 500)) : window.__txMode === 'ok' ? Promise.resolve(json({ text: 'what is on my list today' })) : new Promise(() => {});
     if (u.includes('/api/chat')) {

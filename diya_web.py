@@ -362,7 +362,9 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
             messages = [dict(m, category=tags[m["id"]]) if m["id"] in tags else m for m in messages]
         times = agent.store.message_times([m["id"] for m in messages])  # when each was written, so the page can put them under their days (docs/ONE_CHAT_DESIGN.md, task DIYA-158)
         messages = [dict(m, at=times[m["id"]]) if m["id"] in times else m for m in messages]
-        return {"thread_id": number, "is_main": number == main, "more_before": more_before, "messages": messages}
+        with answering_lock:
+            busy = answering.get(number, 0) > 0
+        return {"thread_id": number, "is_main": number == main, "more_before": more_before, "answering": busy, "messages": messages}
 
     @app.post("/api/transcribe")
     async def transcribe(audio: UploadFile = File(...)):
@@ -460,6 +462,21 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
             if not [i for i in agent.store.pending_captures(CAPTURE_BATCH) if i not in tried]:
                 return  # nothing arrived while the place was being let go of
 
+    answering = {}  # chat -> how many of its messages are being answered right now: told to a page that was left and came back, so it knows Diya is still working (docs/STREAMING_DESIGN.md)
+    answering_lock = threading.Lock()
+
+    def begin_answering(thread_id):
+        with answering_lock:
+            answering[thread_id] = answering.get(thread_id, 0) + 1
+
+    def end_answering(thread_id):
+        with answering_lock:
+            left = answering.get(thread_id, 0) - 1
+            if left > 0:
+                answering[thread_id] = left
+            else:
+                answering.pop(thread_id, None)
+
     def start_turn(req):
         """The part of a chat turn that comes before the model: the chat (a new one if none was named), the history, and the person's message saved. Returns (thread_id, history, message_id)."""
         thread_id = req.thread_id or agent.store.main_thread()  # no chat named: the one chat (docs/ONE_CHAT_DESIGN.md)
@@ -501,14 +518,18 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     def chat(req: ChatRequest, background: BackgroundTasks):
         thread_id, history, message_id = start_turn(req)
         started = time.monotonic()
+        begin_answering(thread_id)
         try:
-            answer, tools_called = agent.ask(history, thread_id=thread_id, message_id=message_id)
-        except Exception as exc:
-            record_turn("chat", started, False, [])
-            status, detail = failure_of(exc)
-            return JSONResponse({"detail": detail, "thread_id": thread_id}, status_code=status)
-        record_turn("chat", started, True, tools_called)
-        reading = end_turn(thread_id, message_id, req, answer)
+            try:
+                answer, tools_called = agent.ask(history, thread_id=thread_id, message_id=message_id)
+            except Exception as exc:
+                record_turn("chat", started, False, [])
+                status, detail = failure_of(exc)
+                return JSONResponse({"detail": detail, "thread_id": thread_id}, status_code=status)
+            record_turn("chat", started, True, tools_called)
+            reading = end_turn(thread_id, message_id, req, answer)  # the answer is saved before the chat stops being "answering", so a page that asks next finds it
+        finally:
+            end_answering(thread_id)
         background.add_task(sort_exchange, message_id, req.message, tools_called)  # after the response is on its way, never before it
         background.add_task(index_for_recall, message_id)
         if config.auto_memory:
@@ -533,14 +554,17 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
                 reading = end_turn(thread_id, message_id, req, answer)
             except Exception as exc:
                 record_turn("stream", started, False, [])
+                end_answering(thread_id)
                 events.put(("error", failure_of(exc)))
                 return
+            end_answering(thread_id)  # the answer is saved: a page that was left and comes back finds it
             events.put(("done", {"thread_id": thread_id, "answer": answer, "tools_called": tools_called, "message_id": message_id, "reading": reading}))
             sort_exchange(message_id, req.message, tools_called)  # after the last line is on its way
             index_for_recall(message_id)
             if config.auto_memory:
                 read_for_facts(message_id)  # after the last line is on its way, as /api/chat's background task is
 
+        begin_answering(thread_id)
         worker = threading.Thread(target=work, name="chat-turn", daemon=True)
         worker.start()
 

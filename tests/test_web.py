@@ -98,13 +98,13 @@ def test_threads_and_history_come_from_the_agents_own_store(config):
     times = [m.pop("at") for m in history["messages"]]  # each message says when it was written (an ISO time with its zone), so the page can put it under its day (task DIYA-158)
     assert all(datetime.fromisoformat(at).tzinfo is not None for at in times)
     assert history == {
-        "thread_id": t, "is_main": True, "more_before": False,  # t has the newest message, so it is the one chat
+        "thread_id": t, "is_main": True, "more_before": False, "answering": False,  # t has the newest message, so it is the one chat; nothing is being answered
         "messages": [
             {"id": 1, "role": "user", "content": "first question"},  # the one chat's messages carry their ids (so a category can be changed)
             {"id": 2, "role": "assistant", "content": "first answer"},
         ]
     }
-    assert client.get("/api/history/9999").json() == {"thread_id": 9999, "is_main": False, "more_before": False, "messages": []}
+    assert client.get("/api/history/9999").json() == {"thread_id": 9999, "is_main": False, "more_before": False, "answering": False, "messages": []}
 
 
 def test_chat_without_a_thread_creates_one_and_saves_both_messages(config):

@@ -86,6 +86,8 @@ function inCategory(messages, tags, name) {
   return kept
 }
 
+const ANSWER_POLL_MS = 2500 // how often a page that was left and came back asks whether the answer has arrived
+
 // Why a reply was not helpful: the same list, in the same words, as diya_feedback.CATEGORIES (a test keeps them equal).
 const FEEDBACK_REASONS = {
   wrong: 'The answer was wrong',
@@ -137,6 +139,7 @@ export default function ChatPage() {
   // Diya sorts each message of the person's into a category after replying (docs/ONE_CHAT_DESIGN.md): the list of categories, where each message is (message id -> name), the category the chat is
   // being looked at by (null = all of it), and why a change of category did not happen.
   const [categories, setCategories] = useState([])
+  const [stillAnswering, setStillAnswering] = useState(false) // Diya is still answering the last message of this chat, started before this page was opened
   const [ratings, setRatings] = useState({}) // the person's rating of Diya's reply to each of their messages: { message id: { rating, category, note, version } }
   const [tags, setTags] = useState({})
   const [lookingAt, setLookingAt] = useState(null)
@@ -169,14 +172,17 @@ export default function ChatPage() {
 
   // Fetch a saved chat's past messages. When that fails, say why and offer to try again: it used to
   // be swallowed, leaving an empty chat that looked as if the thread had nothing in it.
-  function loadThread(threadId) {
+  // `quiet` is the look-again while Diya is still answering a message the person left the page on (docs/STREAMING_DESIGN.md): no loading screen, no error banner, no second look at the categories.
+  function loadThread(threadId, { quiet = false } = {}) {
     let status // stays undefined when the request never got an answer at all
     const seq = ++loadSeqRef.current
-    chatEpochRef.current += 1
+    if (!quiet) chatEpochRef.current += 1
     const stale = () => seq !== loadSeqRef.current
-    setLoadProblem('')
-    setLoadingChat(true)
-    setReady(false)
+    if (!quiet) {
+      setLoadProblem('')
+      setLoadingChat(true)
+      setReady(false)
+    }
     fetch(`/api/history/${threadId}`)
       .then((r) => {
         status = r.status
@@ -189,6 +195,7 @@ export default function ChatPage() {
         if (Number.isInteger(data.thread_id)) threadIdRef.current = data.thread_id
         setEarlierChat(data.is_main === false) // an API that does not say (an older one) is taken to have given the chat that was asked for
         setOlderLeft(data.more_before === true)
+        setStillAnswering(data.answering === true) // the server is still answering a message of this chat (the person left the page and came back, or reloaded)
         const loaded = data.messages
           .filter((m) => m.role === 'user' || m.role === 'assistant')
           .map((m) => ({ role: m.role, text: m.content, serverId: Number.isInteger(m.id) ? m.id : undefined, at: typeof m.at === 'string' ? m.at : undefined }))
@@ -198,10 +205,10 @@ export default function ChatPage() {
         loadRatings(data.messages.filter((m) => m.role === 'user' && Number.isInteger(m.id)).map((m) => m.id))
         setLookingAt(null)
         setMessages(loaded)
-        loadCategories(data.is_main !== false) // an earlier chat's tags came with it; only the one chat's are looked for again
+        if (!quiet) loadCategories(data.is_main !== false) // an earlier chat's tags came with it; only the one chat's are looked for again
       })
       .catch(() => {
-        if (!stale()) setLoadProblem(describeLoadFailure(status))
+        if (!stale() && !quiet) setLoadProblem(describeLoadFailure(status))
       })
       .finally(() => {
         if (stale()) return
@@ -209,6 +216,13 @@ export default function ChatPage() {
         setReady(true)
       })
   }
+
+  // Leaving the page does not stop Diya (the server finishes the answer and keeps it), so when the page is back it looks again every few seconds until the answer is there.
+  useEffect(() => {
+    if (!stillAnswering || thinking) return undefined
+    const timer = setInterval(() => loadThread(threadIdRef.current || 'main', { quiet: true }), ANSWER_POLL_MS)
+    return () => clearInterval(timer)
+  }, [stillAnswering, thinking])
 
   useEffect(() => {
     logRef.current?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -882,10 +896,10 @@ export default function ChatPage() {
             <Inline text={streamText} />
           </div>
         )}
-        {((thinking && !streamText) || speaking) && (
-          <div className="msg assistant thinking-row" role="status" aria-label={thinking ? 'Diya is working on it' : 'Diya is speaking'}>
-            <Orb state={thinking ? 'thinking' : 'speaking'} />
-            <span className="thinking-text">{thinking ? 'Thinking…' : 'Speaking…'}</span>
+        {((thinking && !streamText) || speaking || (stillAnswering && !thinking)) && (
+          <div className="msg assistant thinking-row" role="status" aria-label={thinking || (stillAnswering && !speaking) ? 'Diya is working on it' : 'Diya is speaking'}>
+            <Orb state={thinking || (stillAnswering && !speaking) ? 'thinking' : 'speaking'} />
+            <span className="thinking-text">{thinking ? 'Thinking…' : stillAnswering && !speaking ? 'Still working on your last message…' : 'Speaking…'}</span>
           </div>
         )}
       </div>
