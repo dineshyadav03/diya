@@ -341,6 +341,41 @@ def past_day(question, today):
     return found[0] if found else None
 
 
+_WEEKDAY_WORD = re.compile(r"\b(?:on\s+|this\s+|coming\s+)?(?P<w>monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tues|tue|wed|thurs|thur|thu|fri|sat|sun)\b", re.IGNORECASE)
+_WEEKDAY_INDEX = {"mon": 0, "tue": 1, "tues": 1, "wed": 2, "thu": 3, "thur": 3, "thurs": 3, "fri": 4, "sat": 5, "sun": 6}
+
+
+def upcoming_day(question, today):
+    """The day a question about the FUTURE points at, when a calendar is being asked: an ISO date, "28 Oct" or "Oct 28th 2026" (a day with no year is its next occurrence on or after `today`), or a weekday name
+    ("on Saturday", "this friday": the first such day on or after `today`). None when there is none, and None for "next Friday", which people mean two ways (the same rule as `find`)."""
+    if not isinstance(question, str) or not isinstance(today, date):
+        return None
+    today = today.date() if isinstance(today, datetime) else today
+    if re.search(r"\bnext\s+(?:mon|tue|wed|thu|fri|sat|sun)", question, re.IGNORECASE):
+        return None
+    match = _ON_ISO.search(question)
+    if match:
+        try:
+            return date(int(match.group("y")), int(match.group("m")), int(match.group("d")))
+        except ValueError:
+            return None
+    match = _ON_DM.search(question)
+    if match:
+        month, day = _MONTH_INDEX.get((match.group("m1") or match.group("m2")).lower().rstrip(".")), int(match.group("d1") or match.group("d2"))
+        try:
+            if match.group("y"):
+                return date(int(match.group("y")), month, day)
+            found = date(today.year, month, day)
+            return found if found >= today else date(today.year + 1, month, day)
+        except ValueError:
+            return None
+    match = _WEEKDAY_WORD.search(question)
+    if match:
+        wanted = _WEEKDAY_INDEX[match.group("w").lower()[:3]]
+        return today + timedelta(days=(wanted - today.weekday()) % 7)
+    return None
+
+
 def strip_days(text, today=None):
     """`text` with the days it names (an ISO date, "12 Oct", a relative phrase) taken out, so what is left is the topic."""
     if not isinstance(text, str):

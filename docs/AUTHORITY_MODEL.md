@@ -45,6 +45,7 @@ One press of **Pause Diya** on the Status page (or `POST /api/pause`) stops the 
 | `read_mail` | flow | 0 | looks through the person's Gmail when they ask; the answer is written by a model with no tools | gmail.googleapis.com | n/a | none | yes | Gmail connected |
 | `mail_write_refused` | flow | 0 | answers a request to send, change or delete mail with the fact that access is read-only | none | n/a | none | no | - |
 | `study_repo` | flow | 0 | reads a public GitHub repository the person names and shows the evidence | api.github.com, raw.githubusercontent.com | n/a | none | yes | - |
+| `read_calendar` | flow | 0 | reads the person's Google Calendar for the days they ask about and writes the list itself, with no model | www.googleapis.com | n/a | none | yes | Google Calendar connected |
 | `explain_connections` | flow | 0 | says which accounts are connected and what each can and cannot do, from the connection record and not from the model | none | n/a | none | no | - |
 | `explain_memory` | flow | 0 | says where a remembered fact came from, from the memory's own record | none | n/a | none | no | - |
 | `use_playbook` | flow | 0 | adds the steps of a playbook the person wrote themselves (named in the message or close in meaning) to the turn as their instructions; grants no tool and skips no approval | none | n/a | none | no | - |
@@ -89,6 +90,7 @@ Meta's Rule of Two and Simon Willison's lethal trifecta say an agent should not,
 | `read_mail` | yes | yes | - | 2 |
 | `mail_write_refused` | - | - | - | 0 |
 | `study_repo` | yes | - | - | 1 |
+| `read_calendar` | yes | yes | - | 2 |
 | `explain_connections` | - | - | - | 0 |
 | `explain_memory` | - | yes | - | 1 |
 | `use_playbook` | - | yes | - | 1 |

@@ -19,6 +19,7 @@ from openai import OpenAI, OpenAIError
 import diya_actions
 import diya_automations
 import diya_config
+import diya_calendar_talk
 import diya_connection_talk
 import diya_connector_tools
 import diya_connectors
@@ -1229,6 +1230,13 @@ class Agent:
             return None
         return LOOKUP_PROMPT + "\n" + results
 
+    def _calendar_answer(self, question):
+        """(the list, whether Google answered) for a plain question about the calendar (diya_calendar_talk), or None when the message is not that (the chat then goes on as it would have). Never raises."""
+        try:
+            return diya_calendar_talk.answer(self.config, question)
+        except Exception:  # noqa: BLE001
+            return None
+
     def _connection_answer(self, question):
         """The answer to "are you connected to ...?" from the connection record (diya_connection_talk), or None when the message is not that question or names nothing Diya connects to. Never raises."""
         subject = diya_connection_talk.asks_about_connection(question)
@@ -1332,6 +1340,11 @@ class Agent:
             if connection is not None:  # "are you connected to my calendar?": a fact in a file, so code says it and the model, which would guess, is not asked (docs/CONNECTORS_DESIGN.md)
                 self._journal("explain_connections", {"question": question}, "ok", result=connection, started=started, kind="flow")
                 return connection, []
+            calendar = self._calendar_answer(question)
+            if calendar is not None:  # "what's on my calendar?": dates and times are facts, so code reads Google Calendar for the days asked and writes the list; the small model, which changed 2020 into "2.020", is not asked
+                text, read_fine = calendar
+                self._journal("read_calendar", {"question": question}, "ok" if read_fine else "error", result=text, started=started, kind="flow")
+                return text, []
         if only_tools is None and self.config.knowledge_chat:
             started = time.monotonic()
             note = self._pages_note(question, on_event)

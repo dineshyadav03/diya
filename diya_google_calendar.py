@@ -323,6 +323,32 @@ def _last_day(end):
         return "?"
 
 
+def events_between(config, start, end, limit=25):
+    """The events that overlap the time from `start` to `end` (aware datetimes), soonest first, as ([{title, start, end, all_day}], None), or ([], the reason in words) when they cannot be read. `start` and `end` of
+    an event are Google's own text: a date for an all-day event (whose `end` is the day AFTER its last day) or a time with its zone. Read only; one request."""
+    token = _access_token(config)
+    if token is None:
+        return [], "Google Calendar is not connected."
+    try:
+        response = httpx.get(
+            EVENTS_URL, headers={"Authorization": f"Bearer {token}"},
+            params={"timeMin": start.isoformat(), "timeMax": end.isoformat(), "maxResults": limit, "singleEvents": "true", "orderBy": "startTime"},
+            timeout=NETWORK_TIMEOUT,
+        )
+    except httpx.HTTPError as exc:
+        return [], f"Couldn't reach Google Calendar: {exc}"
+    if response.status_code != 200:
+        return [], f"Google Calendar answered with HTTP {response.status_code}{_reason(response)}."
+    found = []
+    for event in response.json().get("items", []):
+        first, last = event.get("start", {}), event.get("end", {})
+        found.append({
+            "title": event.get("summary") or "(no title)", "start": first.get("dateTime") or first.get("date", ""), "end": last.get("dateTime") or last.get("date", ""),
+            "all_day": "dateTime" not in first and "date" in first,
+        })
+    return found, None
+
+
 def list_events(config):
     def tool():
         token = _access_token(config)
