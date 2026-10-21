@@ -6,6 +6,7 @@ import Orb from '../components/Orb'
 import VoiceBar from '../components/VoiceBar'
 import { readChatStream } from '../lib/chat-stream.mjs'
 import { dayBreaks } from '../lib/day-labels.mjs'
+import { inlineParts } from '../lib/markdown-lite.mjs'
 import { describeLoadFailure, describeSendFailure, readFailure } from '../lib/api-failure.mjs'
 import { describeActionFailure } from '../lib/api-failure.mjs'
 
@@ -83,6 +84,16 @@ function inCategory(messages, tags, name) {
     if (inside) kept.push(m)
   }
   return kept
+}
+
+// A reply drawn with the bold, italic and code the model marked (lib/markdown-lite.mjs): each part is text inside its own element, so a reply can never become markup.
+function Inline({ text }) {
+  return inlineParts(text).map((part, i) => {
+    if (part.kind === 'bold') return <strong key={i}>{part.text}</strong>
+    if (part.kind === 'italic') return <em key={i}>{part.text}</em>
+    if (part.kind === 'code') return <code key={i}>{part.text}</code>
+    return part.text
+  })
 }
 
 export default function ChatPage() {
@@ -748,11 +759,15 @@ export default function ChatPage() {
           }
           return withDay(
             <div key={m.id ?? 'h' + i} className={'msg ' + m.role}>
-              {m.text}
+              {m.role === 'assistant' ? <Inline text={m.text} /> : m.text}
             </div>
           )
         })}
-        {streamText && <div className="msg assistant streaming">{streamText}</div>}
+        {streamText && (
+          <div className="msg assistant streaming">
+            <Inline text={streamText} />
+          </div>
+        )}
         {((thinking && !streamText) || speaking) && (
           <div className="msg assistant thinking-row" role="status" aria-label={thinking ? 'Diya is working on it' : 'Diya is speaking'}>
             <Orb state={thinking ? 'thinking' : 'speaking'} />
