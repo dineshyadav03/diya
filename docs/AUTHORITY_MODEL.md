@@ -61,6 +61,38 @@ Tools of MCP servers the person added (`mcp_...`) are not listed one by one: eac
 | `diya_telegram.py` | the person's own Telegram bot |
 | `diya_warm.py` | the local Ollama, to keep the chat model loaded |
 
+## The Rule of Two, tool by tool (`legs()` in `diya_catalog.py`)
+
+Meta's Rule of Two and Simon Willison's lethal trifecta say an agent should not, in one session, (A) read words other people wrote, (B) reach the person's private data and (C) send something out or change something, because a sentence hidden in what it reads can then steal or damage. Below, each entry's legs; `tests/test_rule_of_two.py` fails if any entry has all three without being a proposal the owner approves action by action, or if a tool that sends the model's own words to a service the owner does not control is not listed.
+
+| Name | A: untrusted words in | B: private data | C: can send out / change | Legs |
+|---|---|---|---|---|
+| `list_files` | yes | yes | - | 2 |
+| `search_notes` | yes | yes | - | 2 |
+| `get_weather` | - | - | yes | 1 |
+| `web_search` | yes | - | yes | 2 |
+| `add_reminder` | - | - | - | 0 |
+| `list_reminders` | - | yes | - | 1 |
+| `add_task` | - | - | - | 0 |
+| `list_tasks` | - | yes | - | 1 |
+| `search_home_assistant` | yes | yes | - | 2 |
+| `search_notion` | yes | yes | - | 2 |
+| `list_todoist_tasks` | yes | yes | - | 2 |
+| `list_calendar_events` | yes | yes | - | 2 |
+| `list_google_tasks` | yes | yes | - | 2 |
+| `propose_todoist_task` | - | - | yes | 1 |
+| `propose_calendar_event` | - | - | yes | 1 |
+| `propose_google_task` | - | - | yes | 1 |
+| `propose_drive_folder` | - | - | yes | 1 |
+| `propose_google_doc` | - | - | yes | 1 |
+| `read_mail` | yes | yes | - | 2 |
+| `mail_write_refused` | - | - | - | 0 |
+| `study_repo` | yes | - | - | 1 |
+| `explain_memory` | - | yes | - | 1 |
+| `use_playbook` | - | yes | - | 1 |
+
+**No single entry has all three.** The one open accounting is the session: a chat offers `list_calendar_events`, `list_files`, `list_google_tasks`, `list_todoist_tasks`, `search_home_assistant`, `search_notes`, `search_notion` (private data and untrusted words, legs A and B) next to `get_weather`, `web_search` (free text out, leg C, no approval), so all three legs exist in one turn even though no tool has them alone. What stands in the way: the model has no tool that names an address, a header or a credential; what a service returns is data, never an instruction; mail, repositories and notes are read by a model with no tools; every write to an account is a proposal the owner approves exactly as shown, and the tools that ran earlier in the turn are shown on the card as a warning. What is not closed: a query or a place name can carry words the model took from what it read. Closing it would mean approving each search, or a search that sees no private text; neither is built, and it is a decision for the owner, not a default.
+
 ## Not built (so nothing here can do it)
 
 Sending, drafting, replying to or deleting mail; inviting anyone to an event; sharing a file; changing or deleting anything that already exists in a Google account; account settings. Each would be tier 3 or 4 and would need its own entry, its own approval wording and its own tests before it could exist (`docs/GOOGLE_WRITE_DESIGN.md`, "Next").

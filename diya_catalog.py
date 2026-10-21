@@ -90,6 +90,53 @@ OUTBOUND_WRITERS = {
 }
 
 
+# The Rule of Two (Meta) and the lethal trifecta (Simon Willison), kept as code (RESEARCH.md entry 17, DIYA-281, 2026-10-21). An agent that at once (A) reads words other people wrote, (B) reaches the
+# person's private data and (C) can send something out or change something, can be talked into stealing or damaging by a sentence hidden in what it reads. Each entry below is given its legs; a tool
+# with all three must be a proposal the owner approves action by action, and the words a model can send to a service the owner does not control are listed here by name so that a new one is a decision.
+PRIVATE_DATA = frozenset({
+    "list_files", "search_notes", "list_reminders", "list_tasks", "search_home_assistant", "search_notion", "list_todoist_tasks", "list_calendar_events", "list_google_tasks", "read_mail",
+    "explain_memory", "use_playbook",
+})
+# Tools whose arguments are words the MODEL chose and that leave this computer for a service the owner does not control (a free-text channel out, however harmless it looks).
+FREE_TEXT_OUT = {
+    "web_search": "the words of the query go to the search service",
+    "get_weather": "the place name goes to the weather service",
+}
+
+
+def legs(entry):
+    """(A) untrusted words come in, (B) the person's private data is reached, (C) something can go out or change at a service."""
+    return {"untrusted": bool(entry.untrusted_output), "private": entry.name in PRIVATE_DATA, "outward": entry.tier >= 2 or entry.name in FREE_TEXT_OUT}
+
+
+def leg_count(entry):
+    return sum(legs(entry).values())
+
+
+def rule_of_two_violations(catalog=None):
+    """What breaks the rule in `catalog` (default: the real one), in words: an entry with all three legs that is not a proposal the owner approves action by action; a tool that reaches a service
+    with no connector (so not the owner's own account) and is not declared in FREE_TEXT_OUT; a connector read that is not counted as private data."""
+    catalog = CATALOG if catalog is None else catalog
+    found = []
+    for entry in catalog.values():
+        if leg_count(entry) == 3 and not (entry.type == "proposal" and entry.approval == "owner approves each action"):
+            found.append(f"{entry.name} has all three legs and is not a proposal the owner approves each time")
+        if entry.type == "tool" and entry.network != "none" and not entry.connector and entry.name not in FREE_TEXT_OUT:
+            found.append(f"{entry.name} sends the model's words to a service that is not the owner's own account and is not declared in FREE_TEXT_OUT")
+        if entry.connector and entry.tier == 0 and entry.name not in PRIVATE_DATA:
+            found.append(f"{entry.name} reads through a connector (the owner's account) and is not counted as private data")
+    return found
+
+
+def session_exposure():
+    """What one chat session holds side by side, because the model may call any tool in the same turn: the tools that bring private data AND untrusted words in (A and B), and the tools that send
+    free text out without the owner approving it (C, ungated). A chat session that offers both has all three legs even though no single tool does: this is the one open accounting, stated in
+    docs/AUTHORITY_MODEL.md, and the test pins it so it cannot grow unseen."""
+    readers = sorted(e.name for e in CATALOG.values() if e.type == "tool" and e.name in PRIVATE_DATA and e.untrusted_output)
+    senders = sorted(name for name in FREE_TEXT_OUT if CATALOG[name].approval == "none")
+    return readers, senders
+
+
 def render():
     """docs/AUTHORITY_MODEL.md, from this file."""
     lines = [
@@ -131,6 +178,28 @@ def render():
         "| Module | Why it may |", "|---|---|",
     ]
     lines += [f"| `{module}` | {why} |" for module, why in OUTBOUND_WRITERS.items()]
+    readers, senders = session_exposure()
+    lines += [
+        "",
+        "## The Rule of Two, tool by tool (`legs()` in `diya_catalog.py`)",
+        "",
+        "Meta's Rule of Two and Simon Willison's lethal trifecta say an agent should not, in one session, (A) read words other people wrote, (B) reach the person's private data and (C) send something out or change something,"
+        " because a sentence hidden in what it reads can then steal or damage. Below, each entry's legs; `tests/test_rule_of_two.py` fails if any entry has all three without being a proposal the owner approves action by action,"
+        " or if a tool that sends the model's own words to a service the owner does not control is not listed.",
+        "",
+        "| Name | A: untrusted words in | B: private data | C: can send out / change | Legs |", "|---|---|---|---|---|",
+    ]
+    for entry in CATALOG.values():
+        have = legs(entry)
+        lines.append(f"| `{entry.name}` | {'yes' if have['untrusted'] else '-'} | {'yes' if have['private'] else '-'} | {'yes' if have['outward'] else '-'} | {leg_count(entry)} |")
+    lines += [
+        "",
+        f"**No single entry has all three.** The one open accounting is the session: a chat offers {', '.join('`' + r + '`' for r in readers)} (private data and untrusted words, legs A and B) next to "
+        f"{', '.join('`' + n + '`' for n in senders)} (free text out, leg C, no approval), so all three legs exist in one turn even though no tool has them alone. What stands in the way: "
+        "the model has no tool that names an address, a header or a credential; what a service returns is data, never an instruction; mail, repositories and notes are read by a model with no tools; "
+        "every write to an account is a proposal the owner approves exactly as shown, and the tools that ran earlier in the turn are shown on the card as a warning. What is not closed: a query or a place name can carry words "
+        "the model took from what it read. Closing it would mean approving each search, or a search that sees no private text; neither is built, and it is a decision for the owner, not a default.",
+    ]
     lines += [
         "",
         "## Not built (so nothing here can do it)",
