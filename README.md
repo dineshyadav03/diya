@@ -5,9 +5,9 @@ and nothing it does outside the computer happens without your approval. It is on
 
 ![The chat: a greeting, a question about something ticked off, a lookup on the web, an automation made from one sentence](docs/screenshot-chat.png)
 
-## Where it stands (2026-10-18)
+## Where it stands (2026-10-21)
 
-Built for Windows with [Ollama](https://ollama.com), tested on a 16 GB laptop with no GPU. About 7,800 automated tests run on every push (7,761 passed on 2026-10-18; the day's starting point is in [docs/BASELINE_2026-10-18.md](docs/BASELINE_2026-10-18.md)). Every unit the [roadmap](ROADMAP.md) has designed is built;
+Built for Windows with [Ollama](https://ollama.com), tested on a 16 GB laptop with no GPU. About 8,200 automated tests run on every push (8,203 passed here on 2026-10-21, and one more is red on this computer only until its old `python-multipart` is updated, see [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md); the starting point of the task sheet is in [docs/BASELINE_2026-10-18.md](docs/BASELINE_2026-10-18.md)), and every push is also scanned for known vulnerabilities in the packages it uses ([docs/DEPENDENCIES.md](docs/DEPENDENCIES.md)). Every unit the [roadmap](ROADMAP.md) has designed is built;
 against the larger vision about two thirds is there (a rough estimate, areas weighted equally), and what is left is mostly what only the owner can do (accounts, a phone, hardware) plus a few features not
 designed yet. In plain terms:
 
@@ -46,6 +46,10 @@ facts closest to what you just said, and is told that it is not everything. A qu
 
 **Playbooks.** Steps you write once for a kind of request, in `playbooks/<name>/SKILL.md` (the open layout Devin's skills use), are handed to the model when you write `@name` or ask something close to what the playbook is
 for. A playbook grants nothing: tools and approvals stay in code. The Playbooks page lists them ([docs/PLAYBOOKS_DESIGN.md](docs/PLAYBOOKS_DESIGN.md)); `sample_playbooks/` has three to copy.
+
+**It knows when.** A fact saved as "ran a 10K last weekend" is told to the model with the weekend it meant ("that was the weekend of 14-15 Jun"), worked out from the day you wrote it and never by rewriting your words; a fact that says
+"until 31 Jan" fades the day after; and "what did you know about me on 12 Oct?" is answered from the history by code, with what has changed since ([docs/TIME_DESIGN.md](docs/TIME_DESIGN.md)). The one chat is shown under your own days,
+a category merge can be taken back, and your messages can be searched by words, category and day.
 
 **You can see why it knows something.** Ask "how do you know I have a dog?" and the answer comes from the record, not from the model: your own words, the date, whether you accepted it or Diya took it on her own, and how
 to undo it. `python diya_review.py export-markdown` writes everything it knows as a plain Markdown file to read or keep in Git, and `restore-markdown` brings it back ([docs/MARKDOWN_MEMORY_DESIGN.md](docs/MARKDOWN_MEMORY_DESIGN.md)); `export-repo FOLDER` writes it as an Agent Memory Repo, a `MEMORY.md` and a note per person
@@ -141,6 +145,7 @@ Nothing below happens on its own; each is a step only you can take (an account, 
   tools it should not (guards in code refuse them: 0 of 153 unasked task proposals were saved in a measured run).
 - Repeating reminders read your words in code: hourly, "until June", "every second Tuesday" and yearly are refused, not guessed. Tasks do not repeat.
 - `web_search` is not covered by the outbound-host allowlist that limits weather to Open-Meteo.
+- No single tool has all three of the dangerous ingredients (reads your data, reads other people's words, sends something out), but **one chat does**: the model is offered reads of your own notes, calendar and tasks next to `web_search` and `get_weather`, which send words it chose to outside services without asking you each time. It is pinned by a test and written in [docs/AUTHORITY_MODEL.md](docs/AUTHORITY_MODEL.md); closing it (approve each search, or a search that sees no private text) is your decision.
 - Models are pulled by tag, not pinned (Ollama cannot pin by digest).
 - The optional model check on a staged fact is the same small model that proposed it: a hint, never a decision.
 - The microphone, the phone channels and every Google feature were built and tested against stand-ins only; Google is parked until a Google project can be created.
@@ -150,13 +155,13 @@ Nothing below happens on its own; each is a step only you can take (an account, 
 
 For the whole story in one place (what it is, what it can do, where it falls short, how it is built, how it was built, the research and the products like it) read [docs/DIYA_GUIDE.md](docs/DIYA_GUIDE.md). Otherwise start with [PRODUCT_VISION.md](PRODUCT_VISION.md) (what it is today) and [ROADMAP.md](ROADMAP.md) (what is planned and done). Then by topic:
 
-- **Memory:** [staged facts and review](docs/STAGE2_DESIGN.md), [people](docs/PERSON_MEMORY_DESIGN.md), [automatic memory](docs/AUTO_MEMORY_DESIGN.md), [Dreaming](docs/dreaming.md) and [its receipts](docs/DREAMING_RECEIPTS_DESIGN.md), [what each kind of memory is](docs/MEMORY_TAXONOMY.md), ["how do you know that?"](docs/PROVENANCE_DESIGN.md), [fading](docs/FADING_DESIGN.md), [forgetting for good](docs/FORGET_DESIGN.md), [the Markdown copy](docs/MARKDOWN_MEMORY_DESIGN.md), [earlier messages found by meaning](docs/EPISODIC_DESIGN.md), [playbooks](docs/PLAYBOOKS_DESIGN.md), [the Agent Memory Repo export](docs/MEMORY_REPO_DESIGN.md).
+- **Memory:** [staged facts and review](docs/STAGE2_DESIGN.md), [people](docs/PERSON_MEMORY_DESIGN.md), [automatic memory](docs/AUTO_MEMORY_DESIGN.md), [Dreaming](docs/dreaming.md) and [its receipts](docs/DREAMING_RECEIPTS_DESIGN.md), [what each kind of memory is](docs/MEMORY_TAXONOMY.md), ["how do you know that?"](docs/PROVENANCE_DESIGN.md), [fading](docs/FADING_DESIGN.md), [forgetting for good](docs/FORGET_DESIGN.md), [the Markdown copy](docs/MARKDOWN_MEMORY_DESIGN.md), [earlier messages found by meaning](docs/EPISODIC_DESIGN.md), [time](docs/TIME_DESIGN.md), [playbooks](docs/PLAYBOOKS_DESIGN.md), [the Agent Memory Repo export](docs/MEMORY_REPO_DESIGN.md).
 - **Your day:** [reminders](docs/PROACTIVITY_DESIGN.md), [repeating reminders](docs/SCHEDULE_DESIGN.md), [tasks](docs/TASKS_DESIGN.md), [Diya writes first](docs/PROACTIVE_DESIGN.md), [automations](docs/AUTOMATIONS_DESIGN.md).
 - **Talking:** [speed](docs/SPEED_DESIGN.md), [streaming](docs/STREAMING_DESIGN.md), [voice](docs/VOICE_DESIGN.md), [answering general questions](docs/LOOKUP_DESIGN.md), [the interface](docs/UI_DESIGN.md).
 - **Outside the computer:** [connectors](docs/CONNECTORS_DESIGN.md), [Google setup](docs/GOOGLE_SETUP.md), [approvals](docs/ACTIONS_DESIGN.md), [push](docs/PUSH_DESIGN.md), [Telegram](docs/TELEGRAM_DESIGN.md), [phone channel](docs/PHONE_CHANNEL_DESIGN.md), [LAN mode](docs/lan.md).
-- **Trust:** [access token and the boundary](docs/STAGE1_DESIGN.md), [UI login](docs/UI_LOGIN_DESIGN.md), [the October audit](docs/AUDIT_2026-10-10.md), [who may do what](docs/AUTHORITY_MODEL.md) and [what each connection may do](docs/PERMISSIONS_DESIGN.md), [the pause switch](docs/PAUSE_DESIGN.md), [saved sign-ins](docs/SECRETS_DESIGN.md), [backups](docs/BACKUP_DESIGN.md), [the Status page](docs/HEALTH_DESIGN.md).
-- **The next phase:** [the owner's decisions of 2026-10-18](docs/DECISIONS_2026-10-18.md), [the task sheet](docs/TRACKER.md), [what Diya can do, with the proof](docs/CAPABILITIES.md), [the monthly checks](docs/MONTHLY_CHECKS.md), [studies of supermemory, REA and Devin](docs/STUDY_SUPERMEMORY.md), [Devin](docs/STUDY_DEVIN.md), and [trying supermemory's local server safely](docs/SUPERMEMORY_LOCAL_TRIAL.md).
-- **Research and plans:** [RESEARCH.md](RESEARCH.md) (34 dated entries; the 2026-10-18 reviews are in [docs/RESEARCH_REVIEWS_2026-10-18.md](docs/RESEARCH_REVIEWS_2026-10-18.md)), [Diya next to the projects like it](docs/COMPARISON.md), [the research plan](docs/RESEARCH_PLAN_2026-10.md), [model benchmark](docs/MODEL_BENCHMARK.md), [the gate benchmark](docs/GATE_BENCHMARK.md).
+- **Trust:** [access token and the boundary](docs/STAGE1_DESIGN.md), [UI login](docs/UI_LOGIN_DESIGN.md), [the October audit](docs/AUDIT_2026-10-10.md), [who may do what](docs/AUTHORITY_MODEL.md) and [what each connection may do](docs/PERMISSIONS_DESIGN.md), [the pause switch](docs/PAUSE_DESIGN.md), [saved sign-ins](docs/SECRETS_DESIGN.md), [backups](docs/BACKUP_DESIGN.md), [the Status page](docs/HEALTH_DESIGN.md), [dependencies and their scans](docs/DEPENDENCIES.md), [the licence review](docs/LICENCES.md).
+- **The next phase:** [the owner's decisions of 2026-10-18](docs/DECISIONS_2026-10-18.md), [the task sheet](docs/TRACKER.md), [what Diya can do, with the proof](docs/CAPABILITIES.md), [the scorecard](docs/SCORECARD.md), [the monthly checks](docs/MONTHLY_CHECKS.md), [studies of supermemory, REA and Devin](docs/STUDY_SUPERMEMORY.md), [Devin](docs/STUDY_DEVIN.md), and [trying supermemory's local server safely](docs/SUPERMEMORY_LOCAL_TRIAL.md).
+- **Research and plans:** [RESEARCH.md](RESEARCH.md) (34 dated entries; the reviews are in [docs/RESEARCH_REVIEWS_2026-10-18.md](docs/RESEARCH_REVIEWS_2026-10-18.md) and [docs/RESEARCH_REVIEWS_2026-10-21.md](docs/RESEARCH_REVIEWS_2026-10-21.md)), [Diya next to the projects like it](docs/COMPARISON.md), [the research plan](docs/RESEARCH_PLAN_2026-10.md), [model benchmark](docs/MODEL_BENCHMARK.md), [the gate benchmark](docs/GATE_BENCHMARK.md).
 
 ## Architecture
 

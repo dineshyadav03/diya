@@ -374,7 +374,9 @@ def test_an_earlier_chats_messages_carry_their_ids_and_categories(tmp_path):
     agent.store.add_message(main_thread, "user", "newest, so the one chat is this")
     cat.Book(agent.store).assign(old, "Weather", "code")
     body = client.get(f"/api/history/{earlier}").json()
-    assert body["is_main"] is False and body["messages"][0] == {"id": old, "role": "user", "content": "how hot is it", "category": "Weather"}
+    first = dict(body["messages"][0])
+    assert isinstance(first.pop("at"), str)  # each message also says when it was written (task DIYA-158)
+    assert body["is_main"] is False and first == {"id": old, "role": "user", "content": "how hot is it", "category": "Weather"}
     assert "category" not in body["messages"][1] and body["messages"][1]["role"] == "assistant"
 
 
