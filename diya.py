@@ -1231,7 +1231,7 @@ class Agent:
     def _where_from(self, question, messages):
         """The answer to "how do you know ...?", built from the record by diya_provenance, or None when the question is not that kind (the chat then goes on as it would have). Never raises: a memory that
         cannot be read is no reason for the chat to fail."""
-        if not isinstance(question, str) or diya_provenance.asks_where_from(question) is None:
+        if not isinstance(question, str) or (diya_provenance.asks_where_from(question) is None and diya_provenance.asks_as_of(question) is None):
             return None
         previous = next((m.get("content") for m in reversed(messages[:-1]) if isinstance(m, dict) and m.get("role") == "assistant" and isinstance(m.get("content"), str)), None)
         try:

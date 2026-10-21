@@ -13,9 +13,10 @@ Importing this module has no side effects.
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import diya_time
+import diya_when
 from diya_memory import FLAG_SOURCE_PREFIX, printable
 
 MAX_FACTS = 3
@@ -156,7 +157,13 @@ def describe(memory, store, fact):
             lines.append(f"You said it again {'once' if len(said) == 1 else f'{len(said)} times'}, most recently {_when(said[-1][1])}.")
         faded = memory.fading().get(fact["id"])
         if faded is not None:
-            lines.append(f"It sounds like a passing state, so it fades on {faded.astimezone().strftime('%d %b %Y')} unless you say it again or keep it.")
+            import diya_fade
+
+            until = diya_fade.lasts_until(fact["text"], fact["created_at"])
+            if until is not None:
+                lines.append(f"It says it lasts until {until.strftime('%d %b %Y')}, so it fades the day after unless you keep it.")
+            else:
+                lines.append(f"It sounds like a passing state, so it fades on {faded.astimezone().strftime('%d %b %Y')} unless you say it again or keep it.")
     if status == "retired":
         lines.append("I no longer use it: it was retired, and the Memory page can restore it.")
     elif status == "candidate":
@@ -167,6 +174,52 @@ def describe(memory, store, fact):
     return " ".join(lines)
 
 
+_AS_OF = re.compile(
+    _LEAD + r"(?:what|which|how\s+much|how\s+many)\s+(?:things\s+|facts\s+)?(?:did|had|do|were)\s+you\s+(?:know|remember|have|recall|store|learn|keep|think)\b(?P<rest>.*)$"
+    r"|" + _LEAD + r"what\s+(?:was|were)\s+(?:in\s+)?(?:your\s+memory|remembered|known)\b(?P<rest2>.*)$"
+    r"|" + _LEAD + r"show\s+(?:me\s+)?(?:your\s+)?memory\s+(?:as\s+of|from|on)\b(?P<rest3>.*)$", re.IGNORECASE)
+AS_OF_LINES = 12
+
+
+def asks_as_of(text, today=None):
+    """(the day asked about, the rest of the question) if `text` asks what Diya remembered ON A PAST DAY ("what did you know about me on 12 Oct?", "what did you remember last week?"), else None. The day is
+    read by diya_when.past_day against `today`; a question with no past day in it is not this kind (so "what do you know about my dog?" goes on to the model as before). Added 2026-10-21 (docs/TIME_DESIGN.md)."""
+    if not isinstance(text, str) or not text.strip() or len(text) > MAX_QUESTION_CHARS or "\n" in text.strip():
+        return None
+    found = _AS_OF.match(text.replace("’", "'").strip())
+    if not found:
+        return None
+    rest = (found.group("rest") or found.group("rest2") or found.group("rest3") or "").strip(" ?!.\"'")
+    today = today or datetime.now().astimezone().date()
+    day = diya_when.past_day(rest, today)
+    return None if day is None else (day, rest)
+
+
+def as_of_answer(memory, day, rest):
+    """What was remembered at the end of `day`, in words made from the record (Memory.as_of), and what has changed since: built by code, never by the model. A topic in the question ("... about my dog on
+    12 Oct") keeps only the facts that share a telling word with it."""
+    end = (datetime(day.year, day.month, day.day) + timedelta(days=1)).astimezone()
+    now_moment = datetime.now().astimezone()
+    then, now = memory.as_of(end), memory.as_of(now_moment)
+    topic = _words(re.sub(r"\b(?:about|on|as of|back|at|in|during|by|from)\b", " ", diya_when.strip_days(rest)))
+    if topic:
+        then = [f for f in then if _matching([f], topic)]
+        now = [f for f in now if _matching([f], topic)]
+    label = f"{diya_when.DAYS[day.weekday()]} {day.day} {diya_when.MON[day.month - 1]} {day.year}"
+    closing = "(Replayed from the history Diya keeps of every change, not written by the model.)"
+    if not then:
+        first = min((f["since"] for f in memory.as_of(now_moment)), default=None)
+        first_note = f" The first thing I have a record of remembering came on {_when(first)}." if first and not topic else ""
+        return f"At the end of {label} I had nothing remembered" + (" about that." if topic else ".") + first_note + " " + closing
+    lines = [f"- {printable(f['text'], QUOTE_CHARS)}" + (f" (since {_when(f['since'])})" if f["since"] else "") for f in then[-AS_OF_LINES:]]
+    more = len(then) - len(lines)
+    ids_then, ids_now = {f["id"] for f in then}, {f["id"] for f in now}
+    added, gone = len(ids_now - ids_then), len(ids_then - ids_now)
+    head = f"At the end of {label} I remembered {len(then)} thing{'s' if len(then) != 1 else ''}" + (" about that" if topic else "") + ":"
+    change = f"Since then: {added} added, {gone} no longer used." if (added or gone) else "Since then nothing has changed."
+    return "\n".join([head, *lines] + ([f"... and {more} older ones."] if more else []) + [change, closing])
+
+
 NOTHING_FOR_THAT = ("I can't find anything I have remembered about you that matches that. If I said something, it may have come from what I already know in general, from the web or from a tool "
                     "(the Activity page shows which tools I used), and I don't keep a record of that kind of source as a memory.")
 NOTHING_FOR_LAST = ("I can't tie my last answer to anything I have remembered about you. It may have come from what I know in general, from the web or from a tool I used (the Activity page shows those).")
@@ -174,6 +227,9 @@ NOTHING_FOR_LAST = ("I can't tie my last answer to anything I have remembered ab
 
 def explain(memory, store, question, previous_answer=None):
     """The answer to a "how do you know" question, or None when the question is not about the person's memory (it is then left to the model). Built only from the record."""
+    asked = asks_as_of(question)
+    if asked is not None:
+        return as_of_answer(memory, *asked)
     rest = asks_where_from(question)
     if rest is None:
         return None

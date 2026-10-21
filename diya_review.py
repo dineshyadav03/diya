@@ -13,6 +13,7 @@
     python diya_review.py export-markdown [PATH]   a Markdown copy of memory (docs/MARKDOWN_MEMORY_DESIGN.md)
     python diya_review.py restore-markdown PATH    bring back what a Markdown copy holds and memory does not
     python diya_review.py export-repo FOLDER       memory as an Agent Memory Repo: MEMORY.md + one note per person (docs/MEMORY_REPO_DESIGN.md)
+    python diya_review.py as-of DAY...      what was remembered at the end of a past day, and what changed since (docs/TIME_DESIGN.md)
     python diya_review.py verify            check the store is consistent
     python diya_review.py judge [ID...]     ask the local model for a second opinion on candidates (advisory)
     python diya_review.py merge FROM [INTO] move every fact about FROM onto INTO (default: you)
@@ -32,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
 
 import diya_config
 import diya_memory
@@ -175,6 +177,18 @@ def cmd_export(memory, config, args, out):
     return EXIT_OK
 
 
+def cmd_as_of(memory, config, args, out):
+    import diya_provenance
+    import diya_when
+
+    day = diya_when.past_day(" ".join(args.day), datetime.now().astimezone().date())
+    if day is None:
+        print("as-of: say a day that has already come: 2026-10-12, 12 Oct, yesterday, last Friday, last week", file=out)
+        return EXIT_USAGE
+    print(diya_provenance.as_of_answer(memory, day, ""), file=out)
+    return EXIT_OK
+
+
 def cmd_export_markdown(memory, config, args, out):
     """The Markdown copy of memory (diya_markdown.py): to a file when a path is given (never over an existing file without --force), else to the screen."""
     import diya_markdown
@@ -306,6 +320,9 @@ def build_parser():
     restore_md = commands.add_parser("restore-markdown", help="bring back facts from a Markdown copy; only what is not here already, nothing is changed")
     restore_md.add_argument("path")
     restore_md.set_defaults(run=cmd_restore_markdown)
+    as_of = commands.add_parser("as-of", help="what was remembered at the end of a past day, and what has changed since (replayed from the history, no model)")
+    as_of.add_argument("day", nargs="+", help="a past day: 2026-10-12, 12 Oct, yesterday, last Friday, last week")
+    as_of.set_defaults(run=cmd_as_of)
     commands.add_parser("verify", help="check the store is consistent").set_defaults(run=cmd_verify)
     judge = commands.add_parser("judge", help="ask the local model for a second opinion on candidates (advisory only)")
     judge.add_argument("ids", nargs="*", type=int, help="only these candidates (default: all of them)")

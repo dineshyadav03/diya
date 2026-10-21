@@ -313,7 +313,9 @@ export default function MemoryPage() {
         )}
         {fact.status === 'accepted' && fact.fades_on && (
           <p className="memory-dim">
-            This looks like a passing state, so it fades on {fact.fades_on} unless you say it again or keep it.{' '}
+            {fact.lasts_until
+              ? `It says it lasts until ${fact.lasts_until}, so it fades the day after unless you keep it.`
+              : `This looks like a passing state, so it fades on ${fact.fades_on} unless you say it again or keep it.`}{' '}
             <button type="button" className="memory-btn memory-btn--quiet" disabled={isBusy} onClick={() => decide(fact, 'keep', 'Kept: it will not fade.')} aria-label={`Keep: ${fact.text}`}>
               Keep
             </button>

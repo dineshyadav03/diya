@@ -33,6 +33,7 @@ from pydantic import BaseModel
 
 import diya_autonomy
 import diya_intent
+import diya_fade
 import diya_memory
 from diya_memory import (
     BudgetExceeded,
@@ -130,6 +131,8 @@ def register(app, config, agent):
             # when a passing state fades unless it is said again or kept (docs/FADING_DESIGN.md), as a date; None for one that does not fade; and how many times the person said it again
             "fades_on": fades.astimezone().strftime("%Y-%m-%d") if fades is not None else None,
             "said_again": (said or {}).get(fact["id"], 0),
+            # the last day the fact itself says it lasts to ("until 31 Jan"), as a date, else None: the page says "it lasts until ..." instead of "a passing state"
+            "lasts_until": (lambda day: day.isoformat() if day is not None else None)(diya_fade.lasts_until(fact["text"], fact["created_at"])) if fades is not None else None,
         }
 
     @app.get("/api/memory")

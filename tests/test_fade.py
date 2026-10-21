@@ -284,3 +284,42 @@ def test_with_automatic_memory_off_no_date_is_promised_and_nothing_fades(tmp_pat
     age(agent.store, fact, 90)
     assert memory.fading() == {} and memory.fade_due() == [] and memory.get(fact)["status"] == "accepted"
     assert client.get("/api/memory").json()["facts"][0]["fades_on"] is None
+
+
+# ---- a fact that says when it ends (diya_when.ends_on; docs/TIME_DESIGN.md), from Mem0's expiration dates --------------------
+
+
+def test_a_fact_that_says_when_it_ends_fades_the_day_after_and_saying_it_again_does_not_move_it(memory, store):
+    from datetime import date
+
+    fact = memory.add_manual("has a gym membership until 31 Jan", "api")
+    when = memory.fading()[fact]
+    made = datetime.now().astimezone().date()
+    year = made.year if date(made.year, 1, 31) >= made else made.year + 1
+    assert when.astimezone().date() == date(year, 2, 1)
+    memory.reinforce(fact, 7, "auto")
+    assert memory.fading()[fact] == when  # the date is the date
+
+
+def test_a_fact_about_the_past_with_a_date_does_not_fade_and_a_kept_one_does_not_either(memory):
+    past = memory.add_manual("lived in Pune until 2019", "api")
+    kept = memory.add_manual("the trial ends on 15 Nov", "api")
+    memory.keep(kept, "api")
+    assert past not in memory.fading() and kept not in memory.fading()
+
+
+def test_an_explicit_end_does_not_need_a_passing_state_word_and_durable_words_do_not_block_it(memory):
+    fact = memory.add_manual("goes to yoga every Monday until the end of March", "api")
+    assert fact in memory.fading()
+
+
+def test_the_page_and_the_provenance_answer_say_it_lasts_until_not_that_it_is_a_passing_state(tmp_path):
+    client, agent, _ = build(tmp_path, ByQuestionClient())
+    memory = Memory(agent.store)
+    fact = memory.add_manual("has a gym membership until 31 Jan", "api")
+    body = {f["id"]: f for f in client.get("/api/memory").json()["facts"]}[fact]
+    assert body["lasts_until"] and body["lasts_until"].endswith("-01-31") and body["fades_on"]
+    assert "It says it lasts until" in prov.describe(memory, agent.store, memory.get(fact)) and "passing state" not in prov.describe(memory, agent.store, memory.get(fact))
+    passing = memory.add_manual("is reading Dune for now", "api")
+    other = {f["id"]: f for f in client.get("/api/memory").json()["facts"]}[passing]
+    assert other["lasts_until"] is None

@@ -388,3 +388,66 @@ def test_a_quick_embedding_is_used_and_a_failing_one_is_passed_on(tmp_path):
     agent.embed = broken
     with pytest.raises(ConnectionError):
         agent.embed_in_time("when is my exam")
+
+
+# ---- questions that name a time (diya_when; docs/TIME_DESIGN.md) ---------------------------------------------------------
+
+TOPICS = ["run", "dentist", "library", "pharmacology", "scholarship"]
+
+
+def topic_embed(text):
+    """Meaning as which topic a text is about, so that time words in a question do not change how close it is to a message."""
+    low = text.lower()
+    return [1.0 if topic in low else 0.0 for topic in TOPICS] + [0.01]
+
+
+def dated(store, text, when):
+    message = store.add_message(store.main_thread(), "user", text)
+    conn = store.connect()
+    conn.execute("UPDATE messages SET created_at = ? WHERE id = ?", (when, message))
+    conn.commit()
+    conn.close()
+    return message
+
+
+def test_a_time_in_the_question_puts_messages_from_those_days_first_without_dropping_the_others(store):
+    from datetime import date
+
+    ids = [dated(store, f"I did a long run along the river with {name}.", when) for name, when in (("Rohan", "2026-05-02T09:00:00+00:00"), ("Maya", "2026-10-14T09:00:00+00:00"),
+                                                                                            ("Karan", "2026-10-02T09:00:00+00:00"), ("Anna", "2026-03-02T09:00:00+00:00"), ("Ben", "2026-04-02T09:00:00+00:00"))]
+    ep.index_new(store, topic_embed, "m")
+    today = date(2026, 10, 21)  # "last week" is 12-18 October
+    plain = [m["id"] for m in ep.search(store, topic_embed, "m", "where did I run?", today=today)]
+    with_time = [m["id"] for m in ep.search(store, topic_embed, "m", "where did I run last week?", today=today)]
+    assert len(plain) == ep.TOP and len(with_time) == ep.TOP and ids[1] in with_time  # the run of last week makes the short list when the question names last week
+    assert set(with_time) - {ids[1]} <= set(ids)  # and the others that fill it are still messages that matched, not nothing
+
+
+def test_the_boost_cannot_lift_a_message_that_does_not_match_at_all(store):
+    from datetime import date
+
+    dated(store, "The library card expires on the third of March.", "2026-10-14T09:00:00+00:00")
+    ep.index_new(store, topic_embed, "m")
+    assert ep.search(store, topic_embed, "m", "when is my pharmacology exam last week?", today=date(2026, 10, 21)) == []
+
+
+def test_a_question_only_about_when_is_answered_with_the_messages_from_those_days(store):
+    from datetime import date
+
+    inside = dated(store, "The dentist appointment is on Thursday at 4:30 pm.", "2026-10-14T09:00:00+00:00")
+    outside = dated(store, "I owe the library 40 rupees for a late book.", "2026-09-01T09:00:00+00:00")
+    ep.index_new(store, topic_embed, "m")
+    calls = []
+    found = ep.search(store, lambda t: calls.append(t) or topic_embed(t), "m", "what did I say last week?", today=date(2026, 10, 21))
+    assert [m["id"] for m in found] == [inside] and outside not in [m["id"] for m in found] and calls == []  # (no embedding was needed)
+    assert ep.search(store, topic_embed, "m", "anything from yesterday?", today=date(2026, 10, 21)) == []  # nothing was said that day
+
+
+def test_a_message_is_found_on_the_day_it_was_for_the_person(store):
+    from datetime import date
+
+    # 20:30 UTC on 13 October is 02:00 on the 14th in Mumbai; this computer's own zone decides, so the test only asks that it is found on ONE of the two days after
+    only = dated(store, "The scholarship form needs my income certificate.", "2026-10-13T20:30:00+00:00")
+    ep.index_new(store, topic_embed, "m")
+    hits = [ep.search(store, topic_embed, "m", "what did I say yesterday?", today=date(2026, 10, d)) for d in (14, 15)]
+    assert any(h and h[0]["id"] == only for h in hits)

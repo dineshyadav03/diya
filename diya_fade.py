@@ -20,7 +20,7 @@ Importing this module has no side effects.
 from __future__ import annotations
 
 import re
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 _DURABLE = re.compile(r"\b(?:always|never|every|each|usually|used\s+to|forever|permanent\w*|all\s+my\s+life|since\s+\w+\s+\d{4}|since\s+\d{4})\b", re.IGNORECASE)
 _ACTIVITY = (
@@ -50,6 +50,32 @@ def fades_on(text, evidence_times):
     if rule is None or not evidence_times:
         return None
     return max(evidence_times) + timedelta(days=rule[0])
+
+
+def explicit_end(text, created_at):
+    """When a fact fades because it SAYS how long it lasts ("until 31 Jan", "the trial ends on 15 Nov", "through the end of March"): the start of the day after that day, as an aware datetime in the person's zone,
+    or None. The year of a date written without one is worked out against the day the fact was made (diya_when.ends_on), a date already behind it is ignored, and saying the fact again does not move the date:
+    the date is the date. Unlike the passing-state phrases this needs no marker word ("always", "every" do not stop "every Monday until March" from ending in March)."""
+    import diya_when
+
+    try:
+        made = diya_when.local_date(created_at)
+    except (ValueError, TypeError, AttributeError):
+        return None
+    last = diya_when.ends_on(text, made)
+    if last is None:
+        return None
+    return datetime.combine(last + timedelta(days=1), time.min).astimezone()
+
+
+def lasts_until(text, created_at):
+    """The last day a fact says it lasts to (a date), or None: what the Memory page says instead of "a passing state"."""
+    import diya_when
+
+    try:
+        return diya_when.ends_on(text, diya_when.local_date(created_at))
+    except (ValueError, TypeError, AttributeError):
+        return None
 
 
 def describe(text):

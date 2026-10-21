@@ -238,6 +238,15 @@ def _now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def _parse_moment(at):
+    """A stored moment as an aware datetime (a time with no zone is UTC, as Diya stores them), or None when it is not a time."""
+    try:
+        moment = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
 def _check_actor(actor):
     if actor not in ACTORS:
         raise ValueError(f"actor must be one of {', '.join(ACTORS)}, got {actor!r}")
@@ -370,6 +379,44 @@ class Memory:
                 "SELECT event, actor, at, detail FROM fact_events WHERE fact_id = ? ORDER BY id", (fact_id,)
             ).fetchall()
 
+    def as_of(self, moment):
+        """What was remembered (accepted, in use) at `moment`, an aware datetime, as {id, text, person, since}, oldest first, replayed from the trail (docs/TIME_DESIGN.md): a fact counts if its events
+        up to then leave it accepted, and its words are those it had then (a reworded candidate is read back through the edits made after). Nothing is written. A fact forgotten for good has no words left
+        to show and is left out; who a fact is about is as it is now; `since` is when it last came to be in use before `moment`."""
+        cutoff = moment.astimezone(timezone.utc)
+        with self._read() as conn:
+            rows = conn.execute(_FACT_SELECT + " ORDER BY f.id").fetchall()
+            events = conn.execute("SELECT fact_id, event, at, detail FROM fact_events ORDER BY id").fetchall()
+        trail = defaultdict(list)
+        for fact_id, event, at, detail in events:
+            trail[fact_id].append((event, _parse_moment(at), detail))
+        found = []
+        for row in rows:
+            fact = _fact(row)
+            history = trail[fact["id"]]
+            if any(event == "purged" for event, _at, _detail in history):
+                continue
+            status, since = None, None
+            for event, at, _detail in history:
+                if at is None or at > cutoff:
+                    continue
+                new = EVENT_STATUS.get(event)
+                if new is not None:
+                    if new == "accepted" and status != "accepted":
+                        since = at
+                    status = new
+            if status != "accepted":
+                continue
+            text = fact["text"]
+            for event, at, detail in reversed(history):  # words changed after `moment` are read back to what they were
+                if event == "edited" and at is not None and at > cutoff:
+                    try:
+                        text = json.loads(detail)["from"]
+                    except (TypeError, ValueError, KeyError):
+                        pass
+            found.append({"id": fact["id"], "text": text, "person": fact["person"], "since": since.isoformat()})
+        return found
+
     def counts(self):
         with self._read() as conn:
             found = dict(conn.execute("SELECT status, COUNT(*) FROM facts GROUP BY status"))
@@ -469,15 +516,56 @@ class Memory:
         return render_profile(self.accepted_texts())
 
     @staticmethod
+    def _told_texts(conn, rows):
+        """The words each fact is TOLD in, for rows of (id, text, created_at, flags, batch_first, batch_last): the fact's own words, and where they hold a relative time ("last weekend", "yesterday",
+        "3 weeks ago") and were written on another day than today, what that meant on the day they were written, added after the phrase (diya_when; docs/TIME_DESIGN.md). The stored text never changes. The day
+        is the day of the message the fact was read from, as far as the record says, else the day the fact was made."""
+        import diya_when
+
+        needing = [row for row in rows if diya_when.has_relative(row[1])]
+        if not needing:
+            return {row[0]: row[1] for row in rows}
+        wanted = {}
+        for fact_id, _text, _created, flags, first, last in needing:
+            message = None
+            try:
+                for flag in json.loads(flags or "[]"):
+                    if isinstance(flag, str) and flag.startswith(FLAG_SOURCE_PREFIX) and flag[len(FLAG_SOURCE_PREFIX):].isdigit():
+                        message = int(flag[len(FLAG_SOURCE_PREFIX):])
+                        break
+            except ValueError:
+                pass
+            if message is None and first is not None and first == last:
+                message = first
+            wanted[fact_id] = message
+        ids = sorted({m for m in wanted.values() if m is not None})
+        times = dict(conn.execute(f"SELECT id, created_at FROM messages WHERE id IN ({','.join('?' * len(ids))})", ids).fetchall()) if ids else {}
+        today = datetime.now().astimezone().date()
+        told = {}
+        for fact_id, text, created, _flags, _first, _last in rows:
+            if fact_id not in wanted:
+                told[fact_id] = text
+                continue
+            try:
+                anchor = diya_when.local_date(times.get(wanted[fact_id]) or created)
+            except (ValueError, TypeError):
+                told[fact_id] = text
+                continue
+            told[fact_id] = diya_when.annotate(text, anchor, today)
+        return told
+
+    @staticmethod
     def _accepted_with_person(conn, exclude_id=None):
         """Every accepted fact as (text, person), oldest first, excluding one fact id if given (so a
-        caller can ask "what would the others plus this new text add up to")."""
-        query = "SELECT f.text, p.name FROM facts f LEFT JOIN people p ON p.id = f.person_id WHERE f.status = 'accepted'"
+        caller can ask "what would the others plus this new text add up to"). The text is the words the model is TOLD (Memory._told_texts), so a limit is measured on what is really sent."""
+        query = "SELECT f.id, f.text, p.name, f.created_at, f.flags, f.batch_first, f.batch_last FROM facts f LEFT JOIN people p ON p.id = f.person_id WHERE f.status = 'accepted'"
         args = ()
         if exclude_id is not None:
             query += " AND f.id != ?"
             args = (exclude_id,)
-        return conn.execute(query + " ORDER BY f.id", args).fetchall()
+        found = conn.execute(query + " ORDER BY f.id", args).fetchall()
+        told = Memory._told_texts(conn, [(i, text, created, flags, first, last) for i, text, _person, created, flags, first, last in found])
+        return [(told[i], person) for i, _text, person, _created, _flags, _first, _last in found]
 
     def render_for_model(self, query="", embed=None, model=""):
         """The accepted facts as the model is actually given them (docs/PERSON_MEMORY_DESIGN.md, M4):
@@ -492,10 +580,12 @@ class Memory:
                 return everything
             import diya_recall
 
-            facts = [{"id": r[0], "text": r[1], "text_key": r[2], "person": r[3]} for r in conn.execute(
-                "SELECT f.id, f.text, f.text_key, p.name FROM facts f LEFT JOIN people p ON p.id = f.person_id WHERE f.status = 'accepted' ORDER BY f.id").fetchall()]
-        chosen = diya_recall.choose(facts, query, MAX_PROFILE_CHARS - PARTIAL_NOTE_ROOM, lambda picked: render_grouped([(f["text"], f["person"]) for f in picked]), store=self.store, embed=embed, model=model)
-        text = render_grouped([(f["text"], f["person"]) for f in chosen])
+            every = conn.execute(
+                "SELECT f.id, f.text, f.text_key, p.name, f.created_at, f.flags, f.batch_first, f.batch_last FROM facts f LEFT JOIN people p ON p.id = f.person_id WHERE f.status = 'accepted' ORDER BY f.id").fetchall()
+            told = self._told_texts(conn, [(r[0], r[1], r[4], r[5], r[6], r[7]) for r in every])
+            facts = [{"id": r[0], "text": r[1], "text_key": r[2], "person": r[3], "told": told[r[0]]} for r in every]
+        chosen = diya_recall.choose(facts, query, MAX_PROFILE_CHARS - PARTIAL_NOTE_ROOM, lambda picked: render_grouped([(f["told"], f["person"]) for f in picked]), store=self.store, embed=embed, model=model)
+        text = render_grouped([(f["told"], f["person"]) for f in chosen])
         if len(chosen) < len(facts):  # honest about being partial (supermemory's company-brain says "this is not the complete set"): the model must not read what is missing as what is not known
             text += "\n" + partial_note(len(facts) - len(chosen))
         return text
@@ -794,8 +884,8 @@ class Memory:
         return row is not None
 
     def fading(self, now=None):
-        """{fact id: when it fades (aware datetime)} for every accepted fact that fades and was not kept (diya_fade). The clock starts from the latest of: when the fact was taken in, each time it was said
-        again, and when it was last restored."""
+        """{fact id: when it fades (aware datetime)} for every accepted fact that fades and was not kept (diya_fade). A fact that says when it ends ("until 31 Jan") fades the day after that day; a passing
+        state fades from the latest of: when the fact was taken in, each time it was said again, and when it was last restored."""
         import diya_fade
 
         found = {}
@@ -804,7 +894,13 @@ class Memory:
         with self._read() as conn:
             rows = conn.execute("SELECT id, text, created_at FROM facts WHERE status = 'accepted'").fetchall()
             for fact_id, text, created in rows:
-                if diya_fade.fade_rule(text) is None or self._is_kept(conn, fact_id):
+                ends = diya_fade.explicit_end(text, created)
+                if ends is None and diya_fade.fade_rule(text) is None:
+                    continue
+                if self._is_kept(conn, fact_id):
+                    continue
+                if ends is not None:  # it says when it ends: that day, and saying it again does not move it
+                    found[fact_id] = ends
                     continue
                 times = [datetime.fromisoformat(created)]
                 times += [datetime.fromisoformat(at) for (at,) in conn.execute("SELECT at FROM fact_mentions WHERE fact_id = ?", (fact_id,))]
