@@ -20,6 +20,7 @@ import diya_actions
 import diya_automations
 import diya_config
 import diya_calendar_talk
+import diya_toolguard
 import diya_connection_talk
 import diya_connector_tools
 import diya_connectors
@@ -1415,6 +1416,7 @@ class Agent:
         if only_tools is not None:
             tools = [spec for spec in tools if spec["function"]["name"] in only_tools]
         offered = frozenset(spec["function"]["name"] for spec in tools or ())
+        repeats = diya_toolguard.RepeatGuard()  # one per turn: a nudge out of identical calls in a row (diya_toolguard)
         for _ in range(MAX_TOOL_ROUNDS):
             response = self._complete(messages, fact_share, tools, on_event, small_talk)
             message = response.choices[0].message
@@ -1439,7 +1441,10 @@ class Agent:
                     on_event("tool", str(call.function.name)[:60])
                 # Every call gets exactly one tool message back, whatever became of it: that is what the model's API
                 # expects, and a call the model got wrong is told so, in words it can act on, rather than ending the turn.
-                result = self._run_tool_call(call, offered, strict=only_tools is not None)
+                result = diya_toolguard.prune(self._run_tool_call(call, offered, strict=only_tools is not None))  # a very long result is cut to its start and end, so it cannot fill the window
+                reminder = repeats.after(call.function.name, call.function.arguments)
+                if reminder:
+                    result = f"{result}\n\n{reminder}"
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
 
         return "I couldn't finish that after several tool calls -- something's likely stuck. Try rephrasing.", tools_called

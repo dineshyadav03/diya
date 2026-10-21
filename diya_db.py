@@ -521,6 +521,21 @@ MIGRATIONS = (
         )
         """,
     )),
+    # What the person thinks of Diya's reply to a message of theirs (docs/FEEDBACK_DESIGN.md): helpful or not, one reason from a fixed list, and an optional note in their own words. `version` counts changes, so a
+    # stale edit from another page or device is refused, never silently written over. Forgetting the message takes its row with it.
+    (27, (
+        """
+        CREATE TABLE IF NOT EXISTS reply_feedback (
+            message_id INTEGER PRIMARY KEY,
+            rating TEXT NOT NULL CHECK (rating IN ('positive', 'negative')),
+            category TEXT,
+            note TEXT,
+            version INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """,
+    )),
 )
 
 MAX_THREAD_TITLE = 80  # the longest name a chat can be given

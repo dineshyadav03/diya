@@ -86,6 +86,16 @@ function inCategory(messages, tags, name) {
   return kept
 }
 
+// Why a reply was not helpful: the same list, in the same words, as diya_feedback.CATEGORIES (a test keeps them equal).
+const FEEDBACK_REASONS = {
+  wrong: 'The answer was wrong',
+  'made-up': 'It made something up',
+  'not-what-i-asked': 'It did not do what I asked',
+  slow: 'It was too slow',
+  privacy: 'It showed or asked for something private or unsafe',
+  other: 'Something else',
+}
+
 // A reply drawn with the bold, italic and code the model marked (lib/markdown-lite.mjs): each part is text inside its own element, so a reply can never become markup.
 function Inline({ text }) {
   return inlineParts(text).map((part, i) => {
@@ -127,6 +137,7 @@ export default function ChatPage() {
   // Diya sorts each message of the person's into a category after replying (docs/ONE_CHAT_DESIGN.md): the list of categories, where each message is (message id -> name), the category the chat is
   // being looked at by (null = all of it), and why a change of category did not happen.
   const [categories, setCategories] = useState([])
+  const [ratings, setRatings] = useState({}) // the person's rating of Diya's reply to each of their messages: { message id: { rating, category, note, version } }
   const [tags, setTags] = useState({})
   const [lookingAt, setLookingAt] = useState(null)
   const [tagProblem, setTagProblem] = useState('')
@@ -184,6 +195,7 @@ export default function ChatPage() {
         const found = {}
         for (const m of data.messages) if (m.role === 'user' && Number.isInteger(m.id) && typeof m.category === 'string') found[m.id] = m.category
         setTags(found)
+        loadRatings(data.messages.filter((m) => m.role === 'user' && Number.isInteger(m.id)).map((m) => m.id))
         setLookingAt(null)
         setMessages(loaded)
         loadCategories(data.is_main !== false) // an earlier chat's tags came with it; only the one chat's are looked for again
@@ -226,6 +238,70 @@ export default function ChatPage() {
     } catch {
       // nothing to show
     }
+  }
+
+  // What the person thinks of Diya's reply to one of their messages (docs/FEEDBACK_DESIGN.md). One place sends it; a change made from another page since they looked comes back as 409 with the item as it now is.
+  function postFeedback(body) {
+    return fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  }
+
+  async function loadRatings(ids) {
+    if (!ids.length) {
+      setRatings({})
+      return
+    }
+    try {
+      const response = await postFeedback({ action: 'list', message_ids: ids })
+      const body = response.ok ? await response.json() : null
+      if (body && body.items && typeof body.items === 'object') {
+        const found = {}
+        for (const [id, item] of Object.entries(body.items)) found[Number(id)] = item
+        setRatings(found)
+      }
+    } catch {
+      // the buttons simply start empty: nothing depends on this
+    }
+  }
+
+  async function rate(serverId, rating, category) {
+    const current = ratings[serverId]
+    setTagProblem('')
+    try {
+      if (current && current.rating === rating && category === undefined) {
+        const response = await postFeedback({ action: 'delete', message_id: serverId, version: current.version }) // pressing the same one again takes it back
+        if (response.ok) {
+          setRatings((shown) => {
+            const { [serverId]: _gone, ...rest } = shown
+            return rest
+          })
+          return
+        }
+        return await refused(response, serverId)
+      }
+      const chosen = category === undefined ? (rating === 'negative' && current ? current.category || null : null) : category || null
+      const response = await postFeedback({ action: 'put', message_id: serverId, rating, category: chosen, note: current ? current.note : null, version: current ? current.version : null })
+      if (response.ok) {
+        const body = await response.json()
+        setRatings((shown) => ({ ...shown, [serverId]: body.item }))
+        return
+      }
+      return await refused(response, serverId)
+    } catch {
+      setTagProblem('Couldn’t save that. Nothing was changed.')
+    }
+  }
+
+  async function refused(response, serverId) {
+    if (response.status === 409) {
+      const body = await response.json().catch(() => null)
+      setRatings((shown) => {
+        const { [serverId]: _old, ...rest } = shown
+        return body && body.current ? { ...rest, [serverId]: body.current } : rest
+      })
+      setTagProblem('That was changed from another page, so it is shown as it is now.')
+      return
+    }
+    setTagProblem('Couldn’t save that. Nothing was changed.')
   }
 
   // The person says a message belongs elsewhere: shown at once, put back if it could not be kept.
@@ -750,6 +826,24 @@ export default function ChatPage() {
                       ))}
                     </select>
                   )}
+                  <span className="msg-rate" role="group" aria-label="How was Diya’s reply to this message?">
+                    <button type="button" className="msg-rate-btn" aria-pressed={!!ratings[m.serverId] && ratings[m.serverId].rating === 'positive'} onClick={() => rate(m.serverId, 'positive')}>
+                      Helpful
+                    </button>
+                    <button type="button" className="msg-rate-btn" aria-pressed={!!ratings[m.serverId] && ratings[m.serverId].rating === 'negative'} onClick={() => rate(m.serverId, 'negative')}>
+                      Not helpful
+                    </button>
+                    {ratings[m.serverId] && ratings[m.serverId].rating === 'negative' && (
+                      <select className="msg-tag" aria-label="What was wrong with the reply" value={ratings[m.serverId].category || ''} onChange={(e) => rate(m.serverId, 'negative', e.target.value)}>
+                        <option value="">What was wrong?</option>
+                        {Object.entries(FEEDBACK_REASONS).map(([id, words]) => (
+                          <option key={id} value={id}>
+                            {words}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </span>
                   <button type="button" className="msg-forget" title="Delete this message and Diya’s reply for good" aria-label="Forget this message for good" disabled={thinking} onClick={() => forgetMessage(m.serverId)}>
                     Forget this
                   </button>

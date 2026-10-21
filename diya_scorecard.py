@@ -66,6 +66,13 @@ def measure_live(store, now=None):
         except (ValueError, TypeError):
             wait = None
     found["oldest_wait_hours"] = wait
+    try:
+        import diya_feedback
+
+        summary = diya_feedback.Feedback(store).summary(days=WINDOW_DAYS * 4, now=now)
+        found["rated"], found["not_helpful"] = summary["rated"], summary["negative"]
+    except Exception:  # noqa: BLE001 -- feedback that cannot be read is "none", not a failed scorecard
+        found["rated"], found["not_helpful"] = 0, 0
     return found
 
 
@@ -147,6 +154,7 @@ def render(live, code, status_items, now, baseline=None):
         f"| Half of answers took | {_seconds(live['p50_ms'])} | at least {MIN_TURNS} answers |",
         f"| 19 in 20 answers took | {_seconds(live['p95_ms'])} | at least {MIN_TURNS} answers |",
         f"| Tool calls in the last day / failed | {live['tool_calls']} / {live['tool_errors']} | always |",
+        f"| Replies rated not helpful (last {WINDOW_DAYS * 4} days) | {live['not_helpful']} of {live['rated']} | always |",
         f"| Oldest message waiting to be read for facts | {'none waiting' if live['oldest_wait_hours'] is None else str(live['oldest_wait_hours']) + ' h'} | always |",
         "",
     ]

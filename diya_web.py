@@ -22,6 +22,7 @@ import diya_actions_api
 import diya_brief_api
 import diya_categories
 import diya_categories_api
+import diya_feedback_api
 import diya_config
 import diya_connections_api
 import diya_connector_tools
@@ -585,6 +586,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     diya_dreaming_api.register(app, config, agent)  # what Dreaming's scheduled passes read and did (docs/DREAMING_RECEIPTS_DESIGN.md)
     diya_health_api.register(app, config, agent)  # is Diya well, one honest line per part (docs/HEALTH_DESIGN.md)
     diya_categories_api.register(app, config, agent, lambda: MAX_PAGE_MESSAGES)  # the one chat by category (docs/ONE_CHAT_DESIGN.md, steps 2 and 3)
+    diya_feedback_api.register(app, config, agent)  # what the person thinks of each reply (docs/FEEDBACK_DESIGN.md)
     diya_push_api.register(app, config, agent)  # telling the phone by Web Push, off unless DIYA_PUSH=1 (docs/PUSH_DESIGN.md, unit P2)
     diya_reminders_api.register(app, config, agent)
     diya_tasks_api.register(app, config, agent)  # the to-do list inside Diya (docs/TASKS_DESIGN.md, unit T2)

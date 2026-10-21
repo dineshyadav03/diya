@@ -74,6 +74,7 @@ taken** (`diya_backup.before_migrating`); if the snapshot cannot be made, Diya d
 | 24 | the embedding of each message you sent (a cache) | `docs/EPISODIC_DESIGN.md` |
 | 25 | how long each chat turn took and whether it worked (numbers only) | `docs/HEALTH_DESIGN.md` |
 | 26 | which messages a category merge moved, so the merge can be undone | `docs/ONE_CHAT_DESIGN.md` |
+| 27 | what you thought of a reply: helpful or not, a reason, a note | `docs/FEEDBACK_DESIGN.md` |
 
 `MIGRATIONS` in `diya_db.py` is the authority on the exact numbers.
 
