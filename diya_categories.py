@@ -12,11 +12,14 @@ Nothing here reaches outside this computer, and a category is only a label: it c
 """
 from __future__ import annotations
 
+import json
 import re
 import threading
 from datetime import datetime, timezone
 
+import diya_db
 import diya_intent
+import diya_when
 
 # (name, what belongs in it). The names are what the person sees; the words are what the model is told. A person can rename a category or add one; these are where it starts, and every one of the
 # owner's first 110 real messages fits one of them.
@@ -112,6 +115,8 @@ def by_model(client, model, text, categories, tries=2):
 MAX_NAME_WORDS = 3
 MAX_NAME_CHARS = 30
 MAX_MEANING_CHARS = 200
+SEARCH_SCAN = 2000  # how many matching messages a search looks through before the date filter and the limit
+MAX_SEARCH_CHARS = 100  # the longest search that is looked for
 MAX_CATEGORIES = 30  # a person can have this many; more would stop being a way to look at the chat
 
 
@@ -291,12 +296,118 @@ class Book:
             live = {row[0]: row[1] for row in conn.execute("SELECT id, name FROM categories WHERE merged_into IS NULL")}
             if source_id not in live or target_id not in live:
                 raise CategoryError("There is no such category.")
+            moved = [[mid, how, at] for mid, how, at in conn.execute("SELECT message_id, source, created_at FROM message_categories WHERE category_id = ? ORDER BY message_id", (source_id,))]
             conn.execute("UPDATE message_categories SET category_id = ? WHERE category_id = ?", (target_id, source_id))
             conn.execute("UPDATE categories SET merged_into = ?, name = name || ' [merged ' || id || ']' WHERE id = ?", (target_id, source_id))
+            conn.execute(
+                "INSERT INTO category_merges (source_id, target_id, source_name, target_name, moved, merged_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (source_id, target_id, live[source_id], live[target_id], json.dumps(moved), datetime.now(timezone.utc).isoformat()),
+            )
             conn.commit()
             return live[target_id]
         finally:
             conn.close()
+
+    @staticmethod
+    def _undo_blocker(conn, merge):
+        """Why this merge cannot be undone now, in plain words, or None when it can. `merge` is a row of (id, source_id, target_id, source_name, target_name, undone_at)."""
+        _id, source_id, target_id, source_name, target_name, undone_at = merge
+        if undone_at is not None:
+            return "That merge was already undone."
+        source = conn.execute("SELECT merged_into FROM categories WHERE id = ?", (source_id,)).fetchone()
+        if source is None or source[0] != target_id:
+            return "That category is not in the state the merge left it, so it cannot be brought back."
+        target = conn.execute("SELECT merged_into, name FROM categories WHERE id = ?", (target_id,)).fetchone()
+        if target is None or target[0] is not None:
+            return f"{target_name} was merged into another category after this, so undo that merge first."
+        if conn.execute("SELECT 1 FROM categories WHERE merged_into IS NULL AND name = ? COLLATE NOCASE", (source_name,)).fetchone():
+            return f"There is already a category called {source_name}; rename it first."
+        return None
+
+    def merges(self, limit=10):
+        """The newest merges first: [{id, source, target, count, at, undone, can_undo, why_not}]. `count` is how many messages the merge moved; `can_undo` is whether undoing it would work right now."""
+        conn = self._open()
+        try:
+            rows = conn.execute(
+                "SELECT id, source_id, target_id, source_name, target_name, undone_at, moved, merged_at FROM category_merges ORDER BY id DESC LIMIT ?", (int(limit),)
+            ).fetchall()
+            found = []
+            for row in rows:
+                why = self._undo_blocker(conn, row[:6])
+                found.append({
+                    "id": row[0], "source": row[3], "target": row[4], "count": len(json.loads(row[6])), "at": row[7],
+                    "undone": row[5] is not None, "can_undo": why is None, "why_not": why or "",
+                })
+            return found
+        finally:
+            conn.close()
+
+    def undo_merge(self, merge_id):
+        """Take a merge back as one act: the category is shown again under its own name, and each message the merge moved goes back to it unless it has been changed since (moved by the person, sorted
+        again). Returns {name, restored, left}: `left` is how many were not put back because they had been changed. CategoryError, changing nothing, if there is no such merge or it cannot be undone."""
+        conn = self._open()
+        try:
+            row = conn.execute("SELECT id, source_id, target_id, source_name, target_name, undone_at, moved FROM category_merges WHERE id = ?", (int(merge_id),)).fetchone()
+            if row is None:
+                raise CategoryError("There is no such merge.")
+            why = self._undo_blocker(conn, row[:6])
+            if why:
+                raise CategoryError(why)
+            _id, source_id, target_id, source_name, _target_name, _undone, moved = row
+            moved = json.loads(moved)
+            conn.execute("UPDATE categories SET merged_into = NULL, name = ? WHERE id = ?", (source_name, source_id))
+            restored = 0
+            for message_id, how, at in moved:
+                restored += conn.execute(
+                    "UPDATE message_categories SET category_id = ? WHERE message_id = ? AND category_id = ? AND source = ? AND created_at = ?", (source_id, message_id, target_id, how, at)
+                ).rowcount
+            conn.execute("UPDATE category_merges SET undone_at = ? WHERE id = ?", (datetime.now(timezone.utc).isoformat(), row[0]))
+            conn.commit()
+            return {"name": source_name, "restored": restored, "left": len(moved) - restored}
+        finally:
+            conn.close()
+
+    def search(self, query, category_id=None, since=None, until=None, limit=30):
+        """The person's words and Diya's, newest first, that contain `query` (case ignored; `%` and `_` are only themselves): [{id, role, text, at, thread_id, category}] across the one chat and every
+        earlier one. `category_id` keeps only what is in that category (a reply counts as the category of the message it answers); `since` and `until` are the person's own calendar days (dates), both
+        included. `text` is a short piece around the words found. Nothing is changed. [] for a query under two characters."""
+        query = " ".join(str(query or "").split())[:MAX_SEARCH_CHARS]
+        if len(query) < 2:
+            return []
+        like = "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        sql = (
+            "SELECT m.id, m.role, m.content, m.created_at, m.thread_id, COALESCE(c1.name, c2.name), COALESCE(mc1.category_id, mc2.category_id) "
+            "FROM messages m "
+            "LEFT JOIN message_categories mc1 ON mc1.message_id = m.id LEFT JOIN categories c1 ON c1.id = mc1.category_id "
+            "LEFT JOIN message_categories mc2 ON m.role = 'assistant' AND mc2.message_id = "
+            "(SELECT u.id FROM messages u WHERE u.thread_id = m.thread_id AND u.id < m.id AND u.role = 'user' ORDER BY u.id DESC LIMIT 1) "
+            "LEFT JOIN categories c2 ON c2.id = mc2.category_id "
+            "WHERE m.role IN ('user', 'assistant') AND m.content LIKE ? ESCAPE '\\' "
+        )
+        args = [like]
+        if category_id is not None:
+            sql += "AND COALESCE(mc1.category_id, mc2.category_id) = ? "
+            args.append(int(category_id))
+        sql += "ORDER BY m.id DESC LIMIT ?"
+        args.append(SEARCH_SCAN)
+        conn = self._open()
+        try:
+            rows = conn.execute(sql, args).fetchall()
+        finally:
+            conn.close()
+        found = []
+        for message_id, role, content, at, thread_id, category, _category_id in rows:
+            if since is not None or until is not None:
+                try:
+                    day = diya_when.local_date(at)
+                except (ValueError, TypeError, AttributeError):
+                    continue
+                if (since is not None and day < since) or (until is not None and day > until):
+                    continue
+            found.append({"id": message_id, "role": role, "text": diya_db.around(content, query), "at": at, "thread_id": thread_id, "category": category})
+            if len(found) >= int(limit):
+                break
+        return found
 
     def messages_in(self, category_id, limit=30):
         """The person's newest messages in a category, from every chat: [{id, text, at, thread_id, source, reply}] newest first (`reply` is the start of what Diya answered)."""

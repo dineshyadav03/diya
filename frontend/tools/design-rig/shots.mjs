@@ -48,6 +48,8 @@ const THREADS = [
   { id: 1, created_at: '2026-03-11T13:30:39+00:00', preview: 'hey' },
 ]
 
+const daysAgo = (n) => new Date(new Date().setHours(12, 0, 0, 0) - n * 86400000).toISOString()
+
 const CONVO = {
   'What did I say about my dentist?': { answer: 'You moved your dentist appointment to Thursday at 3pm, because the original slot conflicted with work.', tools_called: ['search_notes'] },
   "What's the weather in London?": { answer: 'London, England, United Kingdom: 14.2°C, light rain, wind 18 km/h.\n\nTake an umbrella.', tools_called: ['get_weather', 'add_reminder'] },
@@ -89,6 +91,28 @@ const SCENARIOS = [
     ],
   })),
   { name: 'chat-empty', path: '/', stub: {}, steps: [] },
+  // The one chat under its days (task DIYA-158): messages from three days ago, yesterday and today, as the server now sends them (each with the time it was written). `daysAgo` puts a message at noon
+  // local time on that day, so the labels do not depend on the hour the rig is run.
+  {
+    name: 'chat-days', path: '/',
+    stub: {
+      history: [
+        { id: 1, role: 'user', content: 'a question from three days ago', at: daysAgo(3) },
+        { id: 2, role: 'assistant', content: 'its answer', at: daysAgo(3) },
+        { id: 3, role: 'user', content: 'a question from yesterday', at: daysAgo(1) },
+        { id: 4, role: 'assistant', content: 'the answer from yesterday', at: daysAgo(1) },
+        { id: 5, role: 'user', content: 'a question from today', at: daysAgo(0) },
+        { id: 6, role: 'assistant', content: 'the answer from today', at: daysAgo(0) },
+      ],
+    },
+    steps: [],
+    checks: [
+      { name: 'there is one label for each of the three days', js: `document.querySelectorAll('#log .day-sep').length === 3` },
+      { name: 'the last two are called Yesterday and Today', js: `(() => { const l = Array.from(document.querySelectorAll('#log .day-sep')).map((e) => e.textContent.trim()); return l[1] === 'Yesterday' && l[2] === 'Today' })()` },
+      { name: 'each label comes right before the first message of its day', js: `(() => { const log = document.getElementById('log'); const kids = Array.from(log.children); const at = (text) => kids.findIndex((k) => k.textContent.includes(text)); return kids[at('a question from yesterday') - 1].className.includes('day-sep') && kids[at('a question from today') - 1].className.includes('day-sep') && kids[at('a question from three days ago') - 1].className.includes('day-sep') })()` },
+      { name: 'a label is a separator with a name', js: `Array.from(document.querySelectorAll('#log .day-sep')).every((e) => e.getAttribute('role') === 'separator' && e.getAttribute('aria-label'))` },
+    ],
+  },
   {
     name: 'chat-conversation', path: '/', stub: { replies: CONVO, mic: 'denied' },
     steps: [`await __send("What did I say about my dentist?")`, `await __send("What's the weather in London?")`, `await __micDown()`],

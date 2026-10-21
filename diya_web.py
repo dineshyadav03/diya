@@ -359,6 +359,8 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
             messages, more_before = agent.store.get_messages(number), False  # an earlier chat is read whole; its messages carry ids and categories too (so a tag can be moved)
             tags = diya_categories.Book(agent.store).tags([m["id"] for m in messages if m["role"] == "user"])
             messages = [dict(m, category=tags[m["id"]]) if m["id"] in tags else m for m in messages]
+        times = agent.store.message_times([m["id"] for m in messages])  # when each was written, so the page can put them under their days (docs/ONE_CHAT_DESIGN.md, task DIYA-158)
+        messages = [dict(m, at=times[m["id"]]) if m["id"] in times else m for m in messages]
         return {"thread_id": number, "is_main": number == main, "more_before": more_before, "messages": messages}
 
     @app.post("/api/transcribe")

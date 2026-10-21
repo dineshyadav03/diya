@@ -437,7 +437,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/pause", "/api/resume",  # the Status page's pause switch
         "/api/permissions",  # the Connections page: what each connection can do, since when, last used
         "/api/playbooks",  # the Playbooks page: the steps the person wrote, and any file that cannot be used
-        "/api/categories", "/api/categories", "/api/categories",  # the Categories page: its list, a change (every change goes through one call), and looking inside one
+        "/api/categories", "/api/categories", "/api/categories", "/api/categories",  # the Categories page: its list, a change (every change goes through one call), looking inside one, and searching your messages
         "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
         "/api/memory/${fact.id}/replace",  # the Memory page's "replace the old one" button
         "/api/memory/${fact.id}/forget-for-good",  # the Memory page's "Forget for good" button

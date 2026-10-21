@@ -36,6 +36,9 @@ export default function CategoriesPage() {
   const [merging, setMerging] = useState(null) // { id, into } : the category being folded into another, and which
   const [inside, setInside] = useState(null) // { id, messages } : the category being looked into; messages is null while they are fetched
   const [unticked, setUnticked] = useState({}) // suggestion id -> the message ids the person took the tick off
+  const [notice, setNotice] = useState('') // what an undo just did: the one thing said in words that is not an error
+  const [search, setSearch] = useState({ query: '', category: '', when: '' }) // what is typed in the search box
+  const [results, setResults] = useState(null) // null = nothing searched yet, 'busy' while it runs, otherwise the list found
 
   const load = useCallback(async (first) => {
     let status
@@ -133,6 +136,39 @@ export default function CategoriesPage() {
     setInside({ id: category.id, messages: answer.messages })
   }
 
+  async function undoMerge(merge) {
+    setNotice('')
+    const answer = await act({ action: 'undo_merge', merge_id: merge.id }, { keepInside: false })
+    if (answer && answer.undone) {
+      const { name, restored, left } = answer.undone
+      setNotice(`${name} is back with ${restored} message${restored === 1 ? '' : 's'}.${left ? ` ${left} could not be put back because you had moved them since.` : ''}`)
+    }
+  }
+
+  async function runSearch(event) {
+    event.preventDefault()
+    setError('')
+    setResults('busy')
+    const body = { action: 'search', query: search.query, limit: 30 }
+    if (search.category) body.category_id = Number(search.category)
+    if (search.when) body.when = search.when
+    let response
+    try {
+      response = await fetch('/api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    } catch {
+      setResults(null)
+      setError(describeActionFailure())
+      return
+    }
+    const answer = await readJson(response)
+    if (!response.ok || !answer || !Array.isArray(answer.results)) {
+      setResults(null)
+      setError(describeActionFailure(response.ok ? undefined : response.status, answer?.detail))
+      return
+    }
+    setResults(answer.results)
+  }
+
   function answerSuggestion(suggestion, accept) {
     const off = unticked[suggestion.id] || []
     const message_ids = suggestion.messages.map((m) => m.id).filter((id) => !off.includes(id))
@@ -171,7 +207,7 @@ export default function CategoriesPage() {
           <>
             <p className="memory-lede">
               Diya puts each thing you say in exactly one category, a few seconds after she answers, so you can look at your <Link href="/">chat</Link> by category. Nothing here changes what she
-              says or remembers. Rename, add or merge them to suit you; a category you merge away is not lost, its messages move to the one you pick.
+              says or remembers. Rename, add or merge them to suit you; a category you merge away is not lost, its messages move to the one you pick, and you can take a merge back below.
             </p>
 
             {job.running && (
@@ -235,6 +271,95 @@ export default function CategoriesPage() {
                 Add
               </button>
             </form>
+
+            <section aria-labelledby="search-messages">
+              <h2 id="search-messages">Search your messages</h2>
+              <form className="memory-add category-search" onSubmit={runSearch}>
+                <label className="memory-sr" htmlFor="search-words">
+                  Words to look for
+                </label>
+                <input id="search-words" className="memory-input" placeholder="Words to find, e.g. dentist" value={search.query} maxLength={100} onChange={(e) => setSearch({ ...search, query: e.target.value })} />
+                <label className="memory-sr" htmlFor="search-category">
+                  In which category
+                </label>
+                <select id="search-category" className="memory-input" value={search.category} onChange={(e) => setSearch({ ...search, category: e.target.value })}>
+                  <option value="">Any category</option>
+                  {data.categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <label className="memory-sr" htmlFor="search-when">
+                  When
+                </label>
+                <select id="search-when" className="memory-input" value={search.when} onChange={(e) => setSearch({ ...search, when: e.target.value })}>
+                  <option value="">Any time</option>
+                  <option value="yesterday">Yesterday</option>
+                  <option value="last week">Last week</option>
+                  <option value="last month">Last month</option>
+                </select>
+                <button type="submit" className="memory-btn memory-btn--primary" disabled={busy || results === 'busy' || search.query.trim().length < 2}>
+                  Search
+                </button>
+              </form>
+              {results === 'busy' && (
+                <p className="memory-dim" role="status">
+                  Looking…
+                </p>
+              )}
+              {Array.isArray(results) &&
+                (results.length === 0 ? (
+                  <p className="memory-dim" role="status">
+                    Nothing found.
+                  </p>
+                ) : (
+                  <ul className="category-messages" aria-label="Messages found">
+                    {results.map((r) => (
+                      <li key={r.id}>
+                        <Link href={`/?thread=${r.thread_id}`}>{r.text}</Link>
+                        <span className="memory-dim">
+                          {' '}
+                          · {r.role === 'user' ? 'you' : 'Diya'} · {r.at.slice(0, 16).replace('T', ' ')}
+                          {r.category ? ` · ${r.category}` : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ))}
+            </section>
+
+            {(data.merges || []).length > 0 && (
+              <section aria-labelledby="merge-history">
+                <h2 id="merge-history">Merges</h2>
+                <ul className="memory-list">
+                  {data.merges.map((m) => (
+                    <li key={m.id} className="memory-fact">
+                      <p className="memory-text">
+                        {m.source} → {m.target}{' '}
+                        <span className="memory-dim">
+                          · {m.count} message{m.count === 1 ? '' : 's'} · {m.at.slice(0, 16).replace('T', ' ')}
+                          {m.undone ? ' · undone' : ''}
+                        </span>
+                      </p>
+                      {!m.undone && (
+                        <div className="memory-actions">
+                          <button type="button" className="memory-btn" disabled={busy || !m.can_undo} onClick={() => undoMerge(m)} aria-label={`Undo the merge of ${m.source} into ${m.target}`}>
+                            Undo
+                          </button>
+                        </div>
+                      )}
+                      {!m.undone && !m.can_undo && m.why_not && <p className="memory-dim">{m.why_not}</p>}
+                    </li>
+                  ))}
+                </ul>
+                {notice && (
+                  <p className="memory-dim" role="status">
+                    {notice}
+                  </p>
+                )}
+              </section>
+            )}
 
             <section aria-labelledby="category-list">
               <h2 id="category-list">Yours ({data.categories.length})</h2>

@@ -505,6 +505,22 @@ MIGRATIONS = (
         )
         """,
     )),
+    # Merging a category can be taken back (docs/ONE_CHAT_DESIGN.md, task DIYA-156): one row per merge, with which messages it moved (message id, who sorted it, when) so that an undo puts back
+    # exactly those and nothing the person changed afterwards. The messages' words are NOT copied here, only their numbers.
+    (26, (
+        """
+        CREATE TABLE IF NOT EXISTS category_merges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL,
+            target_id INTEGER NOT NULL,
+            source_name TEXT NOT NULL,
+            target_name TEXT NOT NULL,
+            moved TEXT NOT NULL,
+            merged_at TEXT NOT NULL,
+            undone_at TEXT
+        )
+        """,
+    )),
 )
 
 MAX_THREAD_TITLE = 80  # the longest name a chat can be given
@@ -522,6 +538,7 @@ def _around(text, query):
     return ("…" if start else "") + flat[start:end] + ("…" if end < len(flat) else "")
 
 
+around = _around  # the same piece-around-the-words, for other modules (the search over categories)
 MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")  # how a due time is stored
 REMINDER_FIELDS = ("id", "content", "due_at", "due_ts", "done", "created_at", "notified_at")
 
@@ -764,6 +781,17 @@ class Store:
         more = len(rows) > int(limit)
         rows = rows[1:] if more else rows
         return [{"id": row_id, "role": role, "content": content} for row_id, role, content in rows], more
+
+    def message_times(self, message_ids):
+        """{message id: when it was saved (an ISO time with its zone)} for those of `message_ids` that exist: what a page needs to put each message under its day. Changes nothing."""
+        ids = [int(i) for i in message_ids]
+        if not ids:
+            return {}
+        conn = self.connect()
+        try:
+            return {row_id: at for row_id, at in conn.execute(f"SELECT id, created_at FROM messages WHERE id IN ({','.join('?' * len(ids))})", ids)}
+        finally:
+            conn.close()
 
     def previous_user_message(self, message_id):
         """The text of the person's message just before this one in the same chat, or None."""

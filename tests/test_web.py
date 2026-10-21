@@ -1,4 +1,5 @@
 import dataclasses
+from datetime import datetime
 import os
 import sys
 import types
@@ -93,7 +94,10 @@ def test_threads_and_history_come_from_the_agents_own_store(config):
     threads = client.get("/api/threads").json()["threads"]
     assert [x["id"] for x in threads] == [t, empty]
     assert threads[0]["preview"] == "first question"
-    assert client.get(f"/api/history/{t}").json() == {
+    history = client.get(f"/api/history/{t}").json()
+    times = [m.pop("at") for m in history["messages"]]  # each message says when it was written (an ISO time with its zone), so the page can put it under its day (task DIYA-158)
+    assert all(datetime.fromisoformat(at).tzinfo is not None for at in times)
+    assert history == {
         "thread_id": t, "is_main": True, "more_before": False,  # t has the newest message, so it is the one chat
         "messages": [
             {"id": 1, "role": "user", "content": "first question"},  # the one chat's messages carry their ids (so a category can be changed)

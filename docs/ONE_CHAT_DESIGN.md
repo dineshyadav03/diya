@@ -79,4 +79,17 @@ The misses are the kind a click fixes ("play some music" went to Reminders & tas
 - The model's calls on messages no rule can place are right about nine times in ten on the data measured, not always; the tag is one click to fix, and nothing in Diya depends on it.
 - A suggestion can be noisy (it is a 4B model); that is the reason the person decides and unticks.
 - The measured data is the owner's own early use: half of it is quick tests and small talk, so "Chat" is half of everything. How it does on a life with more school, health and people in it has not been measured because that data does not exist yet.
-- Merging cannot be undone from the page (the messages stay where they were moved; a category can be added again and messages moved back one by one).
+- ~~Merging cannot be undone from the page~~ It can, since 2026-10-21 (below).
+
+## Taking a merge back, and searching by words (2026-10-21; tasks DIYA-156 and DIYA-160)
+
+**Undo.** A merge now leaves a row in `category_merges` (migration 26): which category went into which, their names, and for each message it moved only the message's number, who sorted it and when
+(never its words). The Categories page lists the newest merges with an **Undo** button. Undoing is one act: the category is shown again under its own name (a starter category in its own place, and
+found by its starter name again), and each message the merge moved goes back to it **unless it has been changed since** (moved by the person, or sorted again): the page says how many came back and
+how many were left. A message that joined the target after the merge stays there. An undo is refused, changing nothing, when it was already undone, when the category it went into was itself merged away
+since (undo that later merge first), or when another category has taken its name (rename that one). `tests/test_category_undo_search.py`.
+
+**Search.** `Book.search` finds the person's words and Diya's that contain the words typed (case ignored; `%` and `_` are only themselves; at least two characters), newest first, each with the day and the
+category, across the one chat and every earlier one. A reply counts as the category of the message it answers. It can be narrowed to a category and to the person's own calendar days, either as two dates or as
+a phrase (yesterday, last week, last month) read by `diya_when.window`. It looks for the words, not the meaning: for the meaning of an earlier message, chat recall (`docs/EPISODIC_DESIGN.md`) does that. On the page: **Search your messages**.
+Both are in `diya_categories_api.py` (`undo_merge`, `search`) behind the same access token as the rest.

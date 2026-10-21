@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Orb from '../components/Orb'
 import VoiceBar from '../components/VoiceBar'
 import { readChatStream } from '../lib/chat-stream.mjs'
+import { dayBreaks } from '../lib/day-labels.mjs'
 import { describeLoadFailure, describeSendFailure, readFailure } from '../lib/api-failure.mjs'
 import { describeActionFailure } from '../lib/api-failure.mjs'
 
@@ -168,7 +169,7 @@ export default function ChatPage() {
         setOlderLeft(data.more_before === true)
         const loaded = data.messages
           .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m) => ({ role: m.role, text: m.content, serverId: Number.isInteger(m.id) ? m.id : undefined }))
+          .map((m) => ({ role: m.role, text: m.content, serverId: Number.isInteger(m.id) ? m.id : undefined, at: typeof m.at === 'string' ? m.at : undefined }))
         const found = {}
         for (const m of data.messages) if (m.role === 'user' && Number.isInteger(m.id) && typeof m.category === 'string') found[m.id] = m.category
         setTags(found)
@@ -194,7 +195,7 @@ export default function ChatPage() {
   const nextIdRef = useRef(1)
   function addMsg(role, text) {
     const id = nextIdRef.current++
-    setMessages((prev) => [...prev, { id, role, text }])
+    setMessages((prev) => [...prev, { id, role, text, at: new Date().toISOString() }])
     return id
   }
   function setFailed(id, failed) {
@@ -510,6 +511,7 @@ export default function ChatPage() {
   }
 
   const shownMessages = lookingAt ? inCategory(messages, tags, lookingAt) : messages
+  const breaks = dayBreaks(shownMessages) // the label of the day each message starts, or null: the chat is shown under the person's own days
   const counts = {}
   for (const name of Object.values(tags)) counts[name] = (counts[name] || 0) + 1
   const chips = categories.filter((c) => counts[c.name]).map((c) => [c.name, counts[c.name]])
@@ -657,8 +659,20 @@ export default function ChatPage() {
           </div>
         ))}
         {shownMessages.map((m, i) => {
+          const dayLabel = breaks[i]
+          const withDay = (node) =>
+            dayLabel ? (
+              <Fragment key={'day' + (m.id ?? 'h' + i)}>
+                <div className="day-sep" role="separator" aria-label={dayLabel}>
+                  <span>{dayLabel}</span>
+                </div>
+                {node}
+              </Fragment>
+            ) : (
+              node
+            )
           if (m.role === 'tools') {
-            return (
+            return withDay(
               <div key={m.id ?? 'h' + i} className="msg system tool-recap">
                 {m.tools.map((name) => (
                   <span key={name} className="tool-recap-item">
@@ -669,7 +683,7 @@ export default function ChatPage() {
             )
           }
           if (m.role === 'learned') {
-            return (
+            return withDay(
               <div key={m.id ?? 'h' + i} className="msg system learned-note" aria-label="What Diya learned from your message">
                 {m.items.map((item, index) => (
                   <p key={`${item.kind}-${item.id}`} className="learned-line">
@@ -695,7 +709,7 @@ export default function ChatPage() {
             )
           }
           if (m.role === 'user' && m.failed) {
-            return (
+            return withDay(
               <Fragment key={m.id ?? 'h' + i}>
                 <div className="msg user failed">{m.text}</div>
                 <div className="send-error" role="alert">
@@ -711,7 +725,7 @@ export default function ChatPage() {
             )
           }
           if (m.role === 'user' && Number.isInteger(m.serverId)) {
-            return (
+            return withDay(
               <Fragment key={m.id ?? 'h' + i}>
                 <div className="msg user">{m.text}</div>
                 <div className="msg-tag-row">
@@ -732,7 +746,7 @@ export default function ChatPage() {
               </Fragment>
             )
           }
-          return (
+          return withDay(
             <div key={m.id ?? 'h' + i} className={'msg ' + m.role}>
               {m.text}
             </div>
