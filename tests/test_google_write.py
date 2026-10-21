@@ -168,7 +168,7 @@ def test_these_ask_for_a_calendar_event(text):
 
 
 @pytest.mark.parametrize("text", [
-    "what is on my calendar tomorrow?", "show me my calendar", "remind me to call mum tomorrow at 5pm", "how do I add an event to my calendar", "don't add it to my calendar", "I have a meeting tomorrow",
+    "I wonder what is on my calendar tomorrow?", "show me my calendar", "remind me to call mum tomorrow at 5pm", "how do I add an event to my calendar", "don't add it to my calendar", "I have a meeting tomorrow",
     "my calendar is full", "", None, 5,
 ])
 def test_these_do_not(text):
@@ -549,7 +549,7 @@ def test_a_time_the_model_made_up_means_no_card_and_the_model_is_told_to_ask(sig
     assert agent.actions.actions() == [] and told.startswith("Not proposed: an event needs the time it starts") and "ask them when" in told and google.calls == []
 
 
-@pytest.mark.parametrize("message", ["what is on my calendar tomorrow?", "remind me to see the dentist tomorrow at 5pm", "I have a dentist appointment on friday", "how do I add an event to my calendar"])
+@pytest.mark.parametrize("message", ["I wonder what is on my calendar tomorrow?", "remind me to see the dentist tomorrow at 5pm", "I have a dentist appointment on friday", "how do I add an event to my calendar"])
 def test_a_message_that_does_not_ask_for_an_event_gets_none_proposed(signed_in, message):
     agent, told = ask(signed_in, message, "propose_calendar_event", {"title": "Dentist", "when": "friday at 5pm"})
     assert agent.actions.actions() == [] and told == diya_actions.NOT_ASKED_TEXT

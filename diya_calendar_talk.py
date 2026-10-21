@@ -28,7 +28,8 @@ _SUBJECT = re.compile(r"\b(?:calendar|events?|meetings?|appointments?|agenda|sch
 _FRAME = re.compile(
     r"^\W*(?:(?:hey|hi|ok|okay|so|please|diya|and|can\s+you|could\s+you)\b[\s,]*)*"
     r"(?:what(?:'s|\s+is|\s+are|\s+do\s+i\s+have|\s+have\s+i|\s+events?|\s+meetings?|\s+appointments?)|which|any|anything|do\s+i\s+have|have\s+i\s+got|show|list|check|read|see|look"
-    r"|tell\s+me\s+(?:what|my)|how\s+many|(?:my\s+)?(?:calendar|events|meetings|appointments|agenda|schedule))\b", re.IGNORECASE)
+    r"|tell\s+me\s+(?:what|my)|how\s+many"
+    r"|(?:my\s+)?(?:calendar|events|meetings|appointments|agenda|schedule)(?=\s*$|\s+(?:for|on|this|next|today|tomorrow|tonight|\d)))\b", re.IGNORECASE)  # (a bare "calendar for tomorrow", not "my calendar looks busy")
 # "what do I have on Saturday?" names no calendar word but asks one; not when it is plainly about the to-do list or bills
 _HAVE_ON = re.compile(r"^\W*(?:(?:hey|hi|ok|okay|so|please|diya|and)\b[\s,]*)*what\s+(?:do\s+i|have\s+i\s+got)\s+(?:have\s+|got\s+)?(?:on|for|today|tomorrow|this|next|coming)\b", re.IGNORECASE)
 _NOT_CALENDAR = re.compile(r"\b(?:list|tasks?|to-?do|reminders?|bills?|pay|buy|left\s+to|homework|exams?|know|think|remember)\b", re.IGNORECASE)

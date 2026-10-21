@@ -378,7 +378,7 @@ def test_the_no_sound_failure_says_what_to_do():
 def test_the_page_never_shows_a_streamed_reply_that_did_not_finish_and_asks_for_the_stream_first():
     page = (ROOT / "frontend" / "app" / "page.js").read_text(encoding="utf-8")
     assert page.index("fetch('/api/chat/stream'") < page.index("fetch('/api/chat'") and "res.status === 404" in page
-    assert page.count("setStreamText('')") >= 3 and "streamText && <div className=\"msg assistant streaming\">" in page
+    assert page.count("setStreamText('')") >= 3 and "streamText && (" in page and "<div className=\"msg assistant streaming\">" in page and "<Inline text={streamText} />" in page
     assert "(thinking && !streamText) || speaking" in page and "<Orb state=" in page
 
 
