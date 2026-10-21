@@ -33,7 +33,7 @@ dev = ["pytest==8.4.0"]
 dossier = ["reportlab==5.0.1"]
 # Only for telling the phone by Web Push (DIYA_PUSH=1, docs/PUSH_DESIGN.md): the primitives (ECDH on P-256, ECDSA, AES-GCM) are not hand-written here. Like `dossier` it is not in
 # requirements.lock, which stays what running the app and the suite needs; the tests that need it are skipped where it is absent, and CI installs it.
-push = ["cryptography==45.0.5"]
+push = ["cryptography==50.0.2"]  # 45.0.5 had seven advisories fixed in 46.0.7 to 50.0.0 (found by pip-audit in CI, 2026-10-21); the push tests pass with 50.0.2
 
 # milestone2_mcp_server.py and milestone2_mcp_client_test.py (Phase 1, archived learning scripts)
 # need the `mcp` package. They are not part of the maintained app and are not pinned here.

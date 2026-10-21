@@ -24,11 +24,12 @@ Neither can look at code Diya wrote; they look up the versions of other people's
 | Where | Found | Done |
 |---|---|---|
 | `python-multipart` 0.0.20 (a direct dependency: file uploads such as the microphone) | 12 advisories, among them denial of service when parsing crafted multipart requests; fixed by 0.0.31 | pinned to 0.0.31 in `pyproject.toml` and the lock; the web, upload, token and proxy tests pass with it |
+| `cryptography` 45.0.5 (the optional `push` extra: Web Push's key agreement, signing and encryption; found by the first CI run, not by the local scan, because the lock does not hold the extras) | 7 advisories (13 reports); the newest fix is in 50.0.0 | pinned to 50.0.2 in `pyproject.toml`; the push tests (191) pass with it |
 | `aiohttp` 3.14.3 (transitive) | 8 advisories (cookies, request smuggling in the pure-Python parser, memory use); fixed by 3.14.4 | the lock now says 3.14.5 |
 | `certifi` 2026.7.22 (transitive) | a root certificate that should no longer be trusted; fixed by 2026.10.19 | the lock now says 2026.10.19 |
 | `next` 15.5.25 and `postcss` 8.4.31 inside it, `sharp`, `source-map-js` (web UI build tools) | 4 advisories (cache poisoning of pre-rendered pages in self-hosted apps, a style-sheet XSS and source-map file read in `postcss`, a denial of service in `source-map-js`, `sharp`'s image library) | `package-lock.json` moved to `next` 15.5.28, `sharp` 0.35.5, `source-map-js` 1.2.2, and an `overrides` entry in `package.json` raises `postcss` to 8.5.31 (Next pins an older one; the fix without the override is a major upgrade of Next). The UI builds with it; `npm audit` reports 0 |
 
-**What the owner still has to do on this computer:** the running Diya keeps the old versions until the packages are installed again: `python -m pip install "python-multipart==0.0.31"` and, in `frontend`, `npm ci`. Nothing was installed or changed on this computer by this work.
+**What the owner still has to do on this computer:** the running Diya keeps the old versions until the packages are installed again: `python -m pip install "python-multipart==0.0.31"` (and `"cryptography==50.0.2"` if phone notifications are ever switched on) and, in `frontend`, `npm ci`. Until then one test, `tests/test_pyproject.py`, is red on this computer, and it is right to be: it says the installed package is not the one that is pinned. Nothing was installed or changed on this computer by this work.
 
 ## The advisories that are ignored on purpose
 
