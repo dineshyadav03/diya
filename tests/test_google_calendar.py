@@ -220,3 +220,15 @@ def test_list_events_reports_a_bad_status_from_the_events_call(config, monkeypat
     fake_post(monkeypatch, fake_response(200, {"access_token": "x"}))
     monkeypatch.setattr(gcal.httpx, "get", lambda *a, **k: fake_response(500))
     assert "HTTP 500" in gcal.list_events(config)()
+
+
+def test_a_refusal_from_google_names_its_reason_and_the_tab_does_not_claim_success_too_early():
+    import httpx
+
+    import diya_google_calendar as gc
+
+    refused = httpx.Response(401, json={"error": "invalid_client", "error_description": "Unauthorized"})
+    assert gc._reason(refused) == " (invalid_client: Unauthorized)"
+    assert gc._reason(httpx.Response(400, json={"error": "invalid_grant"})) == " (invalid_grant)"
+    assert gc._reason(httpx.Response(500, text="<html>not json</html>")) == "" and gc._reason(httpx.Response(400, json=[1])) == ""
+    assert "Diya is connected" not in open(gc.__file__, encoding="utf-8").read()  # the loopback page is shown before the code is exchanged, so it only says that Google answered

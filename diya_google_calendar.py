@@ -52,7 +52,7 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
         self.server.result = {k: v[0] for k, v in query.items()}
-        body = b"<p>Diya is connected. You can close this tab.</p>"
+        body = b"<p>Google has answered. Go back to Diya: the Connections page says whether the connection worked. You can close this tab.</p>"  # (said before the code is exchanged, so it must not claim success)
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -110,8 +110,19 @@ def _exchange(data):
     except httpx.HTTPError as exc:
         raise ConnectorError(f"couldn't reach Google: {exc}")
     if response.status_code != 200:
-        raise ConnectorError(f"Google answered with HTTP {response.status_code}")
+        raise ConnectorError(f"Google answered with HTTP {response.status_code}{_reason(response)}")
     return response.json()
+
+
+def _reason(response):
+    """Google's own short reason for a refusal ("invalid_client", "invalid_grant", and its one line of explanation), as text to add to an error message: ' (invalid_client: Unauthorized)'. Empty when there is
+    none. It names a reason, never a value: the answer holds no secret, and only its two short text fields are read."""
+    try:
+        body = response.json()
+        code, why = str(body.get("error", ""))[:60], str(body.get("error_description", ""))[:120]
+    except (ValueError, AttributeError):
+        return ""
+    return f" ({code}: {why})" if code and why else f" ({code})" if code else ""
 
 
 CLIENT_ID_SHAPE = re.compile(r"[0-9A-Za-z._-]{8,200}\.apps\.googleusercontent\.com")
