@@ -207,7 +207,8 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .msg-forget:hover, .msg-forget:focus-visible { color: var(--danger-text); text-decoration: underline; }
 .msg-forget:disabled { opacity: 0.5; cursor: default; }
 /* "Helpful" and "Not helpful" under a message (docs/FEEDBACK_DESIGN.md): quiet until pressed; the pressed one is marked by its colour and its weight, not by colour alone. Tokens only. */
-.msg-rate { display: inline-flex; align-items: center; gap: 2px; margin-right: 6px; }
+.msg-rate-row { margin: -4px 0 6px; }
+.msg-rate { display: inline-flex; align-items: center; gap: 2px; margin-left: -6px; }
 .msg-rate-btn { background: transparent; border: 0; padding: 2px 6px; color: var(--text-dim); font: inherit; font-size: 12px; cursor: pointer; border-radius: var(--radius-sm, 6px); }
 .msg-rate-btn:hover, .msg-rate-btn:focus-visible { color: var(--text); text-decoration: underline; }
 .msg-rate-btn[aria-pressed="true"] { color: var(--text); font-weight: 600; text-decoration: underline; }

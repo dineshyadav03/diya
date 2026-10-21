@@ -304,6 +304,33 @@ export default function ChatPage() {
     setTagProblem('Couldn’t save that. Nothing was changed.')
   }
 
+  // The two buttons and the reasons menu for Diya's reply to the person's message `serverId` (docs/FEEDBACK_DESIGN.md). Drawn under the reply, kept against the message it answers.
+  function renderRating(serverId) {
+    const mine = ratings[serverId]
+    return (
+      <div className="msg-rate-row">
+        <span className="msg-rate" role="group" aria-label="How was this reply?">
+          <button type="button" className="msg-rate-btn" aria-pressed={!!mine && mine.rating === 'positive'} onClick={() => rate(serverId, 'positive')}>
+            Helpful
+          </button>
+          <button type="button" className="msg-rate-btn" aria-pressed={!!mine && mine.rating === 'negative'} onClick={() => rate(serverId, 'negative')}>
+            Not helpful
+          </button>
+          {mine && mine.rating === 'negative' && (
+            <select className="msg-tag" aria-label="What was wrong with the reply" value={mine.category || ''} onChange={(e) => rate(serverId, 'negative', e.target.value)}>
+              <option value="">What was wrong?</option>
+              {Object.entries(FEEDBACK_REASONS).map(([id, words]) => (
+                <option key={id} value={id}>
+                  {words}
+                </option>
+              ))}
+            </select>
+          )}
+        </span>
+      </div>
+    )
+  }
+
   // The person says a message belongs elsewhere: shown at once, put back if it could not be kept.
   async function moveMessage(serverId, name) {
     const before = tags[serverId]
@@ -826,24 +853,6 @@ export default function ChatPage() {
                       ))}
                     </select>
                   )}
-                  <span className="msg-rate" role="group" aria-label="How was Diya’s reply to this message?">
-                    <button type="button" className="msg-rate-btn" aria-pressed={!!ratings[m.serverId] && ratings[m.serverId].rating === 'positive'} onClick={() => rate(m.serverId, 'positive')}>
-                      Helpful
-                    </button>
-                    <button type="button" className="msg-rate-btn" aria-pressed={!!ratings[m.serverId] && ratings[m.serverId].rating === 'negative'} onClick={() => rate(m.serverId, 'negative')}>
-                      Not helpful
-                    </button>
-                    {ratings[m.serverId] && ratings[m.serverId].rating === 'negative' && (
-                      <select className="msg-tag" aria-label="What was wrong with the reply" value={ratings[m.serverId].category || ''} onChange={(e) => rate(m.serverId, 'negative', e.target.value)}>
-                        <option value="">What was wrong?</option>
-                        {Object.entries(FEEDBACK_REASONS).map(([id, words]) => (
-                          <option key={id} value={id}>
-                            {words}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </span>
                   <button type="button" className="msg-forget" title="Delete this message and Diya’s reply for good" aria-label="Forget this message for good" disabled={thinking} onClick={() => forgetMessage(m.serverId)}>
                     Forget this
                   </button>
@@ -851,10 +860,21 @@ export default function ChatPage() {
               </Fragment>
             )
           }
+          let replyTo = null // the person's message this reply answers, when there is one with a number
+          if (m.role === 'assistant') {
+            for (let k = i - 1; k >= 0; k--) {
+              if (shownMessages[k].role === 'user') {
+                replyTo = Number.isInteger(shownMessages[k].serverId) ? shownMessages[k].serverId : null
+                break
+              }
+              if (shownMessages[k].role === 'assistant') break
+            }
+          }
           return withDay(
-            <div key={m.id ?? 'h' + i} className={'msg ' + m.role}>
-              {m.role === 'assistant' ? <Inline text={m.text} /> : m.text}
-            </div>
+            <Fragment key={m.id ?? 'h' + i}>
+              <div className={'msg ' + m.role}>{m.role === 'assistant' ? <Inline text={m.text} /> : m.text}</div>
+              {replyTo !== null && renderRating(replyTo)}
+            </Fragment>
           )
         })}
         {streamText && (

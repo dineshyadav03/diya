@@ -91,6 +91,25 @@ const SCENARIOS = [
     ],
   })),
   { name: 'chat-empty', path: '/', stub: {}, steps: [] },
+  // Helpful / Not helpful sit under Diya's reply, not under the person's message (docs/FEEDBACK_DESIGN.md): two exchanges, each with its own pair of buttons straight after the reply.
+  {
+    name: 'chat-feedback', path: '/',
+    stub: {
+      history: [
+        { id: 1, role: 'user', content: 'how hot is it in Pune', at: daysAgo(0) },
+        { id: 2, role: 'assistant', content: 'It is 28 degrees and clear.', at: daysAgo(0) },
+        { id: 3, role: 'user', content: 'and tomorrow?', at: daysAgo(0) },
+        { id: 4, role: 'assistant', content: 'About the same.', at: daysAgo(0) },
+      ],
+    },
+    steps: [],
+    checks: [
+      { name: 'every reply of Diya has its own Helpful and Not helpful buttons', js: `document.querySelectorAll('#log .msg-rate-row').length === 2 && Array.from(document.querySelectorAll('#log .msg-rate-row')).every((r) => /Helpful/.test(r.textContent) && /Not helpful/.test(r.textContent))` },
+      { name: 'the buttons come straight after the reply, not after the message of the person', js: `Array.from(document.querySelectorAll('#log .msg-rate-row')).every((r) => r.previousElementSibling && r.previousElementSibling.classList.contains('assistant'))` },
+      { name: 'none is in the row under the own message of the person', js: `!document.querySelector('#log .msg-tag-row .msg-rate-btn')` },
+      { name: 'the buttons are real buttons that say whether they are pressed', js: `Array.from(document.querySelectorAll('#log .msg-rate-btn')).every((b) => b.tagName === 'BUTTON' && b.hasAttribute('aria-pressed'))` },
+    ],
+  },
   // The one chat under its days (task DIYA-158): messages from three days ago, yesterday and today, as the server now sends them (each with the time it was written). `daysAgo` puts a message at noon
   // local time on that day, so the labels do not depend on the hour the rig is run.
   {
