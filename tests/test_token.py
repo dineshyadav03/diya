@@ -166,6 +166,7 @@ ENDPOINTS = [
     ("POST", "/api/memory/7/forget-for-good", {}),
     ("POST", "/api/messages/1/forget", {"json": {"dry_run": True}}),
     ("POST", "/api/categories", {"json": {"action": "add", "name": "School"}}),
+    ("POST", "/api/feedback", {"json": {"action": "list", "message_ids": [1]}}),
     ("GET", "/api/memory", {}),
     ("GET", "/api/memory/1", {}),
     ("POST", "/api/memory/ingest", {}),
