@@ -48,3 +48,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## DeepSeek Harness (DeepSeek AI) — MIT (study copy only; nothing is in this repository yet)
+
+A read-only copy of https://github.com/deepseek-ai/deepseek-harness (commit `687f282e8625c6b8d11ff58211a90524be2e4317`, 2026-10-17) is kept **outside** this repository, at `C:\Users\dines\dsh-copy\deepseek-harness`, for study (`docs/DSH_PLAN.md`).
+No file from it is part of Diya yet. When any code is taken, its copyright notice and the MIT licence text come here with it, the file says where it came from, and our changes are marked as ours.

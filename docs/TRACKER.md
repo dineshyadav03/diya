@@ -5,15 +5,15 @@ Updated 2026-10-21. The blueprint's task sheet has 298 tasks; the progress is ke
 
 | Status | Tasks |
 |---|---|
-| Not started | 142 |
+| Not started | 141 |
 | Needs verification | 6 |
-| Research queue | 30 |
-| In progress | 16 |
+| Research queue | 29 |
+| In progress | 17 |
 | Blocked | 0 |
-| Done | 104 |
+| Done | 105 |
 | Deferred | 0 |
 
-## Done (104)
+## Done (105)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -119,8 +119,9 @@ Updated 2026-10-21. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-157** Implement reclassify-per-message with source/confidence (2026-10-21): diya_categories.py Book.assign: what the person chose is only ever changed by the person (a sorter's later attempt changes nothing); source is kept per message (person, code, model, continued); tests/test_category_undo_search.py (override survives the sorter, a background pass and another client). Confidence is expressed by the source, in the order person > code > model > continued; there is no numeric score.
 - **DIYA-159** Implement existing-chat backfill progress and cancellation (2026-10-21): sort_earlier already reported progress and could be stopped (tests/test_categories_manage.py); tests/test_category_undo_search.py now proves a resume sorts only what is left, makes no second row, keeps every label made and the person's move between the two passes. Progress and the stop button are on the Categories page.
 - **DIYA-202** Specify privacy-aware local/cloud routing boundary (2026-10-21): diya_config.py refuses a model address that is not this computer unless DIYA_ALLOW_REMOTE_MODEL=1; docs/LOCAL_ONLY.md; tests/test_local_only.py (22): default local, only the explicit word allows it, no program takes a model address from anywhere else. All or nothing, set in the configuration: a per-prompt approval to upload a sensitive prompt to a cloud model is NOT built and not designed.
+- **DIYA-257** Review U22 — Five harness pillars: context/action/orchestration/control/feedback; DeepSeek harness (2026-10-21): docs/DSH_PLAN.md: the five pillars (context, action, orchestration, control, feedback) mapped to the DeepSeek harness's packages and to Diya, with the gaps named; exact DeepSeek harness source found and its licence checked. Review only: nothing was run or adopted; the owner chose both adopting it and keeping Diya's ideas, planned as a bridge in phases.
 
-## In progress (16)
+## In progress (17)
 
 - **DIYA-005** Snapshot local database and all configuration before schema changes (2026-10-18). Not encrypted and not offline: a copy of backups/ on another disk is Dinesh's step.
 - **DIYA-021** Add outbox leases, retry and unique keys (2026-10-18). No lease column: one drain at a time in one process. Dreaming's separate pass is guarded by memory_captures, not a lease.
@@ -138,6 +139,7 @@ Updated 2026-10-21. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-214** Implement data export/delete and revocation propagation (2026-10-18). Delete and revocation are built. Export of the data is not (the Memory page already exports facts as a profile file).
 - **DIYA-017** Add failure/latency monitoring baseline (2026-10-20). NOT done: the sheet asks for CPU and memory to be LOGGED; they are shown when the page is opened and not recorded over time. 'Done' waits for that.
 - **DIYA-192** Validate current Ollama model and hardware acceleration (2026-10-21). Whether enabling it helps is NOT measured: it restarts the model server and loads a model into nearly full memory, so it waits for the owner's yes.
+- **DIYA-188** Investigate DeepSeek harness exact repository/source (2026-10-21). Not yet a reproducible comparison: the harness has not been run (phase 1 needs isolation and the owner's yes).
 
 ## Waiting for the owner (10)
 
