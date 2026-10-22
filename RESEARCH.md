@@ -930,6 +930,21 @@ Not comparable and left out: coding agents (OpenHands, Open Interpreter), browse
 - **Action:** unit **J1** (a tool-call journal, with the Rule-of-Two table as its test) added to `docs/RESEARCH_PLAN_2026-10.md`; the journal itself has since been built (`diya_journal.py`, `docs/ACTIVITY_JOURNAL_DESIGN.md`, `tests/test_journal.py`); the Rule-of-Two sequence table is still not written.
 - **Rechecked 2026-10-18:** Apache-2.0, 1,126 stars, last pushed 2026-10-16. Decision and links in `docs/RESEARCH_REVIEWS_2026-10-18.md` (task DIYA-298).
 
+### 35. Flint and the Eureka Machine (Recursive): a very large local coding model, and an automated research system (read 2026-10-22)
+
+- **Source:** the model's own Hugging Face page, read through its API on 2026-10-22 (https://huggingface.co/api/models/RecursiveSI/flint); the community copies listed by Hugging Face's search the same day; web reports of the Eureka Machine
+  (a Latent Space interview, the AI Engineer World's Fair talk page, news summaries). The owner pasted the announcement. **Observed** below is what the model page says; **claimed** is what the company or a news report says.
+- **Flint, observed:** `RecursiveSI/flint`, Apache-2.0, created 2026-10-21. A mixture of experts (256 experts, 6 used per token), **39.8 billion parameters in total** (community copies are named 40B-A2.5B: about 2.5 B active per token),
+  BF16 weights of about **79.6 GB** in 15 files. Its chat format supports tool calls. It ships serving files for sglang on B300, H200 and 8-GPU machines. Community copies appeared the same day: GGUF (MXFP4), MLX for Apple silicon, NVFP4 and FP8.
+  Some copies are "abliterated" (safety training taken out): never used.
+- **Flint, claimed:** "best-in-class fast local coding", "up to 2x faster than comparable models", 125+ tokens a second on a MacBook Pro and 150+ on an "RTX Spark", built in under four months. **None of this was measured here.**
+- **Why it does not go into Diya now:** even at 4 bits it is 20 GB or more, and this laptop has 15.7 GB in total (about 1.4 GB free) and no usable GPU; it is a coding model and Diya does not write code; whether Ollama or llama.cpp run its new architecture was not checked. Downloading it was not done.
+- **Eureka Machine, claimed:** a v0.1 automated research system; reported results on the NanoGPT speedrun (79.7 s to 77.5 s), NanoChat (0.9372 to 0.9109 bits per byte) and NVIDIA's SOL-ExecBench (7.8% better); one report says some candidate solutions gamed the benchmark by caching outputs
+  or using the timer, which is why correctness checks were added to its loop. Only the artifacts it generated are said to be open-sourced; **the system itself is not released and no repository was found**. Reports disagree on who founded the company, and no independent check of the results was found.
+- **Decision:** neither goes into Diya now. A bigger model later is one setting (`DIYA_OLLAMA_URL`; a model on another computer also needs `DIYA_ALLOW_REMOTE_MODEL=1`, `docs/LOCAL_ONLY.md`): the way if the owner gets a machine with 32 GB or more (the Mac mini is deferred).
+  The idea worth keeping from the Eureka Machine is the checker inside the loop: an automated improver is only trusted with a verifier that catches cheating, which is what `diya_advisor.py` does for Diya (propose-only, tested on held-out cases).
+- **Action:** none to build. Look again in a month: whether llama.cpp and Ollama run Flint, and whether anyone has measured it independently.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,
