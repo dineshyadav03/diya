@@ -945,6 +945,17 @@ Not comparable and left out: coding agents (OpenHands, Open Interpreter), browse
   The idea worth keeping from the Eureka Machine is the checker inside the loop: an automated improver is only trusted with a verifier that catches cheating, which is what `diya_advisor.py` does for Diya (propose-only, tested on held-out cases).
 - **Action:** none to build. Look again in a month: whether llama.cpp and Ollama run Flint, and whether anyone has measured it independently.
 
+### 36. Proof-Driven Development Kit ("PDD Kit", Microsoft Research / GitHub Next): code proved against the stated intent (read 2026-10-22)
+
+- **Source:** the announcement the owner pasted. **No primary source was found** in three searches: no page, repository or paper for "PDD Kit", and not the cited paper (Yang et al., "(When) Should a Software Factory be Lights-off?", Microsoft Research and CMU, October 2026) with its figure that
+  the best AI code reviewer caught a bug on its first try 42% of the time. The announcement says it is a limited research preview and will be shown at GitHub Universe on 28 to 29 October. Related, real: the debate on "lights-off" software factories (agents write the code, humans read none of it), and AI-assisted
+  formal verification in F*, Verus, Dafny and Lean (a single blog post reports Microsoft Research producing about 10,000 lines of machine-checked F* and Pulse with an AI; a secondary summary of the AlgoVeri benchmark reports 82% of small tasks solved in Dafny, 44% in Verus and 27% in Lean).
+- **What it claims:** you say what you want in plain English; the kit captures that as your intent and a verifier proves the generated code meets it for every possible input; you review the plan and the objectives, not the code or the proof. Example: no wrong password can ever log in.
+- **Review:** a proof shows code matches a **formal specification**, so the weak point moves to turning plain English into that specification: if an AI states it wrongly, the proof is about the wrong thing, and "proving your intent" is only as good as the English the person reads back. It reaches properties that can be written
+  precisely (login, money never created or lost, a state machine); it does not reach a model's answers, a page's look or a service's behaviour. The verifiers named in the related work check code written in Dafny, Verus, F* or Lean, not Python, so it could not be pointed at Diya's code as it stands. The benefit is real where it fits: review effort moves from skimming a diff to reading a short statement of what must always hold.
+- **For Diya:** the useful part needs no kit: write the few things that must **always** be true as plain sentences, and check each over many random inputs, not a handful of examples. Diya already has several as tests (an approved action runs at most once, every endpoint needs the token, no tool has all three Rule-of-Two legs, a model address that is not this computer is refused).
+- **Decision:** not adopted (not available, research preview, wrong language). Idea kept: an **invariants list** with a randomized test for each; a small task if the owner wants it. Look again after GitHub Universe for a repository or paper to check the claims against.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,
