@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-// The one navigation for every page (docs/UI_DESIGN.md, D2): a sidebar on a laptop, a top bar with a Menu button on a phone. A page says
-// <AppShell> and puts its content inside; it carries no header of its own, so a link to every page from every page is one list, here.
+// The one navigation for every page (docs/UI_DESIGN.md, D2): a floating pill at the top with the three pages used most (Today, Chat, Memory) and a slider
+// that glides under the one you are on, a round button at the left that opens a glass menu with every page (and the theme), and the brand mark at the right.
+// A page says <AppShell> and puts its content inside; it carries no header of its own, so a link to every page from every page is one list, here.
 // Every /api/... call is same-origin: this app's own route handlers (app/api) forward it to the Python API with the token, on the server.
 
 export const NAV = [
@@ -39,6 +40,13 @@ export const NAV = [
       { href: '/actions', name: 'Actions', badge: 'waiting' },
     ],
   },
+]
+
+// The pill: the pages used most. Everything else is in the menu, grouped as in NAV.
+export const TABS = [
+  { href: '/today', name: 'Today' },
+  { href: '/', name: 'Chat' },
+  { href: '/memory', name: 'Memory' },
 ]
 
 const THEMES = [
@@ -172,7 +180,7 @@ export default function AppShell({ children }) {
 
 function Shell({ children, pathname }) {
   const [open, setOpen] = useState(false)
-  const topbarRef = useRef(null)
+  const hubRef = useRef(null)
   const counts = useCounts()
 
   // A new page closes the menu (a tap on a link navigates; the shell itself stays mounted only within one page).
@@ -187,41 +195,54 @@ function Shell({ children, pathname }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [open])
 
-  // The menu panel sits just under the top bar, whatever height the bar has (a notch, a larger text size).
+  // The menu sits just under the bar at the top, whatever height the bar has (a notch, a larger text size).
   const placeMenu = useCallback((el) => {
-    topbarRef.current = el
-    if (el) el.closest('.shell')?.style.setProperty('--topbar-h', `${el.offsetHeight}px`)
+    hubRef.current = el
+    if (el) el.closest('.shell')?.style.setProperty('--hub-h', `${el.offsetHeight}px`)
   }, [])
 
   const isCurrent = (href) => (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/'))
   const badgeFor = (kind) => (kind === 'due' ? counts.due : kind === 'waiting' ? counts.waiting : null)
   const badgeLabel = (kind, n) => (kind === 'due' ? `${n} due` : `${n} waiting for you`)
   const menuCount = (counts.due || 0) + (counts.waiting || 0)
+  const tab = TABS.findIndex((t) => isCurrent(t.href)) // which of the three the slider is under; -1 on any other page (the slider hides)
 
   return (
     <div className="shell" data-nav-open={open ? 'true' : 'false'}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <header className="topbar" ref={placeMenu}>
-        <Link className="brand" href="/">
-          <img src="/diya-flame.svg" alt="" className="brand-mark" />
-          Diya
-        </Link>
-        <button type="button" className="menu-btn" aria-expanded={open} aria-controls="site-nav" onClick={() => setOpen((o) => !o)}>
-          {open ? 'Close' : 'Menu'}
-          {!open && menuCount > 0 && (
-            <span className="due-badge" aria-label={`${menuCount} need you`}>
-              {menuCount}
+      <header className="hub" ref={placeMenu}>
+        <div className="hub-left">
+          <button type="button" className="hub-btn" aria-label={open ? 'Close the menu' : 'Open the menu'} aria-expanded={open} aria-controls="site-nav" onClick={() => setOpen((o) => !o)}>
+            <span className="hub-bars" aria-hidden="true">
+              <i />
+              <i />
+              <i />
             </span>
-          )}
-        </button>
+            {!open && menuCount > 0 && (
+              <span className="due-badge" aria-label={`${menuCount} need you`}>
+                {menuCount}
+              </span>
+            )}
+          </button>
+        </div>
+        <nav className="hub-pill" aria-label="Main pages" data-tab={tab >= 0 ? tab : undefined} style={tab >= 0 ? { '--tab': tab } : undefined}>
+          <span className="hub-slider" aria-hidden="true" />
+          {TABS.map((item) => (
+            <Link key={item.href} className="hub-tab" href={item.href} aria-current={isCurrent(item.href) ? 'page' : undefined}>
+              {item.name}
+            </Link>
+          ))}
+        </nav>
+        <div className="hub-right">
+          <Link className="hub-btn" href="/" aria-label="Diya: back to the chat">
+            <img src="/diya-flame.svg" alt="" className="hub-mark" />
+          </Link>
+        </div>
       </header>
-      <nav className="sidebar" id="site-nav" aria-label="Main">
-        <Link className="brand" href="/">
-          <img src="/diya-flame.svg" alt="" className="brand-mark" />
-          Diya
-        </Link>
+      {open && <div className="menu-scrim" onClick={() => setOpen(false)} aria-hidden="true" />}
+      <nav className="menu-sheet" id="site-nav" aria-label="All pages">
         {NAV.map((group) => (
           <div key={group.label}>
             <div className="nav-label" id={`nav-${group.label.replace(/\s+/g, '-').toLowerCase()}`}>
@@ -246,7 +267,7 @@ function Shell({ children, pathname }) {
             </ul>
           </div>
         ))}
-        <div className="sidebar-foot">
+        <div className="menu-foot">
           <ThemeToggle />
           <SignOut />
         </div>

@@ -9,10 +9,10 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  // The page colour of each theme (--bg in globals.css): what a phone's status bar takes on.
+  // The top of each theme's sky (--sky in globals.css): what a phone's status bar takes on.
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f6f5f4' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },
+    { media: '(prefers-color-scheme: light)', color: '#e9effb' },
+    { media: '(prefers-color-scheme: dark)', color: '#121830' },
   ],
   colorScheme: 'light dark',
 }
