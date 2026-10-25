@@ -4,6 +4,7 @@
         {"action": "list", "message_ids": [12, 14]}                                         {"items": {"12": {message_id, rating, category, note, version, at}}, "reasons": {id: words}}
         {"action": "put", "message_id": 12, "rating": "negative", "category": "wrong", "note": "...", "version": null}      {"item": {...}}   (version: null to create, the version seen to change)
         {"action": "delete", "message_id": 12, "version": 3}                                {"deleted": true}
+        {"action": "negatives"}                                                             {"items": [{..., "message": the person's words, "reply": the reply that followed}], "reasons": {...}}  (newest first, at most 20)
 
 Like every route these are behind the access token. A refusal is a 400 whose words are safe to show; a change made from another page since the person looked is a 409 that carries the item as it now stands.
 Everything sent back goes through diya_memory.printable() (a note is the person's own text, but it is shown in a page).
@@ -18,6 +19,8 @@ import diya_feedback
 from diya_memory import printable
 
 MAX_IDS = 200
+MESSAGE_SHOWN_CHARS = 300  # how much of the person's message, and of the reply, the Activity page is sent
+REPLY_SHOWN_CHARS = 600
 
 
 class Action(BaseModel):
@@ -36,6 +39,11 @@ def shown(item):
     return dict(item, note=None if item["note"] is None else printable(item["note"], diya_feedback.MAX_NOTE_CHARS))
 
 
+def looked_back(item):
+    """A not-helpful reply as the Activity page shows it: the person's words and the reply cut short, all of it made safe to show."""
+    return dict(shown(item), message=printable(item["message"], MESSAGE_SHOWN_CHARS), reply=None if item["reply"] is None else printable(item["reply"], REPLY_SHOWN_CHARS))
+
+
 def register(app, config, agent):
     def feedback():
         return diya_feedback.Feedback(agent.store)  # looked up per request: the store is what the agent has now
@@ -46,6 +54,8 @@ def register(app, config, agent):
             if body.action == "list" and body.message_ids is not None:
                 found = feedback().items(body.message_ids[:MAX_IDS])
                 return {"items": {str(i): shown(item) for i, item in found.items()}, "reasons": dict(diya_feedback.CATEGORIES)}
+            if body.action == "negatives":
+                return {"items": [looked_back(item) for item in feedback().negatives()], "reasons": dict(diya_feedback.CATEGORIES)}
             if body.action == "put" and body.message_id is not None and body.rating is not None:
                 return {"item": shown(feedback().put(body.message_id, body.rating, body.category, body.note, body.version))}
             if body.action == "delete" and body.message_id is not None and body.version is not None:

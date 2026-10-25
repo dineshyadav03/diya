@@ -49,6 +49,10 @@ function isDreaming(body) {
   return body && Array.isArray(body.runs) && typeof body.idle_last_day === 'number'
 }
 
+function isReview(body) {
+  return body && Array.isArray(body.items) && body.reasons && typeof body.reasons === 'object'
+}
+
 // One scheduled pass of Dreaming, in words: what it read and what it did with it (docs/DREAMING_RECEIPTS_DESIGN.md).
 function describeRun(run) {
   const did = []
@@ -70,6 +74,7 @@ export default function ActivityPage() {
   const [problem, setProblem] = useState('')
   const [stale, setStale] = useState('') // the once-a-minute look failed: kept apart so it never wipes what is shown
   const [dreaming, setDreaming] = useState(null) // Dreaming's receipts, or null when they could not be read (the rest of the page does not depend on them)
+  const [notHelpful, setNotHelpful] = useState(null) // the replies the person marked not helpful (docs/FEEDBACK_DESIGN.md), or null when they could not be read
 
   const load = useCallback(async (first) => {
     let status
@@ -104,17 +109,29 @@ export default function ActivityPage() {
     }
   }, [])
 
+  const loadNotHelpful = useCallback(async () => {
+    try {
+      const response = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'negatives' }) })
+      const body = response.ok ? await readJson(response) : null
+      if (isReview(body)) setNotHelpful(body)
+    } catch {
+      // an extra, like the receipts: if it cannot be read, what is already shown stays
+    }
+  }, [])
+
   useEffect(() => {
     load(true)
     loadDreaming()
+    loadNotHelpful()
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') {
         load(false)
         loadDreaming()
+        loadNotHelpful()
       }
     }, REFRESH_MS)
     return () => clearInterval(timer)
-  }, [load, loadDreaming])
+  }, [load, loadDreaming, loadNotHelpful])
 
   return (
     <main className="history-page memory-page activity-page">
@@ -195,6 +212,31 @@ export default function ActivityPage() {
                             {error}
                           </p>
                         ))}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
+            {notHelpful && (
+              <section aria-label="Replies you marked not helpful">
+                <h2>Replies you marked not helpful</h2>
+                <p className="memory-dim">
+                  The ones you marked &ldquo;Not helpful&rdquo; under a reply in the chat, newest first, with the reason and note you gave. This is for you to read back: it is never shown to Diya, and nothing
+                  here changes it.
+                </p>
+                {notHelpful.items.length === 0 ? (
+                  <p className="memory-dim">None yet. When a reply is not what you wanted, press &ldquo;Not helpful&rdquo; under it and say why; it shows here.</p>
+                ) : (
+                  <ul className="memory-list activity-list">
+                    {notHelpful.items.map((item) => (
+                      <li key={item.message_id} className="memory-fact activity-entry">
+                        <p className="memory-text">You said: {item.message}</p>
+                        <p className="memory-dim">{item.reply === null ? 'Diya had not answered yet.' : `Diya said: ${item.reply}`}</p>
+                        <p className="memory-dim">
+                          {new Date(item.at).toLocaleString()} · {item.category ? notHelpful.reasons[item.category] || item.category : 'no reason given'}
+                        </p>
+                        {item.note && <p className="memory-dim">Your note: {item.note}</p>}
                       </li>
                     ))}
                   </ul>

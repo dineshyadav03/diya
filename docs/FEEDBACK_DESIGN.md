@@ -16,4 +16,8 @@ was not connected when it was, a year written as "2.020") were found only becaus
 **Where the idea comes from.** The shape (a positive or negative rating, an optional reason from a fixed list, an optional note, a version on each item) follows the feedback package of DeepSeek's harness (MIT; `harness/LICENSE`; `THIRD_PARTY_NOTICES.md`).
 The list of reasons, the words and the code are Diya's own.
 
-**Not done.** A page that lists all the replies you marked not helpful with their notes; a note box on the chat page; a use of the numbers to change anything (Diya is not changed by them, on purpose: a change goes through you and a test).
+**Not done.** A note box on the chat page; a use of the numbers to change anything (Diya is not changed by them, on purpose: a change goes through you and a test). (The list of replies marked not helpful is done: see the end.)
+
+## Reading it back (2026-10-25)
+
+The Activity page has a section, "Replies you marked not helpful": the latest 20, newest first, each with what you said, the reply that followed, the reason and your note (`Feedback.negatives`, `POST /api/feedback {"action": "negatives"}`; `tests/test_feedback_review.py`). It is read-only, made safe to show like everything else, cut short, and never given to the model. Until now the buttons recorded your view and nothing let you read it back.

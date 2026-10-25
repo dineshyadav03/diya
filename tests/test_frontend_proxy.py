@@ -432,6 +432,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/threads/search?q=${encodeURIComponent(words)}", "/api/threads/${thread.id}/rename",  # the History page: search inside the chats, and give one a name  # the page asks for the streamed reply, and for the whole one from an API that has no stream route
         "/api/categories", "/api/categories",  # the chat's category chips and tags: the list, and a message moved to another category
         "/api/feedback",  # the chat: what the person thinks of each reply (one function sends list, put and delete)
+        "/api/feedback",  # the Activity page: the replies marked not helpful, read back (2026-10-25)
         "/api/journal",  # the Activity page: what Diya did with a tool or an account
         "/api/health",  # the Status page: is Diya well
         "/api/dreaming",  # the Activity page: what Dreaming read and did

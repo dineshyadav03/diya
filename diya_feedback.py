@@ -23,6 +23,8 @@ CATEGORIES = {
     "other": "Something else",
 }
 MAX_NOTE_CHARS = 2000
+REVIEW_LIMIT = 20  # how many "not helpful" replies the Activity page looks back over by default
+REVIEW_HARD_CAP = 50  # and the most it will ever be asked for
 
 
 class FeedbackError(ValueError):
@@ -60,6 +62,22 @@ class Feedback:
         finally:
             conn.close()
         return {row[0]: _item(row) for row in rows}
+
+    def negatives(self, limit=REVIEW_LIMIT):
+        """The replies the person marked not helpful, newest first, so they can read them back (the Activity page): each is the item plus `message` (the person's own words) and `reply` (the first reply that followed
+        it in the same chat, or None if there is none yet). Raw text: the route makes it safe to show. Read by the person only; never given to the model."""
+        limit = max(1, min(int(limit), REVIEW_HARD_CAP))
+        conn = self.store.connect()
+        try:
+            rows = conn.execute(
+                "SELECT f.message_id, f.rating, f.category, f.note, f.version, f.updated_at, m.content,"
+                " (SELECT r.content FROM messages r WHERE r.thread_id = m.thread_id AND r.id > m.id AND r.role = 'assistant' ORDER BY r.id LIMIT 1)"
+                " FROM reply_feedback f JOIN messages m ON m.id = f.message_id WHERE f.rating = 'negative' ORDER BY f.updated_at DESC, f.message_id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [dict(_item(row[:6]), message=row[6], reply=row[7]) for row in rows]
 
     def put(self, message_id, rating, category=None, note=None, version=None):
         """Keep the person's rating of the reply to message `message_id` and return the item. `version` is None to create and the version the person saw to change one; anything else is a Conflict that carries
