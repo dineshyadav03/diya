@@ -188,7 +188,7 @@ def test_the_page_offers_the_buttons_on_the_persons_own_messages_and_its_reasons
     reasons = dict(re.findall(r"'?([a-z-]+)'?: '([^']+)'", block))
     assert reasons == fb.CATEGORIES
     assert (ROOT / "frontend" / "app" / "api" / "feedback" / "route.js").is_file()
-    assert "{replyTo !== null && renderRating(replyTo)}" in page  # under Diya's reply, for the message it answers
+    assert "{replyTo !== null && renderRating(replyTo, { text: m.text, asked })}" in page  # under Diya's reply, for the message it answers
     row = page.split('className="msg-tag-row"', 1)[1].split("</div>", 1)[0]
     assert "msg-rate" not in row and "Helpful" not in row  # and not under the person's own message
     rig = (ROOT / "frontend" / "tools" / "design-rig" / "shots.mjs").read_text(encoding="utf-8")

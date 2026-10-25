@@ -122,7 +122,8 @@ const SCENARIOS = [
       { name: 'every reply of Diya has its own Helpful and Not helpful buttons', js: `document.querySelectorAll('#log .msg-rate-row').length === 2 && Array.from(document.querySelectorAll('#log .msg-rate-row')).every((r) => /Helpful/.test(r.textContent) && /Not helpful/.test(r.textContent))` },
       { name: 'the buttons come straight after the reply, not after the message of the person', js: `Array.from(document.querySelectorAll('#log .msg-rate-row')).every((r) => r.previousElementSibling && r.previousElementSibling.classList.contains('assistant'))` },
       { name: 'none is in the row under the own message of the person', js: `!document.querySelector('#log .msg-tag-row .msg-rate-btn')` },
-      { name: 'the buttons are real buttons that say whether they are pressed', js: `Array.from(document.querySelectorAll('#log .msg-rate-btn')).every((b) => b.tagName === 'BUTTON' && b.hasAttribute('aria-pressed'))` },
+      { name: 'the rating buttons are real buttons that say whether they are pressed', js: `Array.from(document.querySelectorAll('#log [aria-label="How was this reply?"] .msg-rate-btn')).every((b) => b.tagName === 'BUTTON' && b.hasAttribute('aria-pressed'))` },
+      { name: 'every reply also has Copy and Ask again, as real buttons, before the rating', js: `Array.from(document.querySelectorAll('#log .msg-rate-row')).every((r) => { const b = Array.from(r.querySelectorAll('button')).map((x) => x.textContent.trim()); return b[0] === 'Copy' && b[1] === 'Ask again' && b[2] === 'Helpful' && b[3] === 'Not helpful' })` },
     ],
   },
   // The one chat under its days (task DIYA-158): messages from three days ago, yesterday and today, as the server now sends them (each with the time it was written). `daysAgo` puts a message at noon

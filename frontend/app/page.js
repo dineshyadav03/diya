@@ -140,6 +140,7 @@ export default function ChatPage() {
   // being looked at by (null = all of it), and why a change of category did not happen.
   const [categories, setCategories] = useState([])
   const [stillAnswering, setStillAnswering] = useState(false) // Diya is still answering the last message of this chat, started before this page was opened
+  const [copied, setCopied] = useState(null) // which reply was just copied ({ key, ok }), for two seconds
   const [ratings, setRatings] = useState({}) // the person's rating of Diya's reply to each of their messages: { message id: { rating, category, note, version } }
   const [tags, setTags] = useState({})
   const [lookingAt, setLookingAt] = useState(null)
@@ -319,10 +320,33 @@ export default function ChatPage() {
   }
 
   // The two buttons and the reasons menu for Diya's reply to the person's message `serverId` (docs/FEEDBACK_DESIGN.md). Drawn under the reply, kept against the message it answers.
-  function renderRating(serverId) {
+  // Copy the words of one reply, and show for two seconds whether it worked (a browser can refuse the clipboard).
+  async function copyReply(key, text) {
+    let ok = true
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      ok = false
+    }
+    setCopied({ key, ok })
+    setTimeout(() => setCopied((now) => (now && now.key === key ? null : now)), 2000)
+  }
+
+  function renderRating(serverId, reply) {
     const mine = ratings[serverId]
+    const canAsk = !(thinking || stillAnswering || loadingChat || loadProblem || earlierChat)
     return (
       <div className="msg-rate-row">
+        <span className="msg-rate" role="group" aria-label="Use this reply">
+          <button type="button" className="msg-rate-btn" onClick={() => copyReply(serverId, reply.text)}>
+            {copied && copied.key === serverId ? (copied.ok ? 'Copied' : 'Couldn’t copy') : 'Copy'}
+          </button>
+          {reply.asked && (
+            <button type="button" className="msg-rate-btn" title="Ask the same thing again" disabled={!canAsk} onClick={() => handleSend(reply.asked)}>
+              Ask again
+            </button>
+          )}
+        </span>
         <span className="msg-rate" role="group" aria-label="How was this reply?">
           <button type="button" className="msg-rate-btn" aria-pressed={!!mine && mine.rating === 'positive'} onClick={() => rate(serverId, 'positive')}>
             Helpful
@@ -875,10 +899,12 @@ export default function ChatPage() {
             )
           }
           let replyTo = null // the person's message this reply answers, when there is one with a number
+          let asked = '' // what they said, so the same thing can be asked again
           if (m.role === 'assistant') {
             for (let k = i - 1; k >= 0; k--) {
               if (shownMessages[k].role === 'user') {
                 replyTo = Number.isInteger(shownMessages[k].serverId) ? shownMessages[k].serverId : null
+                asked = typeof shownMessages[k].text === 'string' ? shownMessages[k].text : ''
                 break
               }
               if (shownMessages[k].role === 'assistant') break
@@ -887,7 +913,7 @@ export default function ChatPage() {
           return withDay(
             <Fragment key={m.id ?? 'h' + i}>
               <div className={'msg ' + m.role}>{m.role === 'assistant' ? <Inline text={m.text} /> : m.text}</div>
-              {replyTo !== null && renderRating(replyTo)}
+              {replyTo !== null && renderRating(replyTo, { text: m.text, asked })}
             </Fragment>
           )
         })}
