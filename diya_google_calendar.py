@@ -25,6 +25,8 @@ import json
 import os
 import re
 import secrets
+import threading
+import time
 import urllib.parse
 import webbrowser
 from datetime import datetime, timezone
@@ -321,22 +323,57 @@ def _access_token(config):
     return access_token(config, "google_calendar")
 
 
+# Access tokens already fetched, so that a question that reads, and an approved action that writes and reads back, ask Google's token server once and not three times (DIYA-064). The key holds a
+# fingerprint of the refresh token, never the token: disconnecting or connecting again changes the key, so an old access token is never served to a new connection. Nothing is written to disk and the
+# refresh token is never rewritten by a refresh, so there is no stored state for two jobs to corrupt; a lock per connection makes parallel callers wait for one refresh instead of making many.
+EARLY_SECONDS = 60  # a token with less than this left is refreshed before it is used (the proactive part), not after Google refuses it
+DEFAULT_LIFETIME = 300  # used when Google does not say how long a token lives: short on purpose
+_clock = time.monotonic
+_cache = {}
+_locks = {}
+_guard = threading.Lock()
+
+
+def _lock_for(key):
+    with _guard:
+        return _locks.setdefault(key, threading.Lock())
+
+
+def forget_access_tokens():
+    """Drop every cached access token (a test, or a disconnect that wants the next call to go to Google)."""
+    with _guard:
+        _cache.clear()
+
+
 def access_token(config, token_name):
     """A fresh access token for the refresh token stored under `token_name`, or None if there is no connection or Google
     refuses the refresh (the same "not connected" answer either way -- the tool has nothing useful to
-    say about *why* a refresh failed that the owner can act on mid-conversation)."""
+    say about *why* a refresh failed that the owner can act on mid-conversation). A token that still has more than EARLY_SECONDS
+    left is reused; parallel callers share one refresh."""
     refresh_token = diya_connectors.read_token(config, token_name)
     if refresh_token is None:
         return None
-    try:
-        client_id, client_secret = _client_credentials(config)
-        tokens = _exchange({
-            "client_id": client_id, "client_secret": client_secret,
-            "refresh_token": refresh_token, "grant_type": "refresh_token",
-        })
-    except ConnectorError:
-        return None
-    return tokens.get("access_token")
+    key = (str(getattr(config, "connector_tokens_dir", "")), token_name, hashlib.sha256(refresh_token.encode("utf-8")).hexdigest()[:16])
+    with _lock_for(key):
+        held = _cache.get(key)
+        if held is not None and held[1] - _clock() > EARLY_SECONDS:
+            return held[0]
+        _cache.pop(key, None)  # expired, or about to be: never hand it out
+        try:
+            client_id, client_secret = _client_credentials(config)
+            tokens = _exchange({
+                "client_id": client_id, "client_secret": client_secret,
+                "refresh_token": refresh_token, "grant_type": "refresh_token",
+            })
+        except ConnectorError:
+            return None  # a refusal is not remembered: the next call asks again
+        token = tokens.get("access_token")
+        if not isinstance(token, str) or not token:
+            return None
+        lifetime = tokens.get("expires_in")
+        lifetime = lifetime if isinstance(lifetime, (int, float)) and not isinstance(lifetime, bool) and 0 < lifetime <= 3600 else DEFAULT_LIFETIME
+        _cache[key] = (token, _clock() + lifetime)
+        return token
 
 
 def _last_day(end):

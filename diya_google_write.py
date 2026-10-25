@@ -105,10 +105,34 @@ def _reason(response):
     return diya_memory.printable(message, 160) if isinstance(message, str) else ""
 
 
+# What an approved action may ask Google for, as code and not as a habit (DIYA-040). The account is the one connected under that connector's own name; the resource is only ever the primary calendar, the default
+# task list, Drive's top level and Docs as listed here (a calendar id, a task list, a share or a person's address cannot appear in a request); the operation is one of these methods. Anything else is refused
+# before a token is fetched or a byte is sent. There is no recipient list because nothing Diya does reaches another person (no invitation, no share, no mail).
+_ID = "[A-Za-z0-9_-]{5,128}"
+_PERMITTED = tuple((connector, method, re.compile(pattern)) for connector, method, pattern in (
+    ("google_calendar_edit", "POST", re.escape(CALENDAR_API)),
+    ("google_calendar_edit", "GET", re.escape(CALENDAR_API) + "/" + _ID),
+    ("google_tasks", "POST", re.escape(TASKS_API)),
+    ("google_tasks", "GET", re.escape(TASKS_API) + "/" + _ID),
+    ("google_drive_files", "POST", re.escape(DRIVE_API)),
+    ("google_drive_files", "GET", re.escape(DRIVE_API) + "/" + _ID),
+    ("google_drive_files", "POST", re.escape(DOCS_API)),
+    ("google_drive_files", "POST", re.escape(DOCS_API) + "/" + _ID + ":batchUpdate"),
+    ("google_drive_files", "GET", re.escape(DOCS_API) + "/" + _ID),
+))
+
+
+def permitted(connector, method, url):
+    """Is this exact request one an approved action may make for that connector?"""
+    return any(c == connector and m == method and pattern.fullmatch(url) for c, m, pattern in _PERMITTED)
+
+
 def _send(config, connector, method, url, *, params=None, body=None, what="that", ok=(200,), accept=()):
     """One request to Google as the owner, for an approved action. Returns the response when its status is in `ok` or `accept`. ActionFailed, with nothing done, for a refusal Google gave (and for a sign-in
     that is gone); ActionUncertain for a request that may have reached Google with no answer, or a failure on its side part way."""
     label = GOOGLE_WRITE[connector][0]
+    if not permitted(connector, method, url):
+        raise ActionFailed(f"{label} is not allowed to make that request, so nothing was done.")
     if diya_connectors.read_token(config, connector) is None:
         raise ActionFailed(f"{label} is not connected, so nothing was done.")
     token = diya_google_calendar.access_token(config, connector)
