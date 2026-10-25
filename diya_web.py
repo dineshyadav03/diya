@@ -690,7 +690,8 @@ def main():
         import diya_warm
 
         diya_warm.KeepWarm(config, agent).start()
-    diya_resources.Recorder(agent.store).start()  # a look at memory and the processor every five minutes, for the Status page to look back over
+    if getattr(agent, "store", None) is not None:  # (a stand-in agent in a test has none)
+        diya_resources.Recorder(agent.store).start()  # a look at memory and the processor every five minutes, for the Status page to look back over
 
     if config.lan:
         print(f"Diya's API is in LAN mode: listening on {config.host}:{config.port}, "
