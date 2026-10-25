@@ -54,3 +54,7 @@ __pycache__/
 CLAUDE.md
 # Your own playbooks (diya_playbooks.py): steps you wrote for a kind of request; the examples are in sample_playbooks/
 /playbooks/
+
+# What diya_export.py writes: your chats, memory and tasks as plain files (docs/EXPORT.md)
+/exports/
+diya-export-*/
