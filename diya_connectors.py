@@ -10,6 +10,7 @@ carries someone else's account access along with it.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from dataclasses import dataclass
@@ -86,6 +87,40 @@ def _token_path(config, name):
     return os.path.join(config.connector_tokens_dir, f"{name}.token")
 
 
+def _signed_out_path(config, name):
+    return os.path.join(config.connector_tokens_dir, f"{name}.signedout")
+
+
+def _fingerprint(token):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+
+
+def mark_signed_out(config, name):
+    """Remember that the SERVICE said this sign-in no longer works (Google's invalid_grant: the person removed Diya at Google, or the grant ran out), so nothing asks it again until the person connects again
+    (DIYA-065). What is kept is a short fingerprint of the stored token and the time, never the token: a new connection has another token, so the mark stops applying by itself."""
+    token = read_token(config, name)
+    if token is None:
+        return
+    os.makedirs(config.connector_tokens_dir, exist_ok=True)
+    path = _signed_out_path(config, name)
+    with open(path + ".tmp", "w", encoding="utf-8", newline="\n") as f:
+        f.write(f"{_fingerprint(token)}\n{datetime.now(timezone.utc).isoformat()}\n")
+    os.replace(path + ".tmp", path)
+    log_call(config, name, "signed out by the service", False)
+
+
+def signed_out(config, name):
+    """Has the service signed this connection out (and has it not been connected again since)?"""
+    token = read_token(config, name)
+    if token is None:
+        return False
+    try:
+        with open(_signed_out_path(config, name), encoding="utf-8") as f:
+            return f.readline().strip() == _fingerprint(token)
+    except OSError:
+        return False
+
+
 def is_connected(config, name):
     """Is there a sign-in that can be used? One that cannot be decrypted here (a protected file copied from another Windows user or machine) counts as none: reconnecting is the way out."""
     return read_token(config, name) is not None
@@ -154,10 +189,11 @@ def disconnect(config, name):
         removed = True
     except FileNotFoundError:
         removed = False
-    try:
-        os.remove(_granted_path(config, name))
-    except OSError:
-        pass
+    for leftover in (_granted_path(config, name), _signed_out_path(config, name)):
+        try:
+            os.remove(leftover)
+        except OSError:
+            pass
     log_call(config, name, "disconnected", True, detail=None if removed else "was not connected")
     return removed
 

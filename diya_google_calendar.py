@@ -339,6 +339,13 @@ def _lock_for(key):
         return _locks.setdefault(key, threading.Lock())
 
 
+def not_connected_words(config, token_name, label):
+    """What to say when there is no usable access token: that the connection is not there, or, when Google has signed it out, that and how to put it right."""
+    if diya_connectors.signed_out(config, token_name):
+        return f"Google signed Diya out of {label} (it was removed at Google, or it ran out). Connect it again on the Connections page."
+    return f"{label} is not connected."
+
+
 def forget_access_tokens():
     """Drop every cached access token (a test, or a disconnect that wants the next call to go to Google)."""
     with _guard:
@@ -359,14 +366,18 @@ def access_token(config, token_name):
         if held is not None and held[1] - _clock() > EARLY_SECONDS:
             return held[0]
         _cache.pop(key, None)  # expired, or about to be: never hand it out
+        if diya_connectors.signed_out(config, token_name):
+            return None  # Google already said this sign-in is gone (DIYA-065): nothing asks again, and nothing waits, until the person connects again
         try:
             client_id, client_secret = _client_credentials(config)
             tokens = _exchange({
                 "client_id": client_id, "client_secret": client_secret,
                 "refresh_token": refresh_token, "grant_type": "refresh_token",
             })
-        except ConnectorError:
-            return None  # a refusal is not remembered: the next call asks again
+        except ConnectorError as exc:
+            if "invalid_grant" in str(exc):  # Google itself says the sign-in is revoked or has run out: remember that, so jobs stop asking and the Connections page can say so
+                diya_connectors.mark_signed_out(config, token_name)
+            return None  # any other refusal (a network fault, a busy Google) is not remembered: the next call asks again
         token = tokens.get("access_token")
         if not isinstance(token, str) or not token:
             return None
@@ -393,7 +404,7 @@ def events_between(config, start, end, limit=25):
     an event are Google's own text: a date for an all-day event (whose `end` is the day AFTER its last day) or a time with its zone. Read only; one request."""
     token = _access_token(config)
     if token is None:
-        return [], "Google Calendar is not connected."
+        return [], not_connected_words(config, "google_calendar", "Google Calendar")
     try:
         response = httpx.get(
             EVENTS_URL, headers={"Authorization": f"Bearer {token}"},
@@ -423,7 +434,7 @@ def list_events(config):
     def tool():
         token = _access_token(config)
         if token is None:
-            return "Google Calendar is not connected."
+            return not_connected_words(config, "google_calendar", "Google Calendar")
         now = datetime.now(timezone.utc).isoformat()
         try:
             response = httpx.get(

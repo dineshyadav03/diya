@@ -391,7 +391,7 @@ def google_tasks_list(config):
             return "Google Tasks is not connected."
         token = diya_google_calendar.access_token(config, "google_tasks")
         if token is None:
-            return "Google Tasks is not connected."
+            return diya_google_calendar.not_connected_words(config, "google_tasks", "Google Tasks")
         try:
             response = httpx.get(TASKS_API, params={"showCompleted": "false", "maxResults": 10}, headers={"Authorization": f"Bearer {token}"}, timeout=NETWORK_TIMEOUT)
         except httpx.HTTPError as exc:

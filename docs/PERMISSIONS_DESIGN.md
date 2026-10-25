@@ -21,3 +21,7 @@ Under the exact arguments, the card now says: **Risk level N of 4** and what tha
 - **Expiry of a Google sign-in.** A refresh token has no fixed expiry; an app left in Google's "testing" state has its sign-ins ended after 7 days, which is why `docs/GOOGLE_SETUP.md` says to publish the app. If a sign-in stops working the connection shows as not usable and Connect again is the way back.
 
 **Proof.** `tests/test_permissions.py` (12 cases) and `tests/test_google_write.py::test_a_waiting_google_action_carries_its_risk_its_reach_and_how_far_it_can_be_undone`.
+
+## When Google signs Diya out (2026-10-25, DIYA-065)
+
+If you remove Diya at myaccount.google.com/permissions, or a sign-in runs out, Google answers every refresh with `invalid_grant`. Diya now remembers that (`diya_connectors.mark_signed_out`: a short fingerprint of the stored token and the time, never the token), stops asking Google until you connect again, and says so: every Google reader tells you Google signed Diya out and to connect again on the Connections page, the permissions answer carries `signed_out`, and the card reads "Signed out by Google" with a "Connect again" button. Connecting again gives a new token, so the mark stops applying by itself; Disconnect clears it. Any other failure (a network fault, a busy Google) is not taken for a sign-out. `tests/test_google_signed_out.py`.

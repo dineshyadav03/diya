@@ -183,6 +183,8 @@ def read_mail(config, text, get=None, access_token=None):
     query, described = mail_query(text)
     token = access_token if access_token is not None else diya_google_calendar.access_token(config, TOKEN)
     if not token:
+        if diya_connectors.signed_out(config, TOKEN):
+            raise MailError(diya_google_calendar.not_connected_words(config, TOKEN, "Gmail"))
         raise MailError("Gmail is not connected yet. Open the Connections page and press Connect on Gmail (the steps are written there).")
     api = _Api(token, get)
     listed = api.json("messages", {"q": query, "maxResults": MAX_LISTED})

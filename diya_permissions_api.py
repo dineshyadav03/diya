@@ -42,6 +42,7 @@ def overview(config, agent, connector):
         "name": connector.name,
         "label": printable(connector.label),
         "connected": connected,
+        "signed_out": connected and diya_connectors.signed_out(config, connector.name),  # the service itself said the sign-in is gone: the page offers to connect again
         "access": [printable(line, 200) for line in connector.access],
         "scope": printable(connector.scope, 120),
         "granted": [printable(item, 120) for item in granted] if granted else None,  # what the service said it granted (None: it did not say)

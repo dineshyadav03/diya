@@ -224,6 +224,11 @@ export default function ConnectionsPage() {
                                 <code>{permissions[connector.name].granted.join(' ')}</code>
                               </p>
                             )}
+                            {connector.connected && permissions[connector.name].signed_out && (
+                              <p className="memory-dim" role="alert">
+                                Google signed Diya out of this account (it was removed at Google, or it ran out), so Diya cannot use it until you connect again. Nothing keeps asking Google in the meantime.
+                              </p>
+                            )}
                             {connector.connected && permissions[connector.name].since && (
                               <p className="memory-dim">Connected since {new Date(permissions[connector.name].since).toLocaleString()}.</p>
                             )}
@@ -239,9 +244,14 @@ export default function ConnectionsPage() {
                             )}
                           </div>
                         )}
-                        <p className="memory-person-tag">{connector.connected ? 'Connected' : 'Not connected'}</p>
+                        <p className="memory-person-tag">{connector.connected ? (permissions[connector.name] && permissions[connector.name].signed_out ? 'Signed out by Google' : 'Connected') : 'Not connected'}</p>
                         {connector.connected ? (
                           <div className="memory-actions">
+                            {permissions[connector.name] && permissions[connector.name].signed_out && connector.auth_kind === 'oauth' && (
+                              <button type="button" className="memory-btn memory-btn--primary" onClick={() => connectOAuth(connector)} disabled={isBusy}>
+                                Connect again
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="memory-btn memory-btn--danger"
