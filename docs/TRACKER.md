@@ -5,15 +5,15 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 
 | Status | Tasks |
 |---|---|
-| Not started | 116 |
+| Not started | 114 |
 | Needs verification | 8 |
 | Research queue | 29 |
-| In progress | 22 |
+| In progress | 23 |
 | Blocked | 0 |
-| Done | 123 |
+| Done | 124 |
 | Deferred | 0 |
 
-## Done (123)
+## Done (124)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -138,8 +138,9 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-070** Create synthetic API fixtures and sandbox test accounts (2026-10-25): docs/GOOGLE_LIVE_SMOKE.md: the live check of all eight Google operations, each with what to say, what to see and how to undo; tests/test_google_allowlist.py pins that the plan names every Google operation in the catalog and a stand-in test file that mentions it; the stand-in tests are tests/test_google_*.py, test_calendar_talk.py and test_google_fault_matrix.py. The sandbox test account and the live run itself are the owner's (DIYA-216).
 - **DIYA-040** Add account and recipient/resource allowlists (2026-10-25): diya_google_write.permitted() and _send: an approved action may ask Google only for the primary calendar, the default task list, Drive's top level and Docs by one id, with the method listed; anything else is refused before a token is fetched or a byte is sent; tests/test_google_allowlist.py (32 incl. a seeded random check); the account is the connector's own token, the per-turn and waiting caps already exist (diya_actions MAX_PER_TURN, MAX_PENDING). No recipient list because nothing Diya does reaches another person; several Google accounts at once are DIYA-066 and not built.
 - **DIYA-034** Add source-backed personal knowledge pages (2026-10-25): diya_knowledge.py pages: every sentence is the owner's own words and names the note it came from; tests/test_knowledge.py::test_every_sentence_on_a_page_is_the_persons_own_words_from_the_note_it_names and ::test_a_page_says_where_each_sentence_is_from_and_links_to_the_names_beside_it; remembered facts link to their source message on the Memory page (DIYA-022). Pages are built from the owner's notes only; mail and Drive are not indexed, so there are no connector ids to link.
+- **DIYA-219** Test conditional write at stale version (2026-10-25): tests/test_google_allowlist.py: an approved action can create but cannot update, patch, replace or delete anything that exists (PUT, PATCH and DELETE are refused before a token is fetched), so no edit of a document, sheet or calendar item can overwrite a newer one. True only while no update path exists. The day one is built (DIYA-082, -094, -105) it must send the item's version (ETag) and refuse a stale one; that test is then owed.
 
-## In progress (22)
+## In progress (23)
 
 - **DIYA-005** Snapshot local database and all configuration before schema changes (2026-10-18). Not encrypted and not offline: a copy of backups/ on another disk is Dinesh's step.
 - **DIYA-021** Add outbox leases, retry and unique keys (2026-10-18). No lease column: one drain at a time in one process. Dreaming's separate pass is guarded by memory_captures, not a lease.
@@ -163,6 +164,7 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-118** Set up Google Chat app/bot auth and eligibility (2026-10-25). The row needs a test account shown to support the intended mode; none exists, so it stays open.
 - **DIYA-122** Investigate Meet API features and account entitlements (2026-10-25). Which Workspace editions or admin settings are needed is not stated on the pages read, so 'account entitlements' is open.
 - **DIYA-067** Build typed Google adapter client and error taxonomy (2026-10-25). NOT done as the title says: there is no one typed client taking typed references; each service has its own small functions, and reads return sentences, not typed values.
+- **DIYA-161** Build Claude-inspired message affordances in Diya branding (2026-10-25). NOT done as the title says: editing a message, files, a copy button on code blocks and citations are not built. No UI asset was copied.
 
 ## Waiting for the owner (10)
 
