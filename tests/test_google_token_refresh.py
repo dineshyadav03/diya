@@ -30,7 +30,7 @@ class TokenServer:
         if self.delay:
             time.sleep(self.delay)
         if self.refuse:
-            raise ConnectorError("Google answered with HTTP 400 (invalid_grant)")
+            raise ConnectorError("Google answered with HTTP 503")  # a busy Google: not a revoked sign-in (that one is remembered; tests/test_google_signed_out.py)
         answer = {"access_token": f"access-{self.visits}", "token_type": "Bearer"}
         if self.lifetime is not None:
             answer["expires_in"] = self.lifetime
