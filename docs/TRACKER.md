@@ -5,15 +5,15 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 
 | Status | Tasks |
 |---|---|
-| Not started | 122 |
-| Needs verification | 7 |
+| Not started | 116 |
+| Needs verification | 8 |
 | Research queue | 29 |
-| In progress | 21 |
+| In progress | 22 |
 | Blocked | 0 |
-| Done | 119 |
+| Done | 123 |
 | Deferred | 0 |
 
-## Done (119)
+## Done (123)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -134,8 +134,12 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-136** Specify separate cloud admin scope/approval if ever pursued (2026-10-25): docs/GOOGLE_ADMIN_POLICY.md; tests/test_google_admin_policy.py (5): docs/GOOGLE_ADMIN_POLICY.md section DIYA-136: own project, client and connector; tier-4 proposal; second independent confirmation for billing and deletion; caps; no standing grants. A specification only; nothing to build until a request exists.
 - **DIYA-137** Keep Directory/admin connector off in personal product (2026-10-25): docs/GOOGLE_ADMIN_POLICY.md; tests/test_google_admin_policy.py (5): no scope or connector with admin or directory in it; a personal account has no directory. Pinned by the test.
 - **DIYA-138** Define enterprise-only admin permission package if requested (2026-10-25): docs/GOOGLE_ADMIN_POLICY.md; tests/test_google_admin_policy.py (5): docs/GOOGLE_ADMIN_POLICY.md section DIYA-138: verified Workspace tenant, super-administrator proof, independent review, no domain-wide delegation, separate installation. A specification only.
+- **DIYA-064** Handle refresh with lock and proactive expiry detection (2026-10-25): diya_google_calendar.access_token: a token with time left is reused, one with under a minute left is refreshed before use, a per-connection lock makes parallel callers share one refresh, a connection made again never gets the old token, a refusal is not remembered; tests/test_google_token_refresh.py (16): twelve threads cause one refresh, and a refresh never rewrites the stored refresh token. Google does not rotate refresh tokens and nothing is cached on disk, so there is no stored state for two jobs to corrupt; separate processes each refresh for themselves, which is harmless. Stand-in token server only.
+- **DIYA-070** Create synthetic API fixtures and sandbox test accounts (2026-10-25): docs/GOOGLE_LIVE_SMOKE.md: the live check of all eight Google operations, each with what to say, what to see and how to undo; tests/test_google_allowlist.py pins that the plan names every Google operation in the catalog and a stand-in test file that mentions it; the stand-in tests are tests/test_google_*.py, test_calendar_talk.py and test_google_fault_matrix.py. The sandbox test account and the live run itself are the owner's (DIYA-216).
+- **DIYA-040** Add account and recipient/resource allowlists (2026-10-25): diya_google_write.permitted() and _send: an approved action may ask Google only for the primary calendar, the default task list, Drive's top level and Docs by one id, with the method listed; anything else is refused before a token is fetched or a byte is sent; tests/test_google_allowlist.py (32 incl. a seeded random check); the account is the connector's own token, the per-turn and waiting caps already exist (diya_actions MAX_PER_TURN, MAX_PENDING). No recipient list because nothing Diya does reaches another person; several Google accounts at once are DIYA-066 and not built.
+- **DIYA-034** Add source-backed personal knowledge pages (2026-10-25): diya_knowledge.py pages: every sentence is the owner's own words and names the note it came from; tests/test_knowledge.py::test_every_sentence_on_a_page_is_the_persons_own_words_from_the_note_it_names and ::test_a_page_says_where_each_sentence_is_from_and_links_to_the_names_beside_it; remembered facts link to their source message on the Memory page (DIYA-022). Pages are built from the owner's notes only; mail and Drive are not indexed, so there are no connector ids to link.
 
-## In progress (21)
+## In progress (22)
 
 - **DIYA-005** Snapshot local database and all configuration before schema changes (2026-10-18). Not encrypted and not offline: a copy of backups/ on another disk is Dinesh's step.
 - **DIYA-021** Add outbox leases, retry and unique keys (2026-10-18). No lease column: one drain at a time in one process. Dreaming's separate pass is guarded by memory_captures, not a lease.
@@ -158,6 +162,7 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-069** Implement shared paging, quotas, retry-after and timeouts (2026-10-25). NOT done as the title says: there is no shared client or paging (each list is one capped page by design) and no quota counter.
 - **DIYA-118** Set up Google Chat app/bot auth and eligibility (2026-10-25). The row needs a test account shown to support the intended mode; none exists, so it stays open.
 - **DIYA-122** Investigate Meet API features and account entitlements (2026-10-25). Which Workspace editions or admin settings are needed is not stated on the pages read, so 'account entitlements' is open.
+- **DIYA-067** Build typed Google adapter client and error taxonomy (2026-10-25). NOT done as the title says: there is no one typed client taking typed references; each service has its own small functions, and reads return sentences, not typed values.
 
 ## Waiting for the owner (10)
 
