@@ -100,7 +100,7 @@ def test_the_page_puts_a_label_before_every_kind_of_message_it_draws_and_the_ser
     assert "at: new Date().toISOString()" in page and "at: typeof m.at === 'string'" in page  # a message sent while the page is open has a time too
     assert 'role="separator"' in page and "className=\"day-sep\"" in page
     css = (ROOT / "frontend" / "app" / "globals.css").read_text(encoding="utf-8")
-    assert ".day-sep" in css and "var(--text-dim)" in css.split(".day-sep", 1)[1].split("\n", 1)[0] and "var(--border)" in css.split(".day-sep::before", 1)[1].split("\n", 1)[0]
+    assert ".day-sep" in css and "var(--text-dim)" in css.split(".day-sep", 1)[1].split("\n", 1)[0] and "var(--glass-edge)" in css.split(".day-sep::before", 1)[1].split("\n", 1)[0]
     assert "#" not in css.split(".day-sep {", 1)[1].split("}", 1)[0]  # tokens only: no colour written out
     rig = (ROOT / "frontend" / "tools" / "design-rig" / "shots.mjs").read_text(encoding="utf-8")
     assert "name: 'chat-days'" in rig  # the design rig draws it in a real browser (run on 2026-10-21 in the dark theme, on a desktop and a phone width: every check passed, no contrast failure; the light theme was not run)

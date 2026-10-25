@@ -75,9 +75,10 @@ def test_the_dark_theme_is_written_twice_and_both_copies_are_the_same():
 
 
 def test_the_two_themes_are_the_two_systems_they_say_they_are():
-    assert (LIGHT["--bg"], LIGHT["--surface"], LIGHT["--accent"]) == ("#f6f5f4", "#ffffff", "#0075de")  # Notion: warm paper, white cards, one blue
-    assert (DARK["--bg"], DARK["--surface"], DARK["--accent"]) == ("#0a0a0a", "#191919", "#0075de")  # xAI: near-black, charcoal; the owner asked for the light theme's blue here too
-    assert DARK["--accent"] == LIGHT["--accent"] and DARK["--accent-text"] == LIGHT["--accent-text"]
+    # Restyled on 2026-10-26 at the owner's request, after the look of Hark's interface: a sky with glass on it. Dark is a dusk (the sky's lightest colour is --bg), light is the same at dawn (the sky's darkest is --bg).
+    assert (LIGHT["--bg"], LIGHT["--surface"], LIGHT["--accent"]) == ("#d9e0f0", "#eef1f9", "#1d1d1f")  # pale dawn sky, white glass, an ink pill for the one action
+    assert (DARK["--bg"], DARK["--surface"], DARK["--accent"]) == ("#434b78", "#2a2d40", "#f5f5f7")  # dusk sky, dark glass, a white pill for the one action
+    assert DARK["--accent-text"] == "#1d1d1f" and LIGHT["--accent-text"] == "#f5f5f7"  # each pill's label is the other theme's pill colour
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])

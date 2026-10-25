@@ -5,6 +5,23 @@
 > small monospace labels), and said to go for any of them. This records what was chosen, why, and what changes, so the choice can be
 > reversed or adjusted by changing tokens rather than hunting through pages.
 
+## 0. Restyled after Hark (2026-10-26) -- this supersedes D1 and D2 below where they differ
+
+The owner opened Hark's interface (hark.com) in the browser pane and asked for Diya to look the same. What was taken is the **look and the way it is arranged**, never its assets: its fonts are commercial and its sky is a moving
+photograph, so Diya has its own (a system serif for titles, the system sans for the rest, and a sky drawn with CSS gradients). What changed:
+
+- **A sky, with glass on it.** The page is a dusk (dark, the main look) or a dawn (light); the navigation, cards, messages and the message box are translucent glass on it (`--glass`, `--glass-strong`, `--glass-user`,
+  `--glass-hover`, `--glass-edge`; blur only where something overlaps, as on the top bar, the menu and the message box). The sky drifts very slowly and stops under reduced motion.
+- **No sidebar.** A floating pill at the top holds Today, Chat and Memory with a white slider that glides under the current one; a round button at the left opens a glass menu with every page (grouped as before, with the due and
+  waiting counts) and the theme choice and sign-out; the brand mark is at the right. Same on a phone (the pill is sized to fit 320 px).
+- **One action colour: the page's own white** (an ink-dark pill in the light theme). The blue is only for links, the focus ring and "this needs you". Primary buttons are pills with dark text.
+- **Messages are glass bubbles** (Diya's on the left, yours lighter on the right); the message box is a glass capsule; the bottom of the chat fades into it; page titles are lowercase serif ("today", "past chats").
+- **Contrast is still proven.** `--bg` is the LIGHTEST colour the dark sky ever reaches (the darkest in the light theme) and `--surface` is a glass card laid over exactly that, so the pairings in `tests/test_frontend_theme.py` hold
+  for every pixel; `tests/test_frontend_shell.py` checks the sky never goes past `--bg`, and the design rig checks the painted page (dark and light, desktop, phone and 320 px).
+- **Not copied:** Hark's panels dashboard on its Home page ("create a new panel"), its search button and its Projects page. Diya's Today page is its Home.
+
+To go back: `git revert` the commit that carries this section; the old tokens and the sidebar come back with it.
+
 ## 1. What was wrong, in the current interface
 
 - **A header that is a wall of buttons.** Nine pill buttons plus "Test voice" and "Speak" wrap onto three rows on a laptop-width

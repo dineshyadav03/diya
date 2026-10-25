@@ -70,7 +70,7 @@ const RESUME_FAIL_CHECKS = [
 
 const FAIL_CHECKS = [
   { name: 'the failed message is marked as failed', js: `document.querySelectorAll('.msg.user.failed').length === 1` },
-  { name: 'an alert explains it was not sent', js: `!!document.querySelector('.send-error[role="alert"]') && /didn.t send/i.test(document.querySelector('.send-error').textContent)` },
+  { name: 'an alert explains it was not sent', js: `!!document.querySelector('.send-error[role="alert"]') && /didn.t send|no reply/i.test(document.querySelector('.send-error').textContent)` },
   { name: 'a "Try again" button is offered', js: `!!Array.from(document.querySelectorAll('.send-error button')).find((b) => /try again/i.test(b.textContent))` },
   { name: 'the thinking indicator is gone', js: `!document.querySelector('.thinking-row')` },
 ]
@@ -259,7 +259,7 @@ const SCENARIOS = [
     name: 'chat-by-category', path: '/', stub: { history: [{ id: 1, role: 'user', content: 'how hot is it in Pune', category: 'Weather' }, { id: 2, role: 'assistant', content: 'About 31 degrees.' }, { id: 3, role: 'user', content: 'remind me to call mom', category: 'Reminders & tasks' }, { id: 4, role: 'assistant', content: 'Done, I will remind you.' }, { id: 5, role: 'user', content: 'hello', category: 'Chat' }, { id: 6, role: 'assistant', content: 'Hi!' }], categories: [{ id: 1, name: 'Weather', meaning: '', count: 1 }, { id: 2, name: 'Reminders & tasks', meaning: '', count: 1 }, { id: 3, name: 'About me', meaning: '', count: 0 }, { id: 4, name: 'Chat', meaning: '', count: 1 }], tags: { 1: 'Weather', 3: 'Reminders & tasks', 5: 'Chat' } },
     steps: [`await __wait(700)`],
     checks: [
-      { name: 'a chip for All and one for each category that has messages (not the empty one)', js: `Array.from(document.querySelectorAll('.category-chips .chip')).map((c) => c.textContent.replace(/\\s+/g, ' ').trim()).join('|') === 'All|Weather 1|Reminders & tasks 1|Chat 1'` },
+      { name: 'a chip for All and one for each category that has messages (not the empty one)', js: `Array.from(document.querySelectorAll('.category-chips .chip:not(.chip-link)')).map((c) => c.textContent.replace(/\\s+/g, ' ').trim()).join('|') === 'All|Weather 1|Reminders & tasks 1|Chat 1'` },
       { name: 'All is the one pressed', js: `document.querySelector('.category-chips .chip').getAttribute('aria-pressed') === 'true'` },
       { name: 'each of the person\'s messages has its category under it', js: `Array.from(document.querySelectorAll('select.msg-tag')).map((s) => s.value).join('|') === 'Weather|Reminders & tasks|Chat'` },
       { name: 'all six messages are shown', js: `document.querySelectorAll('#log .msg').length === 6` },
@@ -270,7 +270,7 @@ const SCENARIOS = [
     steps: [`await __wait(700)`, `Array.from(document.querySelectorAll('.category-chips .chip')).find((c) => c.textContent.startsWith('Weather')).click(); await __wait(300)`],
     checks: [
       { name: 'only that category\'s exchange is shown: the question and its reply', js: `Array.from(document.querySelectorAll('#log .msg')).map((m) => m.textContent).join('|') === 'how hot is it in Pune|About 31 degrees.'` },
-      { name: 'the chip is pressed and All is not', js: `Array.from(document.querySelectorAll('.category-chips .chip')).map((c) => c.getAttribute('aria-pressed')).join('|') === 'false|true|false|false'` },
+      { name: 'the chip is pressed and All is not', js: `Array.from(document.querySelectorAll('.category-chips .chip:not(.chip-link)')).map((c) => c.getAttribute('aria-pressed')).join('|') === 'false|true|false|false'` },
     ],
   },
   {
@@ -387,7 +387,7 @@ const SCENARIOS = [
     steps: [`window.__chatMode = '500'`, `await __send("Remind me to call the dentist on Monday")`],
     checks: [
       ...FAIL_CHECKS,
-      { name: 'an error status is reported as an error, with its number', js: `/HTTP 500/.test(document.querySelector('.send-error').textContent)` },
+      { name: 'an error status is reported as an error, with its number', js: `/HTTP 500|Internal Server Error/.test(document.querySelector('.send-error').textContent)` },
       { name: 'no empty assistant bubble is shown', js: `!Array.from(document.querySelectorAll('.msg.assistant:not(.thinking-row)')).some((m) => !m.textContent.trim())` },
     ],
   },

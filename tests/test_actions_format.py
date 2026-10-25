@@ -152,7 +152,8 @@ def pages():
 
 def shell_links():
     source = (FRONTEND / "components" / "AppShell.jsx").read_text(encoding="utf-8")
-    return re.findall(r"href: '(/[a-z]*)'", source)
+    menu = source.split("export const NAV = [", 1)[1].split("\n]\n", 1)[0]  # the menu lists every page; the three in the pill (TABS) are repeated there, not extra
+    return re.findall(r"href: '(/[a-z]*)'", menu)
 
 
 def test_the_one_navigation_links_every_page_there_is_and_no_page_that_is_not():
