@@ -8,12 +8,12 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 | Not started | 114 |
 | Needs verification | 8 |
 | Research queue | 29 |
-| In progress | 20 |
+| In progress | 19 |
 | Blocked | 0 |
-| Done | 127 |
+| Done | 128 |
 | Deferred | 0 |
 
-## Done (127)
+## Done (128)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -89,6 +89,7 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-013** Test graceful stop/restart after power loss (2026-10-20): tests/test_crash_restart.py (2) with real processes that are KILLED, not stopped: a process saving messages is killed mid-stream and the database passes SQLite's integrity check and Diya's own, every message has its reading job and no job lacks its message; a process killed after an approved action's outside effect began leaves it executing, a restart turns it into unknown, it is never run again and the effect happened once; a run only a moment old is left alone.. Not a real power cut: the operating system's write cache is not in play, and a disk that lies is not tested. Startup calls reconcile (diya.py) and the Actions page does too.
 - **DIYA-027** Add memory provenance recall benchmark (2026-10-20): tests/test_provenance_bench.py (4): 32 questions about 16 invented facts made by the real pipeline, plus 8 about things never said: 32 of 32 correct, 0 wrong attribution, 0 missed, 0 of 8 invented a history, and a corrected fact is said to be no longer used. The first run found two defects (one common shared word attached the wrong history; a live fact hid the retired one) and diya_provenance._matching was fixed; numbers before and after in docs/PROVENANCE_DESIGN.md.. Invented data and the wordings the question patterns recognise; no language model writes these answers, so it measures the code.
 - **DIYA-010** Define user acceptance journeys with realistic fixtures (2026-10-20): docs/ACCEPTANCE_JOURNEYS.md and tests/test_journeys.py (11): ten whole workflows through the real HTTP routes with a scripted model and a stand-in Google: tell her something, correct it, forget it (and for good), a reminder by your own words, a task, an automation, a Google Task that waits for your press and is read back, pause and resume, a checked backup and restore, memory out as Markdown and a repository and back; each with what you must see and the failure it must survive; a test fails if the document and the tests disagree.. Scripted model: they test the chain, not the quality of a real model's answers. Calendar and Gmail reads, voice and the phone channels have no journey because they have never run for real.
+- **DIYA-017** Add failure/latency monitoring baseline (2026-10-25): diya_resources.py + migration 28 (resource_samples): while the API runs a look every five minutes at memory free, how busy the processor was and what the API held, numbers only, newest 5,000 kept; the Status page's 'This computer' says what the last 24 hours were like; with what was already there (answers' P50 and P95 and failure counts from turn_stats, the age of the oldest message waiting to be read, tool and connector failures in the last day); tests/test_resources.py (6); docs/HEALTH_DESIGN.md. The recorder runs only inside the API process (not while it is stopped); no text of the owner's is read or kept. Measured on stand-ins; the first real numbers appear after the API has run for a while.
 - **DIYA-237** Review U02 — Add/rename/merge categories; server/UI parity (2026-10-21): docs/RESEARCH_REVIEWS_2026-10-21.md (section DIYA-237); tests/test_category_undo_search.py: every API action has a page control; a merge can be undone and listed. Whether the owner likes the categories is DIYA-155 (owner-labelled), still open.
 - **DIYA-244** Review U09 — Very large models one layer at a time, AirLLM, NVIDIA Model Optimizer (2026-10-21): docs/RESEARCH_REVIEWS_2026-10-21.md (DIYA-244): AirLLM (Apache-2.0) and NVIDIA Model-Optimizer (Apache-2.0) queried 2026-10-21, README read. Deferred to DIYA-198; no tokens-per-second figure for a CPU-only machine was seen (not established).
 - **DIYA-245** Review U10 — Jev, OpenJev-type fast deciders, THX-01 and claimed ~10ms forward pass (2026-10-21): docs/RESEARCH_REVIEWS_2026-10-21.md (DIYA-245): laya-mlx figures read; THX-01 searched for and not found. Decision: benchmark only (DIYA-199); no speed claimed for this laptop.
@@ -143,7 +144,7 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-034** Add source-backed personal knowledge pages (2026-10-25): diya_knowledge.py pages: every sentence is the owner's own words and names the note it came from; tests/test_knowledge.py::test_every_sentence_on_a_page_is_the_persons_own_words_from_the_note_it_names and ::test_a_page_says_where_each_sentence_is_from_and_links_to_the_names_beside_it; remembered facts link to their source message on the Memory page (DIYA-022). Pages are built from the owner's notes only; mail and Drive are not indexed, so there are no connector ids to link.
 - **DIYA-219** Test conditional write at stale version (2026-10-25): tests/test_google_allowlist.py: an approved action can create but cannot update, patch, replace or delete anything that exists (PUT, PATCH and DELETE are refused before a token is fetched), so no edit of a document, sheet or calendar item can overwrite a newer one. True only while no update path exists. The day one is built (DIYA-082, -094, -105) it must send the item's version (ETag) and refuse a stale one; that test is then owed.
 
-## In progress (20)
+## In progress (19)
 
 - **DIYA-005** Snapshot local database and all configuration before schema changes (2026-10-18). Not encrypted and not offline: a copy of backups/ on another disk is Dinesh's step.
 - **DIYA-021** Add outbox leases, retry and unique keys (2026-10-18). No lease column: one drain at a time in one process. Dreaming's separate pass is guarded by memory_captures, not a lease.
@@ -156,7 +157,6 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-093** Implement new Doc creation and insertion (2026-10-18). Create and a line of text, read back (stand-in). Needs Dinesh's real-account try.
 - **DIYA-097** Implement Google Tasks list/task-list read (2026-10-18). Lists open tasks in the default list only (stand-in). Needs Dinesh's real-account try.
 - **DIYA-098** Implement Tasks create/complete/update/move/delete (2026-10-18). Create and read-back only (stand-in): complete, update, move, delete are not built.
-- **DIYA-017** Add failure/latency monitoring baseline (2026-10-20). NOT done: the sheet asks for CPU and memory to be LOGGED; they are shown when the page is opened and not recorded over time. 'Done' waits for that.
 - **DIYA-192** Validate current Ollama model and hardware acceleration (2026-10-21). Whether enabling it helps is NOT measured: it restarts the model server and loads a model into nearly full memory, so it waits for the owner's yes.
 - **DIYA-188** Investigate DeepSeek harness exact repository/source (2026-10-21). Not yet a reproducible comparison: the harness has not been run (phase 1 needs isolation and the owner's yes).
 - **DIYA-054** Add capped exponential backoff and quotas (2026-10-25). NOT done as the title says: nothing retries, so there is no backoff to cap, and there is no per-day count of Google requests. The acceptance (no runaway attempts) holds; 'Done' waits for whether the owner wants retries for reads.
