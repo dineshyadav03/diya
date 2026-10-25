@@ -23,6 +23,7 @@ import diya_brief_api
 import diya_categories
 import diya_categories_api
 import diya_feedback_api
+import diya_resources
 import diya_config
 import diya_connections_api
 import diya_connector_tools
@@ -689,6 +690,7 @@ def main():
         import diya_warm
 
         diya_warm.KeepWarm(config, agent).start()
+    diya_resources.Recorder(agent.store).start()  # a look at memory and the processor every five minutes, for the Status page to look back over
 
     if config.lan:
         print(f"Diya's API is in LAN mode: listening on {config.host}:{config.port}, "

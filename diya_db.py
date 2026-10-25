@@ -536,6 +536,21 @@ MIGRATIONS = (
         )
         """,
     )),
+    # How the computer was doing, a few numbers every few minutes (docs/HEALTH_DESIGN.md, DIYA-017): memory free, how busy the processor was, and what Diya's API held. Numbers only, no text of yours; the
+    # newest two weeks are kept.
+    (28, (
+        """
+        CREATE TABLE IF NOT EXISTS resource_samples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            at TEXT NOT NULL,
+            ram_total INTEGER,
+            ram_free INTEGER,
+            cpu_percent REAL,
+            process_rss INTEGER
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_resource_samples_at ON resource_samples (at)",
+    )),
 )
 
 MAX_THREAD_TITLE = 80  # the longest name a chat can be given
@@ -943,6 +958,37 @@ class Store:
         conn = self.connect()
         try:
             return [bool(row[0]) for row in conn.execute("SELECT ok FROM turn_stats ORDER BY id DESC LIMIT ?", (count,)).fetchall()]
+        finally:
+            conn.close()
+
+    # --- how the computer was doing (numbers only) ---
+
+    RESOURCE_SAMPLES_KEPT = 5000  # two weeks at one every five minutes is about 4,000
+
+    def resource_sample_add(self, at, ram_total, ram_free, cpu_percent, process_rss):
+        """Write one look at the computer and drop the ones older than the newest RESOURCE_SAMPLES_KEPT. Numbers only."""
+        conn = self.connect()
+        try:
+            conn.execute("INSERT INTO resource_samples (at, ram_total, ram_free, cpu_percent, process_rss) VALUES (?, ?, ?, ?, ?)", (at, ram_total, ram_free, cpu_percent, process_rss))
+            conn.execute("DELETE FROM resource_samples WHERE id <= (SELECT MAX(id) FROM resource_samples) - ?", (self.RESOURCE_SAMPLES_KEPT,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def resource_sample_last(self):
+        """When the newest look was taken (an ISO time), or None."""
+        conn = self.connect()
+        try:
+            row = conn.execute("SELECT at FROM resource_samples ORDER BY id DESC LIMIT 1").fetchone()
+            return row[0] if row else None
+        finally:
+            conn.close()
+
+    def resource_samples_since(self, since):
+        """[(ram_total, ram_free, cpu_percent, process_rss)] of the looks at or after `since` (an ISO time), oldest first."""
+        conn = self.connect()
+        try:
+            return conn.execute("SELECT ram_total, ram_free, cpu_percent, process_rss FROM resource_samples WHERE at >= ? ORDER BY id", (since,)).fetchall()
         finally:
             conn.close()
 

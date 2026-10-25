@@ -20,6 +20,7 @@ import diya_backup
 import diya_connectors
 import diya_machine
 import diya_pause
+import diya_resources
 import diya_secrets
 import diya_warm
 from diya_memory import printable
@@ -166,13 +167,17 @@ def _backup(config, now):
 LOW_MEMORY_GB = 1.0
 
 
-def _machine(sample):
+def _machine(sample, store=None, now=None):
     """Memory free, how busy the processor is, and what Diya's API holds (diya_machine): so that a slow answer can be told from a broken one. A warning when less than a gigabyte of memory is free, because the
     models are then pushed out of memory and every answer gets slow."""
     found = sample()
     text = diya_machine.describe(found)
     if text is None:
         return _item("machine", "This computer", "off", "This system cannot be asked how much memory is free or how busy the processor is.")
+    if store is not None:  # what the last day was like, from the numbers written every few minutes (diya_resources)
+        looked_back = diya_resources.describe(diya_resources.trend(store, (now or datetime.now(timezone.utc)).astimezone(timezone.utc)))
+        if looked_back:
+            text += " " + looked_back
     if found["ram_free"] < LOW_MEMORY_GB * diya_machine.GB:
         return _item("machine", "This computer", "warn", text + " Memory is nearly full: close something, or answers will be slow while the model is pushed in and out.")
     return _item("machine", "This computer", "ok", text)
@@ -235,7 +240,7 @@ def collect(config, store, now=None, ping=ping_ollama, sample=None):
         ("pause", "Pause switch", lambda: _pause(store)),
         ("database", "Memory (database)", lambda: _database(config, store)),
         ("model", "Chat model", lambda: _model(config, ping)),
-        ("machine", "This computer", lambda: _machine(sample or diya_machine.sample)),
+        ("machine", "This computer", lambda: _machine(sample or diya_machine.sample, store, moment)),
         ("reading", "Reading messages for facts", lambda: _reading(config, store)),
         ("dreaming", "Dreaming (the nightly tidy-up)", lambda: _dreaming(config, store, moment)),
         ("connections", "Connections", lambda: _connections(config)),

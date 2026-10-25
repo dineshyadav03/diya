@@ -33,3 +33,7 @@
   On this laptop when first tried: 4.2 of 15.7 GB free, processor 15% busy, the API holding 16 MB.
 * **Not done:** CPU and memory are shown when the page is opened, not logged over time, so a spike an hour ago is not on the record. The sheet's wording asks for them "logged"; that part is open.
 
+
+## Looking back over the last day (2026-10-25, DIYA-017)
+
+The Status page used to show memory and processor use only for the moment you opened it. While the API runs, `diya_resources.Recorder` takes a look every five minutes (memory free, how busy the processor was, what Diya's API holds) and writes the numbers to `resource_samples` (migration 28; the newest 5,000 are kept, about two weeks). "This computer" then adds what the last 24 hours were like: the lowest and average free memory, the processor's average, and how often memory was under 1 GB or the processor over 85 per cent. Numbers only, no text of yours, nothing leaves the computer. How fast answers come and how many fail were already there (`turn_stats`), as were how old the oldest message waiting to be read is and the tool and connector failures in the last day. `tests/test_resources.py`.
