@@ -1,19 +1,19 @@
 # Task sheet progress
 
-Updated 2026-10-21. The blueprint's task sheet has 298 tasks; the progress is kept in `docs/tracker/progress.csv` and written into the owner's three copies of the sheet by `python scripts/tracker.py apply`.
+Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is kept in `docs/tracker/progress.csv` and written into the owner's three copies of the sheet by `python scripts/tracker.py apply`.
 "Done" means the acceptance test in the sheet was met and there is evidence. Anything that touches Google, a phone or another real thing the tests cannot reach stays "In progress" until the owner has tried it.
 
 | Status | Tasks |
 |---|---|
-| Not started | 141 |
-| Needs verification | 6 |
+| Not started | 122 |
+| Needs verification | 7 |
 | Research queue | 29 |
-| In progress | 17 |
+| In progress | 21 |
 | Blocked | 0 |
-| Done | 105 |
+| Done | 119 |
 | Deferred | 0 |
 
-## Done (105)
+## Done (119)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -120,8 +120,22 @@ Updated 2026-10-21. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-159** Implement existing-chat backfill progress and cancellation (2026-10-21): sort_earlier already reported progress and could be stopped (tests/test_categories_manage.py); tests/test_category_undo_search.py now proves a resume sorts only what is left, makes no second row, keeps every label made and the person's move between the two passes. Progress and the stop button are on the Categories page.
 - **DIYA-202** Specify privacy-aware local/cloud routing boundary (2026-10-21): diya_config.py refuses a model address that is not this computer unless DIYA_ALLOW_REMOTE_MODEL=1; docs/LOCAL_ONLY.md; tests/test_local_only.py (22): default local, only the explicit word allows it, no program takes a model address from anywhere else. All or nothing, set in the configuration: a per-prompt approval to upload a sensitive prompt to a cloud model is NOT built and not designed.
 - **DIYA-257** Review U22 — Five harness pillars: context/action/orchestration/control/feedback; DeepSeek harness (2026-10-21): docs/DSH_PLAN.md: the five pillars (context, action, orchestration, control, feedback) mapped to the DeepSeek harness's packages and to Diya, with the gaps named; exact DeepSeek harness source found and its licence checked. Review only: nothing was run or adopted; the owner chose both adopting it and keeping Diya's ideas, planned as a bridge in phases.
+- **DIYA-217** Implement Google API fault matrix tests (2026-10-25): tests/test_google_fault_matrix.py (91): 401, 403 bad scope, 404 bad id, 409, 412, 429, 500/502/503/504, read timeout, connect error, connect timeout, 200 with junk, wrong shape, tried on the calendar reads, Tasks list, Gmail search and the writes: one request each, a typed outcome or a plain sentence, no token in any message. Found and fixed: the calendar reads crashed on a 200 reply that was not JSON or the wrong shape; Gmail crashed on a JSON list.. Stand-in Google only; DIYA-216 (a live smoke run in a test account) is separate and not done.
+- **DIYA-071** Review current Google OAuth restricted scope and app verification requirements (2026-10-25): docs/GOOGLE_SURFACES_2026-10.md (DIYA-071): official pages read 2026-10-25 for Testing (7-day refresh token, 100 test users), Published-unverified (warning, lifetime cap of 100), no personal-use exemption stated, and the labels Google gives gmail.readonly (Restricted) and drive.file (Non-sensitive). Calendar and Tasks scopes are not labelled on their pages; the Cloud Console shows the label. Decision recorded: stay In production, one user.
+- **DIYA-079** Review filter/rule and permanent deletion APIs/permissions (2026-10-25): docs/GOOGLE_SURFACES_2026-10.md (DIYA-079): filters need gmail.settings.basic (Restricted), max 1,000; permanent delete needs the full-mailbox scope and cannot be undone. Diya offers neither; permanent deletion has no design and is off.
+- **DIYA-085** Investigate calendar creation/ACL operations (2026-10-25): docs/GOOGLE_SURFACES_2026-10.md (DIYA-085): calendars.insert vs acl.insert scopes; Diya holds calendar.events only, so it cannot create or share calendars. Read from search summaries of the reference pages, not the pages opened: check live before relying on it.
+- **DIYA-114** Check Forms API account eligibility/scopes (2026-10-25): docs/GOOGLE_SURFACES_2026-10.md (DIYA-114): forms.create / responses.list scopes (drive.file covers both), forms made after 2026-06-30 start unpublished. Consumer vs Workspace constraints not stated on the pages read. Nothing built.
+- **DIYA-125** Verify Keep API availability for account type (2026-10-25): docs/GOOGLE_SURFACES_2026-10.md (DIYA-125): the Keep API is documented as an enterprise-administrator API with domain-wide delegation (since 2021-09-02); no consumer promise on any page. Decision: no consumer support assumed. Nothing built.
+- **DIYA-127** Verify Classroom teacher/student role requirements (2026-10-25): docs/GOOGLE_SURFACES_2026-10.md (DIYA-127): per-class roles, admin controls, Workspace for Education domains. Whether a personal account may call the API is not stated on the pages read. Nothing built.
+- **DIYA-129** Recheck current Google Photos API limits and approved use cases (2026-10-25): docs/GOOGLE_SURFACES_2026-10.md (DIYA-129): since 2025-03-31 the Library API reads only app-created media; uploads need appendonly; the Picker API for picking from the library. Which scopes remain should be re-checked on the authorization page before any build. Nothing built.
+- **DIYA-131** Investigate Places/Routes/Maps APIs for relevant read tasks (2026-10-25): docs/GOOGLE_SURFACES_2026-10.md (DIYA-131): Places and Routes are key-based, pay-per-request services (per-SKU free monthly usage since 2025-03-01), separate from account content; a lookup would be a read-only declared tool. That billing is required and how a key is restricted are not stated on the pages read. Nothing built.
+- **DIYA-133** Check YouTube Data API account scopes and quotas (2026-10-25): docs/GOOGLE_SURFACES_2026-10.md (DIYA-133): videos.insert scopes, 100 calls/day bucket, default 10,000 units/day, unverified projects not restricted to private. Channel eligibility not stated on the pages read. Nothing built.
+- **DIYA-135** Keep Google Cloud administrator connector disabled by default (2026-10-25): docs/GOOGLE_ADMIN_POLICY.md; tests/test_google_admin_policy.py (5): the Google permissions asked for are exactly five; no cloud, billing or admin power exists in code, connectors or the catalog. Policy and pins, not a feature.
+- **DIYA-136** Specify separate cloud admin scope/approval if ever pursued (2026-10-25): docs/GOOGLE_ADMIN_POLICY.md; tests/test_google_admin_policy.py (5): docs/GOOGLE_ADMIN_POLICY.md section DIYA-136: own project, client and connector; tier-4 proposal; second independent confirmation for billing and deletion; caps; no standing grants. A specification only; nothing to build until a request exists.
+- **DIYA-137** Keep Directory/admin connector off in personal product (2026-10-25): docs/GOOGLE_ADMIN_POLICY.md; tests/test_google_admin_policy.py (5): no scope or connector with admin or directory in it; a personal account has no directory. Pinned by the test.
+- **DIYA-138** Define enterprise-only admin permission package if requested (2026-10-25): docs/GOOGLE_ADMIN_POLICY.md; tests/test_google_admin_policy.py (5): docs/GOOGLE_ADMIN_POLICY.md section DIYA-138: verified Workspace tenant, super-administrator proof, independent review, no domain-wide delegation, separate installation. A specification only.
 
-## In progress (17)
+## In progress (21)
 
 - **DIYA-005** Snapshot local database and all configuration before schema changes (2026-10-18). Not encrypted and not offline: a copy of backups/ on another disk is Dinesh's step.
 - **DIYA-021** Add outbox leases, retry and unique keys (2026-10-18). No lease column: one drain at a time in one process. Dreaming's separate pass is guarded by memory_captures, not a lease.
@@ -140,6 +154,10 @@ Updated 2026-10-21. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-017** Add failure/latency monitoring baseline (2026-10-20). NOT done: the sheet asks for CPU and memory to be LOGGED; they are shown when the page is opened and not recorded over time. 'Done' waits for that.
 - **DIYA-192** Validate current Ollama model and hardware acceleration (2026-10-21). Whether enabling it helps is NOT measured: it restarts the model server and loads a model into nearly full memory, so it waits for the owner's yes.
 - **DIYA-188** Investigate DeepSeek harness exact repository/source (2026-10-21). Not yet a reproducible comparison: the harness has not been run (phase 1 needs isolation and the owner's yes).
+- **DIYA-054** Add capped exponential backoff and quotas (2026-10-25). NOT done as the title says: nothing retries, so there is no backoff to cap, and there is no per-day count of Google requests. The acceptance (no runaway attempts) holds; 'Done' waits for whether the owner wants retries for reads.
+- **DIYA-069** Implement shared paging, quotas, retry-after and timeouts (2026-10-25). NOT done as the title says: there is no shared client or paging (each list is one capped page by design) and no quota counter.
+- **DIYA-118** Set up Google Chat app/bot auth and eligibility (2026-10-25). The row needs a test account shown to support the intended mode; none exists, so it stays open.
+- **DIYA-122** Investigate Meet API features and account entitlements (2026-10-25). Which Workspace editions or admin settings are needed is not stated on the pages read, so 'account entitlements' is open.
 
 ## Waiting for the owner (10)
 
