@@ -114,6 +114,34 @@ def _exchange(data):
     return response.json()
 
 
+def wait_hint(response):
+    """What to say after Google answered 429 (too many requests), shared by every Google request Diya makes (tests/test_google_fault_matrix.py): ' Try again in about 45 seconds.' when Google sent a
+    Retry-After of a number of seconds (shown in minutes from two minutes up, and as 'over an hour' past an hour), else ' Try again in a minute.' Nothing is retried for the person: this only says when to ask."""
+    try:
+        wait = int(float(str((getattr(response, "headers", None) or {}).get("Retry-After", "")).strip()))
+    except (ValueError, TypeError, OverflowError):
+        wait = 0
+    if wait <= 0:
+        return " Try again in a minute."
+    if wait > 3600:
+        return " Try again in over an hour."
+    return f" Try again in about {wait} seconds." if wait < 120 else f" Try again in about {-(-wait // 60)} minutes."
+
+
+def events_in(response):
+    """The events in a calendar answer as a list of objects, or None when the answer is not what Google sends (not JSON, not an object, `items` not a list). Entries that are not objects are dropped."""
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    items = data.get("items", [])
+    if not isinstance(items, list):
+        return None
+    return [item for item in items if isinstance(item, dict)]
+
+
 def _reason(response):
     """Google's own short reason for a refusal ("invalid_client", "invalid_grant", and its one line of explanation), as text to add to an error message: ' (invalid_client: Unauthorized)'. Empty when there is
     none. It names a reason, never a value: the answer holds no secret, and only its two short text fields are read."""
@@ -337,10 +365,15 @@ def events_between(config, start, end, limit=25):
         )
     except httpx.HTTPError as exc:
         return [], f"Couldn't reach Google Calendar: {exc}"
+    if response.status_code == 429:
+        return [], f"Google Calendar is limiting requests right now.{wait_hint(response)}"
     if response.status_code != 200:
         return [], f"Google Calendar answered with HTTP {response.status_code}{_reason(response)}."
+    items = events_in(response)
+    if items is None:
+        return [], "Google Calendar sent back something I could not read."
     found = []
-    for event in response.json().get("items", []):
+    for event in items:
         first, last = event.get("start", {}), event.get("end", {})
         found.append({
             "title": event.get("summary") or "(no title)", "start": first.get("dateTime") or first.get("date", ""), "end": last.get("dateTime") or last.get("date", ""),
@@ -363,9 +396,13 @@ def list_events(config):
             )
         except httpx.HTTPError as exc:
             return f"Couldn't reach Google Calendar: {exc}"
+        if response.status_code == 429:
+            return f"Google Calendar is limiting requests right now.{wait_hint(response)}"
         if response.status_code != 200:
             return f"Google Calendar answered with HTTP {response.status_code}."
-        events = response.json().get("items", [])
+        events = events_in(response)
+        if events is None:
+            return "Google Calendar sent back something I could not read."
         if not events:
             return "No upcoming events."
         lines = []

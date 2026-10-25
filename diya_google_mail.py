@@ -165,13 +165,16 @@ class _Api:
         if response.status_code in (401, 403):
             raise MailError("Google refused to show the mail. Check that the Gmail API is switched on in your Google app and that you allowed Diya to read your mail, then connect Gmail again.")
         if response.status_code == 429:
-            raise MailError("Google says there have been too many requests. Try again in a minute.")
+            raise MailError(f"Google says there have been too many requests.{diya_google_calendar.wait_hint(response)}")
         if response.status_code != 200:
             raise MailError(f"Google answered with an error (HTTP {response.status_code}).")
         try:
-            return response.json()
+            data = response.json()
         except ValueError as exc:
             raise MailError("Google sent back something I could not read.") from exc
+        if not isinstance(data, dict):  # a list or a bare value is not what Gmail sends
+            raise MailError("Google sent back something I could not read.")
+        return data
 
 
 def read_mail(config, text, get=None, access_token=None):

@@ -128,7 +128,7 @@ def _send(config, connector, method, url, *, params=None, body=None, what="that"
     if status in (401, 403):
         raise ActionFailed(f"Google refused{suffix}, so nothing was done. Check that the API is switched on and that you allowed Diya to do this, then connect {label} again.")
     if status == 429:
-        raise ActionFailed("Google is limiting requests right now, so nothing was done. Propose it again in a minute.")
+        raise ActionFailed(f"Google is limiting requests right now, so nothing was done.{diya_google_calendar.wait_hint(response).replace('Try again', 'Propose it again')}")
     if 500 <= status <= 599:
         raise ActionUncertain(f"Google answered with an error (HTTP {status}) part way through, so {what} may or may not have been done. Look in Google, then record what you found.")
     raise ActionFailed(f"Google answered with HTTP {status}{suffix}, so nothing was done.")
@@ -372,6 +372,8 @@ def google_tasks_list(config):
             response = httpx.get(TASKS_API, params={"showCompleted": "false", "maxResults": 10}, headers={"Authorization": f"Bearer {token}"}, timeout=NETWORK_TIMEOUT)
         except httpx.HTTPError as exc:
             return f"Couldn't reach Google Tasks: {type(exc).__name__}"
+        if response.status_code == 429:
+            return f"Google Tasks is limiting requests right now.{diya_google_calendar.wait_hint(response)}"
         if response.status_code != 200:
             return f"Google Tasks answered with HTTP {response.status_code}."
         items = [i for i in (_json(response).get("items") or []) if isinstance(i, dict)]
