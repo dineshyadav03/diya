@@ -15,6 +15,8 @@ connector" lives here, even though its own OAuth mechanics are a separate module
 from __future__ import annotations
 
 
+import re
+
 import httpx
 
 import diya_connectors
@@ -241,6 +243,29 @@ def todoist_add_task_prepare(args, text):
             [f"It has no due date: {due!r} was left out, because the user did not say when."])
 
 
+_TODOIST_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def _todoist_read_back(token, task_id, content):
+    """The independent check that the task really is there (DIYA-052): Todoist's answer to the write is not taken as proof; the task is asked for again by its number, and what comes back must be a task with
+    the words that were approved and not already ticked off. The number goes into the address only if it is plainly a number or a short code. Anything else (no number, the read failing, a different task) is
+    ActionUncertain: it may well be there, it is not confirmed, and the owner is told to look. Returns the sentence that says it was added."""
+    unconfirmed = "Todoist said the task was added, but {why}, so it is not confirmed. Look in Todoist, then record what you found."
+    task_id = str(task_id) if isinstance(task_id, (int, str)) and not isinstance(task_id, bool) else ""
+    if not _TODOIST_ID.fullmatch(task_id):
+        raise ActionUncertain(unconfirmed.format(why="it gave no usable task number to check"))
+    try:
+        found = httpx.get(f"{TODOIST_API}/tasks/{task_id}", headers=_todoist_headers(token), timeout=NETWORK_TIMEOUT)
+        data = found.json() if found.status_code == 200 else None
+    except (httpx.HTTPError, ValueError):
+        data = None
+    if not isinstance(data, dict):
+        raise ActionUncertain(unconfirmed.format(why="reading it back to check did not work"))
+    if data.get("content") != content or data.get("checked") is True or data.get("is_completed") is True:
+        raise ActionUncertain(unconfirmed.format(why="reading it back showed a different task"))
+    return f"Added to your Todoist Inbox (task {task_id}), and checked by reading it back."
+
+
 def todoist_add_task_execute(config, args):
     """Create the task through Todoist's API, in the Inbox (no project is chosen). Called only by Actions.run, after the
     owner approved exactly these arguments. Never retried: a failure it knows happened before anything took effect is
@@ -266,7 +291,7 @@ def todoist_add_task_execute(config, args):
             task_id = response.json().get("id")
         except (ValueError, AttributeError):
             task_id = None
-        return f"Added to your Todoist Inbox (task {task_id})." if task_id else "Added to your Todoist Inbox."
+        return _todoist_read_back(token, task_id, body["content"])
     if status in (401, 403):
         raise ActionFailed("Todoist refused the token, so nothing was added. Reconnect Todoist on the Connections page.")
     if status == 429:

@@ -484,13 +484,21 @@ def test_a_due_date_in_the_persons_words_with_other_capitals_and_a_full_stop_is_
 
 
 def post_ok(monkeypatch, body=None, status=200):
-    return fake_call(monkeypatch, fake_response(status, body), method="post")
+    """Todoist's answer to the write, and a read-back that agrees with what was written (the stand-in remembers the last thing posted)."""
+    calls = fake_call(monkeypatch, fake_response(status, body), method="post")
+
+    def read_back(url, **kwargs):
+        posted = calls[-1][1]["json"] if calls else {}
+        return fake_response(200, {"id": url.rsplit("/", 1)[-1], "content": posted.get("content")})
+
+    monkeypatch.setattr(diya_connector_tools.httpx, "get", read_back)
+    return calls
 
 
 def test_adding_a_task_posts_it_to_the_inbox_with_the_token(monkeypatch, connected):
     calls = post_ok(monkeypatch, {"id": "6XGgmFVcrG5RRjVr"})
     said = todoist_add_task_execute(connected, {"content": "Buy milk"})
-    assert said == "Added to your Todoist Inbox (task 6XGgmFVcrG5RRjVr)."
+    assert said == "Added to your Todoist Inbox (task 6XGgmFVcrG5RRjVr), and checked by reading it back."
     ((url, kwargs),) = calls
     assert url == "https://api.todoist.com/api/v1/tasks"
     assert kwargs["json"] == {"content": "Buy milk"}  # no project: Todoist puts it in the Inbox
@@ -517,16 +525,44 @@ def test_a_due_phrase_is_sent_only_when_there_is_one(monkeypatch, connected):
 @pytest.mark.parametrize("status", [200, 201])
 def test_either_success_status_counts(monkeypatch, connected, status):
     post_ok(monkeypatch, {"id": "7"}, status)
-    assert todoist_add_task_execute(connected, {"content": "x"}) == "Added to your Todoist Inbox (task 7)."
+    assert todoist_add_task_execute(connected, {"content": "x"}) == "Added to your Todoist Inbox (task 7), and checked by reading it back."
 
 
-def test_a_success_with_no_readable_id_is_still_a_success(monkeypatch, connected):
+def test_a_success_with_no_readable_id_is_unconfirmed_and_nothing_is_read_back(monkeypatch, connected):
     def not_json():
         raise ValueError("no JSON")
 
-    for response in (types.SimpleNamespace(status_code=200, json=not_json), fake_response(200, ["a list"]), fake_response(200, {"no": "id"})):
+    reads = fake_call(monkeypatch, fake_response(200, {}), method="get")
+    for response in (types.SimpleNamespace(status_code=200, json=not_json), fake_response(200, ["a list"]), fake_response(200, {"no": "id"}), fake_response(200, {"id": "../projects"}), fake_response(200, {"id": True})):
         fake_call(monkeypatch, response, method="post")
-        assert todoist_add_task_execute(connected, {"content": "x"}) == "Added to your Todoist Inbox."
+        with pytest.raises(ActionUncertain, match="not confirmed.*Look in Todoist, then record what you found"):
+            todoist_add_task_execute(connected, {"content": "x"})
+    assert reads == []  # an id that is not plainly an id never reaches an address
+
+
+def test_the_task_is_asked_for_again_by_its_number_with_the_token_and_a_timeout(monkeypatch, connected):
+    post_ok(monkeypatch, {"id": "abc-123"})
+    reads = fake_call(monkeypatch, fake_response(200, {"id": "abc-123", "content": "Buy milk", "checked": False}), method="get")
+    todoist_add_task_execute(connected, {"content": "Buy milk"})
+    ((url, kwargs),) = reads
+    assert url == "https://api.todoist.com/api/v1/tasks/abc-123" and kwargs["headers"] == {"Authorization": "Bearer a-token"} and kwargs["timeout"] == 5.0
+
+
+@pytest.mark.parametrize("answer", [fake_response(404, {}), fake_response(500, {}), fake_response(200, ["not an object"]), fake_response(200, {"id": "abc", "content": "Something else"}),
+                                    fake_response(200, {"id": "abc", "content": "Buy milk", "checked": True}), fake_response(200, {"id": "abc", "content": "Buy milk", "is_completed": True})])
+def test_a_readback_that_fails_or_shows_another_task_leaves_it_unknown(monkeypatch, connected, answer):
+    post_ok(monkeypatch, {"id": "abc"})
+    fake_call(monkeypatch, answer, method="get")
+    with pytest.raises(ActionUncertain, match="Todoist said the task was added, but .*it is not confirmed"):
+        todoist_add_task_execute(connected, {"content": "Buy milk"})
+
+
+@pytest.mark.parametrize("error", [httpx.ReadTimeout("slow"), httpx.ConnectError("refused")])
+def test_a_readback_that_cannot_reach_todoist_leaves_it_unknown(monkeypatch, connected, error):
+    post_ok(monkeypatch, {"id": "abc"})
+    fake_call(monkeypatch, raises=error, method="get")
+    with pytest.raises(ActionUncertain, match="reading it back to check did not work"):
+        todoist_add_task_execute(connected, {"content": "Buy milk"})
 
 
 def test_with_no_token_stored_nothing_is_sent(monkeypatch, config):
@@ -601,7 +637,7 @@ def test_the_whole_flow_proposed_approved_and_run_posts_exactly_once(monkeypatch
     actions.approve(action["id"], action["args_hash"], "ui")
     assert calls == []  # nor does approving: only run does
     done = actions.run(action["id"])
-    assert done["status"] == "succeeded" and done["result"] == "Added to your Todoist Inbox (task abc)."
+    assert done["status"] == "succeeded" and done["result"] == "Added to your Todoist Inbox (task abc), and checked by reading it back."
     assert len(calls) == 1
     assert actions.verify_integrity() == []
 
