@@ -5,7 +5,7 @@ cloud model unless you say so, in so many words, for a reason you have in mind.
 
 **What the code does about it.** The address of the model is one setting, `DIYA_OLLAMA_URL`, and every program of Diya's reads it from the configuration. The configuration refuses an address that is not this computer
 (anything but `localhost`, `127.0.0.1`, `::1` or a name ending in `.localhost`) and says so: it names the host the words would have gone to. To send everything you say to such a host anyway, you also set
-`DIYA_ALLOW_REMOTE_MODEL=1`. A pasted setting or a typo cannot do it silently. `tests/test_local_only.py` proves the check and that no program takes a model address from anywhere else.
+`DIYA_ALLOW_REMOTE_MODEL=1`. A pasted setting or a typo cannot do it silently. `tests/test_local_only.py` proves the check and that no program takes a model address from anywhere else. Since 2026-10-25 an address with a space, a control character, a backslash, an `@` part or a bad port is refused as well (two programs can read such an address two ways); `tests/test_invariants.py` tries it with made-up addresses (`docs/INVARIANTS.md`).
 
 **What it does not cover.**
 * A *sensitive prompt* sent to a cloud model *case by case* (the sheet's "explicit user approval of sensitive prompt upload") is not built. Today the choice is all or nothing, made in the configuration; a per-prompt

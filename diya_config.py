@@ -261,11 +261,23 @@ def ensure_data_dir(config: "Config") -> None:
 def _check_model_stays_here(url, allow):
     """Diya's rule (docs/DECISIONS_2026-10-18.md, docs/LOCAL_ONLY.md): what the person says goes to a model on THIS computer. A model address that is not this computer is refused unless the person
     says in so many words (DIYA_ALLOW_REMOTE_MODEL=1) that they mean to send everything they say there. A typo or a pasted setting must not do it silently."""
-    host = (urlsplit(url).hostname or "").lower()
-    if host in ("localhost", "127.0.0.1", "::1") or host.endswith(".localhost"):
+    allowed = allow is not None and allow.lower() in _TRUE_WORDS
+    try:
+        parts = urlsplit(url)
+        host, _port = (parts.hostname or "").lower(), parts.port  # reading the port is what refuses a port that is not a number
+    except ValueError:
+        host = None
+    if host is not None and any(char.isspace() or ord(char) < 32 or char in "\\@\x7f" for char in url):
+        host = None  # a space, a control character, a backslash or a user@ part: two programs can read the host of such an address two ways, so it is not trusted to name this computer
+    if host is not None and (host in ("localhost", "127.0.0.1", "::1") or host.endswith(".localhost")):
         return
-    if allow is not None and allow.lower() in _TRUE_WORDS:
+    if allowed:
         return
+    if host is None:
+        raise ConfigError(
+            "DIYA_OLLAMA_URL is not a plain web address (it has a space, a control character, a backslash, an @ or a bad port in it), so it is not clear which computer it means, "
+            "and Diya keeps prompts on this computer. Write it like http://localhost:11434/v1. If you really mean a computer that is not this one, also set DIYA_ALLOW_REMOTE_MODEL=1."
+        )
     raise ConfigError(
         f"DIYA_OLLAMA_URL points at {host or url!r}, which is not this computer, so everything you say would be sent there. Diya keeps prompts on this computer. "
         "If you really mean it, also set DIYA_ALLOW_REMOTE_MODEL=1."

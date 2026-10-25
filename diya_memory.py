@@ -134,6 +134,8 @@ class SourceUnreadable(FactError):
 # listed: real scripts and emoji sequences need them.
 _INVISIBLE = frozenset(
     "\u061c\u200b\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2060\u2066\u2067\u2068\u2069\ufeff"
+    "\u00ad\u180e\u2061\u2062\u2063\u2064\u206a\u206b\u206c\u206d\u206e\u206f\ufff9\ufffa\ufffb"  # soft hyphen, Mongolian vowel separator, invisible operators, the deprecated format controls, interlinear marks (added 2026-10-25, found while writing the whole-table check in tests/test_invariants.py)
+    "\U000e0001" + "".join(chr(code) for code in range(0xE0020, 0xE0080))  # the "tag" block: invisible letters that can carry a hidden message
 )
 
 
