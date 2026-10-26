@@ -10,7 +10,7 @@ import time
 import threading
 import urllib.parse
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import httpx
@@ -33,12 +33,14 @@ import diya_intent
 import diya_knowledge
 import diya_mcp
 import diya_playbooks
+import diya_drive_tidy
 import diya_google_contacts
 import diya_google_drive
 import diya_google_mail
 import diya_google_mailwrite
 import diya_google_slides
 import diya_google_write
+import diya_weekly_plan
 import diya_journal
 import diya_repostudy
 import diya_memory
@@ -532,9 +534,9 @@ ABOUT_DIYA_NOTE = (
     "automations, such as 'every morning at 8am tell me the weather in Pune', said in the chat or added on the Automations page; a memory of facts about them that they can see, correct and undo on the Memory page; "
     "pages built from their notes folder (Knowledge) and answers such as 'what do my notes say about Maya?'; web search for questions that need today's facts; one chat that sorts what they say into "
 "categories they can rename, merge and look inside (Categories page); and 'study https://github.com/owner/repo' reads a public repository and says what it read and did not. "
-    "To connect an account, the person does it on the Connections page (menu, under System), not in the chat: Google Calendar (they need their own Google app; the steps are in docs/GOOGLE_SETUP.md), Todoist, Notion "
-    "and Home Assistant, and Gmail, which she can only read (search and read mail, never send, change or delete). These are built but have not yet been tried with real accounts, so say that if asked. You cannot read their Google Drive or other files, and you cannot change anything outside this "
-    "computer unless they press Approve."
+    "To connect an account, the person does it on the Connections page (menu, under System), not in the chat: Google Calendar and the other Google cards (they need their own Google app; the steps are in docs/GOOGLE_SETUP.md; "
+    "each thing beyond reading, such as sending mail, changing events, Drive, Contacts, Sheets, Slides and Forms, is its own card with its own narrow permission), Todoist, Notion and Home Assistant. These are built but have not yet been tried with real accounts, so say that if asked. "
+    "She reads their mail and Drive when asked and never opens attachments; she never deletes mail or files for good; and you cannot change anything outside this computer unless they press Approve."
 )
 MAX_DONE_SHOWN = 15  # how many ticked-off reminders, and how many tasks, a question about what they did is given
 EMBED_TURN_SECONDS = 6.0  # the longest a chat waits for the embedding model to help it (earlier words, a playbook): a cold or starved computer gets the chat without the extra, not a long wait
@@ -1273,6 +1275,7 @@ class Agent:
         self._turn.reads = []
         self._turn.proposed = []  # [(action, notes)]: what this turn recorded for the owner to approve
         self._turn.refused = []  # why a proposal this turn was refused, in words
+        self._turn.lead = None  # words to put before the proposals in the reply (a weekly plan)
         self._turn.note = "\n\n".join(part for part in (self._done_note(self._turn.user_text), ABOUT_DIYA_NOTE if diya_intent.asks_about_diya(self._turn.user_text) else None, self._playbook_note(self._turn.user_text), self._earlier_note(self._turn.user_text, message_id, messages), self._mail_connected_note(self._turn.user_text)) if part) or None if only_tools is None else None
         self._turn.active = True
         try:
@@ -1289,6 +1292,7 @@ class Agent:
             self._turn.reads = []
             self._turn.proposed = []
             self._turn.refused = []
+            self._turn.lead = None
 
     def _settle_proposals(self, answer, on_event, only_tools):
         """The reply after a turn that proposed something is built by code (diya_actions.proposal_reply). And a reply that says something is waiting for approval when this turn recorded nothing is replaced
@@ -1304,6 +1308,8 @@ class Agent:
                 else:
                     waiting.append((action, notes))
             text = diya_actions.proposal_reply(waiting, ran)
+            if getattr(self._turn, "lead", None):
+                text = f"{self._turn.lead}\n\n{text}"  # (a plan the owner was shown, then the proposals made from it)
         else:
             asked = [kind for kind in self.actions.kinds if kind.asked is not None and kind.tool_name and kind.asked(self._turn.user_text)]
             if not asked or not diya_actions.claims_a_proposal(answer):
@@ -1511,6 +1517,63 @@ class Agent:
         text, status = diya_google_contacts.lookup(self.config, found)
         return None if status == "nothing" else text
 
+    def _tidy_drive(self, question):
+        """"tidy my Drive": the plan and its undo manifest are worked out by code (diya_drive_tidy.plan), shown in full, and the first few moves are PROPOSED for the owner to approve one by one. None if the message is not such a request."""
+        if not diya_drive_tidy.request(question):
+            return None
+        if not diya_connectors.is_connected(self.config, diya_google_drive.CHANGE):
+            return "Google Drive (change) is not connected, so I can't tidy it. The Connections page connects it."
+        try:
+            moves, lines = diya_drive_tidy.plan(self.config)
+        except diya_google_drive.client.GoogleError as exc:
+            return str(exc)
+        kind = diya_actions.by_name(self.actions.kinds, "google_drive_move")
+        proposed = 0
+        for move in moves[:diya_actions.MAX_PER_TURN] if kind is not None else ():
+            try:
+                action = self.actions.propose(kind.name, move, thread_id=self._turn.thread_id, message_id=self._turn.message_id, taint_sources=["read_drive"])
+            except diya_actions.ActionError as exc:
+                self._turn.refused.append(str(exc))
+                break
+            self._turn.proposed.append((action, []))
+            proposed += 1
+        if moves:
+            lines.append(f"{proposed} of the {len(moves)} move(s) are proposed for you to approve one by one{'; ask again for the rest' if proposed < len(moves) else ''}. Nothing is moved until you do.")
+        text = "\n".join(lines)
+        self._turn.lead = text
+        return "" if proposed else text
+
+    def _plan_week(self, question):
+        """"plan my week: study physics 3 times for 1 hour": code reads the calendar, places each session in the earliest free gap (never on an event, never in the past), shows the plan, and PROPOSES the first few sessions as events
+        for the owner to approve (one message may lead to at most MAX_PER_TURN actions). The plan is the lead of the reply (_settle_proposals). None if the message is not such a request."""
+        now = datetime.now()
+        plan = diya_weekly_plan.request(question, now.date())
+        if plan is None:
+            return None
+        if not diya_connectors.is_connected(self.config, "google_calendar"):
+            return "Google Calendar is not connected, so I can't look for free time. The Connections page connects it."
+        try:
+            events = diya_calendar_find.events_for_days(self.config, plan["first"], plan["last"])
+        except diya_calendar_find.client.GoogleError as exc:
+            return str(exc)
+        placed, missed = diya_weekly_plan.schedule(events, plan, now)
+        kind = diya_actions.by_name(self.actions.kinds, "google_calendar_add_event")
+        can_add = kind is not None and diya_connectors.is_connected(self.config, kind.connector)
+        proposed = 0
+        for title, start, minutes in placed[:diya_actions.MAX_PER_TURN] if can_add else ():
+            try:
+                action = self.actions.propose(kind.name, {"title": title, "start": diya_time.iso_of_local(start), "duration_minutes": minutes}, thread_id=self._turn.thread_id, message_id=self._turn.message_id, taint_sources=["read_calendar"])
+            except diya_actions.ActionError as exc:
+                self._turn.refused.append(str(exc))
+                break
+            self._turn.proposed.append((action, []))
+            proposed += 1
+        text = diya_weekly_plan.render(plan, placed, missed, now.date(), proposed)
+        if placed and not can_add:
+            text += "\nTo put them on your calendar, connect Google Calendar (add events) on the Connections page."
+        self._turn.lead = text
+        return "" if proposed else text
+
     def _deck_from_doc(self, question):
         """"make a deck from my Study plan doc": the Doc the person named is read by code and cut into an outline (diya_google_slides.deck_from_doc), which is PROPOSED as a deck for the owner to approve with every slide on the
         card. The reply is the proposal's own sentence, or why it could not be made. None if the message is not such a request (or Drive read is not connected: then the chat goes on as before)."""
@@ -1601,6 +1664,14 @@ class Agent:
             if contact is not None:
                 self._journal("read_contacts", {"question": question}, "ok", result=contact, started=started, kind="flow")
                 return contact, ["read_contacts"]
+        if only_tools is None:
+            planned = self._plan_week(question)
+            if planned is not None:
+                return planned, ["read_calendar"] + (["propose_calendar_event"] if self._turn.proposed else [])
+        if only_tools is None:
+            tidied = self._tidy_drive(question)
+            if tidied is not None:
+                return tidied, ["read_drive"] + (["propose_move_drive_file"] if self._turn.proposed else [])
         if only_tools is None:
             made = self._deck_from_doc(question)
             if made is not None:

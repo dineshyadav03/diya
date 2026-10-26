@@ -457,6 +457,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/push/status", "/api/push/key", "/api/push/subscribe", "/api/push/unsubscribe", "/api/push/test",  # its "Notify this device" control
         "/api/connections", "/api/connections/${connector.name}/connect", "/api/connections/${connector.name}/connect",
         "/api/connections/connect-google",  # the Connections page's "Connect all Google": one sign-in for every Google card
+        "/api/connections/connect-google",  # and "Connect the newer Google cards": a second sign-in for the cards added from 2026-10-26 (same route, with a group)
         "/api/connections/${connector.name}/disconnect",  # the token-kind form and the oauth-kind button both post here
         "/api/connections/${connector.name}/setup", "/api/connections/${connector.name}/clear-setup",  # Google's one-time client ID and secret form, and forgetting that app
         "/api/actions", "/api/actions", "/api/actions",  # the chat header's waiting count, the Actions page's list, and the strip under the chat

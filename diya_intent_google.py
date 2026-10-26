@@ -134,6 +134,22 @@ def groups_contact(text):
     return _asks(text, r"\b(?:put|add|move|remove|take)\b[^.?!]{0,80}\b(?:group|label)\b", place=lambda said: _CONTACT.search(said) is not None or re.search(r"\b(?:group|label)\b", said, re.IGNORECASE) is not None and not _drive_word(said) and not _mail_word(said))
 
 
+# ---- Google Forms (diya_google_forms) -----------------------------------------------------------------------------------------------------------
+
+_FORM_WORD = re.compile(r"\b(?:google\s+)?(?:forms?|surveys?|questionnaires?)\b", re.IGNORECASE)
+
+
+def asks_for_form(text):
+    """Make a new Google Form ("make a Google Form called Feedback with the question ...")."""
+    said = _plain(text, 900)
+    return said is not None and intent._asks_to_add(said) and _FORM_WORD.search(said) is not None and not intent.names_google_tasks(said) and re.search(r"\b(?:create|make|new|start|build)\b", said, re.IGNORECASE) is not None
+
+
+def adds_form_questions(text):
+    """Add questions to a form Diya made ("add a question to the Feedback form: ...")."""
+    return _asks(text, r"\b(?:add|append|insert)\b[^.?!]{0,60}\bquestions?\b", place=lambda said: _FORM_WORD.search(said) is not None and not intent.names_google_tasks(said), limit=900)
+
+
 # ---- Google Sheets and Slides on what Diya made (diya_google_sheets, diya_google_slides) ----------------------------------------------------------
 
 _SHEET_WORD = re.compile(r"\b(?:google\s+)?(?:sheets?|spreadsheets?)\b", re.IGNORECASE)

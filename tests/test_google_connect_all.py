@@ -5,6 +5,7 @@ five permissions the app already had (nothing new); the one refresh token it ret
 alone (not connected, or still connected as it was); no answer about what was granted, or nothing granted, or a failed step stores nothing; every card still disconnects on its own, Google is told to forget
 the permission only when the LAST one goes, and a card connected again by itself stops being part of the shared sign-in; the permissions page compares what Google granted with the whole list that sign-in
 asked, and flags something outside it; forgetting Google's app disconnects every Google card, Calendar included; and the page's button, its same-origin route and its words exist.
+The newer cards (diya_google_cards) have the same button in a second group ("more"), tested at the end.
 It does not prove how the real Google's screen looks or that it grants all five to an unverified app: that is docs/GOOGLE_LIVE_SMOKE.md.
 """
 import dataclasses
@@ -225,3 +226,48 @@ def test_the_button_its_same_origin_route_and_its_words_exist():
     assert "/api/connections/connect-google" in page and "Connect all Google" in page and "Waiting for your browser" in page
     names = set(re.findall(r"'(google_[a-z_]+)'", page.split("GOOGLE_CARDS", 1)[1].split("]", 1)[0]))
     assert names == set(FIVE)  # the page's list of Google's cards is the registry's
+
+
+# ---- the newer cards in one sign-in too (the "more" group) ------------------------------------------------------------------------------------------------
+
+def newer_cards(config):
+    import diya_google_cards
+
+    return {c.name: c.scope for c in diya_connector_tools.real_connectors(config) if c.name in set(diya_google_cards.names())}
+
+
+def test_the_newer_cards_are_asked_in_one_sign_in_for_exactly_their_own_permissions_and_cards_sharing_one_get_it_together(config, monkeypatch):
+    newer = newer_cards(config)
+    assert len(newer) >= 9 and not set(newer) & set(FIVE)
+    asked = signs_in(monkeypatch, sorted(set(newer.values())))
+    connected, left_out = gcal.connect_all(config, newer)
+    assert sorted(connected) == sorted(newer) and left_out == [] and len(asked) == 1
+    assert sorted(asked[0].split()) == sorted(set(newer.values()))  # each permission once, though three cards use calendar.events and two use drive.file
+    assert all(diya_connectors.read_token(config, name) == "shared-refresh" for name in newer)
+    assert not any(diya_connectors.is_connected(config, name) for name in FIVE)  # the first five are untouched
+
+
+def test_a_newer_permission_unticked_leaves_only_its_card_off(config, monkeypatch):
+    newer = newer_cards(config)
+    granted = sorted(set(newer.values()) - {"https://www.googleapis.com/auth/gmail.send"})
+    signs_in(monkeypatch, granted)
+    connected, left_out = gcal.connect_all(config, newer)
+    assert left_out == ["google_mail_send"] and "google_mail_drafts" in connected and not diya_connectors.is_connected(config, "google_mail_send")
+
+
+def test_the_route_connects_the_newer_group_when_asked_and_the_first_five_by_default(config, monkeypatch):
+    app = diya_web.create_app(config, diya.Agent(config, client=FakeClient([]), action_kinds=[]), None)
+    client = TestClient(app, base_url="https://localhost")
+    newer = newer_cards(config)
+    asked = signs_in(monkeypatch, sorted(set(newer.values())))
+    body = client.post("/api/connections/connect-google", json={"group": "more"}).json()
+    assert sorted(asked[0].split()) == sorted(set(newer.values())) and len(body["connected"]) == len(newer)
+    asked.clear()
+    signs_in(monkeypatch, list(FIVE.values()))
+    body = client.post("/api/connections/connect-google").json()
+    assert len(body["connected"]) == 5
+
+
+def test_the_page_has_the_second_button_and_its_words():
+    page = (ROOT / "frontend" / "app" / "connections" / "page.js").read_text(encoding="utf-8")
+    assert "connectMoreGoogle" in page and "Connect the newer Google cards" in page and "group: 'more'" in page

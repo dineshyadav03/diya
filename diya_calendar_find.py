@@ -188,6 +188,11 @@ def _events(config, first, last):
     return items
 
 
+def events_for_days(config, first, last):
+    """The events of the calendar from the start of `first` to the end of `last` (days), as Google gives them; GoogleError for a problem. Read only."""
+    return _events(config, first, last)
+
+
 def answer(config, question, now=None):
     """(the reply, whether it was read fine) when `question` asks for an event by name or for free time, else None (then the chat goes on as before). Never raises."""
     now = now or datetime.now().astimezone()

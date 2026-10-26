@@ -120,6 +120,18 @@ export default function ConnectionsPage() {
     )
   }
 
+  // The newer Google cards in one sign-in too (sending mail, changing events, Drive, Contacts, Sheets and Slides): a second Google screen, with its own list of permissions to tick.
+  function connectMoreGoogle() {
+    settle(
+      () => fetch('/api/connections/connect-google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ group: 'more' }) }),
+      'google-more',
+      (body) =>
+        body.left_out && body.left_out.length
+          ? `Connected: ${body.connected.join(', ')}. Left off, because the permission was not allowed on Google's screen: ${body.left_out.join(', ')}.`
+          : `Connected: ${body.connected.join(', ')}.`,
+    )
+  }
+
   // One trip to Google's screen for every Google card. The call waits for the owner to finish there; the answer says which cards were connected and which were left out (a permission unticked on Google's screen).
   function connectAllGoogle() {
     settle(
@@ -172,6 +184,8 @@ export default function ConnectionsPage() {
   const connectors = data ? data.connectors : []
   const googleCards = connectors.filter((connector) => GOOGLE_CARDS.includes(connector.name) && connector.implemented)
   // Offered once Google's app is set up (its id and secret are shared by every Google card) and while some Google card is still off.
+  const moreCards = connectors.filter((connector) => !GOOGLE_CARDS.includes(connector.name) && connector.name.startsWith('google_') && connector.implemented)
+  const canConnectMoreGoogle = moreCards.length > 0 && googleCards.some((connector) => connector.setup && connector.setup.done) && moreCards.some((connector) => !connector.connected)
   const canConnectAllGoogle = googleCards.length > 1 && googleCards.some((connector) => connector.setup && connector.setup.done) && googleCards.some((connector) => !connector.connected)
 
   return (
@@ -229,8 +243,22 @@ export default function ConnectionsPage() {
                       </div>
                     </li>
                   )}
+                  {canConnectMoreGoogle && (
+                    <li className="memory-fact" data-status="candidate">
+                      <p className="memory-text">Connect the newer Google cards at once</p>
+                      <p className="memory-dim">
+                        A second Google screen for the things beyond the first five: sending and filing mail, changing and cancelling events, reading and changing Drive, Contacts, and making Sheets, Slides and Forms. Each card has its own
+                        permission and you can untick any on Google&rsquo;s screen: that card just stays off. Anything these do still waits for your approval, one at a time.
+                      </p>
+                      <div className="memory-actions">
+                        <button type="button" className="memory-btn memory-btn--primary" onClick={connectMoreGoogle} disabled={busy !== ''}>
+                          {busy === 'google-more' ? 'Waiting for your browser…' : 'Connect the newer Google cards'}
+                        </button>
+                      </div>
+                    </li>
+                  )}
                   {connectors.map((connector) => {
-                    const isBusy = busy === connector.name || (busy === 'google-all' && GOOGLE_CARDS.includes(connector.name))
+                    const isBusy = busy === connector.name || (busy === 'google-all' && GOOGLE_CARDS.includes(connector.name)) || (busy === 'google-more' && moreCards.some((card) => card.name === connector.name))
                     return (
                       <li key={connector.name} className="memory-fact" data-status={connector.connected ? 'accepted' : 'candidate'}>
                         <p className="memory-text">{connector.label}</p>

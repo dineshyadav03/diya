@@ -894,6 +894,28 @@ class Store:
         finally:
             conn.close()
 
+    def journal_scrub_tools(self, tools):
+        """Blank the preview and the note of every journal row for these tools (what they were asked, in words), for 'purge what Diya keeps because of Google' (diya_google_data). The rows stay (that it happened, when,
+        how it came out, the digest) and a receipt says how many were blanked. Returns that number."""
+        names = [str(t) for t in tools]
+        if not names:
+            return 0
+        marks = ",".join("?" for _ in names)
+        conn = self.connect()
+        try:
+            conn.execute("INSERT OR REPLACE INTO app_state (key, value) VALUES ('journal_edit_allowed', '1')")
+            changed = conn.execute(f"UPDATE tool_journal SET args_preview = NULL, note = NULL WHERE tool IN ({marks}) AND (args_preview IS NOT NULL OR note IS NOT NULL)", names).rowcount
+            conn.execute("DELETE FROM app_state WHERE key = 'journal_edit_allowed'")
+            if changed:
+                conn.execute("INSERT INTO journal_receipts (at, what, rows_changed, detail) VALUES (?, 'blanked', ?, ?)", (datetime.now(timezone.utc).isoformat(), changed, f"the words of what {len(names)} Google tool(s) were asked"))
+            conn.commit()
+            return changed
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def journal_prune(self, before):
         """Delete the rows written before `before` (an ISO time), and write a receipt saying how many. Returns that number."""
         conn = self.connect()

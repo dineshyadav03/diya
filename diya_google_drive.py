@@ -67,8 +67,11 @@ def _esc(text):
     return str(text).replace("\\", "\\\\").replace("'", "\\'")
 
 
+FORM = "application/vnd.google-apps.form"
+
+
 def _type_words(mime):
-    return {FOLDER: "folder", DOC: "Google Doc", SHEET: "Google Sheet", SLIDES: "Google Slides", "application/pdf": "PDF"}.get(mime) or ("text file" if str(mime).startswith("text/") else "image" if str(mime).startswith("image/") else "file")
+    return {FOLDER: "folder", DOC: "Google Doc", SHEET: "Google Sheet", SLIDES: "Google Slides", FORM: "Google Form", "application/pdf": "PDF"}.get(mime) or ("text file" if str(mime).startswith("text/") else "image" if str(mime).startswith("image/") else "file")
 
 
 def _day(google_text):
@@ -122,15 +125,15 @@ def _said(text, status="found"):
     return said
 
 
-def _which_file(config, name):
-    """(the one file the person named, None) or (None, the Said that explains): used by reading a file and listing its versions."""
+def _which_file(config, name, mime=None):
+    """(the one file the person named, None) or (None, the Said that explains): used by reading a file and listing its versions (`mime`: only files of that type)."""
     if diya_connectors.read_token(config, READ) is None:
         return None, _said(NOT_CONNECTED, "problem")
     if not isinstance(name, str) or not name.strip():
         return None, _said("Say which file, by its name.", "problem")
     wanted = " ".join(re.sub(r"[^\w' &.-]", " ", name).split())[:80]
     try:
-        file, problem = _pick(_lookup(config, READ, _query(wanted, not_mime=FOLDER)), wanted)
+        file, problem = _pick(_lookup(config, READ, _query(wanted, mime=mime, not_mime=None if mime else FOLDER)), wanted)
     except client.GoogleError as exc:
         return None, _said(str(exc), "problem")
     if problem:
@@ -168,6 +171,13 @@ def read_file(config, name):
     if why is not None:
         return why
     mime, file_id = file.get("mimeType"), file["id"]
+    if mime == FORM:
+        import diya_google_forms
+
+        try:
+            return _said(diya_google_forms.render_form(config, file_id, file["name"]))
+        except client.GoogleError as exc:
+            return _said(str(exc), "problem")
     head = f"{diya_memory.printable(file['name'], 100)} ({_type_words(mime)}, version {diya_memory.printable(file.get('version', '?'), 20)}, changed {_day(file.get('modifiedTime'))})"
     try:
         if mime in (DOC, SLIDES):
@@ -185,6 +195,19 @@ def read_file(config, name):
     except client.GoogleError as exc:
         return _said(str(exc), "problem")
     return _said(f"{head}\n{body}" + ("\n(Cut short.)" if len(body) >= READ_CHARS - 50 else ""))
+
+
+def responses_of(config, name):
+    """How many answers a form has and what each said, by code, without the respondent's email address (diya_google_forms.render_responses)."""
+    file, why = _which_file(config, name, FORM)
+    if why is not None:
+        return why
+    import diya_google_forms
+
+    try:
+        return _said(diya_google_forms.render_responses(config, file["id"], file["name"]))
+    except client.GoogleError as exc:
+        return _said(str(exc), "problem")
 
 
 def list_revisions(config, name):
@@ -210,7 +233,7 @@ def list_revisions(config, name):
 
 _MAX_ASK = 200
 _LEAD = r"^\W*(?:(?:hey|hi|ok|okay|so|please|diya|and|can\s+you|could\s+you)\b[\s,]*)*"
-_NOUN = r"(?:file|doc|document|sheet|spreadsheet|slides?|presentation|pdf)"
+_NOUN = r"(?:file|doc|document|sheet|spreadsheet|slides?|presentation|pdf|form|survey)"
 _OF = r"(?:in|on|from)\s+(?:my\s+)?(?:google\s+)?drive"
 _NAME = r"(?P<name>[A-Za-z0-9][A-Za-z0-9 '&._-]{0,78}?)"
 _SEARCH = (
@@ -223,6 +246,10 @@ _READ = (
     re.compile(_LEAD + r"(?:read|open|show|summari[sz]e)\s+(?:me\s+)?(?:the\s+|my\s+)?" + _NAME + r"\s+" + _NOUN + r"(?:\s+" + _OF + r")?\s*\??$", re.IGNORECASE),
     re.compile(_LEAD + r"(?:read|open|show|summari[sz]e)\s+(?:me\s+)?(?:the\s+|my\s+)?" + _NAME + r"\s+" + _OF + r"\s*\??$", re.IGNORECASE),
     re.compile(_LEAD + r"what\s+(?:does|do)\s+(?:my\s+|the\s+)?" + _NAME + r"\s+" + _NOUN + r"\s+say\s*\??$", re.IGNORECASE),
+)
+_RESPONSES = (
+    re.compile(_LEAD + r"(?:show|read|list|get|see)\s+(?:me\s+)?(?:the\s+)?(?:responses|answers|replies)\s+(?:to|for|of|on)\s+(?:my\s+|the\s+)?" + _NAME + r"\s+(?:google\s+)?(?:form|survey|questionnaire)\s*\??$", re.IGNORECASE),
+    re.compile(_LEAD + r"how\s+many\s+(?:responses|answers|replies)\s+(?:did|has|have|does)\s+(?:my\s+|the\s+)?" + _NAME + r"\s+(?:google\s+)?(?:form|survey|questionnaire)\s+(?:get|got|have|has|received|receive)\s*\??$", re.IGNORECASE),
 )
 _VERSIONS = (
     re.compile(_LEAD + r"(?:what\s+are\s+)?(?:the\s+)?(?:earlier\s+versions?|older\s+versions?|version\s+history|revisions?|history)\s+of\s+(?:the\s+|my\s+)?" + _NAME + r"(?:\s+" + _NOUN + r")?\s*\??$", re.IGNORECASE),
@@ -245,6 +272,10 @@ def request(text):
             groups = found.groupdict()
             query = re.sub(r"^(?:my|the|any|all)\s+", "", " ".join((groups.get("q") or "").split()).strip(" .'-"), flags=re.IGNORECASE)
             return {"action": "search", "query": query, "kind": _KIND_OF_NOUN.get((groups.get("kind") or "").lower()), "said_drive": True}
+    for pattern in _RESPONSES:
+        found = pattern.search(flat)
+        if found:
+            return {"action": "responses", "name": " ".join(found.group("name").split()).strip(" .'-"), "said_drive": said_drive}
     for pattern in _VERSIONS:
         found = pattern.search(flat)
         if found:
@@ -264,6 +295,8 @@ def run(config, found):
         return search_drive(config, found.get("query") or None, found.get("kind"))
     if found["action"] == "versions":
         return list_revisions(config, found["name"])
+    if found["action"] == "responses":
+        return responses_of(config, found["name"])
     return read_file(config, found["name"])
 
 

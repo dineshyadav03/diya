@@ -312,7 +312,8 @@ def connect_all(config, scopes, open_browser=webbrowser.open):
 
     Raises ConnectorError, and stores nothing, if the sign-in fails, if Google does not say which permissions it granted (nothing can be checked, so nothing is trusted), or if none of the cards' permissions was
     granted. Each card keeps its own permission and can be disconnected on its own, as before; Google's own permission is taken back when the last one goes (revoke_for)."""
-    wanted = {name: scope for name, scope in scopes.items() if name in ALL_GOOGLE and isinstance(scope, str) and scope.strip()}
+    cards = every_card()  # the first five and the newer ones (diya_google_cards): the owner may connect either group in one sign-in
+    wanted = {name: scope for name, scope in scopes.items() if name in cards and isinstance(scope, str) and scope.strip()}
     if not wanted:
         raise ConnectorError("there is no Google card to connect")
     asked = list(dict.fromkeys(wanted.values()))

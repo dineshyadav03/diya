@@ -34,6 +34,10 @@ class ConnectBody(BaseModel):
     token: str
 
 
+class ConnectGoogleBody(BaseModel):
+    group: str = "first"  # "first": the original five cards; "more": the newer ones (sending mail, changing events, Drive, Contacts, ...)
+
+
 class SetupBody(BaseModel):
     values: dict[str, str]
 
@@ -70,8 +74,11 @@ def register(app, config, agent, connectors=diya_connectors.CONNECTORS, connect_
         return {"connectors": diya_connectors.status(config, connectors)}
 
     @app.post("/api/connections/connect-google")
-    def connect_google():
-        group = {c.name: c.scope for c in connectors if c.name in diya_google_calendar.ALL_GOOGLE and c.implemented and c.scope}
+    def connect_google(body: ConnectGoogleBody | None = None):
+        import diya_google_cards
+
+        names = set(diya_google_cards.names()) if body is not None and body.group == "more" else set(diya_google_calendar.ALL_GOOGLE)
+        group = {c.name: c.scope for c in connectors if c.name in names and c.implemented and c.scope}
         labels = {c.name: c.label for c in connectors}
         try:
             connected, left_out = connect_all(config, group)

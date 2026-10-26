@@ -104,6 +104,17 @@ Before these: in your Google project switch on the Google Sheets API and the Goo
 - Mail to tasks: after "any email from the college?" a *Possible tasks I noticed* list may appear; "put suggestion 1 in my Google Tasks" makes a card to approve.
 - Doc to deck: "make a deck from my Diya drive test doc" makes a card with every slide and a last slide naming the Doc.
 
+## Google Forms (added 2026-10-27; DIYA-114 to -117)
+
+Before these: in your Google project switch on the Google Forms API (no new permission: reading a form uses the Drive read card, making one the Drive change card). If Google refuses, the answer says the sign-in does not allow it; tell me.
+
+| Operation | What to say to Diya | What you should see | Undo | Its stand-in test |
+|---|---|---|---|---|
+| `propose_google_form` | "make a Google Form called Diya form test with the questions: how did you hear of us (a friend or an ad), any comments" | A card with the questions and their kinds, "it is not shared with anyone"; after approval a form with those questions | Delete the form in Drive | `tests/test_google_forms.py` — `propose_google_form` |
+| `propose_form_questions` | "add a question to the Diya form test form: would you come again" | A card; after approval the question is at the end | Delete the question in Forms | `tests/test_google_forms.py` — `propose_form_questions` |
+
+Then answer your own form once from another browser, and say "show the responses to my Diya form test form": you should see the answer and no email address.
+
 Two things to try that should be **refused**: "send an email to my boss saying hi" (no address typed: nothing is proposed) and "reply to Sam's email" when two of Sam's emails match (Diya lists them and asks which).
 
 When all eight pass, tell me, and the sheet's DIYA-216 (a smoke run on a real account) and the "needs your real account" rows (DIYA-081, -087, -093, -097) can be marked from what you saw.
