@@ -100,6 +100,45 @@ def discards_draft(text):
     return _asks(text, r"\b(?:delete|discard|remove|throw\s+away|get\s+rid\s+of|trash)\b", place=lambda said: re.search(r"\bdrafts?\b", said, re.IGNORECASE) is not None)
 
 
+# ---- Google Calendar changes (diya_google_calchange) -----------------------------------------------------------------------------------------------
+
+_CAL = re.compile(r"\b(?:calendar|events?|meetings?|appointments?|sessions?|classes|class|lectures?|interviews?|exams?|invit\w+)\b", re.IGNORECASE)
+_REPEAT_WORDS = re.compile(
+    r"\b(?:daily|weekly|monthly|yearly|annually|every\s+(?:day|week|month|year|mon|tues?|wed(?:nes)?|thu(?:rs?)?|fri|sat(?:ur)?|sun)\w*|each\s+(?:day|week|month|year))\b", re.IGNORECASE)
+
+
+def _cal_word(said):
+    return _CAL.search(said) is not None and not intent.names_google_tasks(said)
+
+
+def changes_calendar_event(text):
+    """Move, rename or change the length of one calendar event ("move my dentist appointment to friday at 3pm", "rename the physics session")."""
+    return _asks(text, r"\b(?:reschedule|move|shift|push|postpone|rename|retitle|change|update|extend|shorten)\b", place=_cal_word)
+
+
+def cancels_calendar_event(text):
+    """Cancel one calendar event ("cancel my dentist appointment")."""
+    return _asks(text, r"\b(?:cancel|delete|remove|drop|scrap|call\s+off)\b", place=_cal_word)
+
+
+def invites_to_event(text):
+    """Invite typed addresses to one event ("invite maya@x.com to the physics session")."""
+    return _asks(text, r"\binvite\b|\badd\b[^.?!]{0,60}\b(?:guests?|attendees?)\b|\badd\b[^.?!]{0,60}\bto\s+(?:the|my)\s+(?:\w+\s+){0,3}(?:meeting|event|appointment|session)\b", place=lambda said: _cal_word(said) and _has_address(said))
+
+
+def answers_invitation(text):
+    """Accept, decline or say maybe to an invitation ("accept the invitation to the physics session", "decline the meeting with Sam")."""
+    return _asks(text, r"\b(?:accept|decline|reject|rsvp|tentatively)\b|\bsay\s+(?:yes|no|maybe)\s+to\b", place=_cal_word)
+
+
+def adds_repeating_event(text):
+    """Add an event that repeats ("add a weekly study session on mondays at 6pm for 8 weeks")."""
+    said = _plain(text)
+    if said is None or _REPEAT_WORDS.search(said) is None or intent.names_google_tasks(said) or not intent._asks_to_add(said):
+        return False
+    return re.search(r"\bcalendar\b|\b(?:meeting|appointment|event|session|class|lecture|lesson|interview)\b", said, re.IGNORECASE) is not None
+
+
 _FILE_MAIL = (
     r"\barchive\b|\bmark\b[^.?!]{0,60}\b(?:as\s+)?(?:read|unread)\b|\b(?:star|unstar)\b|\b(?:label|unlabel|tag)\b|\b(?:trash|bin)\b|\b(?:delete|remove|get\s+rid\s+of)\b"
     r"|\bmove\b[^.?!]{0,60}\b(?:bin|trash)\b|\b(?:restore|undelete|untrash|bring\s+back|put\s+back)\b"

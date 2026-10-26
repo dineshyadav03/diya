@@ -5,6 +5,7 @@ from datetime import datetime
 import pytest
 
 import diya
+import diya_catalog
 import diya_config
 import diya_connector_tools
 import diya_connectors
@@ -295,7 +296,7 @@ def test_every_advertised_tool_has_an_implementation(config):
     advertised = {t["function"]["name"] for t in diya.TOOLS}
     connector_tools = {spec["function"]["name"] for _name, spec, _func in diya_connector_tools.tool_specs(config)}
     proposal_tools = {kind.tool_name for kind in agent.actions.kinds if kind.tool is not None}
-    assert proposal_tools == {"propose_todoist_task", "propose_calendar_event", "propose_google_task", "propose_drive_folder", "propose_google_doc"}  # the kinds of action Diya has
+    assert proposal_tools == {name for name, entry in diya_catalog.CATALOG.items() if entry.type == "proposal"}  # the kinds of action Diya has are exactly the proposals on the one list (diya_catalog.CATALOG), so a new kind cannot exist unlisted
     assert advertised | connector_tools | proposal_tools == set(agent._functions)
 
 

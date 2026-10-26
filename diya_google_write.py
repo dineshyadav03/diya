@@ -74,7 +74,9 @@ def _steps(api, scope):
 
 
 ACCESS = {
-    "google_calendar_edit": ("Adds an event, just for you, to your calendar: when you approve that one event, or straight away when you ask for it, if you switched that on.", "Cannot invite anyone, and cannot change or delete events."),
+    "google_calendar_edit": ("Adds an event, just for you, to your calendar: when you approve that one event, or straight away when you ask for it, if you switched that on.",
+                             "Adds an event that repeats (daily, weekly, monthly or yearly, 2 to 52 times), only when you approve it.",
+                             "Cannot invite anyone, and cannot change or delete events (those are the separate 'change events' and 'guests' cards)."),
     "google_tasks": ("Lists your Google Tasks, with their states, and reads any of your lists by name.", "Adds a task: when you approve that one task, or straight away when you ask for it, if you switched that on.",
                      "Completing, renaming, moving or deleting a task always waits for your approval, one task at a time. Deleting cannot be undone by Diya.", "Cannot change anything in a list other than your main one."),
     "google_drive_files": ("Makes a folder or a new Google Doc: when you approve that one, or straight away when you ask for it, if you switched that on.", "Can see only the files and folders Diya made herself, never the rest of your Drive.", "Cannot share, move or delete anything."),

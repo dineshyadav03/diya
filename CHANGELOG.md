@@ -8,6 +8,9 @@ which migration it carries; the table below the notes says what each migration h
   mark read or unread, star, label and bin one email, each only when you approve exactly what the card shows. An email goes only to an address you typed; the email a reply or forward is about is found from your words (several matches: it asks which);
   at most 20 sent a day; never a hidden copy or an attachment; every send is read back from Sent. (`docs/GOOGLE_CHANGES.md`, `docs/GOOGLE_LIVE_SMOKE.md`)
 
+* **Calendar, beyond adding.** Rename, move or cancel one of your own events (no guests), invite typed addresses, accept or decline an invitation, and add an event that repeats (two new cards on the permission already added). Ask "when is my dentist
+  appointment?" or "when am I free tomorrow?" and the answer comes from the calendar by code, not from the model. (`docs/GOOGLE_CHANGES.md`)
+
 ## 2026-10-20
 * **Episodic recall.** A question is answered with the few earlier messages of yours closest in meaning to it, even if they are weeks old and no longer in the chat window. On invented data with the real models, the
   right message was found 20 times in 20 and the chat model went from 1 right answer in 20 to 20 in 20 (`docs/EPISODIC_DESIGN.md`). *Migration 24.* `DIYA_EPISODIC=0` turns it off.

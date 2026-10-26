@@ -16,6 +16,7 @@ import diya
 import diya_catalog
 import diya_config
 import diya_connector_tools
+import diya_google_cards
 import diya_autoapprove
 import diya_connectors
 import diya_journal
@@ -46,7 +47,7 @@ def by_name(client):
 def test_every_real_connection_says_what_it_can_do_and_what_it_cannot(world):
     _, _, client = world
     found = by_name(client)
-    assert set(found) == {"home_assistant", "notion", "todoist", "google_calendar", "google_mail", "google_calendar_edit", "google_tasks", "google_drive_files", "google_mail_drafts", "google_mail_send", "google_mail_organise"}
+    assert set(found) == {"home_assistant", "notion", "todoist", "google_calendar", "google_mail", "google_calendar_edit", "google_tasks", "google_drive_files"} | set(diya_google_cards.names())  # the first five Google cards and every newer one
     for name, item in found.items():
         assert item["access"] and all(isinstance(line, str) and line.endswith(".") for line in item["access"]), name
         assert any(line.startswith("Cannot") for line in item["access"]), f"{name} must say what it cannot do"

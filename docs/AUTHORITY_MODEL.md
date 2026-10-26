@@ -45,6 +45,11 @@ One press of **Pause Diya** on the Status page (or `POST /api/pause`) stops the 
 | `propose_update_google_task` | proposal | 2 | proposes renaming a Google Task or changing its notes or due day | tasks.googleapis.com (only when approved) | by hand in Google Tasks: Diya does not keep the old words | owner approves each action | no | Google Tasks connected |
 | `propose_move_google_task` | proposal | 2 | proposes moving a Google Task to the top of the list or under another task | tasks.googleapis.com (only when approved) | by hand in Google Tasks | owner approves each action | no | Google Tasks connected |
 | `propose_delete_google_task` | proposal | 3 | proposes deleting one of the person's open Google Tasks | tasks.googleapis.com (only when approved) | Diya cannot bring it back | owner approves each action | no | Google Tasks connected |
+| `propose_update_calendar_event` | proposal | 2 | proposes renaming, moving or changing the length of one of the person's own calendar events that has no guests | www.googleapis.com (only when approved) | by hand in Google Calendar: Diya does not keep the old name or time | owner approves each action | no | Google Calendar (change events) connected |
+| `propose_cancel_calendar_event` | proposal | 3 | proposes cancelling one of the person's own calendar events that has no guests | www.googleapis.com (only when approved) | Diya cannot bring it back | owner approves each action | no | Google Calendar (change events) connected |
+| `propose_invite_calendar_event` | proposal | 3 | proposes inviting addresses the person typed to one of their own events; Google Calendar emails the guests | www.googleapis.com (only when approved) | an invitation that is sent cannot be taken back | owner approves each action | no | Google Calendar (guests) connected |
+| `propose_rsvp_calendar_event` | proposal | 3 | proposes accepting, declining or saying maybe to an invitation the person was sent; the organiser is told | www.googleapis.com (only when approved) | the answer can be changed by answering again, but the organiser has been told | owner approves each action | no | Google Calendar (guests) connected |
+| `propose_repeating_calendar_event` | proposal | 2 | proposes an event that repeats (daily, weekly, monthly or yearly, 2 to 52 times), just for the person, on their Google Calendar | www.googleapis.com (only when approved) | by hand in Google Calendar: Diya cannot remove it | owner approves each action | no | Google Calendar (add events) connected |
 | `propose_gmail_draft` | proposal | 2 | proposes saving (or replacing) a draft email in the person's Drafts folder; a draft is not sent | gmail.googleapis.com (only when approved) | by hand in Gmail: the draft can be edited or deleted there | owner approves each action | no | Gmail: drafts connected |
 | `propose_discard_gmail_draft` | proposal | 3 | proposes throwing away one draft email | gmail.googleapis.com (only when approved) | Diya cannot bring it back | owner approves each action | no | Gmail: drafts connected |
 | `propose_send_gmail` | proposal | 3 | proposes sending a new email to an address the person typed | gmail.googleapis.com (only when approved) | an email that is sent cannot be taken back | owner approves each action | no | Gmail: send connected |
@@ -101,6 +106,11 @@ Meta's Rule of Two and Simon Willison's lethal trifecta say an agent should not,
 | `propose_update_google_task` | - | - | yes | 1 |
 | `propose_move_google_task` | - | - | yes | 1 |
 | `propose_delete_google_task` | - | - | yes | 1 |
+| `propose_update_calendar_event` | - | - | yes | 1 |
+| `propose_cancel_calendar_event` | - | - | yes | 1 |
+| `propose_invite_calendar_event` | - | - | yes | 1 |
+| `propose_rsvp_calendar_event` | - | - | yes | 1 |
+| `propose_repeating_calendar_event` | - | - | yes | 1 |
 | `propose_gmail_draft` | - | - | yes | 1 |
 | `propose_discard_gmail_draft` | - | - | yes | 1 |
 | `propose_send_gmail` | - | - | yes | 1 |

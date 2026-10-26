@@ -40,6 +40,21 @@ Before these: in your Google project, under Data access, add `gmail.compose`, `g
 | `propose_forward_gmail` | "forward the email about the Diya smoke test to YOUR-ADDRESS" | A card "Forward ... text only without attachments"; after approval the forward arrives | Nothing unsends it: it went to you | `tests/test_google_mailwrite.py` — `propose_forward_gmail` |
 | `propose_organise_gmail` | "archive the email about the Diya smoke test" | A card; after approval the email has left your inbox (try mark as read, star and the bin too) | Move it back to the inbox in Gmail | `tests/test_google_mailwrite.py` — `propose_organise_gmail` |
 
+## The Calendar changes (added 2026-10-26; DIYA-080, -082, -083, -084)
+
+Before these: Google Cloud needs nothing new (the same `calendar.events` permission is already added for "add events"); on the Connections page press Connect on **Google Calendar (change events)** and **Google Calendar (guests)**
+(two more cards). Make a plain test event first: "put 'Diya calendar test' on my calendar tomorrow at 5pm for 30 minutes".
+
+| Operation | What to say to Diya | What you should see | Undo | Its stand-in test |
+|---|---|---|---|---|
+| `propose_update_calendar_event` | "rename Diya calendar test to Diya calendar test two" then "move Diya calendar test two to tomorrow at 6pm" | A card with the event and the change; after approval the event has the new name or time | Change it back in Google Calendar | `tests/test_google_calchange.py` — `propose_update_calendar_event` |
+| `propose_cancel_calendar_event` | "cancel Diya calendar test two" | A card that says Diya cannot bring it back (risk level 3); after approval the event is gone | Nothing: it was a test event | `tests/test_google_calchange.py` — `propose_cancel_calendar_event` |
+| `propose_invite_calendar_event` | "invite YOUR-OTHER-ADDRESS to Diya calendar test" (make a new test event first) | A card that says Google Calendar emails them (risk level 3); after approval the address is a guest and gets an email | Remove the guest in Google Calendar | `tests/test_google_calchange.py` — `propose_invite_calendar_event` |
+| `propose_rsvp_calendar_event` | "accept the invitation to Diya calendar test" (from your other account's invitation) | A card that says the organiser is told; after approval the answer shows as accepted | Answer again in Google Calendar | `tests/test_google_calchange.py` — `propose_rsvp_calendar_event` |
+| `propose_repeating_calendar_event` | "add a weekly Diya repeat test on monday at 6pm for 3 weeks" | A card "repeating weekly, 3 times"; after approval three events appear, one a week | Delete the series in Google Calendar | `tests/test_google_calchange.py` — `propose_repeating_calendar_event` |
+
+Two read-only questions to try as well (nothing changes): "when is my Diya calendar test?" lists it with its day and time, and "when am I free tomorrow?" lists the gaps between 9:00 and 18:00.
+
 Two things to try that should be **refused**: "send an email to my boss saying hi" (no address typed: nothing is proposed) and "reply to Sam's email" when two of Sam's emails match (Diya lists them and asks which).
 
 When all eight pass, tell me, and the sheet's DIYA-216 (a smoke run on a real account) and the "needs your real account" rows (DIYA-081, -087, -093, -097) can be marked from what you saw.

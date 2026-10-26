@@ -14,7 +14,7 @@ import diya_connectors
 import diya_google_calendar
 
 CARDS = {}  # name -> (label, scope)
-MODULES = ("diya_google_mailwrite",)  # the modules that make cards; a new one is named here so that disconnecting and forgetting Google know of its cards
+MODULES = ("diya_google_mailwrite", "diya_google_calchange")  # the modules that make cards; a new one is named here so that disconnecting and forgetting Google know of its cards
 
 
 def names():

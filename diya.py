@@ -21,6 +21,7 @@ import diya_actions
 import diya_autoapprove
 import diya_automations
 import diya_config
+import diya_calendar_find
 import diya_calendar_talk
 import diya_toolguard
 import diya_connection_talk
@@ -929,9 +930,9 @@ class Agent:
             return diya_actions.NOT_ASKED_TEXT
         args = diya_actions.normalise_args(args)
         notes = []
-        if in_turn and kind.prepare is not None:
-            args, notes = kind.prepare(args, said)
         try:
+            if in_turn and kind.prepare is not None:  # (may refuse: an address the person did not type, a repeat they did not say)
+                args, notes = kind.prepare(args, said)
             if in_turn and kind.resolve is not None:  # a change to something that exists: the one thing is looked up now, by the words the person used (a read), or the proposal is refused
                 args = kind.resolve(self.config, args, said)
         except diya_actions.ActionError as exc:
@@ -1365,7 +1366,8 @@ class Agent:
     def _calendar_answer(self, question):
         """(the list, whether Google answered) for a plain question about the calendar (diya_calendar_talk), or None when the message is not that (the chat then goes on as it would have). Never raises."""
         try:
-            return diya_calendar_talk.answer(self.config, question)
+            found = diya_calendar_find.answer(self.config, question)  # an event by name, or free time
+            return found if found is not None else diya_calendar_talk.answer(self.config, question)
         except Exception:  # noqa: BLE001
             return None
 

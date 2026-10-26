@@ -17,6 +17,7 @@ import diya_config
 import diya_connector_tools
 import diya_connectors
 import diya_google_calendar as gcal
+import diya_google_cards
 import diya_web
 from diya_connectors import ConnectorError
 from fakes import FakeClient
@@ -100,7 +101,7 @@ def client(config):
     return TestClient(diya_web.create_app(config, agent, object()), base_url="https://localhost")
 
 
-SHARE_GOOGLES_CLIENT = ("google_calendar", "google_mail", "google_calendar_edit", "google_tasks", "google_drive_files", "google_mail_drafts", "google_mail_send", "google_mail_organise")
+SHARE_GOOGLES_CLIENT = ("google_calendar", "google_mail", "google_calendar_edit", "google_tasks", "google_drive_files") + diya_google_cards.names()  # the first five, and every newer card (docs/GOOGLE_CHANGES.md)
 
 
 def google(client):

@@ -20,6 +20,7 @@ import re
 import httpx
 
 import diya_connectors
+import diya_google_calchange
 import diya_google_calendar
 import diya_google_mail
 import diya_google_mailwrite
@@ -344,7 +345,7 @@ def todoist_add_task_kind():
 def real_action_kinds():
     """Every kind of action Diya actually has, ready to hand to Agent (action_kinds=): each a write the owner approves
     one at a time on the Actions page. Lives here, beside the connectors, because a kind needs its connector."""
-    return (todoist_add_task_kind(), *diya_google_write.action_kinds(), *diya_google_tasks.action_kinds(), *diya_google_mailwrite.action_kinds())
+    return (todoist_add_task_kind(), *diya_google_write.action_kinds(), *diya_google_tasks.action_kinds(), *diya_google_mailwrite.action_kinds(), *diya_google_calchange.action_kinds())
 
 
 # ---- wiring: the registry and the tool specs -----------------------------------------------------
@@ -371,6 +372,7 @@ def real_connectors(config):
                  access=("Looks through your mail when you ask.", "Cannot send, draft, change, label or delete a message (those are the separate 'Gmail: drafts', 'send' and 'organise' cards).")),
         *diya_google_write.connectors(),
         *diya_google_mailwrite.connectors(),
+        *diya_google_calchange.connectors(),
     )
 
 
