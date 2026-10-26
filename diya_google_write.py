@@ -39,7 +39,8 @@ SHOWN_BODY = 100  # how much of a document's text the owner is shown in the one 
 MINUTES = (5, 1440)
 
 CALENDAR_API = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
-TASKS_API = "https://tasks.googleapis.com/tasks/v1/lists/@default/tasks"
+TASKS_PAGE = 25  # how many open tasks one look at the list asks for (one request; a longer list says it is longer)
+TASKS_API ="https://tasks.googleapis.com/tasks/v1/lists/@default/tasks"
 DRIVE_API = "https://www.googleapis.com/drive/v3/files"
 DOCS_API = "https://docs.googleapis.com/v1/documents"
 FOLDER_TYPE = "application/vnd.google-apps.folder"
@@ -393,7 +394,7 @@ def google_tasks_list(config):
         if token is None:
             return diya_google_calendar.not_connected_words(config, "google_tasks", "Google Tasks")
         try:
-            response = httpx.get(TASKS_API, params={"showCompleted": "false", "maxResults": 10}, headers={"Authorization": f"Bearer {token}"}, timeout=NETWORK_TIMEOUT)
+            response = httpx.get(TASKS_API, params={"showCompleted": "false", "maxResults": TASKS_PAGE}, headers={"Authorization": f"Bearer {token}"}, timeout=NETWORK_TIMEOUT)
         except httpx.HTTPError as exc:
             return f"Couldn't reach Google Tasks: {type(exc).__name__}"
         if response.status_code == 429:
@@ -403,7 +404,10 @@ def google_tasks_list(config):
         items = [i for i in (_json(response).get("items") or []) if isinstance(i, dict)]
         if not items:
             return "No open tasks in Google Tasks."
-        return "\n".join(diya_memory.printable(i.get("title") or "(no title)", 120) + (f" (due {str(i['due'])[:10]})" if i.get("due") else "") for i in items)
+        lines = [diya_memory.printable(i.get("title") or "(no title)", 120) + (f" (due {str(i['due'])[:10]})" if i.get("due") else "") for i in items]
+        if _json(response).get("nextPageToken"):  # Google has more: say so, so a long list is never taken for the whole list
+            lines.append(f"(There are more open tasks than these {len(items)}; only the first {TASKS_PAGE} are shown.)")
+        return "\n".join(lines)
 
     return tool
 
