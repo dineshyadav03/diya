@@ -1,19 +1,19 @@
 # Task sheet progress
 
-Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is kept in `docs/tracker/progress.csv` and written into the owner's three copies of the sheet by `python scripts/tracker.py apply`.
+Updated 2026-10-26. The blueprint's task sheet has 298 tasks; the progress is kept in `docs/tracker/progress.csv` and written into the owner's three copies of the sheet by `python scripts/tracker.py apply`.
 "Done" means the acceptance test in the sheet was met and there is evidence. Anything that touches Google, a phone or another real thing the tests cannot reach stays "In progress" until the owner has tried it.
 
 | Status | Tasks |
 |---|---|
-| Not started | 114 |
+| Not started | 113 |
 | Needs verification | 8 |
 | Research queue | 29 |
-| In progress | 19 |
+| In progress | 18 |
 | Blocked | 0 |
-| Done | 128 |
+| Done | 130 |
 | Deferred | 0 |
 
-## Done (128)
+## Done (130)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -45,6 +45,7 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-048** Create user-visible preview for remote writes (2026-10-18): Actions page: risk level, what it reaches, how far it can be undone, which connection it uses, under the exact arguments; tests/test_google_write.py, docs/PERMISSIONS_DESIGN.md. No recipient is shown because nothing Diya can do reaches another person yet; the Google account's email is not kept (DIYA-066).
 - **DIYA-052** Build independent remote-write verifier (2026-10-25): Google writes were already read back by id (diya_google_write._read_back); the Todoist task is now asked for again by its number before success is reported, and a missing or odd number, a failed read, another task's words or a ticked-off task leave it unknown (diya_connector_tools._todoist_read_back); tests/test_connector_tools.py (8 new). Stand-in services only. A Todoist answer with no number used to count as success; it is now 'not confirmed'.
 - **DIYA-053** Handle unknown write outcomes and duplicate retries (2026-10-18): ActionUncertain -> status unknown, never sent again; tests/test_google_write.py and tests/test_connector_tools.py. The calendar event id is made from the request, so a second try cannot make a second event.
+- **DIYA-056** Publish activity feed and action receipt detail (2026-10-26): diya_actions.Actions.run writes one activity line per run (approved:<kind>: ok, error, or refused, with chat, message, duration and the length of the result, never its words); the Activity page shows it as 'carried out what you approved' next to every tool and connector use; the Actions page still has the full receipt with source and result; tests/test_actions_journal.py (5); docs/ACTIVITY_JOURNAL_DESIGN.md. Model requests and policy decisions are not in the record (DIYA-051 stays open). Stand-in services only.
 - **DIYA-059** Choose supported Google account types and deployment audience (2026-10-18): docs/DECISIONS_2026-10-18.md (the owner's own words, 2026-10-18). Personal Google account; single user; the app stays an unverified 'In production' OAuth app with Google's warning screen, which is expected for one's own app.
 - **DIYA-061** Implement OAuth authorization code + PKCE as appropriate (2026-10-18): diya_google_calendar.pkce_pair; tests/test_secrets.py: challenge sent first, matching verifier sent with the code; state check in tests/test_google_calendar.py. No OpenID nonce: no ID token is requested. Stand-in Google only.
 - **DIYA-062** Support incremental per-app read/write scopes (2026-10-18): diya_google_write.GOOGLE_WRITE: one connector, one scope, one Connect per service; tests/test_google_write.py. Stand-in Google only.
@@ -143,19 +144,19 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-040** Add account and recipient/resource allowlists (2026-10-25): diya_google_write.permitted() and _send: an approved action may ask Google only for the primary calendar, the default task list, Drive's top level and Docs by one id, with the method listed; anything else is refused before a token is fetched or a byte is sent; tests/test_google_allowlist.py (32 incl. a seeded random check); the account is the connector's own token, the per-turn and waiting caps already exist (diya_actions MAX_PER_TURN, MAX_PENDING). No recipient list because nothing Diya does reaches another person; several Google accounts at once are DIYA-066 and not built.
 - **DIYA-034** Add source-backed personal knowledge pages (2026-10-25): diya_knowledge.py pages: every sentence is the owner's own words and names the note it came from; tests/test_knowledge.py::test_every_sentence_on_a_page_is_the_persons_own_words_from_the_note_it_names and ::test_a_page_says_where_each_sentence_is_from_and_links_to_the_names_beside_it; remembered facts link to their source message on the Memory page (DIYA-022). Pages are built from the owner's notes only; mail and Drive are not indexed, so there are no connector ids to link.
 - **DIYA-219** Test conditional write at stale version (2026-10-25): tests/test_google_allowlist.py: an approved action can create but cannot update, patch, replace or delete anything that exists (PUT, PATCH and DELETE are refused before a token is fetched), so no edit of a document, sheet or calendar item can overwrite a newer one. True only while no update path exists. The day one is built (DIYA-082, -094, -105) it must send the item's version (ETag) and refuse a stale one; that test is then owed.
+- **DIYA-100** Test recurring scheduling edge cases and duplicates (2026-10-26): tests/test_google_restart.py (10): for the event, the task, the folder and the document, a process that dies right after Google received the creating request leaves the action 'executing'; any number of fresh starts on the same database cannot run it again, reconcile calls it unknown, and Google was sent exactly one creating request; a finished action stays finished through restarts; two fresh starts racing for one approved action send it once; an event's Google id is made from its content. Repeating reminders through restarts are tests/test_seven_days.py (DIYA-057).. Stand-in Google only. Google Tasks has no idempotency key, so the protection there is the run-once lease and the 'unknown' outcome the owner is told to look at; a second proposal of the same task after an unknown outcome is a new decision of the owner's.
 
-## In progress (19)
+## In progress (18)
 
 - **DIYA-005** Snapshot local database and all configuration before schema changes (2026-10-18). Not encrypted and not offline: a copy of backups/ on another disk is Dinesh's step.
 - **DIYA-021** Add outbox leases, retry and unique keys (2026-10-18). No lease column: one drain at a time in one process. Dreaming's separate pass is guarded by memory_captures, not a lease.
 - **DIYA-042** Provide approve/deny/revoke controls (2026-10-18). There is no separate 'revoke an approved action': approval runs the action at once. Pausing before approving covers the gap.
 - **DIYA-051** Implement append-only normalized tool/event journal (2026-10-18). Tool calls and code-decided flows are recorded. Not yet: model requests, policy decisions and one correlation id across them.
-- **DIYA-056** Publish activity feed and action receipt detail (2026-10-18). Approved actions' receipts are still on the Actions page; one combined feed is not built.
 - **DIYA-060** Build Google account connection wizard (2026-10-18). Accounts are not shown (the email is not kept) and there is one Google account only.
 - **DIYA-081** Implement Calendar event create and readback (2026-10-18). Create plus read-back (title, start, end, no guests) against a stand-in. Needs Dinesh's real-account try.
 - **DIYA-087** Implement upload/create folder/file/copy (2026-10-18). Folder create and read-back only (stand-in). Upload, file create and copy are not built. Needs Dinesh's real-account try.
 - **DIYA-093** Implement new Doc creation and insertion (2026-10-18). Create and a line of text, read back (stand-in). Needs Dinesh's real-account try.
-- **DIYA-097** Implement Google Tasks list/task-list read (2026-10-18). Lists open tasks in the default list only (stand-in). Needs Dinesh's real-account try.
+- **DIYA-097** Implement Google Tasks list/task-list read (2026-10-26). NOT done as the title says: it does not read the next page, show task ids or states of finished tasks, or read other task lists (reading other lists would widen what Diya can reach: a decision).
 - **DIYA-098** Implement Tasks create/complete/update/move/delete (2026-10-18). Create and read-back only (stand-in): complete, update, move, delete are not built.
 - **DIYA-192** Validate current Ollama model and hardware acceleration (2026-10-21). Whether enabling it helps is NOT measured: it restarts the model server and loads a model into nearly full memory, so it waits for the owner's yes.
 - **DIYA-188** Investigate DeepSeek harness exact repository/source (2026-10-21). Not yet a reproducible comparison: the harness has not been run (phase 1 needs isolation and the owner's yes).
@@ -166,7 +167,7 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-067** Build typed Google adapter client and error taxonomy (2026-10-25). NOT done as the title says: there is no one typed client taking typed references; each service has its own small functions, and reads return sentences, not typed values.
 - **DIYA-161** Build Claude-inspired message affordances in Diya branding (2026-10-25). NOT done as the title says: editing a message, files, a copy button on code blocks and citations are not built. No UI asset was copied.
 
-## Waiting for the owner (10)
+## Waiting for the owner (9)
 
 - **DIYA-005** Snapshot local database and all configuration before schema changes (2026-10-18). Not encrypted and not offline: a copy of backups/ on another disk is Dinesh's step.
 - **DIYA-012** Check one-command Windows startup (2026-10-18). python diya_run.py starts the API and UI together; starting at login is not set up. Dinesh's step.
@@ -175,6 +176,5 @@ Updated 2026-10-25. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-081** Implement Calendar event create and readback (2026-10-18). Create plus read-back (title, start, end, no guests) against a stand-in. Needs Dinesh's real-account try.
 - **DIYA-087** Implement upload/create folder/file/copy (2026-10-18). Folder create and read-back only (stand-in). Upload, file create and copy are not built. Needs Dinesh's real-account try.
 - **DIYA-093** Implement new Doc creation and insertion (2026-10-18). Create and a line of text, read back (stand-in). Needs Dinesh's real-account try.
-- **DIYA-097** Implement Google Tasks list/task-list read (2026-10-18). Lists open tasks in the default list only (stand-in). Needs Dinesh's real-account try.
 - **DIYA-098** Implement Tasks create/complete/update/move/delete (2026-10-18). Create and read-back only (stand-in): complete, update, move, delete are not built.
 - **DIYA-231** Decide email/Drive indexing retention and memory promotion (2026-10-18). The answer was 'yes' to 'should Diya use email and Drive for memory?'. Recorded as the careful reading: yes, opt-in per source, nothing from mail becomes a fact on its own. Please confirm that is what you meant (the suggestion in the question was no).
