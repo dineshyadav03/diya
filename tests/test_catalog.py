@@ -92,7 +92,7 @@ def test_anything_at_tier_two_or_above_is_a_proposal_the_owner_approves_each_tim
         if entry.tier >= 2:
             assert entry.type == "proposal" and entry.approval == "owner approves each action", entry.name
     assert all(entry.tier >= 2 for entry in catalog.CATALOG.values() if entry.type == "proposal")
-    assert max(entry.tier for entry in catalog.CATALOG.values()) == 2  # nothing external-facing or destructive exists yet
+    assert max(entry.tier for entry in catalog.CATALOG.values()) <= 3  # nothing destructive or privileged (tier 4: permanent delete, public sharing, account settings) exists, and nothing at tier 3 is ever done straight away (tests/test_auto_approve.py)
 
 
 def test_a_read_that_returns_other_peoples_words_says_so():

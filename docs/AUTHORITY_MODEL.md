@@ -8,8 +8,8 @@ Written 2026-10-18 for the blueprint's DIYA-036, -037 and -038. The source is `d
 |---|---|
 | 0 | reads: looks, changes nothing outside Diya's own records |
 | 1 | reversible local write: changes Diya's own database where the person can see and undo it |
-| 2 | reversible remote write: adds something private to the person's own account; proposed only, the owner approves each one (the four Google additions the owner may switch to 'straight away' are the one exception) |
-| 3 | external-facing: reaches other people (send, invite, share). Not built |
+| 2 | reversible remote write: adds something private to the person's own account, or changes it in a way that can be put back by hand; proposed only, the owner approves each one (the four Google additions the owner may switch to 'straight away' are the one exception) |
+| 3 | external-facing or not undoable: reaches other people (send, invite, share) or removes what Diya cannot bring back; proposed only, the owner approves each one, and it is never done straight away |
 | 4 | destructive or privileged: delete at scale, account settings, public sharing. Not built; denied by default |
 
 ## The rule that makes it a broker
@@ -41,6 +41,10 @@ One press of **Pause Diya** on the Status page (or `POST /api/pause`) stops the 
 | `propose_calendar_event` | proposal | 2 | proposes an event, just for the person, on their Google Calendar | www.googleapis.com (only when approved) | by hand in Google Calendar: Diya cannot remove it | owner approves each action | no | Google Calendar (add events) connected |
 | `propose_google_task` | proposal | 2 | proposes a task in the person's Google Tasks | tasks.googleapis.com (only when approved) | by hand in Google Tasks: Diya cannot remove it | owner approves each action | no | Google Tasks connected |
 | `propose_drive_folder` | proposal | 2 | proposes a new folder at the top of the person's Google Drive | www.googleapis.com (only when approved) | by hand in Google Drive: Diya cannot remove it | owner approves each action | no | Google Drive and Docs connected |
+| `propose_complete_google_task` | proposal | 2 | proposes marking one of the person's open Google Tasks as done | tasks.googleapis.com (only when approved) | by hand in Google Tasks: it can be marked open again there | owner approves each action | no | Google Tasks connected |
+| `propose_update_google_task` | proposal | 2 | proposes renaming a Google Task or changing its notes or due day | tasks.googleapis.com (only when approved) | by hand in Google Tasks: Diya does not keep the old words | owner approves each action | no | Google Tasks connected |
+| `propose_move_google_task` | proposal | 2 | proposes moving a Google Task to the top of the list or under another task | tasks.googleapis.com (only when approved) | by hand in Google Tasks | owner approves each action | no | Google Tasks connected |
+| `propose_delete_google_task` | proposal | 3 | proposes deleting one of the person's open Google Tasks | tasks.googleapis.com (only when approved) | Diya cannot bring it back | owner approves each action | no | Google Tasks connected |
 | `propose_google_doc` | proposal | 2 | proposes a new Google Doc with at most a line of text | docs.googleapis.com (only when approved) | by hand in Google Drive: Diya cannot remove it | owner approves each action | no | Google Drive and Docs connected |
 | `read_mail` | flow | 0 | looks through the person's Gmail when they ask; the answer is written by a model with no tools | gmail.googleapis.com | n/a | none | yes | Gmail connected |
 | `mail_write_refused` | flow | 0 | answers a request to send, change or delete mail with the fact that access is read-only | none | n/a | none | no | - |
@@ -59,6 +63,7 @@ Tools of MCP servers the person added (`mcp_...`) are not listed one by one: eac
 | `diya_connector_tools.py` | Notion search is a POST that only reads; the Todoist task is created only inside todoist_add_task_execute, which diya_actions.run calls after the owner approves |
 | `diya_google_calendar.py` | Google's own OAuth endpoints: the token exchange and refresh, and revoking the permission |
 | `diya_google_write.py` | the approved Google writes: every request goes through _send, called only from the kinds' execute functions |
+| `diya_google_client.py` | the approved changes to the newer Google cards (mail drafts and sending, calendar edits, Drive, Docs, Sheets, Slides, contacts, forms): every request goes through send, called only from the kinds' execute functions |
 | `diya_push.py` | web push to the person's own subscribed devices |
 | `diya_telegram.py` | the person's own Telegram bot |
 | `diya_warm.py` | the local Ollama, to keep the chat model loaded |
@@ -86,6 +91,10 @@ Meta's Rule of Two and Simon Willison's lethal trifecta say an agent should not,
 | `propose_calendar_event` | - | - | yes | 1 |
 | `propose_google_task` | - | - | yes | 1 |
 | `propose_drive_folder` | - | - | yes | 1 |
+| `propose_complete_google_task` | - | - | yes | 1 |
+| `propose_update_google_task` | - | - | yes | 1 |
+| `propose_move_google_task` | - | - | yes | 1 |
+| `propose_delete_google_task` | - | - | yes | 1 |
 | `propose_google_doc` | - | - | yes | 1 |
 | `read_mail` | yes | yes | - | 2 |
 | `mail_write_refused` | - | - | - | 0 |

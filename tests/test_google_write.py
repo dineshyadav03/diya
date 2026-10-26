@@ -133,10 +133,10 @@ def test_connecting_asks_google_for_that_one_scope_and_stores_the_token_under_it
 
 def test_the_real_registry_has_every_kind_and_each_tool_only_proposes():
     kinds = {k.name: k for k in diya_connector_tools.real_action_kinds()}
-    assert {n: (k.connector, k.tool_name) for n, k in kinds.items() if n != "todoist_add_task"} == {
+    assert {n: (k.connector, k.tool_name) for n, k in kinds.items() if n in ("google_calendar_add_event", "google_tasks_add", "google_drive_make_folder", "google_docs_create")} == {
         "google_calendar_add_event": (CAL, "propose_calendar_event"), "google_tasks_add": (TASKS, "propose_google_task"),
         "google_drive_make_folder": (DRIVE, "propose_drive_folder"), "google_docs_create": (DRIVE, "propose_google_doc"),
-    }
+    }  # the first four Google kinds, unchanged (the kinds that change what is already there: docs/GOOGLE_CHANGES.md, tests/test_google_tasks_changes.py)
     for kind in gw.action_kinds():
         function = kind.tool["function"]
         assert "only PROPOSES" in function["description"] and "approves it on the Actions page" in function["description"]

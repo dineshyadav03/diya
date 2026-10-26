@@ -22,6 +22,7 @@ import httpx
 import diya_connectors
 import diya_google_calendar
 import diya_google_mail
+import diya_google_tasks
 import diya_google_write
 import diya_intent
 from diya_actions import ActionFailed, ActionKind, ActionUncertain, InvalidArgs
@@ -342,7 +343,7 @@ def todoist_add_task_kind():
 def real_action_kinds():
     """Every kind of action Diya actually has, ready to hand to Agent (action_kinds=): each a write the owner approves
     one at a time on the Actions page. Lives here, beside the connectors, because a kind needs its connector."""
-    return (todoist_add_task_kind(), *diya_google_write.action_kinds())
+    return (todoist_add_task_kind(), *diya_google_write.action_kinds(), *diya_google_tasks.action_kinds())
 
 
 # ---- wiring: the registry and the tool specs -----------------------------------------------------
@@ -419,5 +420,5 @@ def tool_specs(config):
                 "parameters": {"type": "object", "properties": {}, "required": []},
             },
         }, diya_google_calendar.list_events(config)),
-        *diya_google_write.read_tool_specs(config),
+        *diya_google_tasks.read_tool_specs(config),
     )

@@ -151,8 +151,19 @@ def test_a_message_that_only_states_a_fact_gets_no_tools_so_there_is_nothing_to_
 def test_a_fully_obeying_model_still_has_no_tool_for_reaching_another_person():
     import diya_connector_tools
 
+    import diya_autoapprove
+    import diya_catalog
+
     names = {t["function"]["name"] for t in diya.TOOLS} | {k.tool_name for k in diya_connector_tools.real_action_kinds()}
-    assert not [n for n in names if any(word in n for word in ("send", "email", "mail", "share", "invite", "delete", "remove", "message", "post", "publish"))]
+    risky = [n for n in names if any(word in n for word in ("send", "email", "mail", "share", "invite", "delete", "remove", "message", "post", "publish"))]
+    # Since 2026-10-26 (docs/GOOGLE_CHANGES.md) a model can PROPOSE to send, share or delete, but never do it. Every such name is a proposal the owner approves action by action at the risk level that says so,
+    # never one of the tools the model calls itself, and never something that can be switched to "straight away".
+    model_tools = {t["function"]["name"] for t in diya.TOOLS}
+    assert not [n for n in risky if n in model_tools], risky  # nothing the model CALLS reaches another person or removes anything
+    for name in risky:
+        entry = diya_catalog.CATALOG[name]
+        assert name.startswith("propose_") and entry.type == "proposal" and entry.tier >= 2 and entry.approval == "owner approves each action", name
+    assert not [kind.name for kind in diya_connector_tools.real_action_kinds() if kind.tool_name in risky and kind.name in diya_autoapprove.AUTO_KINDS]
 
 
 def test_text_in_a_calendar_entry_never_reaches_the_model_when_the_plain_question_is_asked(world, monkeypatch):

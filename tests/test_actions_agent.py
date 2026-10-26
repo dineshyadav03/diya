@@ -53,8 +53,10 @@ def test_with_no_kinds_the_model_is_offered_exactly_the_tools_it_always_had():
 
 def test_by_default_the_agent_has_the_real_kind_and_offers_it_only_once_todoist_is_connected():
     agent = diya.Agent(diya_config.load_config(), client=FakeClient())
-    assert [kind.name for kind in agent.actions.kinds] == ["todoist_add_task", "google_calendar_add_event", "google_tasks_add", "google_drive_make_folder", "google_docs_create"]
-    assert agent._proposal_tools == {"propose_todoist_task", "propose_calendar_event", "propose_google_task", "propose_drive_folder", "propose_google_doc"}
+    names_of_kinds = [kind.name for kind in agent.actions.kinds]
+    assert names_of_kinds[:5] == ["todoist_add_task", "google_calendar_add_event", "google_tasks_add", "google_drive_make_folder", "google_docs_create"]  # the first five, in order (more were added after them: docs/GOOGLE_CHANGES.md)
+    assert len(set(names_of_kinds)) == len(names_of_kinds) and {"propose_todoist_task", "propose_calendar_event", "propose_google_task", "propose_drive_folder", "propose_google_doc"} <= agent._proposal_tools
+    assert agent._proposal_tools == {kind.tool_name for kind in agent.actions.kinds}  # every kind is offered by exactly its own tool
     assert agent.tools == diya.TOOLS  # not connected: the model is not even shown it
     diya_connectors.store_token(agent.config, "todoist", "a-token")
     names = [tool["function"]["name"] for tool in agent.tools]

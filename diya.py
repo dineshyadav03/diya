@@ -931,6 +931,12 @@ class Agent:
         if in_turn and kind.prepare is not None:
             args, notes = kind.prepare(args, said)
         try:
+            if in_turn and kind.resolve is not None:  # a change to something that exists: the one thing is looked up now, by the words the person used (a read), or the proposal is refused
+                args = kind.resolve(self.config, args)
+        except diya_actions.ActionError as exc:
+            self._turn.refused.append(str(exc))
+            return diya_actions.refused_text(exc)
+        try:
             action = self.actions.propose(
                 kind.name,
                 args,

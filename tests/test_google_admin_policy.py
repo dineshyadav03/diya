@@ -46,7 +46,7 @@ def test_no_connector_is_for_cloud_or_directory_administration():
 
 def test_the_catalog_has_nothing_external_facing_or_destructive_and_nothing_about_money_or_accounts():
     for entry in diya_catalog.CATALOG.values():
-        assert entry.tier <= 2, (entry.name, entry.tier)  # tier 3 (external-facing) and 4 (destructive) exist as ideas only
+        assert entry.tier <= 3, (entry.name, entry.tier)  # tier 3 (reaches other people, or removes what Diya cannot bring back) exists, one proposal at a time; tier 4 (destructive or privileged at scale) is never built
         assert not re.search(r"billing|provision|\biam\b|role|organisation|organization|domain-wide", f"{entry.name} {entry.effect}", re.IGNORECASE), (entry.name, entry.effect)
 
 

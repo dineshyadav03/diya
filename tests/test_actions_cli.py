@@ -483,13 +483,15 @@ def test_run_for_real_with_no_model_and_no_network_it_works_and_speaks_utf8(worl
     result = run_for_real(world, "kinds")
     assert result.returncode == 0, result.stderr
     # the real kinds, none of whose connectors is connected in this empty folder, so Diya could not propose any yet
-    assert result.stdout.decode("utf-8") == (
+    first_five = (
         f"{'todoist_add_task':<24} Add a Todoist task: needs todoist connected\n"
         f"{'google_calendar_add_event':<24} Add a Google Calendar event: needs google_calendar_edit connected\n"
         f"{'google_tasks_add':<24} Add a Google Task: needs google_tasks connected\n"
         f"{'google_drive_make_folder':<24} Make a Google Drive folder: needs google_drive_files connected\n"
         f"{'google_docs_create':<24} Make a Google Doc: needs google_drive_files connected\n"
     )
+    listing = result.stdout.decode("utf-8")
+    assert listing.startswith(first_five) and all(line.endswith(" connected") for line in listing.splitlines())  # and the kinds added since (changing a task, ...) each say what they need
     assert run_for_real(world, "list").stdout.decode("utf-8") == "Actions: 0 waiting for you, 0 in all.\nNothing waiting for you.\n"
 
 

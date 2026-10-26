@@ -15,7 +15,8 @@ The tiers (the blueprint's Part V, 14.7):
 2  reversible remote writes. Adds something private to one of the person's own accounts: an event, a task, a folder, a document. Only ever PROPOSED by the model; the owner approves each one,
    exactly as shown, and Diya cannot remove it afterwards (undoing is by hand in the service). The one exception, chosen by the owner on 2026-10-26 (diya_autoapprove.py): the four Google additions in
    AUTO_KINDS may be switched, one by one, to be done straight away when the owner asks for them in their own message and nothing outside that message was read first; everything else still waits.
-3  external-facing. Reaches other people: sends a message, invites a guest, shares a file. Not built; each would need exact per-action approval at the least.
+3  external-facing, or not undoable. Reaches other people (sends a message, invites a guest, shares a file) or removes something Diya cannot bring back (deletes a task). Only ever PROPOSED; the owner approves each one, exactly as
+   shown, with every recipient and what is lost on the card, and it is never done straight away (2026-10-26, docs/GOOGLE_CHANGES.md). Built one kind at a time as the owner connects the card it needs.
 4  destructive or privileged. Deletes at scale, changes account settings, shares publicly. Not built, and denied by default.
 
 Importing this module has no side effects.
@@ -29,8 +30,8 @@ from pathlib import Path
 TIERS = {
     0: "reads: looks, changes nothing outside Diya's own records",
     1: "reversible local write: changes Diya's own database where the person can see and undo it",
-    2: "reversible remote write: adds something private to the person's own account; proposed only, the owner approves each one (the four Google additions the owner may switch to 'straight away' are the one exception)",
-    3: "external-facing: reaches other people (send, invite, share). Not built",
+    2: "reversible remote write: adds something private to the person's own account, or changes it in a way that can be put back by hand; proposed only, the owner approves each one (the four Google additions the owner may switch to 'straight away' are the one exception)",
+    3: "external-facing or not undoable: reaches other people (send, invite, share) or removes what Diya cannot bring back; proposed only, the owner approves each one, and it is never done straight away",
     4: "destructive or privileged: delete at scale, account settings, public sharing. Not built; denied by default",
 }
 
@@ -68,6 +69,10 @@ CATALOG = {e.name: e for e in (
     E("propose_calendar_event", "proposal", 2, "proposes an event, just for the person, on their Google Calendar", "www.googleapis.com (only when approved)", "by hand in Google Calendar: Diya cannot remove it", "owner approves each action", False, "Google Calendar (add events) connected", "google_calendar_edit"),
     E("propose_google_task", "proposal", 2, "proposes a task in the person's Google Tasks", "tasks.googleapis.com (only when approved)", "by hand in Google Tasks: Diya cannot remove it", "owner approves each action", False, "Google Tasks connected", "google_tasks"),
     E("propose_drive_folder", "proposal", 2, "proposes a new folder at the top of the person's Google Drive", "www.googleapis.com (only when approved)", "by hand in Google Drive: Diya cannot remove it", "owner approves each action", False, "Google Drive and Docs connected", "google_drive_files"),
+    E("propose_complete_google_task", "proposal", 2, "proposes marking one of the person's open Google Tasks as done", "tasks.googleapis.com (only when approved)", "by hand in Google Tasks: it can be marked open again there", "owner approves each action", False, "Google Tasks connected", "google_tasks"),
+    E("propose_update_google_task", "proposal", 2, "proposes renaming a Google Task or changing its notes or due day", "tasks.googleapis.com (only when approved)", "by hand in Google Tasks: Diya does not keep the old words", "owner approves each action", False, "Google Tasks connected", "google_tasks"),
+    E("propose_move_google_task", "proposal", 2, "proposes moving a Google Task to the top of the list or under another task", "tasks.googleapis.com (only when approved)", "by hand in Google Tasks", "owner approves each action", False, "Google Tasks connected", "google_tasks"),
+    E("propose_delete_google_task", "proposal", 3, "proposes deleting one of the person's open Google Tasks", "tasks.googleapis.com (only when approved)", "Diya cannot bring it back", "owner approves each action", False, "Google Tasks connected", "google_tasks"),
     E("propose_google_doc", "proposal", 2, "proposes a new Google Doc with at most a line of text", "docs.googleapis.com (only when approved)", "by hand in Google Drive: Diya cannot remove it", "owner approves each action", False, "Google Drive and Docs connected", "google_drive_files"),
     E("read_mail", "flow", 0, "looks through the person's Gmail when they ask; the answer is written by a model with no tools", "gmail.googleapis.com", "n/a", "none", True, "Gmail connected", "google_mail"),
     E("mail_write_refused", "flow", 0, "answers a request to send, change or delete mail with the fact that access is read-only", "none", "n/a", "none", False),
@@ -87,6 +92,7 @@ OUTBOUND_WRITERS = {
     "diya_connector_tools.py": "Notion search is a POST that only reads; the Todoist task is created only inside todoist_add_task_execute, which diya_actions.run calls after the owner approves",
     "diya_google_calendar.py": "Google's own OAuth endpoints: the token exchange and refresh, and revoking the permission",
     "diya_google_write.py": "the approved Google writes: every request goes through _send, called only from the kinds' execute functions",
+    "diya_google_client.py": "the approved changes to the newer Google cards (mail drafts and sending, calendar edits, Drive, Docs, Sheets, Slides, contacts, forms): every request goes through send, called only from the kinds' execute functions",
     "diya_push.py": "web push to the person's own subscribed devices",
     "diya_telegram.py": "the person's own Telegram bot",
     "diya_warm.py": "the local Ollama, to keep the chat model loaded",
