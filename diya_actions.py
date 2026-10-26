@@ -29,10 +29,12 @@ import contextlib
 import hashlib
 import json
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import diya_connectors
+import diya_journal
 import diya_memory
 import diya_pause
 
@@ -544,8 +546,9 @@ class Actions:
                 conn.execute("UPDATE actions SET status = 'executing', executed_at = ? WHERE id = ?", (_stamp(now), action_id))
                 self._event(conn, action_id, "executing", _stamp(now))
         if problem:
-            return self.get(action_id)
+            return self._journaled(self.get(action_id), 0.0, started=False)
         # The effect is attempted outside any transaction, after "executing" is on disk.
+        started = time.monotonic()
         try:
             outcome, event, result = "succeeded", "succeeded", kind.execute(self.config, args)
         except ActionFailed as exc:
@@ -564,7 +567,17 @@ class Actions:
                 raise IllegalTransition(f"action {action_id} was no longer executing when it finished")
             self._event(conn, action_id, event, _stamp(self._clock()),
                         json.dumps({"reason": result}) if outcome == "unknown" else None)
-        return self.get(action_id)
+        return self._journaled(self.get(action_id), time.monotonic() - started)
+
+    def _journaled(self, action, seconds, started=True):
+        """Put the outcome of a run in the activity record, so the Activity page shows what was done after you approved it next to everything else (DIYA-056): which kind, how it came out, from which chat and message,
+        and how long it took. Never the result's words (only their length, as for every tool), and never able to break a run: recording does not raise."""
+        status = {"succeeded": "ok", "failed": "error", "unknown": "error"}.get(action["status"], "refused") if started else "refused"  # one that could not even start (its connector was disconnected, its kind is gone) was refused
+        note = {"succeeded": "approved action done", "failed": "approved action failed", "unknown": "approved action: outcome not known, look and record what you found"}.get(action["status"], "approved action not started") if started else "approved action not started"
+        diya_journal.record(
+            self.store, f"approved:{action['kind']}", action["args"], status, kind="flow", thread_id=action["thread_id"], message_id=action["message_id"], result=action["result"], seconds=seconds, note=note,
+        )
+        return action
 
     def expire(self, moment=None):
         """Close every pending or approved-but-not-yet-run action whose time is up as of `moment` (default: now)

@@ -28,6 +28,7 @@ function describe(entry) {
   if (WHAT[entry.tool]) return WHAT[entry.tool]
   if (entry.tool.startsWith('mcp_')) return `used a connected program (${entry.tool.split('_')[1] || 'MCP'})`
   if (entry.tool.startsWith('propose_')) return 'proposed an action for you to approve'
+  if (entry.tool.startsWith('approved:')) return `carried out what you approved (${entry.tool.slice('approved:'.length).replace(/_/g, ' ')})`
   return `used ${entry.tool}`
 }
 
@@ -176,7 +177,7 @@ export default function ActivityPage() {
                       {describe(entry)} <span className={`activity-status activity-status--${entry.status}`}>{OUTCOME[entry.status] || entry.status}</span>
                     </p>
                     <p className="memory-dim">
-                      {new Date(entry.at).toLocaleString()} · {entry.kind === 'flow' ? 'because of what you said' : 'chosen by the model'}
+                      {new Date(entry.at).toLocaleString()} · {entry.tool.startsWith('approved:') ? 'after you approved it' : entry.kind === 'flow' ? 'because of what you said' : 'chosen by the model'}
                       {entry.origin === 'unattended' ? ' · while you were away' : ''}
                       {entry.duration_ms != null ? ` · ${entry.duration_ms < 1000 ? `${entry.duration_ms} ms` : `${(entry.duration_ms / 1000).toFixed(1)} s`}` : ''}
                     </p>

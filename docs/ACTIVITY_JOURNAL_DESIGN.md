@@ -15,3 +15,7 @@
 **Proof.** `tests/test_journal.py` (append-only, secrets hidden, a refused call recorded, flows recorded, unattended origin, never raises), the route and page pins in `tests/test_token.py`, `tests/test_frontend_proxy.py` and `tests/test_actions_format.py`.
 
 **Not done.** Journalling approvals and runs of actions (they already have their own history in `docs/ACTIONS_DESIGN.md`'s table); export; filtering by tool in the page; a retention rule.
+
+## Approved actions are in the record too (2026-10-26, DIYA-056)
+
+Running an approved action now writes one line here, named `approved:<kind>`: how it came out (ok; error for a failure or an outcome that is not known; refused for one that could not even start), which chat and message it came from, and how long it took. As for every tool, only the length of the result is kept, never its words, and arguments named like a secret are hidden. The Activity page says it as "carried out what you approved", and the Status page's "Tools and accounts" counts a failed one among the last day's failures. The Actions page still holds the full receipt. `tests/test_actions_journal.py`.
