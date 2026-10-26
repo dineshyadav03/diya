@@ -26,6 +26,8 @@ hold for all of it, and what is built.
 
 | Google Calendar | an event by name, and free time (code answers, no model) | rename / move / change the length of one of your own events with no guests; cancel one (level 3); invite typed addresses (level 3); accept, decline or say maybe to an invitation (level 3); add an event that repeats | two new cards, both on the existing `calendar.events` permission: **Google Calendar (change events)** and **Google Calendar (guests)**; the repeating event is a new kind of the existing "add events" card |
 
+| Google Drive and Docs | search your whole Drive; read a Doc, Slides, a Sheet or a text file with numbered paragraphs and a version; a file's earlier versions | rename, move (with from / to / how to undo shown), bin, bring back, share with one typed address (level 3), stop sharing; add to or change words in a Doc | two new cards: **Google Drive (read)** (`drive.readonly`) and **Google Drive (change)** (`drive.file`: only what Diya made) |
+
 More follow below as they are built.
 
 ## Gmail (diya_google_mailwrite.py; DIYA-075, -076, -077, -078, -113)
@@ -55,3 +57,13 @@ More follow below as they are built.
 * **A repeating event** is written in your calendar's own time zone (read from the calendar) when this computer is in it, so a daylight-saving change does not shift later events; otherwise in UTC, which does not shift but is not the wall clock after such a change.
 * **Questions** ("when is my dentist appointment?", "when am I free tomorrow?", "find an hour on friday", "am I free at 3pm?") are answered by code from the read-only card: gaps between 9:00 and 18:00, with events marked free by Google and cancelled ones not counted. A question that finds nothing and did not say "calendar" is left to the chat.
 * **Not built:** moving or cancelling an event that has guests, changing one event of a series or the whole series, an event with guests created in one step, all-day events moved, and other calendars.
+
+## Google Drive and Docs (diya_google_drive.py; DIYA-086, -088, -089, -090, -091, -092, -094, -095)
+
+* **Reading** needs its own permission, `drive.readonly`, the one place Diya asks to see the whole Drive. It is a read card (it changes nothing); a Doc or Slides comes back as numbered paragraphs (so an answer can cite "[¶3]") with the file's version and date; a Sheet as rows; a text file as text (up to 200 KB, then cut
+  to 3000 characters); a PDF, picture or video by its name and details only. File text is other people's words, so **the Drive is not offered to the model as tools at all**: like the mail, code reads and a model with NO tools words the answer (a search is listed by code with no model). That keeps the whole Drive, other people's words and the web search out of one turn (docs/AUTHORITY_MODEL.md, the one open accounting); a test pins that no Drive tool exists.
+* **Changing** uses the narrow `drive.file` permission, which only ever sees what Diya made. So rename, move, bin, restore, share and Doc edits work on the files and folders Diya made, and cannot reach anything else in your Drive: that is Google's rule, and the code does not try to go round it. Changing files you made yourself needs the broad Drive permission, which Diya does not ask for.
+* **Dry run for a move**: the card says which folder it is in and which it goes into and how to put it back; the move is refused if the file is no longer where it was proposed from.
+* **The bin, not deletion**: Diya puts a file in Drive's bin (kept 30 days) and brings it back. It has no request that deletes for good (a test pins that). A folder that holds files is not binned.
+* **Sharing**: one address the person typed, a role they said (view, comment or edit), the type always "user" (never "anyone with the link", never a whole domain, never ownership). Google emails them. Stopping the sharing is its own kind (level 2).
+* **Conflicts and lost access**: a file's version is checked again when the action runs. A file changed since, in the bin, gone, or no longer visible means nothing is done, with the reason in words. A Doc is edited with `requiredRevisionId`: an edit made by anyone since means Google refuses the write and the document is exactly as it was. The words to change must be the person's own, found in the Doc 1 to 10 times, and the count is shown.

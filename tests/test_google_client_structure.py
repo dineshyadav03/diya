@@ -35,7 +35,7 @@ def attr_call(owner, *attrs):
 
 def test_exactly_one_function_in_the_client_makes_a_changing_request_and_it_is_called_send():
     assert calls_in_functions(CLIENT, attr_call("httpx", "request", "post", "put", "patch", "delete")) == {"send"}
-    assert calls_in_functions(CLIENT, attr_call("httpx", "get")) == {"read"}  # and the only other request it makes is a GET
+    assert calls_in_functions(CLIENT, attr_call("httpx", "get")) == {"_fetch"}  # and the only other request it makes is a GET, in the one function that read (JSON) and read_text both go through
 
 
 def test_every_call_to_send_is_inside_a_function_that_runs_after_an_approval():

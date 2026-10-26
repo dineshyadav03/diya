@@ -100,6 +100,54 @@ def discards_draft(text):
     return _asks(text, r"\b(?:delete|discard|remove|throw\s+away|get\s+rid\s+of|trash)\b", place=lambda said: re.search(r"\bdrafts?\b", said, re.IGNORECASE) is not None)
 
 
+# ---- Google Drive and Docs changes (diya_google_drive) ---------------------------------------------------------------------------------------------
+
+_DRIVE_THING = re.compile(r"\b(?:drive|files?|folders?|documents?|docs?|sheets?|spreadsheets?|slides?|presentations?)\b", re.IGNORECASE)
+_NOT_DRIVE = re.compile(r"\b(?:e-?mails?|mails?|calendar|events?|meetings?|appointments?|tasks?|reminders?|drafts?)\b", re.IGNORECASE)
+_DOC_WORD = re.compile(r"\b(?:google\s+)?(?:docs?|documents?)\b", re.IGNORECASE)
+_MAKE_A_DOC = re.compile(r"\b(?:create|make|start|new)\b[^.?!]{0,30}\b(?:docs?|documents?)\b", re.IGNORECASE)
+
+
+def _drive_word(said):
+    return _DRIVE_THING.search(said) is not None and _NOT_DRIVE.search(said) is None
+
+
+def renames_drive_file(text):
+    """Rename one file or folder in Drive ("rename the file Notes to Exam notes")."""
+    return _asks(text, r"\b(?:rename|retitle)\b", place=_drive_word)
+
+
+def moves_drive_file(text):
+    """Move one file into a folder ("move Exam notes into the folder Exams")."""
+    return _asks(text, r"\bmove\b|\b(?:put|file)\b[^.?!]{0,60}\b(?:in|into|to)\s+(?:the\s+|my\s+)?(?:\w+\s+){0,3}folder\b", place=lambda said: _drive_word(said) or re.search(r"\bfolder\b", said, re.IGNORECASE) is not None)
+
+
+def trashes_drive_file(text):
+    """Put one file or folder in the Drive bin ("delete the file Old notes", "move Old notes to the bin")."""
+    return _asks(text, r"\b(?:delete|trash|remove|bin)\b|\bget\s+rid\s+of\b", place=_drive_word)
+
+
+def restores_drive_file(text):
+    """Bring one file back from the Drive bin ("restore Old notes from the bin")."""
+    return _asks(text, r"\b(?:restore|undelete|untrash|bring\s+back|put\s+back)\b", place=_drive_word)
+
+
+def shares_drive_file(text):
+    """Share one file with an address the person typed ("share Exam notes with maya@x.com, she can view it")."""
+    return _asks(text, r"\bshare\b|\bgive\b[^.?!]{0,40}\baccess\b|\blet\b[^.?!]{0,40}\b(?:view|see|read|comment|edit)\b", place=lambda said: _drive_word(said) and _has_address(said))
+
+
+def unshares_drive_file(text):
+    """Stop sharing one file with an address the person typed."""
+    return _asks(text, r"\bunshare\b|\bstop\s+sharing\b|\b(?:remove|take\s+away|revoke)\b[^.?!]{0,40}\baccess\b", place=lambda said: _drive_word(said) and _has_address(said))
+
+
+def edits_google_doc(text):
+    """Add to, or change words in, a Google Doc that Diya made ("add a line to my Study plan doc", "in the Study plan doc change monday to tuesday")."""
+    said = _plain(text)
+    return said is not None and _MAKE_A_DOC.search(said) is None and _asks(said, r"\b(?:append|replace|insert|add|change|fix|correct|update|rewrite)\b", place=lambda s: _DOC_WORD.search(s) is not None and _NOT_DRIVE.search(s) is None)
+
+
 # ---- Google Calendar changes (diya_google_calchange) -----------------------------------------------------------------------------------------------
 
 _CAL = re.compile(r"\b(?:calendar|events?|meetings?|appointments?|sessions?|classes|class|lectures?|interviews?|exams?|invit\w+)\b", re.IGNORECASE)

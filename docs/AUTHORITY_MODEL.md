@@ -37,6 +37,13 @@ One press of **Pause Diya** on the Status page (or `POST /api/pause`) stops the 
 | `list_todoist_tasks` | tool | 0 | lists open tasks in Todoist | api.todoist.com | n/a | none | yes | Todoist connected |
 | `list_calendar_events` | tool | 0 | lists the next events on the person's Google Calendar | www.googleapis.com | n/a | none | yes | Google Calendar connected |
 | `list_google_tasks` | tool | 0 | lists open Google Tasks | tasks.googleapis.com | n/a | none | yes | Google Tasks connected |
+| `propose_rename_drive_file` | proposal | 2 | proposes renaming one file or folder that Diya made in the person's Drive | www.googleapis.com (only when approved) | by hand in Google Drive: rename it back | owner approves each action | no | Google Drive (change) connected |
+| `propose_move_drive_file` | proposal | 2 | proposes moving one file that Diya made into a folder that Diya made, showing where it comes from and goes to | www.googleapis.com (only when approved) | by hand in Google Drive: move it back (the card says where from) | owner approves each action | no | Google Drive (change) connected |
+| `propose_trash_drive_file` | proposal | 2 | proposes putting one file (or an empty folder) that Diya made in the Drive bin | www.googleapis.com (only when approved) | Drive keeps it in the bin for 30 days; bring it back there or by asking Diya | owner approves each action | no | Google Drive (change) connected |
+| `propose_restore_drive_file` | proposal | 2 | proposes bringing one file or folder that Diya made back from the Drive bin | www.googleapis.com (only when approved) | put it in the bin again | owner approves each action | no | Google Drive (change) connected |
+| `propose_share_drive_file` | proposal | 3 | proposes sharing one file that Diya made with one address the person typed, as viewer, commenter or editor; Google emails them | www.googleapis.com (only when approved) | stop sharing it, but the person has been told | owner approves each action | no | Google Drive (change) connected |
+| `propose_unshare_drive_file` | proposal | 2 | proposes stopping the sharing of one file that Diya made with one address the person typed | www.googleapis.com (only when approved) | share it again | owner approves each action | no | Google Drive (change) connected |
+| `propose_edit_google_doc` | proposal | 2 | proposes adding text to the end of a Google Doc that Diya made, or changing words in it, guarded by the document's version | docs.googleapis.com (only when approved) | by hand in the Doc's version history | owner approves each action | no | Google Drive (change) connected |
 | `propose_todoist_task` | proposal | 2 | proposes a task in the person's Todoist Inbox | api.todoist.com (only when approved) | by hand in Todoist: Diya cannot remove it | owner approves each action | no | Todoist connected |
 | `propose_calendar_event` | proposal | 2 | proposes an event, just for the person, on their Google Calendar | www.googleapis.com (only when approved) | by hand in Google Calendar: Diya cannot remove it | owner approves each action | no | Google Calendar (add events) connected |
 | `propose_google_task` | proposal | 2 | proposes a task in the person's Google Tasks | tasks.googleapis.com (only when approved) | by hand in Google Tasks: Diya cannot remove it | owner approves each action | no | Google Tasks connected |
@@ -57,6 +64,7 @@ One press of **Pause Diya** on the Status page (or `POST /api/pause`) stops the 
 | `propose_forward_gmail` | proposal | 3 | proposes forwarding one email the person names to an address they typed (text only) | gmail.googleapis.com (only when approved) | an email that is sent cannot be taken back | owner approves each action | no | Gmail: send and Gmail connected |
 | `propose_organise_gmail` | proposal | 2 | proposes filing one email the person names: archive, read or unread, star, one of their own labels, the bin and back | gmail.googleapis.com (only when approved) | by hand in Gmail: every one of these can be put back (the bin keeps mail for 30 days) | owner approves each action | no | Gmail: organise connected |
 | `propose_google_doc` | proposal | 2 | proposes a new Google Doc with at most a line of text | docs.googleapis.com (only when approved) | by hand in Google Drive: Diya cannot remove it | owner approves each action | no | Google Drive and Docs connected |
+| `read_drive` | flow | 0 | looks through the person's Google Drive when they ask (a search by name, a file as numbered paragraphs, a file's earlier versions); the answer is written by a model with no tools | www.googleapis.com | n/a | none | yes | Google Drive (read) connected |
 | `read_mail` | flow | 0 | looks through the person's Gmail when they ask; the answer is written by a model with no tools | gmail.googleapis.com | n/a | none | yes | Gmail connected |
 | `mail_write_refused` | flow | 0 | answers a request to send, change or delete mail that cannot be proposed (the card for it is not connected, or it is for many emails at once) with the plain fact, and never lets the model guess | none | n/a | none | no | - |
 | `study_repo` | flow | 0 | reads a public GitHub repository the person names and shows the evidence | api.github.com, raw.githubusercontent.com | n/a | none | yes | - |
@@ -98,6 +106,13 @@ Meta's Rule of Two and Simon Willison's lethal trifecta say an agent should not,
 | `list_todoist_tasks` | yes | yes | - | 2 |
 | `list_calendar_events` | yes | yes | - | 2 |
 | `list_google_tasks` | yes | yes | - | 2 |
+| `propose_rename_drive_file` | - | - | yes | 1 |
+| `propose_move_drive_file` | - | - | yes | 1 |
+| `propose_trash_drive_file` | - | - | yes | 1 |
+| `propose_restore_drive_file` | - | - | yes | 1 |
+| `propose_share_drive_file` | - | - | yes | 1 |
+| `propose_unshare_drive_file` | - | - | yes | 1 |
+| `propose_edit_google_doc` | - | - | yes | 1 |
 | `propose_todoist_task` | - | - | yes | 1 |
 | `propose_calendar_event` | - | - | yes | 1 |
 | `propose_google_task` | - | - | yes | 1 |
@@ -118,6 +133,7 @@ Meta's Rule of Two and Simon Willison's lethal trifecta say an agent should not,
 | `propose_forward_gmail` | - | - | yes | 1 |
 | `propose_organise_gmail` | - | - | yes | 1 |
 | `propose_google_doc` | - | - | yes | 1 |
+| `read_drive` | yes | yes | - | 2 |
 | `read_mail` | yes | yes | - | 2 |
 | `mail_write_refused` | - | - | - | 0 |
 | `study_repo` | yes | - | - | 1 |

@@ -55,6 +55,22 @@ Before these: Google Cloud needs nothing new (the same `calendar.events` permiss
 
 Two read-only questions to try as well (nothing changes): "when is my Diya calendar test?" lists it with its day and time, and "when am I free tomorrow?" lists the gaps between 9:00 and 18:00.
 
+## Google Drive and Docs (added 2026-10-26; DIYA-086, -088, -089, -090, -091, -092, -094, -095)
+
+Before these: in your Google project switch on the Google Drive API (and Google Docs API, already on), add `drive.readonly` under Data access (this one is Google's "restricted" kind: it lets Diya see your whole Drive, to search and read it;
+nothing in the read card changes anything), then on the Connections page press Connect on **Google Drive (read)** and **Google Drive (change)**. Make a test Doc first: "make a Google Doc called Diya drive test with the line hello".
+
+| Operation | What to say to Diya | What you should see | Undo | Its stand-in test |
+|---|---|---|---|---|
+| `read_drive` | "search my drive for physics notes", then "read my Diya drive test doc in my drive", then "what are the earlier versions of Diya drive test?" | A list of names, types and dates (never contents); the file's text as numbered paragraphs with its version and date, with a short answer above it; the dates and who changed it. Nothing changes | Nothing changes | `tests/test_google_drive.py` — `read_drive` |
+| `propose_rename_drive_file` | "rename the file Diya drive test to Diya drive test two" | A card with the old and new name; after approval the file has the new name | Rename it back | `tests/test_google_drive.py` — `propose_rename_drive_file` |
+| `propose_move_drive_file` | "make a Drive folder called Diya box", then "move the file Diya drive test two into the folder Diya box" | A card with where it comes from and goes, and how to put it back; after approval it is in the folder | Move it back | `tests/test_google_drive.py` — `propose_move_drive_file` |
+| `propose_trash_drive_file` | "delete the file Diya drive test two from my drive" | A card saying Drive keeps it 30 days; after approval it is in the Drive bin | Bring it back from the bin | `tests/test_google_drive.py` — `propose_trash_drive_file` |
+| `propose_restore_drive_file` | "restore the file Diya drive test two from the bin in my drive" | A card; after approval it is out of the bin | Put it in the bin again | `tests/test_google_drive.py` — `propose_restore_drive_file` |
+| `propose_share_drive_file` | "share the file Diya drive test two with YOUR-OTHER-ADDRESS so they can view it" | A card with the one address and the role, risk level 3; after approval Google emails them and they can open it | Stop sharing it (next row) | `tests/test_google_drive.py` — `propose_share_drive_file` |
+| `propose_unshare_drive_file` | "stop sharing the file Diya drive test two with YOUR-OTHER-ADDRESS" | A card; after approval they lose access | Share it again | `tests/test_google_drive.py` — `propose_unshare_drive_file` |
+| `propose_edit_google_doc` | "add a line to my Diya drive test doc saying second line", then "in my Diya drive test doc change hello to goodbye" | A card with the whole text (or the old and new words and how many places); after approval the Doc has it | Use the Doc's version history | `tests/test_google_drive.py` — `propose_edit_google_doc` |
+
 Two things to try that should be **refused**: "send an email to my boss saying hi" (no address typed: nothing is proposed) and "reply to Sam's email" when two of Sam's emails match (Diya lists them and asks which).
 
 When all eight pass, tell me, and the sheet's DIYA-216 (a smoke run on a real account) and the "needs your real account" rows (DIYA-081, -087, -093, -097) can be marked from what you saw.

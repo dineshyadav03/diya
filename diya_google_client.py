@@ -170,8 +170,8 @@ def error_for(response, what):
 
 # ---- reads ---------------------------------------------------------------------------------------------------------------------------------------------
 
-def read(config, connector, what, url, params=None):
-    """A GET to Google for the card `connector`; what Google said as a dict. Raises GoogleError. Tried again at most twice if Google was busy or failed on its side."""
+def _fetch(config, connector, what, url, params=None):
+    """A GET to Google for the card `connector`; the answering response (status 200). Raises GoogleError. Tried again at most twice if Google was busy or failed on its side."""
     if not permitted(connector, "GET", url):
         raise GoogleError("bad_request", f"{what} is not allowed to ask for that, so nothing was asked.")
     if diya_connectors.read_token(config, connector) is None:
@@ -191,11 +191,7 @@ def read(config, connector, what, url, params=None):
             last = GoogleError("network", f"Couldn't reach Google for {what} ({type(exc).__name__}).")
         else:
             if response.status_code == 200:
-                try:
-                    data = response.json()
-                except ValueError:
-                    return {}
-                return data if isinstance(data, dict) else {}
+                return response
             last = error_for(response, what)
             if last.kind not in ("rate_limited", "server"):
                 raise last
@@ -204,6 +200,22 @@ def read(config, connector, what, url, params=None):
             continue
         break
     raise last
+
+
+def read(config, connector, what, url, params=None):
+    """A GET to Google for the card `connector`; what Google said as a dict. Raises GoogleError. Tried again at most twice if Google was busy or failed on its side."""
+    response = _fetch(config, connector, what, url, params)
+    try:
+        data = response.json()
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def read_text(config, connector, what, url, params=None, max_chars=20000):
+    """A GET whose answer is text (an export of a Google file, the content of a text file), cut to `max_chars`. Raises GoogleError."""
+    text = getattr(_fetch(config, connector, what, url, params), "text", "")
+    return text[:max_chars] if isinstance(text, str) else ""
 
 
 def pages(config, connector, what, url, params, key, *, max_pages=DEFAULT_PAGES):
