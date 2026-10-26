@@ -358,7 +358,7 @@ def test_the_known_failures_are_measured_not_hidden():
     """A false allowance is no worse than before the guard; a false refusal is the safe direction."""
     assert [m for m in lr.LIMIT_ALLOWED if not diya_intent.is_reminder_request(m)] == []
     assert [m for m in lr.LIMIT_REFUSED if diya_intent.is_reminder_request(m)] == []
-    assert (len(lr.REQUESTS), len(lr.NOT_REQUESTS), len(lr.LIMIT_ALLOWED), len(lr.LIMIT_REFUSED)) == (30, 31, 4, 6)
+    assert (len(lr.REQUESTS), len(lr.NOT_REQUESTS), len(lr.LIMIT_ALLOWED), len(lr.LIMIT_REFUSED)) == (30, 35, 0, 6)
 
 
 def test_the_guard_is_not_fooled_by_case_spacing_or_a_curly_apostrophe():

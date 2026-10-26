@@ -415,7 +415,7 @@ def test_no_proposal_for_the_real_gate_changes_what_it_says_to_any_everyday_or_l
     cases = advisor._labelled(str(ROOT), gate)
     assert len(cases) == 119
     result = propose(str(ROOT), gate, cases)
-    assert result.right_before == 107 and len(result.proposals) + len(result.no_safe_fix) == 6
+    assert result.right_before == 111 and len(result.proposals) + len(result.no_safe_fix) == 6
     base = advisor.module_from_source(source)
     for proposal in result.proposals + ([result.combined] if result.combined else []):
         patched = advisor.module_from_source(proposal.source)

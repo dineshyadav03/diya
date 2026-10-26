@@ -43,6 +43,7 @@ am do does did doing done have has had having will would shall should can could 
 i me my mine myself we us our ours you your yours he him his she her hers it its they them their theirs
 this that these those there here who whom what which when where why how also very just really quite too
 than up out over under again once only own same some such any all each both more most other s t d ll m re ve
+user now longer currently
 """.split())
 
 _TOKEN = re.compile(r"[^\W_]+")

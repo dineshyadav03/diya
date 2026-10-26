@@ -8,13 +8,13 @@ each on a throwaway database. Prompted by Hamel Husain's post (`RESEARCH.md` ent
 | Benchmark | What it measures | Result |
 |---|---|---|
 | `diya_evals.py` | Nine tool-routing checks (the ones the guards were built around) | **9 of 9** |
-| `diya_heldout_bench.py` (new) | 45 messages written before any model saw them: right tool or none, and the answer | first run **35 of 45**, routing **43 of 45**; after fixing three faults it found and replacing those cases, **37 of 45**, routing **44 of 45**; after correcting three doubtful labels (below), **40 of 45** |
+| `diya_heldout_bench.py` (new) | 45 messages written before any model saw them: right tool or none, and the answer | first run **35 of 45**, routing **43 of 45**; after fixing three faults it found and replacing those cases, **37 of 45**, routing **44 of 45**; after correcting three doubtful labels (below), **40 of 45**; after the fix round that followed (below and `docs/HELDOUT_BENCH.md`), **42 of 45**, routing **45 of 45** |
 | `diya_schedule_bench.py` | A repeating reminder: saved right, or refused, never wrong | repeats asked for: **19 of 20** saved with the right rule, 0 wrong, 0 lost; unreadable repeats (9): 0 saved, all told; single reminders (12): 10 saved, 0 wrongly repeating; not asked (12): **0 saved** |
 | `diya_actions_bench.py` | A task added when asked, never when not | asked for the to-do list: **19 of 20** recorded; named Todoist (not connected): 5 of 5 handled; not asked (51): **0 recorded**; invented due phrases 0; claimed an add that did not happen 0 of 57 |
 | `diya_autonomy_bench.py` | Is automatic memory safe to leave on? (the must-be-zero lines) | **clean**: no secret kept, no order taken as a fact, no sensitive fact accepted, no wrongly replaced fact. Plain facts: 15 of 24 remembered on their own, 4 asked about, 1 recorded wrong, 4 lost. Sensitive 18 of 18 asked. Secrets 9 of 10 not kept (the tenth waits as a question). Orders 8 of 8 not extracted |
-| `diya_memory_qa_bench.py` | Told things over a chat, then asked: does the answer use them? | **31 of 33 (93%)**; every kind 100% except corrections, 5 of 7 |
+| `diya_memory_qa_bench.py` | Told things over a chat, then asked: does the answer use them? | **31 of 33 (93%)**; every kind 100% except corrections, 5 of 7. After the fix round, corrections **7 of 7** (re-run on that kind alone) |
 | `diya_episodic_bench.py` | Finding an earlier message by meaning | top 1 **20 of 20**; at the chosen cut-off 0.55, 0 of 10 unrelated questions let through, but the margin is thin (weakest correct match 0.56, strongest unrelated 0.51) |
-| `diya_gate_bench.py` | Who should decide the capture gates: the code or the model | fact-sharing: code 47 of 47, model 42 of 47. "Is this a reminder request?": code 61 of 71 (4 false yes, 6 false no), model 65 of 71 (6 false yes, 0 false no) |
+| `diya_gate_bench.py` | Who should decide the capture gates: the code or the model | fact-sharing: code 47 of 47, model 42 of 47. "Is this a reminder request?": code 61 of 71 (4 false yes, 6 false no), model 65 of 71 (6 false yes, 0 false no). After the fix round: code **65 of 71 (0 false yes, 6 false no)**; the six left are the documented "known limit" refusals ("wake me up at 7"), refused on purpose |
 | `diya_latency_bench.py` (new) | How fast it answers | quiet: first word **0.7 s**, short answer **2.5 s**, a full paragraph up to **14 s**, **about 11 words a second**; with half the processor busy: first word 1.3 s, typical answer 4.3 s, slow end 20 s, 7.8 words a second; cold start **18 s** |
 
 ## What the failures said
@@ -36,3 +36,12 @@ each on a throwaway database. Prompted by Hamel Husain's post (`RESEARCH.md` ent
 - Speed is for this laptop today with 1 GB of memory free; a Mac mini with 16 GB or more would be a different measurement.
 - The weather answers come from a live service and were graded on the call alone.
 - During the held-out run the owner's real Google Calendar was connected and read once (read-only, by the local model); no message, event or answer left the computer.
+
+## After the fixes (same day)
+
+Fixed in code, each with tests (`tests/test_fixes_from_the_benchmarks.py`), then the same benchmarks run again on the same model:
+- **The reminder gate** no longer takes a refusal ("please don't set a reminder for that"), a question about the phrase ("what does 'remind me' mean in Spanish", "how do I set a reminder on my phone") or a habit ("I remember to lock the door every night") for a request. Code: 61 → **65 of 71**, false yes **4 → 0**. A real request, including "remind me how to work the thermostat at 6", is still one.
+- **Corrections** such as "I switched to tea, I stopped drinking coffee" are no longer held back as ungrounded because of the boilerplate words of the stored fact ("the user", "now", "no longer"): 5 → **7 of 7**.
+- **Plain statements typed the way people type them** ("i switched from physics...", "my favourite subject is...", "also my roommate moved out...", "i enrolled/joined/bought...") are read as statements. **A folder that is not there** is now answered with what the main folder holds, not a request to look again.
+- **Held-out set: 35 → 42 of 45** over the day, routing 43 → **45 of 45**. Three cases still fail and are open on purpose: two statements with verbs the word list does not know ("dropped", "took a night job"), and one answer that is only too long.
+- The must-be-zero lines were not re-run in full (the schedule, task and autonomy benchmarks did not change).

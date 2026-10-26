@@ -44,3 +44,19 @@ Made after the second run, said here so the number can be trusted: the same save
   is a request). What must hold is that nothing unasked is saved, which the `forbidden_tools` line still checks. The length limit was the wrong label, and is removed.
 - **ho-33** ("got a doctor visit on wednesday morning") expected no tool at all; the model looked at the calendar, which is read-only and does no harm. The case now allows that one tool (`allowed_tools`); its length limit stays and it still fails on length (107 words).
 - **Not changed, the model was wrong:** ho-25 (it asked for a folder called `notes` that does not exist), ho-13 and ho-16 (plain statements answered with paragraphs), ho-47 (a statement, answered with a paragraph), ho-33's length.
+
+## The fix round (2026-10-26, later the same day) and what it showed
+
+The failures above were fixed in code (tests in `tests/test_fixes_from_the_benchmarks.py`), and the four cases that led to the fixes (ho-13, ho-16, ho-25, ho-47) were **moved to the development tests** and four new ones written before the fixes
+were run (ho-49 to ho-52). Third run: **41 of 45**, routing **45 of 45**. The new cases did what a held-out set is for, and not all of them passed:
+- ho-51 ("i prefer studying in the library after 6pm") passed: the new statement words work on an unseen sentence.
+- **ho-52** ("whats in my notes directory": the folder is not there) failed again: the first fix told the model to look in `.`, and it answered "there is no folder, only files". So the fix was too narrow and was redone: the reply
+  now says there is no such folder **and lists what the main folder holds** (files, folders marked with `/`, nothing secret-shaped, never a path on this computer). ho-52 moved to the development tests and **ho-53** ("show me whats inside my documents folder") was written first.
+  Fourth run: ho-53 passed. **42 of 45**, routing **45 of 45**.
+- **ho-49** ("i dropped my maths elective this term") and **ho-50** ("my flatmate took a night job at the hospital last month") **still fail**: plain statements with verbs the statement words do not include ("dropped", "took a job"), answered with a paragraph
+  (41 and 40 words, over the 30). Nothing is saved and no tool is called, so nothing unsafe happens; only the reply is longer than it should be. **Left open on purpose:** every unseen phrasing needs one more word, which is the limit of a word list, and adding
+  words until these two pass would turn them into development cases again. A model that decides "is this a statement?" was measured (docs/BENCHMARK_2026-10-26.md, the gate benchmark) and was worse than the code on the cases it was built for (42 of 47 against 47 of 47), so the honest
+  position is: the code is right on what it knows, and the next unseen verb will be a miss.
+- **ho-33** ("got a doctor visit on wednesday morning") still fails on length only (107 words after a read-only calendar look, which is allowed).
+
+Score history on this set, which changes as cases are replaced (so the numbers are not strictly comparable): 35 → 37 → 40 (labels corrected) → 41 → **42 of 45**. Case set hash `f0d54c21f3f0`.

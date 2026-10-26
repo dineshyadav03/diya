@@ -46,7 +46,7 @@ _REQUEST_ANYWHERE = re.compile(
 _NEGATIVE = re.compile(r"\w+n't\b|\bnot\b|\bnever\b|\bno idea\b|\bmissing\b|\blost\b|\blate\b|\bwrong\b|\bstill no\b", re.IGNORECASE)
 _FIRST_PERSON = re.compile(r"^(i|i'm|i've|i'll|i'd|my|we|we're|we've|our)\b", re.IGNORECASE)
 # "remember that ..." is a fact with an explicit "keep this"; "remember to ..." is a task and is not.
-_KEEP_THIS = re.compile(r"^(remember that|note that|fyi|for your information|keep in mind that|btw|by the way)[,:]?\s+", re.IGNORECASE)
+_KEEP_THIS = re.compile(r"^(remember that|note that|fyi|for your information|keep in mind that|btw|by the way|also|oh and|oh also)[,:]?\s+", re.IGNORECASE)
 # Phone typing leaves the apostrophe out ("ive been", "im allergic"); put it back before looking, so the same words are read the same way ("im looking for ..." is then a request, as "i'm looking for" is).
 _NO_APOSTROPHE = re.compile(r"\b(i)(ve|m)\b", re.IGNORECASE)
 _MONTH_OR_DAY = re.compile(
@@ -59,7 +59,7 @@ _FACT_WORDS = re.compile(
     r"\b(allergic|birthday|appointment|exam|test|flight|meeting|deadline|interview|wedding|anniversary|"
     r"moved|moving|live|lives|living|work at|works at|working at|work for|works for|working for|born|"
     r"called|named|password|code|address|number|"
-    r"is on|are on|leaves|leaving|starts|ends|arrives|graduat\w+|got a new|have a new|adopted)\b",
+    r"is on|are on|leaves|leaving|starts|ends|arrives|graduat\w+|got a new|have a new|adopted|switch(?:ed|ing)?|enrolled|joined|bought|studying|favou?rite)\b",
     re.IGNORECASE,
 )
 _SENTENCE_END = re.compile(r"(?<=[.!])\s+")
@@ -489,12 +489,24 @@ def said_in(phrase, text):
     return bool(phrase) and re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", words) is not None
 
 
+# What looks like a request for a reminder and is not (found by the capture-gate benchmark on 2026-10-26: the code let these through, 4 of 71): a refusal ("please don't set a reminder for that", "never remind me
+# again"), a question about the phrase or about how ("what does 'remind me' mean in spanish", "how do i set a reminder on my phone"), and a habit ("i remember to lock the door every night"). Refusing a
+# request that was real is the safe direction, and "remind me how to work the thermostat at 6" is still a request: the question rule only reads a message that BEGINS with the question word.
+_REMINDER_NOT_A_REQUEST = re.compile(
+    r"\b(?:don'?t|do\s+not|never|no\s+need\s+to|stop)\s+(?:\w+\s+){0,2}?(?:set|add|create|make|schedule|save|put|give|remind)\b"
+    r"|^\W*(?:what|how|why|where|when)\b[^.!]*\b(?:does|do|is|are|to)\b[^.!]*\b(?:mean|means|meaning|work|works|set\s+(?:up\s+)?(?:a\s+)?(?:reminder|alarm))\b"
+    r"|^\W*i\s+(?:always\s+|usually\s+|often\s+|never\s+)?remember\s+to\b",
+    re.IGNORECASE,
+)
+
+
 def is_reminder_request(text):
     """True if the message asks for a reminder ("remind me to ...", "set a reminder", "don't let me forget ...").
-    Not a question about reminders, not a fact, not a sum: those are False, as is anything that is not text."""
+    Not a question about reminders, not a refusal, not a habit, not a fact, not a sum: those are False, as is anything that is not text."""
     if not isinstance(text, str):
         return False
-    return bool(_REMINDER_REQUEST.search(text.replace(chr(0x2019), "'")))
+    text = text.replace(chr(0x2019), "'")
+    return bool(_REMINDER_REQUEST.search(text)) and not _REMINDER_NOT_A_REQUEST.search(text)
 
 
 # ---- is this a question about what the person's own notes say? (docs/KNOWLEDGE_DESIGN.md, step 3) ----

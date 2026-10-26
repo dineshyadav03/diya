@@ -73,6 +73,9 @@ def _is_secret_name(name):
     return fnmatch.fnmatch(name, "*.pem") or fnmatch.fnmatch(name, "*.key")
 
 
+MISSING_FOLDER_LISTED = 50  # how many names of the main folder are shown when the folder asked about is not there
+
+
 def list_files(directory=".", roots=()):
     """List the files in `directory`, restricted to a configured set of allowed folders.
 
@@ -92,7 +95,15 @@ def list_files(directory=".", roots=()):
         real_root = os.path.realpath(root)
         candidate = os.path.realpath(os.path.join(root, directory))
         if pathlib.Path(candidate).is_relative_to(real_root):
-            names = os.listdir(candidate)
+            try:
+                names = os.listdir(candidate)
+            except (FileNotFoundError, NotADirectoryError):
+                # The person asked about a folder that is not there (their "notes folder"): say so, and show what the main folder holds, so that the answer is about their files and not a request to go and look again.
+                # The held-out benchmark (ho-25, then ho-52) showed that pointing the model at "." was not enough: it answered "there is nothing here".
+                names = sorted(n for n in os.listdir(real_root) if not _is_secret_name(n))
+                shown = [n + ("/" if os.path.isdir(os.path.join(real_root, n)) else "") for n in names[:MISSING_FOLDER_LISTED]]
+                held = f" The main folder has: {', '.join(shown)}" + (f" (and {len(names) - len(shown)} more)" if len(names) > len(shown) else "") + "." if shown else " The main folder is empty."
+                return f"There is no folder called '{directory}' here.{held}"
             return "\n".join(name for name in names if not _is_secret_name(name))
     return f"Can't list '{directory}': outside the allowed folders."
 

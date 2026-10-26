@@ -68,6 +68,11 @@ NOT_REQUESTS = [
     "What is the reminder for?",
     "Do you remember my sister's name?",
     "Set the table for four",
+    # Fixed on 2026-10-26 (they were the guard's known false allowances: the capture-gate benchmark showed them): a question about how, a habit, a refusal, a question about the phrase.
+    "How do I set a reminder on my phone?",
+    "I remember to lock the door every night",
+    "Please don't set a reminder for that",
+    "What does 'remind me' mean in Spanish?",
     "Add 5 and 7",
     "Create a poem about autumn",
     "Schedule looks busy this week",
@@ -78,12 +83,7 @@ NOT_REQUESTS = [
 ]
 
 # Not requests, but the guard allows them (a false allowance: no worse than before the guard existed).
-LIMIT_ALLOWED = [
-    "How do I set a reminder on my phone?",
-    "I remember to lock the door every night",
-    "Please don't set a reminder for that",
-    "What does 'remind me' mean in Spanish?",
-]
+LIMIT_ALLOWED = []  # none since 2026-10-26: its four were fixed and moved to NOT_REQUESTS above; the next one found goes here, in plain view
 
 # Requests a person would recognise, which the guard refuses (a false refusal: they can say "remind me to ...").
 LIMIT_REFUSED = [

@@ -28,9 +28,7 @@ CASES = [
     {"id": "ho-10", "category": "answer", "prompt": "who wrote pride and prejudice", "tool": None, "answer_any": ["austen"]},
     # ---- sharing a fact is not asking for anything: a short acknowledgement, no tool, nothing saved -----------------------------------------------------
     {"id": "ho-12", "category": "fact-share", "prompt": "my roommate priya is vegetarian and allergic to peanuts", "tool": None, "forbidden_tools": ["add_reminder", "add_task"], "answer_any": ["priya"], "max_words": 30},
-    {"id": "ho-13", "category": "fact-share", "prompt": "i switched from physics to computer science this semester", "tool": None, "forbidden_tools": ["add_reminder", "add_task"], "max_words": 30},
     {"id": "ho-14", "category": "fact-share", "prompt": "my bus to college leaves at 7:40 every morning", "tool": None, "forbidden_tools": ["add_reminder", "add_task"], "max_words": 30},
-    {"id": "ho-16", "category": "fact-share", "prompt": "my favourite subject is organic chemistry but i hate the labs", "tool": None, "forbidden_tools": ["add_reminder", "add_task"], "max_words": 30},
     # ---- the person's own notes ---------------------------------------------------------------------------------------------------------------------
     {"id": "ho-17", "category": "notes", "prompt": "what did i write about the garden?", "tool": "search_notes", "answer_any": ["tomato", "basil"]},
     {"id": "ho-18", "category": "notes", "prompt": "did i note anything about guitar", "tool": "search_notes", "answer_any": ["barre", "f major"]},
@@ -42,7 +40,6 @@ CASES = [
     {"id": "ho-23", "category": "weather", "prompt": "weather in tokyo?", "tool": "get_weather", "args_have": ["tokyo"]},
     {"id": "ho-24", "category": "weather", "prompt": "how hot is it in jaipur rn", "tool": "get_weather", "args_have": ["jaipur"]},
     # ---- files -----------------------------------------------------------------------------------------------------------------------------------------
-    {"id": "ho-25", "category": "files", "prompt": "list the files in my notes folder", "tool": "list_files", "answer_any": ["guitar.txt", "dentist.txt", "garden.txt"]},
     {"id": "ho-26", "category": "files", "prompt": "what files do i have here", "tool": "list_files", "answer_any": ["guitar.txt", "dentist.txt", "garden.txt"]},
     # ---- a reminder that was asked for ------------------------------------------------------------------------------------------------------------------
     {"id": "ho-27", "category": "reminder-asked", "prompt": "remind me to submit the lab report tomorrow at 5pm", "tool": "add_reminder", "args_have": ["lab report"]},
@@ -68,6 +65,11 @@ CASES = [
     {"id": "ho-45", "category": "other", "prompt": "thanks!", "tool": None, "max_words": 25},
     # ---- written on 2026-10-26 to replace ho-11, ho-15 and ho-37, which were moved to the development sets when fixes were made for them (docs/HELDOUT_BENCH.md) ----------------------------------------
     {"id": "ho-46", "category": "task-asked", "prompt": "add to my tasks: email the landlord about the lease", "tool": "add_task", "args_have": ["landlord"]},
-    {"id": "ho-47", "category": "fact-share", "prompt": "also my roommate moved out on the 2nd so rent is split two ways now", "tool": None, "forbidden_tools": ["add_reminder", "add_task"], "max_words": 30},
     {"id": "ho-48", "category": "fact-share", "prompt": "im flying to delhi on the 21st with my cousin", "tool": None, "forbidden_tools": ["add_reminder", "add_task"], "max_words": 30},
+    # ---- written on 2026-10-26, before the fixes, to replace ho-13, ho-16, ho-25 and ho-47 (moved to the development tests; docs/HELDOUT_BENCH.md) -----------------------------------------------------
+    {"id": "ho-49", "category": "fact-share", "prompt": "i dropped my maths elective this term", "tool": None, "forbidden_tools": ["add_reminder", "add_task"], "max_words": 30},
+    {"id": "ho-50", "category": "fact-share", "prompt": "my flatmate took a night job at the hospital last month", "tool": None, "forbidden_tools": ["add_reminder", "add_task"], "max_words": 30},
+    {"id": "ho-51", "category": "fact-share", "prompt": "i prefer studying in the library after 6pm", "tool": None, "forbidden_tools": ["add_reminder", "add_task"], "max_words": 30},
+    # ho-52 ("whats in my notes directory": the folder is not there, and the answer said "nothing") led to a second fix and moved to the development tests; ho-53 was written before that fix was run.
+    {"id": "ho-53", "category": "files", "prompt": "show me whats inside my documents folder", "tool": "list_files", "answer_any": ["guitar.txt", "dentist.txt", "garden.txt"]},
 ]
