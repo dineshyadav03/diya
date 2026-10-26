@@ -5,15 +5,15 @@ Updated 2026-10-26. The blueprint's task sheet has 298 tasks; the progress is ke
 
 | Status | Tasks |
 |---|---|
-| Not started | 110 |
+| Not started | 108 |
 | Needs verification | 8 |
 | Research queue | 29 |
 | In progress | 19 |
 | Blocked | 0 |
-| Done | 132 |
+| Done | 134 |
 | Deferred | 0 |
 
-## Done (132)
+## Done (134)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -147,6 +147,8 @@ Updated 2026-10-26. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-100** Test recurring scheduling edge cases and duplicates (2026-10-26): tests/test_google_restart.py (10): for the event, the task, the folder and the document, a process that dies right after Google received the creating request leaves the action 'executing'; any number of fresh starts on the same database cannot run it again, reconcile calls it unknown, and Google was sent exactly one creating request; a finished action stays finished through restarts; two fresh starts racing for one approved action send it once; an event's Google id is made from its content. Repeating reminders through restarts are tests/test_seven_days.py (DIYA-057).. Stand-in Google only. Google Tasks has no idempotency key, so the protection there is the run-once lease and the 'unknown' outcome the owner is told to look at; a second proposal of the same task after an unknown outcome is a new decision of the owner's.
 - **DIYA-191** Create held-out tool-routing and task-success benchmark (2026-10-26): diya_heldout_bench.py; diya_latency_bench.py; tests/test_heldout_bench.py; docs/HELDOUT_BENCH.md; docs/STYLE_BENCH.md. Run on one model (diya-chat). 2026-10-26 evening: the benchmark had never been asked the way the chat asks (persona and what is known about the person in front of the model), which hid that the small model answered 'I don't have access to your notes'; it now does (a made-up profile), so its numbers changed meaning: 43 of 45 with the notes searched by code (41 with the old persona, 39 with the new style rules alone). Comparing other models is `--model a,b` (DIYA-193). The best held-out set is still the owner's own labelled messages.
 - **DIYA-194** Measure first-token/full-task P50/P95 and tokens/sec (2026-10-26): diya_latency_bench.py + tests/test_latency_bench.py (7): four fixed prompts, repeated trials, first word / whole answer / tokens a second, P50 and P95, quiet and with half the cores busy, and a cold start; measured on diya-chat: quiet first word 0.7 s, whole 2.5 s typical and 14 s at the slow end, about 11 words a second; loaded 1.3 s, 4.3 s, 20 s, 7.8 words a second; cold start 18 s (docs/BENCHMARK_2026-10-26.md). 3 trials of 4 prompts (12 numbers per condition): the P95 is the slowest or next to it, not a promise. One machine, one day, about 1 GB of memory free.
+- **DIYA-043** Add data-origin taint labels (2026-10-26): diya_origin.py; tests/test_origin.py (32); docs/ORIGIN_LABELS.md. Every tool result that holds other people's words (the catalog's own list: the web, notes, files, Notion, Todoist, Home Assistant, the calendar, Google Tasks) reaches the model starting with one line saying whose words they are and that they are information only; mail, notes pages, searches and repositories are read by a model with no tools and an instruction to ignore any instruction in them; a proposal made after reading any of it is tainted and never done straight away. Real model: 43 of 45 on the routing messages before and after the labels; an instruction hidden in a web result was followed in 6 of 8 without the label and 2 of 8 with it (8 runs: it helps, not by how much; the code's guards, not the label, are what stops text from outside doing anything).
+- **DIYA-215** Add redaction and retention setting for audit events (2026-10-26): diya_journal.py (preview and note redaction, prune); diya_db migration 29 (journal_receipts, guarded triggers); diya_forget.py; tests/test_journal_privacy.py (24); docs/ACTIVITY_JOURNAL_DESIGN.md. A value that looks like a credential, an email address or a card or phone number is hidden in the activity record wherever it is; DIYA_JOURNAL_PREVIEWS=0 keeps no words of what a tool was asked; 'Forget for good' now blanks the previews and notes of the rows from the forgotten messages (it could not reach them before); DIYA_JOURNAL_KEEP_DAYS=N removes older rows at start-up; each change leaves a receipt that cannot be changed or deleted. Default: everything kept, the owner's standing decision. The database still refuses an ordinary UPDATE or DELETE of the record; a program that sets the one switch itself could change it, as it could always have dropped the triggers. Dreaming's receipts are untouched.
 
 ## In progress (19)
 

@@ -76,6 +76,7 @@ taken** (`diya_backup.before_migrating`); if the snapshot cannot be made, Diya d
 | 26 | which messages a category merge moved, so the merge can be undone | `docs/ONE_CHAT_DESIGN.md` |
 | 27 | what you thought of a reply: helpful or not, a reason, a note | `docs/FEEDBACK_DESIGN.md` |
 | 28 | how the computer was doing every few minutes: memory free, processor busy, what the API held (numbers only) | `docs/HEALTH_DESIGN.md` |
+| 29 | the activity record can forget: the words of what a forgotten message made a tool do are blanked, rows older than a limit you set are removed, each with a receipt (counts only) | `docs/ACTIVITY_JOURNAL_DESIGN.md` |
 
 `MIGRATIONS` in `diya_db.py` is the authority on the exact numbers.
 

@@ -32,6 +32,7 @@ import diya_dreaming_api
 import diya_forget_api
 import diya_permissions_api
 import diya_health_api
+import diya_journal
 import diya_journal_api
 import diya_knowledge_api
 import diya_playbooks_api
@@ -691,6 +692,7 @@ def main():
 
         diya_warm.KeepWarm(config, agent).start()
     if getattr(agent, "store", None) is not None:  # (a stand-in agent in a test has none)
+        diya_journal.prune(agent.store, config.journal_keep_days)  # DIYA_JOURNAL_KEEP_DAYS: rows older than that are removed, with a receipt (0: all are kept)
         diya_resources.Recorder(agent.store).start()  # a look at memory and the processor every five minutes, for the Status page to look back over
 
     if config.lan:

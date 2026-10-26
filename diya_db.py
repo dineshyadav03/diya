@@ -551,7 +551,42 @@ MIGRATIONS = (
         """,
         "CREATE INDEX IF NOT EXISTS idx_resource_samples_at ON resource_samples (at)",
     )),
+    # The activity record can be made to forget (DIYA-215): the text of a preview of what a forgotten message made a tool do, and rows older than a limit the owner set. Until now the database refused every UPDATE and
+    # DELETE of it with no exception, so "Forget for good" could not reach the words in it. The two triggers now refuse unless one named switch is set INSIDE the same transaction (only the two functions below set it, and
+    # clear it before they commit, so it is never left on), and each change writes a receipt, which can never be changed or deleted, saying what kind of change it was and how many rows.
+    (29, (
+        "DROP TRIGGER IF EXISTS tool_journal_no_update",
+        "DROP TRIGGER IF EXISTS tool_journal_no_delete",
+        "CREATE TRIGGER tool_journal_no_update BEFORE UPDATE ON tool_journal WHEN NOT EXISTS (SELECT 1 FROM app_state WHERE key = 'journal_edit_allowed') BEGIN SELECT RAISE(ABORT, 'the journal is append-only'); END",
+        "CREATE TRIGGER tool_journal_no_delete BEFORE DELETE ON tool_journal WHEN NOT EXISTS (SELECT 1 FROM app_state WHERE key = 'journal_edit_allowed') BEGIN SELECT RAISE(ABORT, 'the journal is append-only'); END",
+        """
+        CREATE TABLE IF NOT EXISTS journal_receipts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            at TEXT NOT NULL,
+            what TEXT NOT NULL,
+            rows_changed INTEGER NOT NULL,
+            detail TEXT
+        )
+        """,
+        "CREATE TRIGGER IF NOT EXISTS journal_receipts_no_update BEFORE UPDATE ON journal_receipts BEGIN SELECT RAISE(ABORT, 'the receipts are append-only'); END",
+        "CREATE TRIGGER IF NOT EXISTS journal_receipts_no_delete BEFORE DELETE ON journal_receipts BEGIN SELECT RAISE(ABORT, 'the receipts are append-only'); END",
+    )),
 )
+
+def journal_scrub_in(conn, message_ids):
+    """In the caller's transaction (it commits): blank the preview and the note of the journal rows that came from these messages, and write the receipt. The switch the triggers look for is set and cleared
+    inside the same transaction, so it is never left on. Returns how many rows were blanked."""
+    ids = [int(i) for i in message_ids]
+    if not ids:
+        return 0
+    marks = ",".join("?" for _ in ids)
+    conn.execute("INSERT OR REPLACE INTO app_state (key, value) VALUES ('journal_edit_allowed', '1')")
+    changed = conn.execute(f"UPDATE tool_journal SET args_preview = NULL, note = NULL WHERE message_id IN ({marks}) AND (args_preview IS NOT NULL OR note IS NOT NULL)", ids).rowcount
+    conn.execute("DELETE FROM app_state WHERE key = 'journal_edit_allowed'")
+    if changed:
+        conn.execute("INSERT INTO journal_receipts (at, what, rows_changed, detail) VALUES (?, 'blanked', ?, ?)", (datetime.now(timezone.utc).isoformat(), changed, f"previews of what tools were asked for {len(ids)} forgotten message(s)"))
+    return changed
+
 
 MAX_THREAD_TITLE = 80  # the longest name a chat can be given
 MAX_SEARCH_CHARS = 100  # the longest search that is looked for
@@ -845,6 +880,43 @@ class Store:
             )
             conn.commit()
             return cur.lastrowid
+        finally:
+            conn.close()
+
+    def journal_scrub(self, message_ids):
+        """Blank the preview and the note of every row that came from one of these messages (what a tool was asked, in words). The row stays: that it happened, when, with what outcome, and the digest. Returns how many were
+        blanked, and writes a receipt. Used by 'Forget for good' (diya_forget), which does the same inside its own transaction (journal_scrub_in)."""
+        conn = self.connect()
+        try:
+            changed = journal_scrub_in(conn, message_ids)
+            conn.commit()
+            return changed
+        finally:
+            conn.close()
+
+    def journal_prune(self, before):
+        """Delete the rows written before `before` (an ISO time), and write a receipt saying how many. Returns that number."""
+        conn = self.connect()
+        try:
+            conn.execute("INSERT OR REPLACE INTO app_state (key, value) VALUES ('journal_edit_allowed', '1')")
+            deleted = conn.execute("DELETE FROM tool_journal WHERE at < ?", (before,)).rowcount
+            conn.execute("DELETE FROM app_state WHERE key = 'journal_edit_allowed'")
+            if deleted:
+                conn.execute("INSERT INTO journal_receipts (at, what, rows_changed, detail) VALUES (?, 'pruned', ?, ?)", (datetime.now(timezone.utc).isoformat(), deleted, f"rows written before {before}"))
+            conn.commit()
+            return deleted
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def journal_receipts(self, limit=50):
+        """The receipts of what was blanked or removed, newest first, as dicts."""
+        conn = self.connect()
+        try:
+            rows = conn.execute("SELECT id, at, what, rows_changed, detail FROM journal_receipts ORDER BY id DESC LIMIT ?", (int(limit),)).fetchall()
+            return [dict(zip(("id", "at", "what", "rows_changed", "detail"), row)) for row in rows]
         finally:
             conn.close()
 

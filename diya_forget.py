@@ -9,7 +9,7 @@ Diya keeps everything by default, and "forget that" only RETIRES a fact: the wor
   action) are kept and unlinked, and reported, because deleting a message is not the same as cancelling what you asked for.
 * `dry_run` says what would happen and changes nothing, so a page can ask "are you sure?" with the real numbers.
 
-What it cannot reach, and says so: the activity journal and Dreaming's receipts are append-only by design (they hold counts, ids and short previews of what a tool was asked, never the reply); snapshots
+What it reaches in the activity journal: the short previews of what a tool was asked for that message (since 2026-10-26; the row stays, with that it happened, when and how it came out, and a receipt says how many were blanked). What it cannot reach, and says so: Dreaming's receipts are append-only by design (counts and ids, never words); snapshots
 in `backups/` made earlier still hold the old words until they rotate out (the newest 14 are kept) or are deleted by hand; and a copy in a cloud-sync folder's own history is that program's.
 
 Importing this module has no side effects.
@@ -131,6 +131,9 @@ def forget_message(store, memory, config, message_id, also_learned=True, dry_run
         for table in ("tasks", "actions", "reminder_series"):
             conn.execute(f"UPDATE {table} SET message_id = NULL WHERE message_id IN ({marks})", ids)
         conn.execute(f"DELETE FROM messages WHERE id IN ({marks})", ids)
+        import diya_db
+
+        report["journal_blanked"] = diya_db.journal_scrub_in(conn, ids)  # what tools were asked for these messages, in words, is blanked too (the rows stay: that it happened, when, how it came out)
         conn.commit()
     except BaseException:
         conn.rollback()

@@ -143,6 +143,10 @@ class Config:
     privacy_unsure_asks: bool = False  # DIYA_PRIVACY_UNSURE_ASKS
     # A question about what the person's own notes say about a name that has a page (docs/KNOWLEDGE_DESIGN.md, step 3) is answered from that page, with no tools; off with DIYA_KNOWLEDGE_CHAT=0.
     knowledge_chat: bool = True  # DIYA_KNOWLEDGE_CHAT
+    # The activity record (docs/ACTIVITY_JOURNAL_DESIGN.md, DIYA-215): whether it keeps a short preview of what each tool was asked ("query=garden"), and how many days of it are kept (0: all of it, the default).
+    # DIYA_JOURNAL_PREVIEWS=0 keeps only that a tool was used, when, how it came out and how long it took; DIYA_JOURNAL_KEEP_DAYS=90 removes rows older than that, with a receipt saying how many.
+    journal_previews: bool = True  # DIYA_JOURNAL_PREVIEWS
+    journal_keep_days: int = 0  # DIYA_JOURNAL_KEEP_DAYS
     memory_store_chars: int = 20000  # DIYA_MEMORY_STORE_CHARS
     # Keeping the chat model loaded (diya_warm.py, docs/SPEED_DESIGN.md): Ollama unloads a model after five idle minutes, and loading it again plus reading the tools took about 20 seconds on
     # this computer's CPU, so the first message after a pause was slow even for "hey". While the API runs it asks Ollama, every few minutes, to keep the model for `keep_alive` more
@@ -248,7 +252,7 @@ _DATA_FILES = ("db_path", "knowledge_dir", "advisor_dir", "mcp_config", "profile
 
 
 # The settings that are a size limit in characters, where 0 means "no limit": the setting, and what 0 means for it.
-_LIMIT_SETTINGS = {"history_chars": ("DIYA_HISTORY_CHARS", "everything"), "dream_batch_chars": ("DIYA_DREAM_BATCH_CHARS", "no cap")}
+_LIMIT_SETTINGS = {"history_chars": ("DIYA_HISTORY_CHARS", "everything"), "dream_batch_chars": ("DIYA_DREAM_BATCH_CHARS", "no cap"), "journal_keep_days": ("DIYA_JOURNAL_KEEP_DAYS", "keep everything")}
 
 
 def ensure_data_dir(config: "Config") -> None:
@@ -338,7 +342,7 @@ def load_config(env=None) -> Config:
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
                         ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
-                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("episodic", "DIYA_EPISODIC"), ("playbooks", "DIYA_PLAYBOOKS"), ("categories", "DIYA_CATEGORIES"), ("repo_study", "DIYA_REPO_STUDY"), ("mail", "DIYA_MAIL"), ("protect_secrets", "DIYA_PROTECT_SECRETS"), ("backup", "DIYA_BACKUP"), ("knowledge_chat", "DIYA_KNOWLEDGE_CHAT"), ("mcp", "DIYA_MCP"), ("privacy_unsure_asks", "DIYA_PRIVACY_UNSURE_ASKS")):
+                        ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("episodic", "DIYA_EPISODIC"), ("playbooks", "DIYA_PLAYBOOKS"), ("categories", "DIYA_CATEGORIES"), ("repo_study", "DIYA_REPO_STUDY"), ("mail", "DIYA_MAIL"), ("protect_secrets", "DIYA_PROTECT_SECRETS"), ("backup", "DIYA_BACKUP"), ("knowledge_chat", "DIYA_KNOWLEDGE_CHAT"), ("journal_previews", "DIYA_JOURNAL_PREVIEWS"), ("mcp", "DIYA_MCP"), ("privacy_unsure_asks", "DIYA_PRIVACY_UNSURE_ASKS")):
         flag = read_flag(name)
         if flag is not None:
             values[field] = flag

@@ -36,6 +36,7 @@ import diya_google_mail
 import diya_journal
 import diya_repostudy
 import diya_memory
+import diya_origin
 import diya_provenance
 import diya_recall
 import diya_schedule
@@ -664,6 +665,7 @@ class Agent:
     def __init__(self, config=None, client=None, store=None, clock=None, action_kinds=None):
         self.config = config or diya_config.load_config()
         self.store = store or diya_db.Store(self.config.db_path)
+        self.store.journal_previews = self.config.journal_previews  # DIYA_JOURNAL_PREVIEWS=0: the activity record keeps no words of what a tool was asked (docs/ACTIVITY_JOURNAL_DESIGN.md)
         # The approval gate (docs/ACTIONS_DESIGN.md): the kinds of write Diya may PROPOSE (each only while its connector
         # is connected, and each only ever run after the owner approves it). Tests hand in fakes, the way they hand in
         # a fake model client.
@@ -1640,7 +1642,7 @@ class Agent:
             self._journal(name, args, "error", result=result, started=started, note=type(exc).__name__)
             return result
         self._journal(name, args, "error" if isinstance(result, str) and result.startswith("Error:") else "ok", result=result, started=started)
-        return result
+        return diya_origin.label(name, result)  # words someone else wrote start with a line saying so (DIYA-043, docs/ORIGIN_LABELS.md)
 
     def _journal(self, tool, args, status, *, result=None, started=None, kind="tool", note=None):
         """One entry in the activity journal (diya_journal): what was done, in which chat and for which message, unattended or not. Never raises."""
