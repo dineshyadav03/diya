@@ -170,3 +170,9 @@ def test_disconnecting_forgets_what_was_granted(world):
     assert diya_connectors.read_granted(config, "google_tasks") is None
     diya_connectors.store_granted(config, "google_tasks", "")  # nothing said, nothing stored
     assert diya_connectors.read_granted(config, "google_tasks") is None
+
+
+def test_no_access_line_is_longer_than_the_permissions_page_shows(world):
+    """The page cuts a line at 200 characters (found 2026-10-26: a long line lost the word 'approve' off its end); a connector's own words must fit."""
+    for connector in diya_connector_tools.real_connectors(world[0]):
+        assert all(len(line) <= 200 for line in connector.access), (connector.name, [len(line) for line in connector.access])

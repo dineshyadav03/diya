@@ -85,6 +85,19 @@ Before these: in your Google project switch on the People API, add `contacts.rea
 
 Also try "send an email to YOUR-CONTACT saying this is the Diya smoke test": the card should show the contact's address and "(Name, from your contacts)". A name that is two people, or nobody, is refused.
 
+## Google Sheets and Slides (added 2026-10-26; DIYA-101 to -109)
+
+Before these: in your Google project switch on the Google Sheets API and the Google Slides API (the permission is the `drive.file` one the Drive (change) card already has, so there is nothing new to add or press).
+
+| Operation | What to say to Diya | What you should see | Undo | Its stand-in test |
+|---|---|---|---|---|
+| `propose_google_sheet` | "make a Google Sheet called Diya sheet test with rows item, cost; books, 40; =danger, 1" | A card with the rows and "1 cell(s) that began with = + - or @ are kept as plain text"; after approval a Sheet whose cell shows `'=danger` as text, never a formula | Delete the Sheet in Drive | `tests/test_google_sheets_slides.py` — `propose_google_sheet` |
+| `propose_sheet_rows` | "add a row to the Diya sheet test sheet: pens, 5" | A card saying after which row; after approval the row is at the end | Delete the row in Sheets | `tests/test_google_sheets_slides.py` — `propose_sheet_rows` |
+| `propose_sheet_cells` | "in the Diya sheet test sheet set D2 to 45", then "in the Diya sheet test sheet replace B2 with 99" | The first card says only empty cells; the second says it REPLACES 1 filled cell and what it holds now (and is refused unless you say replace or overwrite) | Use the sheet's version history | `tests/test_google_sheets_slides.py` — `propose_sheet_cells` |
+| `propose_sheet_header` | "make the header row of the Diya sheet test sheet bold" | A card; after approval the first row is bold and stays in view | Undo in Sheets | `tests/test_google_sheets_slides.py` — `propose_sheet_header` |
+| `propose_google_slides` | "make a Google Slides deck called Diya deck test with slides: Why | spaced practice || Plan | week 1" | A card with every slide's title (and the bullets in its fields); after approval a deck with a title slide and two slides. Look at how it looks in Slides | Delete the deck in Drive | `tests/test_google_sheets_slides.py` — `propose_google_slides` |
+| `propose_add_slides` | "add a slide to the Diya deck test deck: Revision plan | mock tests" | A card; after approval the slide is at the end | Delete the slide in Slides | `tests/test_google_sheets_slides.py` — `propose_add_slides` |
+
 Two things to try that should be **refused**: "send an email to my boss saying hi" (no address typed: nothing is proposed) and "reply to Sam's email" when two of Sam's emails match (Diya lists them and asks which).
 
 When all eight pass, tell me, and the sheet's DIYA-216 (a smoke run on a real account) and the "needs your real account" rows (DIYA-081, -087, -093, -097) can be marked from what you saw.

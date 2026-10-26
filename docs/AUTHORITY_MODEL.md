@@ -61,6 +61,12 @@ One press of **Pause Diya** on the Status page (or `POST /api/pause`) stops the 
 | `propose_update_contact` | proposal | 2 | proposes adding an email address or number the person typed to one contact | people.googleapis.com (only when approved) | by hand in Google Contacts: remove it there | owner approves each action | no | Google Contacts (change) connected |
 | `propose_delete_contact` | proposal | 3 | proposes deleting one contact | people.googleapis.com (only when approved) | Diya cannot bring it back | owner approves each action | no | Google Contacts (change) connected |
 | `propose_contact_group` | proposal | 2 | proposes putting a contact in one of the person's own contact groups, or taking them out | people.googleapis.com (only when approved) | do the opposite | owner approves each action | no | Google Contacts (change) connected |
+| `propose_google_sheet` | proposal | 2 | proposes a new Google Sheet, optionally with rows of plain values (nothing can become a formula) | sheets.googleapis.com (only when approved) | by hand in Google Drive: Diya cannot remove it | owner approves each action | no | Google Drive (change) connected |
+| `propose_sheet_rows` | proposal | 2 | proposes adding rows to the end of a sheet that Diya made | sheets.googleapis.com (only when approved) | by hand in the sheet's version history | owner approves each action | no | Google Drive (change) connected |
+| `propose_sheet_cells` | proposal | 2 | proposes writing plain values into cells of a sheet that Diya made, showing what is there now; replacing filled cells needs the person's word replace or overwrite | sheets.googleapis.com (only when approved) | by hand in the sheet's version history | owner approves each action | no | Google Drive (change) connected |
+| `propose_sheet_header` | proposal | 2 | proposes making the first row of a sheet that Diya made bold and keeping it in view | sheets.googleapis.com (only when approved) | by hand in Google Sheets | owner approves each action | no | Google Drive (change) connected |
+| `propose_google_slides` | proposal | 2 | proposes a new Google Slides deck from an outline shown whole on the card | slides.googleapis.com (only when approved) | by hand in Google Drive: Diya cannot remove it | owner approves each action | no | Google Drive (change) connected |
+| `propose_add_slides` | proposal | 2 | proposes adding slides from an outline to a deck that Diya made | slides.googleapis.com (only when approved) | by hand in the deck's version history | owner approves each action | no | Google Drive (change) connected |
 | `propose_gmail_draft` | proposal | 2 | proposes saving (or replacing) a draft email in the person's Drafts folder; a draft is not sent | gmail.googleapis.com (only when approved) | by hand in Gmail: the draft can be edited or deleted there | owner approves each action | no | Gmail: drafts connected |
 | `propose_discard_gmail_draft` | proposal | 3 | proposes throwing away one draft email | gmail.googleapis.com (only when approved) | Diya cannot bring it back | owner approves each action | no | Gmail: drafts connected |
 | `propose_send_gmail` | proposal | 3 | proposes sending a new email to an address the person typed | gmail.googleapis.com (only when approved) | an email that is sent cannot be taken back | owner approves each action | no | Gmail: send connected |
@@ -135,6 +141,12 @@ Meta's Rule of Two and Simon Willison's lethal trifecta say an agent should not,
 | `propose_update_contact` | - | - | yes | 1 |
 | `propose_delete_contact` | - | - | yes | 1 |
 | `propose_contact_group` | - | - | yes | 1 |
+| `propose_google_sheet` | - | - | yes | 1 |
+| `propose_sheet_rows` | - | - | yes | 1 |
+| `propose_sheet_cells` | - | - | yes | 1 |
+| `propose_sheet_header` | - | - | yes | 1 |
+| `propose_google_slides` | - | - | yes | 1 |
+| `propose_add_slides` | - | - | yes | 1 |
 | `propose_gmail_draft` | - | - | yes | 1 |
 | `propose_discard_gmail_draft` | - | - | yes | 1 |
 | `propose_send_gmail` | - | - | yes | 1 |

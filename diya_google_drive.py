@@ -743,7 +743,8 @@ def connectors():
                                ("Searches your Drive by name, words inside, type and date, and reads a Google Doc, Slides, a Sheet or a text file when you ask.", "Lists a file's earlier versions.",
                                 "Cannot change, move, share or delete anything, and does not read pictures, PDFs or videos.")),
         diya_google_cards.card(CHANGE, LABELS[CHANGE], "Rename, move, bin, bring back and share the files Diya made, and change the words in a Doc Diya made, when you approve each one.", SCOPES[CHANGE], "Google Drive API and Google Docs API",
-                               ("Renames, moves, puts in the bin, brings back and shares files and folders Diya made, and adds to or changes the words in a Doc Diya made, only when you approve that one change.",
+                               ("Renames, moves, puts in the bin, brings back and shares files and folders Diya made, only when you approve that one change.",
+                                "Adds to or changes the words in a Doc Diya made, and makes and changes Sheets and Slides decks Diya made, only when you approve each one.",
                                 "Sees only what Diya made itself (the narrow drive.file permission), so it cannot touch anything else in your Drive.",
                                 "Cannot share with anyone you did not name by address, make anything public, or delete for good.")),
     )

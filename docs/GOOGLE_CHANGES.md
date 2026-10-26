@@ -30,6 +30,8 @@ hold for all of it, and what is built.
 
 | Google Contacts | a contact's email or number (code answers, no model); a NAME turned into an address for an email, an invitation or a share | add a contact, add an email or number, put in or out of a group of yours, delete one (level 3) | two new cards: **Google Contacts (read)** (`contacts.readonly`) and **Google Contacts (change)** (`contacts`) |
 
+| Google Sheets and Slides | (the Drive read card reads any Sheet as rows and any deck as numbered paragraphs) | on the sheets and decks Diya made: make a sheet, add rows, write cells (replacing filled cells needs the word replace or overwrite), bold and freeze the header; make a deck from an outline, add slides | the existing **Google Drive (change)** card (`drive.file`) |
+
 More follow below as they are built.
 
 ## Gmail (diya_google_mailwrite.py; DIYA-075, -076, -077, -078, -113)
@@ -76,3 +78,12 @@ More follow below as they are built.
   people, nobody, or one person with two addresses refuses the proposal and lists them; the name must be one the person said; the card says "(Maya Rao, from your contacts)". An address the person typed is used as typed, and an address they did not type is never used. This is DIYA-113: no email goes to a target that was ambiguous.
 * **Asking.** "What is Maya's email?" and "find the contact Sam" are answered by code from the contacts with no model and no tool (contacts can hold what anyone shared). When no one by that name is in them the chat goes on as before: the person may have told Diya.
 * **Changing.** Add a contact (only details the person typed; a duplicate by name or address is refused), add an email or number to one found now (against its version), put one in or out of one of the person's own groups (built-in groups cannot be changed and Diya makes none), delete one (level 3). All read back.
+
+## Google Sheets and Slides (diya_google_sheets.py, diya_google_slides.py; DIYA-101 to -109)
+
+* **On what Diya made.** They use the `drive.file` permission of the Drive (change) card, so they work on sheets and decks Diya made and cannot reach any other. Reading any sheet or deck is the Drive read card (values as shown, rows numbered; a deck's text as numbered paragraphs). Formulas are not read: only what a cell shows.
+* **No formula injection (DIYA-104).** Everything is written as plain text (`valueInputOption=RAW`, so `=1+1` is text), and a value that starts with `=`, `+`, `-` or `@` and is not a plain number is also kept with an apostrophe in front so that it stays text when exported and opened elsewhere. The card says how many cells were kept as text. A test pins this for
+  formulas, hyperlinks and the classic `+cmd|...` shape, and that a plain `-5` stays a number.
+* **Overwrite guard (DIYA-105).** Cells are shown with what they hold now; replacing filled cells needs the word *replace* or *overwrite* in the person's own message, and the cells are read again when the action runs: if they are not what the card showed, or the sheet's version moved, nothing is done. Rows are added after the row the card named and the sheet must still have that many rows.
+* **Decks (DIYA-107, -109).** An outline (`Title | bullet || Title | bullet`) is shown whole; every slide uses Google's own title-and-body layout, so the layout is always valid; no images (so no image licence to record: images are not built). The deck is read back: the slide count and every title must be what was asked for. Diya does not draw the slides to look at them, so how they LOOK is for the person to check in Slides.
+* **Not built:** charts, named ranges, other formatting, formulas, several sheets in one file, images in slides, and anything on a sheet or deck Diya did not make.

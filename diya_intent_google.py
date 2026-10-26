@@ -134,6 +134,50 @@ def groups_contact(text):
     return _asks(text, r"\b(?:put|add|move|remove|take)\b[^.?!]{0,80}\b(?:group|label)\b", place=lambda said: _CONTACT.search(said) is not None or re.search(r"\b(?:group|label)\b", said, re.IGNORECASE) is not None and not _drive_word(said) and not _mail_word(said))
 
 
+# ---- Google Sheets and Slides on what Diya made (diya_google_sheets, diya_google_slides) ----------------------------------------------------------
+
+_SHEET_WORD = re.compile(r"\b(?:google\s+)?(?:sheets?|spreadsheets?)\b", re.IGNORECASE)
+_SLIDES_WORD = re.compile(r"\b(?:google\s+)?(?:slides|slide\s+deck|presentations?|decks?)\b", re.IGNORECASE)
+_CELL = re.compile(r"(?<![A-Za-z0-9])[A-Z]{1,2}[0-9]{1,4}(?![A-Za-z0-9])", re.IGNORECASE)
+
+
+def _sheet_word(said):
+    """The message names a sheet. The rows or slides in it can say anything (task, email, event), so only Google Tasks being named rules it out."""
+    return _SHEET_WORD.search(said) is not None and not intent.names_google_tasks(said)
+
+
+def asks_for_sheet(text):
+    """Make a new Google Sheet ("make a Google Sheet called Budget with columns item and cost")."""
+    said = _plain(text, 600)
+    return said is not None and intent._asks_to_add(said) and _sheet_word(said) and re.search(r"\b(?:create|make|new|start)\b", said, re.IGNORECASE) is not None
+
+
+def appends_to_sheet(text):
+    """Add rows to a sheet ("add a row to the Budget sheet: books, 40")."""
+    return _asks(text, r"\b(?:add|append|insert|put)\b[^.?!]{0,60}\b(?:rows?|lines?|entry|entries)\b", place=_sheet_word, limit=600)
+
+
+def changes_sheet_cells(text):
+    """Write into named cells of a sheet ("in the Budget sheet set B2 to 45", "replace C3 in the Budget sheet with 12")."""
+    return _asks(text, r"\b(?:set|change|update|replace|overwrite|write|put|fill)\b", place=lambda said: _sheet_word(said) and _CELL.search(said) is not None, limit=600)
+
+
+def formats_sheet_header(text):
+    """Bold the first row of a sheet and keep it in view."""
+    return _asks(text, r"\b(?:bold|format|style|freeze)\b", place=lambda said: _sheet_word(said) and re.search(r"\b(?:header|heading|first\s+row|top\s+row)\b", said, re.IGNORECASE) is not None)
+
+
+def asks_for_slides(text):
+    """Make a new Google Slides deck ("make a Google Slides deck called Exams with slides on ...")."""
+    said = _plain(text, 900)
+    return said is not None and intent._asks_to_add(said) and _SLIDES_WORD.search(said) is not None and not intent.names_google_tasks(said) and re.search(r"\b(?:create|make|new|start|build)\b", said, re.IGNORECASE) is not None
+
+
+def adds_slides(text):
+    """Add slides to a deck Diya made ("add a slide to the Exams deck: Revision plan")."""
+    return _asks(text, r"\b(?:add|append|insert)\b[^.?!]{0,60}\bslides?\b", place=lambda said: _SLIDES_WORD.search(said) is not None and not intent.names_google_tasks(said), limit=900)
+
+
 # ---- Google Drive and Docs changes (diya_google_drive) ---------------------------------------------------------------------------------------------
 
 _DRIVE_THING = re.compile(r"\b(?:drive|files?|folders?|documents?|docs?|sheets?|spreadsheets?|slides?|presentations?)\b", re.IGNORECASE)
