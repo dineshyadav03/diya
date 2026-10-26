@@ -5,15 +5,15 @@ Updated 2026-10-26. The blueprint's task sheet has 298 tasks; the progress is ke
 
 | Status | Tasks |
 |---|---|
-| Not started | 113 |
+| Not started | 111 |
 | Needs verification | 8 |
 | Research queue | 29 |
 | In progress | 18 |
 | Blocked | 0 |
-| Done | 130 |
+| Done | 132 |
 | Deferred | 0 |
 
-## Done (130)
+## Done (132)
 
 - **DIYA-001** Pin current Git SHA, branch and release state (2026-10-18): docs/BASELINE_2026-10-18.md: SHA 8fbe9d8, branch main, tree clean, date
 - **DIYA-003** Rerun backend unit/integration tests with saved output (2026-10-18): docs/BASELINE_2026-10-18.md: python -m pytest tests, 7495 passed, 5 skipped, 0 failed, 8m23s, commit 8fbe9d8. Stand-in models, so this says nothing about model quality.
@@ -145,6 +145,8 @@ Updated 2026-10-26. The blueprint's task sheet has 298 tasks; the progress is ke
 - **DIYA-034** Add source-backed personal knowledge pages (2026-10-25): diya_knowledge.py pages: every sentence is the owner's own words and names the note it came from; tests/test_knowledge.py::test_every_sentence_on_a_page_is_the_persons_own_words_from_the_note_it_names and ::test_a_page_says_where_each_sentence_is_from_and_links_to_the_names_beside_it; remembered facts link to their source message on the Memory page (DIYA-022). Pages are built from the owner's notes only; mail and Drive are not indexed, so there are no connector ids to link.
 - **DIYA-219** Test conditional write at stale version (2026-10-25): tests/test_google_allowlist.py: an approved action can create but cannot update, patch, replace or delete anything that exists (PUT, PATCH and DELETE are refused before a token is fetched), so no edit of a document, sheet or calendar item can overwrite a newer one. True only while no update path exists. The day one is built (DIYA-082, -094, -105) it must send the item's version (ETag) and refuse a stale one; that test is then owed.
 - **DIYA-100** Test recurring scheduling edge cases and duplicates (2026-10-26): tests/test_google_restart.py (10): for the event, the task, the folder and the document, a process that dies right after Google received the creating request leaves the action 'executing'; any number of fresh starts on the same database cannot run it again, reconcile calls it unknown, and Google was sent exactly one creating request; a finished action stays finished through restarts; two fresh starts racing for one approved action send it once; an event's Google id is made from its content. Repeating reminders through restarts are tests/test_seven_days.py (DIYA-057).. Stand-in Google only. Google Tasks has no idempotency key, so the protection there is the run-once lease and the 'unknown' outcome the owner is told to look at; a second proposal of the same task after an unknown outcome is a new decision of the owner's.
+- **DIYA-191** Create held-out tool-routing and task-success benchmark (2026-10-26): diya_heldout_bench.py + tests/labelled_heldout.py (45 held-out messages written before any model saw them; the same prompts, tools, fixture notes, temperature 0 and seed for every model; routing and answer counted apart; every failure printed to be read) + tests/test_heldout_bench.py (8: no message repeats another set's, which caught three) + docs/HELDOUT_BENCH.md; run on diya-chat: 35 of 45 first (routing 43 of 45), 37 of 45 (routing 44) after fixing two faults it found (tests/test_found_by_the_heldout_bench.py), 40 of 45 with three corrected labels; docs/BENCHMARK_2026-10-26.md. Run on one model (diya-chat). Comparing the others is `--model a,b` and takes an hour or more on this processor (DIYA-193). The best held-out set is still the owner's own labelled messages, which would be private and live outside the repository.
+- **DIYA-194** Measure first-token/full-task P50/P95 and tokens/sec (2026-10-26): diya_latency_bench.py + tests/test_latency_bench.py (7): four fixed prompts, repeated trials, first word / whole answer / tokens a second, P50 and P95, quiet and with half the cores busy, and a cold start; measured on diya-chat: quiet first word 0.7 s, whole 2.5 s typical and 14 s at the slow end, about 11 words a second; loaded 1.3 s, 4.3 s, 20 s, 7.8 words a second; cold start 18 s (docs/BENCHMARK_2026-10-26.md). 3 trials of 4 prompts (12 numbers per condition): the P95 is the slowest or next to it, not a promise. One machine, one day, about 1 GB of memory free.
 
 ## In progress (18)
 
