@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Orb from '../components/Orb'
 import VoiceBar from '../components/VoiceBar'
+import WaitingActions from '../components/WaitingActions'
 import { readChatStream } from '../lib/chat-stream.mjs'
 import { dayBreaks } from '../lib/day-labels.mjs'
 import { inlineParts } from '../lib/markdown-lite.mjs'
@@ -104,6 +105,12 @@ function Inline({ text }) {
     if (part.kind === 'bold') return <strong key={i}>{part.text}</strong>
     if (part.kind === 'italic') return <em key={i}>{part.text}</em>
     if (part.kind === 'code') return <code key={i}>{part.text}</code>
+    if (part.kind === 'link')
+      return (
+        <a key={i} href={part.text} target="_blank" rel="noopener noreferrer">
+          Open it
+        </a>
+      )
     return part.text
   })
 }
@@ -929,6 +936,7 @@ export default function ChatPage() {
           </div>
         )}
       </div>
+      {!earlierChat && <WaitingActions refreshKey={messages.length} />}
       <VoiceBar
         onSend={handleSend}
         onSystemMessage={(t) => addMsg('system', t)}

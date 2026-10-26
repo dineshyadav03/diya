@@ -197,7 +197,9 @@ export default function ConnectionsPage() {
               <p className="memory-lede">
                 Outside accounts Diya can reach, once you connect them. Nothing here is connected by default. Diya reads
                 from a connected account on its own; anything that would change one waits for your approval, one action
-                at a time, on the Actions page.
+                at a time, on the Actions page or right under the chat. The only exception is an addition that touches
+                just you (an event, a task, a folder, a document) which you have switched to &ldquo;do straight away&rdquo; on the
+                Actions page.
               </p>
               {notice && (
                 <p className="memory-notice" role="status">

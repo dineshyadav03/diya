@@ -85,6 +85,7 @@ function useCounts() {
     }
     checkActions()
     checkReminders()
+    window.addEventListener('diya-actions-changed', checkActions) // a decision made under the chat (components/WaitingActions.jsx)
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') {
         checkActions()
@@ -94,6 +95,7 @@ function useCounts() {
     return () => {
       cancelled = true
       clearInterval(timer)
+      window.removeEventListener('diya-actions-changed', checkActions)
     }
   }, [])
 

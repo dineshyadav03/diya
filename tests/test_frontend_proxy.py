@@ -459,8 +459,10 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/connections/connect-google",  # the Connections page's "Connect all Google": one sign-in for every Google card
         "/api/connections/${connector.name}/disconnect",  # the token-kind form and the oauth-kind button both post here
         "/api/connections/${connector.name}/setup", "/api/connections/${connector.name}/clear-setup",  # Google's one-time client ID and secret form, and forgetting that app
-        "/api/actions", "/api/actions",  # the chat header's waiting count, and the Actions page's list
+        "/api/actions", "/api/actions", "/api/actions",  # the chat header's waiting count, the Actions page's list, and the strip under the chat
         "/api/actions/${action.id}/approve", "/api/actions/${action.id}/reject", "/api/actions/${action.id}/resolve",
+        "/api/actions/${action.id}/approve", "/api/actions/${action.id}/reject",  # the same two decisions, from the strip under the chat (components/WaitingActions.jsx)
+        "/api/actions/auto",  # the Actions page's switch for "do it straight away"
         "/session", "/session", "/session",  # the sign-in page's POST, the sidebar's "am I signed in" and its sign-out (docs/UI_LOGIN_DESIGN.md)
     ])
     assert not [p for p in browser_files() if re.search(r"fetch\(\s*[^`'\"\s]", p.read_text(encoding="utf-8"))]  # no computed URLs
@@ -518,7 +520,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         "/api/knowledge", "/api/knowledge/build", "/api/knowledge/hide", "/api/knowledge/unhide",
         "/api/tasks", "/api/tasks/{task_id}/done", "/api/tasks/{task_id}/reopen",
         "/api/connections", "/api/connections/connect-google", "/api/connections/{name}/connect", "/api/connections/{name}/disconnect", "/api/connections/{name}/setup", "/api/connections/{name}/clear-setup",
-        "/api/actions", "/api/actions/{action_id}", "/api/actions/{action_id}/approve",
+        "/api/actions", "/api/actions/auto", "/api/actions/{action_id}", "/api/actions/{action_id}/approve",
         "/api/actions/{action_id}/reject", "/api/actions/{action_id}/resolve",
     }
     assert set(proxies) == set(routes), "an API route with no proxy route (or the reverse)"

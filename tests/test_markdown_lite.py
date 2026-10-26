@@ -71,3 +71,34 @@ def test_the_page_draws_the_models_replies_and_the_streaming_one_through_it_and_
     assert "{m.role === 'assistant' ? <Inline text={m.text} /> : m.text}" in page
     assert "<Inline text={streamText} />" in page
     assert "dangerouslySetInnerHTML" not in page
+
+
+# ---- an address of Google's own in a reply is a link (2026-10-26: what Diya added to the owner's account is told with its address) ----------------------------------------------------------------
+
+@needs_node
+def test_a_google_address_in_a_reply_becomes_a_link_and_the_full_stop_after_it_is_not_part_of_it():
+    assert parts("Made the folder. https://drive.google.com/drive/folders/abc123") == [("text", "Made the folder. "), ("link", "https://drive.google.com/drive/folders/abc123")]
+    assert parts("See https://docs.google.com/document/d/x1y2z3/edit. Then stop") == [("text", "See "), ("link", "https://docs.google.com/document/d/x1y2z3/edit"), ("text", "."), ("text", " Then stop")]
+    assert parts("https://google.com") == [("link", "https://google.com")]
+
+
+@needs_node
+@pytest.mark.parametrize("text", [
+    "https://evil.example/x", "https://google.com@evil.example/x", "https://google.com.evil.example/x", "https://notgoogle.com/x", "https://evilgoogle.com", "http://drive.google.com/x", "https://google.com:evil@x.example",
+    "ftp://drive.google.com/x", "javascript:alert(1) https://x.example",
+])
+def test_an_address_that_is_not_googles_stays_the_words_it_was(text):
+    found = parts(text)
+    assert "".join(t for _k, t in found) == text and "link" not in {k for k, _t in found}
+
+
+@needs_node
+def test_putting_the_parts_back_gives_the_original_words_even_with_a_link_between_marks():
+    text = "**Done**: made `x` at https://drive.google.com/drive/folders/abc123, *check it*."
+    found = parts(text)
+    assert [k for k, _t in found if k != "text"] == ["bold", "code", "link", "italic"] and "".join(t for _k, t in found) == text.replace("**", "").replace("`", "").replace("*", "")
+
+
+def test_the_page_draws_a_link_part_as_an_anchor_that_opens_elsewhere_without_the_opener():
+    page = PAGE.read_text(encoding="utf-8")
+    assert "part.kind === 'link'" in page and 'target="_blank" rel="noopener noreferrer"' in page

@@ -38,6 +38,7 @@ export default function ActionsPage() {
   const [data, setData] = useState(null)
   const [problem, setProblem] = useState('')
   const [busy, setBusy] = useState(0) // 0, or the id of the action being decided
+  const [autoBusy, setAutoBusy] = useState('') // '', or the name of the kind being switched
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [notes, setNotes] = useState({}) // id -> the note typed for an unknown outcome
@@ -100,6 +101,30 @@ export default function ActionsPage() {
     else setError(result.text)
     await load(false)
     setBusy(0)
+  }
+
+  // Switch one kind of addition to "do it straight away", or back to asking. The answer is the whole list again, so the page shows what the API now says.
+  async function setAuto(kind, on) {
+    setAutoBusy(kind.name)
+    setError('')
+    setNotice('')
+    try {
+      const response = await fetch('/api/actions/auto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: kind.name, on }),
+      })
+      const body = await readJson(response)
+      if (response.ok && body && Array.isArray(body.pending) && Array.isArray(body.history)) {
+        setData(body)
+        setNotice(on ? `${kind.label}: Diya will now do it straight away when you ask for it in your own message.` : `${kind.label}: Diya will ask for your Approve again.`)
+      } else {
+        setError(describeActionFailure(response.ok ? undefined : response.status, body?.detail))
+      }
+    } catch {
+      setError(describeActionFailure())
+    }
+    setAutoBusy('')
   }
 
   function approve(action) {
@@ -169,7 +194,8 @@ export default function ActionsPage() {
             <>
               <p className="memory-lede">
                 Diya never changes anything outside this computer on its own. When it wants to, it asks here first, and
-                nothing happens until you approve it.
+                nothing happens until you approve it. The only exception is a kind you switch to &ldquo;do straight away&rdquo;
+                below, and then only when you asked for it in your own message.
               </p>
               <p className="memory-dim">
                 {kinds.length === 0
@@ -187,6 +213,40 @@ export default function ActionsPage() {
                 <p className="memory-error" role="alert">
                   {error}
                 </p>
+              )}
+
+              {kinds.some((kind) => kind.can_auto) && (
+                <>
+                  <h2 id="auto">Do straight away</h2>
+                  <p className="memory-dim">
+                    When you ask for one of these in your own message, Diya does it at once and tells you, with no Approve. What she proposes after reading a web page, a note or an email still waits for
+                    you, and so does anything that sends, shares, changes or deletes. Each can be switched off at any time, and the pause switch stops them too.
+                  </p>
+                  <ul className="memory-list" aria-labelledby="auto">
+                    {kinds
+                      .filter((kind) => kind.can_auto)
+                      .map((kind) => (
+                        <li key={kind.name} className="memory-fact" data-status={kind.auto ? 'accepted' : 'candidate'}>
+                          <p className="memory-text">{kind.label}</p>
+                          <p className="memory-dim">
+                            {kind.auto ? 'On: done straight away when you ask for it.' : 'Off: asks for your Approve first.'}
+                            {kind.available ? '' : ' It needs its connection first.'}
+                          </p>
+                          <div className="memory-actions">
+                            <button
+                              type="button"
+                              className={kind.auto ? 'memory-btn' : 'memory-btn memory-btn--primary'}
+                              onClick={() => setAuto(kind, !kind.auto)}
+                              disabled={autoBusy === kind.name}
+                              aria-label={`${kind.auto ? 'Switch off' : 'Switch on'} doing it straight away: ${kind.label}`}
+                            >
+                              {kind.auto ? 'Switch off' : 'Switch on'}
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                  </ul>
+                </>
               )}
 
               <h2 id="waiting">Waiting for you ({pending.length})</h2>

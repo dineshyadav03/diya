@@ -366,6 +366,19 @@ h1 { font-family: var(--serif); font-weight: 500; text-transform: lowercase; }
 @keyframes orb-spin { to { transform: rotate(360deg); } }
 @keyframes orb-pulse { 0% { transform: scale(0.8); opacity: 0.9; } 100% { transform: scale(1.35); opacity: 0; } }
 .msg.streaming { white-space: pre-wrap; }
+/* What Diya has lined up for your OK, under the chat (components/WaitingActions.jsx): one press approves exactly what is written. */
+.waiting-strip { display: flex; flex-direction: column; gap: 8px; width: min(100%, 720px); margin: 0 auto; padding: 4px 16px 0; }
+.waiting-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 10px 16px; border: 1px solid var(--glass-edge); border-radius: var(--r-lg); background: var(--glass-strong); color: var(--text); }
+.waiting-text { flex: 1 1 260px; margin: 0; font-size: 14px; line-height: 1.45; }
+.waiting-buttons { display: flex; gap: 8px; }
+.waiting-approve, .waiting-reject { padding: 7px 16px; border: 1px solid var(--border-strong); border-radius: var(--pill); font: inherit; font-size: 13.5px; cursor: pointer; }
+.waiting-approve { background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 600; }
+.waiting-reject { background: transparent; color: var(--text); }
+.waiting-approve:disabled, .waiting-reject:disabled { cursor: not-allowed; opacity: 0.6; }
+.waiting-note, .waiting-outcome { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--text-dim); }
+.waiting-outcome { padding: 8px 14px; border: 1px solid var(--glass-edge); border-radius: var(--r-lg); background: var(--glass); color: var(--text); }
+.waiting-outcome--bad { color: var(--danger-text); border-color: var(--danger); }
+.waiting-strip a { color: var(--link); }
 .note-card .question-text { white-space: pre-wrap; }
 
 /* ── The composer: a text box ────────────────────────────────────────────────────── */
