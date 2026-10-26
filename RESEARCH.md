@@ -956,6 +956,25 @@ Not comparable and left out: coding agents (OpenHands, Open Interpreter), browse
 - **For Diya:** the useful part needs no kit: write the few things that must **always** be true as plain sentences, and check each over many random inputs, not a handful of examples. Diya already has several as tests (an approved action runs at most once, every endpoint needs the token, no tool has all three Rule-of-Two legs, a model address that is not this computer is refused).
 - **Decision:** not adopted (not available, research preview, wrong language). Idea kept: an **invariants list** with a randomized test for each; a small task if the owner wants it. Look again after GitHub Universe for a repository or paper to check the claims against.
 
+### 37. Supermemory (MIT): a hosted memory layer that injects what it learned into any agent's context (read 2026-10-26)
+
+- **Source:** the page the owner pasted from Twitter (the product's homepage text); the repository `supermemoryai/supermemory` read through GitHub's API and README on 2026-10-26; one web search for independent checks. **Observed** is what the repository says;
+  **claimed** is what the page or the README says.
+- **Observed:** MIT licence, about 31,400 stars, pushed the day before, described as "memory and context engine + app ... can be run fully locally". The README lists: facts extracted from conversations, contradictions and temporal changes handled,
+  automatic forgetting, an always-up-to-date user profile, hybrid search over memory and documents, connectors (Google Drive, Gmail, Notion, OneDrive, GitHub), extractors for PDFs, images and video, and a self-hosting guide (not read).
+- **Claimed, not independently checked:** "#1 on LongMemEval, LoCoMo and ConvoMem", 95% Recall@15 with a 99.4% smaller context, about 50 ms for a profile; on the pasted page: a model called learner-1 that "extracts and dreams" and a "vector-graph
+  database", 100,000+ organisations and a trillion tokens a month, search in 187 ms on the server (356 ms end to end), 64% cheaper per question, 81% of questions answered against 69%, and a comparison with Mem0. The search found **no replication by anyone
+  outside the company**, and every comparison with a competitor is published by Supermemory itself. learner-1 is described only on the product's own pages; nothing says whether it is released.
+- **Review:** the shape is the one in notes 9 and 10 (extract, merge, update, forget, keep a profile, understand time) and Diya has each part: facts the person can read, supersession on a correction, an as-of-a-day replay (`docs/TIME_DESIGN.md`),
+  fading, a short profile always in front of the model, read-only connectors. What differs is the thing that matters to the owner: Supermemory acts on what it infers and lives on its servers; Diya proposes, keeps the source of every fact and stays on this computer
+  (`docs/LOCAL_ONLY.md`, decision 232). Its numbers are for a hosted service at scale and say nothing about a 4B model on a laptop.
+- **For Diya:** one idea is worth keeping, and it is not a feature of theirs but of the pitch: memory should live **outside the model and the harness**, so any agent can use it. Diya can do that without leaving the computer: a small **local read-only MCP server**
+  that offers the accepted facts (and nothing unaccepted) to another agent the owner runs, such as Claude Code. Diya's own MCP code is a client (`docs/MCP_DESIGN.md`); a server would be a new unit and a new thing that can leak, so it would need its own design,
+  a switch that is off, and the same rule as everything else: only accepted facts, only on this computer, only read.
+- **Decision:** not adopted. No code taken (MIT would allow it with its notice, but it is a hosted, TypeScript-first stack and its engine is not what Diya runs on). Idea kept: a local read-only memory server, if the owner wants other tools to share Diya's memory.
+  A public benchmark of Diya's own memory (LongMemEval-S, `github.com/xiaowu0162/LongMemEval`) is the honest way to compare, and is a measurement task for later, not now.
+- **Action:** none to build.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,
