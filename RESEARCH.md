@@ -975,6 +975,20 @@ Not comparable and left out: coding agents (OpenHands, Open Interpreter), browse
   A public benchmark of Diya's own memory (LongMemEval-S, `github.com/xiaowu0162/LongMemEval`) is the honest way to compare, and is a measurement task for later, not now.
 - **Action:** none to build.
 
+### 38. "Before trusting a benchmark, run it and read the cases it failed" (Hamel Husain, 2026-10-26; Epoch AI's benchmark hub)
+
+- **Source:** the post (https://x.com/HamelHusain/status/2114434195854684330, read in the browser pane on 2026-10-26: 23.5K views at the time) and Epoch AI's benchmarks page (https://epoch.ai/benchmarks, read the same day). The owner pasted the post's link and asked for Diya's
+  benchmarks to be run to see where it stands.
+- **The post says:** public benchmarks are of surprisingly poor quality for how much the industry relies on them; Epoch AI is "an independent third party which scrutinizes benchmarks and looks at the data"; before trusting one, run it and inspect the examples its grader failed.
+  He intends a longer write-up later. **Epoch's page says (observed):** 94 benchmarks and 411 models; models may have seen the questions in training; small changes in prompts or settings can swing a score a lot; one benchmark is saturated; a strict answer format gives some
+  models scores below random guessing (Yi-34B-Chat 15% against 25% on GPQA Diamond); a vendor's own GPQA figure for one model (65%) was not reproduced by Epoch's runs (55% plus or minus 3); and Epoch has less insight into benchmarks it does not run.
+- **Review:** the advice is right and Diya is not exempt. Diya's benchmarks are small, graded by words that must appear, and were mostly written by the person who also wrote the guard they measure (some guards were built after looking at the model's failures on those very messages).
+  What holds up is the part that does not depend on the model: the "must be zero" safety lines (a secret kept, an order taken as a fact, an unasked reminder saved) are enforced by code and are checked every run. What does not hold up is any claim that the model's routing is
+  "good": the nine evals are the messages it was built around.
+- **Done:** a **held-out routing benchmark** (`diya_heldout_bench.py`, `tests/labelled_heldout.py`: 45 messages written before any model saw them, never to be tuned on, with a test that none repeats another set's message (it caught three), the same conditions for every model,
+  routing and answer counted apart, every failure printed in full to be read) and a **speed benchmark** (`diya_latency_bench.py`: first word, whole answer, tokens a second, quiet and under load). `docs/HELDOUT_BENCH.md` says what each is and is not.
+- **Decision / action:** the whole set was run on 2026-10-26 and the failures were read: every number is in `docs/BENCHMARK_2026-10-26.md`. The held-out benchmark found two real faults (a to-do item with the word "email" read as a mailbox question; phone-typed statements not read as statements), both fixed with tests; three of its labels were wrong and are corrected in `docs/HELDOUT_BENCH.md` with the number shown both ways. Idea kept: the best held-out set is the owner's own messages, labelled by the owner, kept outside the repository.
+
 ## Cross-cutting
 
 1. Diya's differentiation is inspectability and data sovereignty. There is a cloud pole (Instinct,
