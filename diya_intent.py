@@ -46,7 +46,9 @@ _REQUEST_ANYWHERE = re.compile(
 _NEGATIVE = re.compile(r"\w+n't\b|\bnot\b|\bnever\b|\bno idea\b|\bmissing\b|\blost\b|\blate\b|\bwrong\b|\bstill no\b", re.IGNORECASE)
 _FIRST_PERSON = re.compile(r"^(i|i'm|i've|i'll|i'd|my|we|we're|we've|our)\b", re.IGNORECASE)
 # "remember that ..." is a fact with an explicit "keep this"; "remember to ..." is a task and is not.
-_KEEP_THIS = re.compile(r"^(remember that|note that|fyi|for your information|keep in mind that)[,:]?\s+", re.IGNORECASE)
+_KEEP_THIS = re.compile(r"^(remember that|note that|fyi|for your information|keep in mind that|btw|by the way)[,:]?\s+", re.IGNORECASE)
+# Phone typing leaves the apostrophe out ("ive been", "im allergic"); put it back before looking, so the same words are read the same way ("im looking for ..." is then a request, as "i'm looking for" is).
+_NO_APOSTROPHE = re.compile(r"\b(i)(ve|m)\b", re.IGNORECASE)
 _MONTH_OR_DAY = re.compile(
     r"\b(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|"
     r"nov(ember)?|dec(ember)?|monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|tonight|"
@@ -82,6 +84,7 @@ def is_fact_share(text):
     if not isinstance(text, str):
         return False
     text = text.strip().replace("’", "'")  # phone keyboards send a typographic apostrophe
+    text = _NO_APOSTROPHE.sub(lambda m: f"{m.group(1)}'{m.group(2)}", text)
     if not text or len(text) > MAX_CHARS or "?" in text:
         return False
     keep = _KEEP_THIS.match(text)
@@ -528,6 +531,9 @@ _MAIL_NOT_ABOUT_MINE = re.compile(
     r"\bhow\s+(?:do|does|did|to|can)\b[^?]*\b(?:work|works|set\s*up|use)\b|\bwhat\s+(?:is|are)\s+(?:an?\s+)?(?:e-?mail|gmail|inbox)\b|\bhistory\s+of\b|\b(?:my\s+)?e-?mail\s+(?:address|id|password)\b|\b(?:connect|link|set\s*up)\b",
     re.IGNORECASE,
 )
+# "put 'email professor sharma' on my to-do list" holds the word email and the word list, and is a task, not a look through the mailbox (found by the held-out benchmark on 2026-10-26: Diya answered "Gmail is not
+# connected" instead of adding the task). A message that is plainly about a to-do list, a task or a reminder is not a question about mail, whatever else it mentions.
+_MAIL_IS_A_TO_DO = re.compile(r"\b(?:to-?\s?do|task\s+list|my\s+tasks?|a\s+tasks?|add\s+(?:a\s+)?task|remind(?:ers?|\s+me))\b|^\W*(?:to-?do|task)\s*:", re.IGNORECASE)
 _MAIL_WRITE_AT_START = re.compile(r"^\W*(?:please\s+)?(?:(?:can|could|will|would)\s+you\s+)?(?:send|write|draft|compose|forward|delete|archive|trash|unsubscribe|mark|label|move|reply|respond)\b", re.IGNORECASE)
 _MAIL_WRITE_ANYWHERE = re.compile(r"\b(?:send|write|draft|compose)\s+(?:an?\s+|the\s+|my\s+|some\s+)?(?:e-?mail|mail|message|reply)\b|\b(?:delete|archive|trash)\s+(?:all\s+|my\s+|the\s+|that\s+|this\s+)?(?:e-?mails?|mails?|messages?)\b", re.IGNORECASE)
 MAX_MAIL_QUESTION_CHARS = 300
@@ -549,7 +555,7 @@ def asks_about_mail(text):
     """True for a short question or request to look through the person's own mail ("any email from the college?", "what did the bank email say", "check my inbox"). Not a request to write mail, not
     a question about mail in general ("what is gmail", "how does email work", "what is my email address"), and not about connecting it (asks_about_diya)."""
     text = _mail_text(text)
-    if text is None or wants_mail_written(text):
+    if text is None or wants_mail_written(text) or _MAIL_IS_A_TO_DO.search(text):
         return False
     return _MAIL_WORD.search(text) is not None and _MAIL_NOT_ABOUT_MINE.search(text) is None and _MAIL_READ.search(text) is not None
 
