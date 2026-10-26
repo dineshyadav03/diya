@@ -489,6 +489,28 @@ def said_in(phrase, text):
     return bool(phrase) and re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", words) is not None
 
 
+# A reply that says a reminder or a task WAS saved. Used only when the person asked for one and no tool that saves one ran in the turn: then the claim is false, whoever wrote it (found 2026-10-26, replaying the
+# owner's long chat: asked "remind me about the dentist", the model answered "I've added a reminder ... Reminder: Don't forget the dentist" and had called nothing).
+_CLAIMS_REMINDER = re.compile(
+    r"\bi(?:'ve|\s+have)\s+(?:just\s+)?(?:set|added|created|saved|made)\s+(?:a|an|the|your)\s+(?:\w+\s+){0,3}?(?:reminder|alarm)\b|\b(?:reminder|alarm)\s+(?:has\s+been\s+|is\s+)?(?:set|saved|added|created)\b|\*\*reminder\*\*\s*:",
+    re.IGNORECASE,
+)
+_CLAIMS_TASK = re.compile(
+    r"\bi(?:'ve|\s+have)\s+(?:just\s+)?(?:added|created|saved|put|made)\s+(?:a|an|the|your)\s+(?:\w+\s+){0,3}?(?:task|to-?do)\b|\btask\s+(?:has\s+been\s+|is\s+)?(?:added|saved|created)\b|\*\*task\*\*\s*:",
+    re.IGNORECASE,
+)
+
+
+def claims_a_reminder(reply):
+    """Does this reply say that a reminder was set, added or saved?"""
+    return isinstance(reply, str) and _CLAIMS_REMINDER.search(reply.replace(chr(0x2019), "'")) is not None
+
+
+def claims_a_task(reply):
+    """Does this reply say that a task was added or saved?"""
+    return isinstance(reply, str) and _CLAIMS_TASK.search(reply.replace(chr(0x2019), "'")) is not None
+
+
 # What looks like a request for a reminder and is not (found by the capture-gate benchmark on 2026-10-26: the code let these through, 4 of 71): a refusal ("please don't set a reminder for that", "never remind me
 # again"), a question about the phrase or about how ("what does 'remind me' mean in spanish", "how do i set a reminder on my phone"), and a habit ("i remember to lock the door every night"). Refusing a
 # request that was real is the safe direction, and "remind me how to work the thermostat at 6" is still a request: the question rule only reads a message that BEGINS with the question word.

@@ -6,7 +6,8 @@ The owner found pressing Approve for every calendar event, task, folder and docu
   an empty folder, a document with at most a line of text). Nothing that sends, shares, changes, moves or deletes can be added to the list without changing this file and the test that pins it;
 * each is OFF until the owner switches it on, one by one, and can be switched off again at any time; the pause switch (docs/PAUSE_DESIGN.md) stops them too;
 * it applies only to a proposal made while answering the owner's OWN message (the kind's own `asked` check, which every proposal has to pass, has already said that message asked for exactly that), and never to
-  one made after Diya read something that is not the owner's (a web page, a note, an email, a file: `tainted`), which waits for an Approve as before;
+  one made after Diya read something that is not the owner's (a web page, a note, an email, a file: `tainted`), which waits for an Approve as before; and only when everything in it is made of the owner's own words
+  (the kind's `auto_ok`: the model's invented title, note or line of text, or a time that was filled in and not said, sends it to the owner's Approve; found 2026-10-26, when a task was proposed with a note the model made up);
 * what is done is exactly what was recorded and hashed (the approval is made with that hash, so a change in between refuses it), is recorded as an approval `via` "auto" in the action's own history and in the
   activity journal, and is never retried if its outcome is not known.
 
@@ -65,13 +66,19 @@ def set_enabled(store, name, on, now=None):
     return enabled_kinds(store)
 
 
-def allowed(store, action):
+def allowed(store, action, kind, said):
     """May this freshly proposed action be approved and run now, without the owner pressing Approve? Only if its kind is in AUTO_KINDS and switched on, it is still pending, nothing outside the owner's own
-    message was read before it was proposed, and Diya is not paused."""
+    message was read before it was proposed, Diya is not paused, and the kind's own check (`kind.auto_ok`, which every kind in AUTO_KINDS must have) says that everything in it is made of the owner's own words in
+    `said`: a title, a name or a line the model wrote that they did not say, or a time that was filled in, sends it to the owner's Approve instead. `kind` is the ActionKind; `said` the owner's message."""
+    try:
+        faithful = kind is not None and kind.auto_ok is not None and bool(kind.auto_ok(action["args"], said))
+    except Exception:  # noqa: BLE001 -- a check that fails is a no
+        faithful = False
     return (
         action.get("kind") in AUTO_KINDS
         and action.get("status") == "pending"
         and action.get("tainted") is False
         and is_enabled(store, action["kind"])
         and not diya_pause.is_paused(store)
+        and faithful
     )

@@ -447,3 +447,16 @@ that permission and it is narrow on purpose:
   the same single, never-repeated run as for any approved action; an outcome that is not known is told as not known and never retried;
 - the reply is built by code from what happened ("Done: ... " with Google's own link, or "Not done: ..."), never from the model's words.
 Proof: `tests/test_auto_approve.py`. Todoist is not on the list: it has never been tried against a real account.
+
+### Only the owner's own words go straight in (2026-10-26)
+
+The same day the real model proposed a Google task with a `notes` line it had made up ("A quick check to make sure I'm working properly"). With the switch on, that would have gone into the owner's list unseen. So every kind in `AUTO_KINDS` has an
+`auto_ok(args, text)` that is true only when everything in the proposal is made of the owner's own words: the title (or name) is among them; a line of text or a note is among them; a time was given and nothing was filled in for it (`moment.assumed`
+is empty: "tomorrow" alone, which becomes 09:00, or "tomorrow morning" waits for an Approve). A task's note that is not the owner's is now dropped when it is proposed (`task_prepare`). A kind with no such check never goes straight, whatever the switch
+says. Against the real model with all four on and Google replaced by a stand-in: the four faithful requests were done at once, 4 of 4 in two trials; "put the dentist on my calendar tomorrow" (09:00 filled in) waited.
+The notes `prepare` writes are addressed to the model ("ask the user when it starts") and are never shown to the owner: what was left out is plain from the sentence they approve.
+
+### A reply never says something was saved when nothing was (2026-10-26)
+
+`Agent._settle_claims`: when the message asked for a reminder (or a task) and the turn called no tool that saves one, a reply that says it was saved ("I've added a reminder", "Reminder: ...") is replaced by the plain fact and how to ask again.
+Found by replaying the owner's long chat against the real model. Proof: `tests/test_false_claims.py`. Todoist's and Google Tasks' are proposals and have their own guard above.

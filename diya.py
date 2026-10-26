@@ -478,6 +478,9 @@ MAIL_CONNECTED_NOTE = (
     "Gmail IS connected to Diya, read-only. Mail is looked through by a separate step whenever the person asks about their mail (who wrote, what an email says, anything from a name), and you are not given its "
     "results on this turn. Never say you have no access to their Gmail or email. If they want mail looked at, tell them to ask it plainly, for example 'any email from the college?' or 'check my inbox'."
 )
+# Said instead of a reply that claimed a reminder or a task was saved when nothing was (Agent._settle_claims).
+NO_REMINDER_SAVED = "I did not set a reminder, so nothing will go off. Tell me what and when in one line, for example 'remind me to call the dentist tomorrow at 5pm'."
+NO_TASK_SAVED = "I did not add a task, so nothing is on your list. Say it again in one line, for example 'add a task: renew the bus pass'."
 # How to ask again, said back to the person when a reply claimed a proposal that was never made (diya_actions.nothing_was_proposed_reply).
 PROPOSAL_EXAMPLES = {
     "propose_calendar_event": "put the dentist on my calendar tomorrow at 5pm for 30 minutes", "propose_google_task": "add a Google task: renew the bus pass",
@@ -1234,7 +1237,8 @@ class Agent:
         self._turn.active = True
         try:
             answer, tools = self._ask(messages, on_event, only_tools)
-            return self._settle_proposals(answer, on_event, only_tools), tools
+            answer = self._settle_proposals(answer, on_event, only_tools)
+            return self._settle_claims(answer, tools, on_event, only_tools), tools
         finally:
             self._turn.active = False
             self._turn.note = None
@@ -1255,7 +1259,7 @@ class Agent:
         if made:
             waiting, ran = [], []
             for action, notes in made:
-                if diya_autoapprove.allowed(self.store, action):  # the owner switched this kind to "do it straight away", it came from their own message, and nothing outside it was read first
+                if diya_autoapprove.allowed(self.store, action, diya_actions.by_name(self.actions.kinds, action["kind"]), self._turn.user_text):  # the owner switched this kind to "do it straight away", it came from their own message, and nothing outside it was read first
                     ran.append(self._run_straight_away(action))
                 else:
                     waiting.append((action, notes))
@@ -1267,6 +1271,23 @@ class Agent:
             text = diya_actions.nothing_was_proposed_reply(PROPOSAL_EXAMPLES.get(asked[0].tool_name, "add it plainly, in one line"), self._turn.refused[0] if self._turn.refused else None)
         if on_event is not None:
             on_event("reset", None)  # what was shown so far was the model's wording
+            on_event("delta", text)
+        return text
+
+    def _settle_claims(self, answer, tools, on_event, only_tools):
+        """A reply that says a reminder or a task was saved, when the person asked for one and the turn did not save one, is replaced by the plain fact. Nothing is changed when a tool that saves ran (whatever
+        it answered) or when the message asked for neither."""
+        if only_tools is not None or self._turn.proposed:
+            return answer
+        said = self._turn.user_text
+        if "add_reminder" not in tools and diya_intent.is_reminder_request(said) and diya_intent.claims_a_reminder(answer):
+            text = NO_REMINDER_SAVED
+        elif "add_task" not in tools and diya_intent.is_task_request(said) and not diya_intent.names_todoist(said) and not diya_intent.names_google_tasks(said) and diya_intent.claims_a_task(answer):
+            text = NO_TASK_SAVED
+        else:
+            return answer
+        if on_event is not None:
+            on_event("reset", None)
             on_event("delta", text)
         return text
 

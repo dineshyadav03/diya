@@ -28,7 +28,7 @@ TASKS = "google_tasks_add"  # a real kind's name, on a stand-in that only record
 
 
 def kind(**changes):
-    return task_kind(name=TASKS, **changes)
+    return task_kind(name=TASKS, **dict({"auto_ok": lambda args, said: True}, **changes))  # a fake kind that says everything in it is the owner's own words; the real kinds' checks are tested below
 
 
 def proposing(title="buy milk"):
@@ -201,6 +201,72 @@ def test_the_actions_page_has_the_switches_and_says_the_one_exception():
     assert "The only exception is a kind you switch to" in page
     route = root / "frontend" / "app" / "api" / "actions" / "auto" / "route.js"
     assert route.exists() and "'/api/actions/auto'" in route.read_text(encoding="utf-8") and "force-dynamic" in route.read_text(encoding="utf-8")
+
+
+# ---- only what is made of the owner's own words ----------------------------------------------------------------------------------------------
+
+def test_a_kind_without_its_own_check_is_never_done_straight_away_even_when_switched_on():
+    executed = []
+    agent = agent_with(task_kind(name=TASKS, executed=executed), replies=proposing())  # no auto_ok
+    diya_autoapprove.set_enabled(agent.store, TASKS, True)
+    ask(agent, "add a task: buy milk")
+    assert executed == [] and agent.actions.actions()[0]["status"] == "pending"
+
+
+def test_a_check_that_says_no_or_fails_sends_the_proposal_to_the_owners_approve():
+    for check, title in ((lambda args, said: False, "buy milk"), (lambda args, said: 1 / 0, "buy eggs")):  # a different title each time: the two agents share the test's one database, and a copy of a waiting action is refused
+        executed = []
+        agent = agent_with(kind(executed=executed, auto_ok=check), replies=proposing(title))
+        diya_autoapprove.set_enabled(agent.store, TASKS, True)
+        answer, _ = ask(agent, f"add a task: {title}")
+        assert executed == [] and agent.actions.actions()[-1]["status"] == "pending" and answer.startswith("Ready for your OK:")
+
+
+def test_the_check_is_given_what_was_proposed_and_what_the_owner_wrote():
+    seen = []
+    agent = agent_with(kind(auto_ok=lambda args, said: seen.append((dict(args), said)) or True), replies=proposing())
+    diya_autoapprove.set_enabled(agent.store, TASKS, True)
+    ask(agent, "add a task: buy milk")
+    assert seen == [({"title": "buy milk"}, "add a task: buy milk")]
+
+
+import diya_google_write as gw
+
+EVENT_SAID = "put 'Diya smoke test' on my calendar tomorrow at 5pm for 30 minutes"
+
+
+@pytest.mark.parametrize("args, said, expected", [
+    ({"title": "Diya smoke test", "when": "tomorrow at 5pm", "start": "2026-10-27T11:30:00Z", "duration_minutes": 30}, EVENT_SAID, True),
+    ({"title": "Diya smoke test (a test of my system)", "when": "tomorrow at 5pm", "start": "2026-10-27T11:30:00Z"}, EVENT_SAID, False),  # a title the model made longer
+    ({"title": "Dentist", "when": "tomorrow", "start": "2026-10-27T03:30:00Z"}, "put the dentist on my calendar tomorrow", False),  # no time of day was said: 9am was filled in, so the owner looks first
+    ({"title": "Dentist", "when": "tomorrow morning", "start": "2026-10-27T03:30:00Z"}, "put the dentist on my calendar tomorrow morning", False),  # "morning" is filled in as an hour
+    ({"title": "Dentist", "start": "2026-10-27T03:30:00Z"}, "put the dentist on my calendar", False),  # no words for the time at all
+])
+def test_an_event_is_done_straight_away_only_if_the_title_and_the_time_are_the_owners_own(args, said, expected):
+    assert gw.event_auto_ok(args, said) is expected
+
+
+@pytest.mark.parametrize("check, args, said, expected", [
+    (gw.task_auto_ok, {"title": "buy milk"}, "add a Google task: buy milk", True),
+    (gw.task_auto_ok, {"title": "buy milk", "notes": "from the shop on the corner"}, "add a Google task: buy milk, from the shop on the corner", True),
+    (gw.task_auto_ok, {"title": "buy milk", "notes": "A quick check to make sure I am working"}, "add a Google task: buy milk", False),
+    (gw.task_auto_ok, {"title": "Purchase milk"}, "add a Google task: buy milk", False),
+    (gw.folder_auto_ok, {"name": "Diya smoke test"}, "make a Drive folder called Diya smoke test", True),
+    (gw.folder_auto_ok, {"name": "Diya smoke test folder"}, "make a Drive folder called Diya smoke test", False),
+    (gw.doc_auto_ok, {"title": "Diya smoke test", "body": "hello"}, "make a Google Doc called Diya smoke test with the line hello", True),
+    (gw.doc_auto_ok, {"title": "Diya smoke test"}, "make a Google Doc called Diya smoke test", True),
+    (gw.doc_auto_ok, {"title": "Diya smoke test", "body": "This document was made to test Diya."}, "make a Google Doc called Diya smoke test", False),
+    (gw.folder_auto_ok, {"name": 5}, "make a Drive folder called 5", False),
+])
+def test_a_title_a_name_or_a_line_the_model_made_up_is_not_done_straight_away(check, args, said, expected):
+    assert check(args, said) is expected
+
+
+def test_every_kind_that_can_be_switched_on_has_such_a_check_and_a_made_up_task_note_is_dropped():
+    real = {k.name: k for k in diya_connector_tools.real_action_kinds()}
+    assert all(real[name].auto_ok is not None for name in diya_autoapprove.AUTO_KINDS)
+    assert gw.task_prepare({"title": "buy milk", "notes": "A quick check to make sure I'm working."}, "add a Google task: buy milk") == ({"title": "buy milk"}, [])
+    assert gw.task_prepare({"title": "buy milk", "notes": "from the corner shop"}, "add a Google task: buy milk from the corner shop")[0]["notes"] == "from the corner shop"
 
 
 def test_a_real_run_of_the_action_summary_is_what_the_owner_would_have_approved():

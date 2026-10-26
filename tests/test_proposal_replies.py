@@ -33,11 +33,11 @@ def test_several_proposals_in_one_turn_are_listed():
     assert answer.startswith("Ready for your OK:\n- Add the task 'buy milk'.\n- Add the task 'call mum'.\n\n")
 
 
-def test_what_was_left_out_of_a_proposal_is_said_after_its_sentence():
-    kind = task_kind(prepare=lambda args, said: ({"title": args["title"]}, ["The due date 'friday' was not in your words, so it was left out."]))
+def test_the_notes_written_for_the_model_are_not_shown_to_the_person_what_was_left_out_is_plain_from_the_sentence():
+    kind = task_kind(prepare=lambda args, said: ({"title": args["title"]}, ["It has no due date: 'friday' was left out, because the user did not say when. Ask the user when."]))
     agent = agent_with(kind, replies=[tool_reply(PROPOSE, '{"title": "buy milk", "due": "friday"}'), text_reply(FLUFF)])
     answer, _ = ask(agent, "add a task: buy milk")
-    assert "Add the task 'buy milk'. The due date 'friday' was not in your words, so it was left out." in answer
+    assert answer.startswith("Ready for your OK: Add the task 'buy milk'.\n\nNothing is added") and "the user" not in answer and "friday" not in answer
 
 
 def test_a_streamed_reply_is_taken_back_and_replaced():

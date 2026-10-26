@@ -296,7 +296,7 @@ def event_execute(config, args):
 def event_kind():
     return ActionKind(
         name="google_calendar_add_event", label="Add a Google Calendar event", connector="google_calendar_edit", validate=event_validate, render=event_render, execute=event_execute,
-        asked=diya_intent.asks_to_add_calendar_event, prepare=event_prepare,
+        asked=diya_intent.asks_to_add_calendar_event, prepare=event_prepare, auto_ok=event_auto_ok,
         tool={"type": "function", "function": {
             "name": "propose_calendar_event",
             "description": (
@@ -330,6 +330,8 @@ def task_render(args):
 
 def task_prepare(args, text):
     """A due date is the person's: read by code from their words (a day, not a time of day), or left out and the model told."""
+    if "notes" in args and not _own_words(args["notes"], text):  # a note the model made up ("a quick check to make sure I am working") is not the person's: it is left out, so nothing they did not say goes into their list
+        args = {key: value for key, value in args.items() if key != "notes"}
     due = args.get("due")
     if due is None:
         return args, []
@@ -372,7 +374,7 @@ def task_execute(config, args):
 
 def task_kind():
     return ActionKind(
-        name="google_tasks_add", label="Add a Google Task", connector="google_tasks", validate=task_validate, render=task_render, execute=task_execute, asked=diya_intent.asks_for_google_task, prepare=task_prepare,
+        name="google_tasks_add", label="Add a Google Task", connector="google_tasks", validate=task_validate, render=task_render, execute=task_execute, asked=diya_intent.asks_for_google_task, prepare=task_prepare, auto_ok=task_auto_ok,
         tool={"type": "function", "function": {
             "name": "propose_google_task",
             "description": "Propose adding a task to the user's Google Tasks. This only PROPOSES it: nothing is added until the user approves it on the Actions page. Use it only when the user asks for it in Google Tasks by name.",
@@ -446,7 +448,7 @@ def folder_execute(config, args):
 def folder_kind():
     return ActionKind(
         name="google_drive_make_folder", label="Make a Google Drive folder", connector="google_drive_files", validate=folder_validate, render=folder_render, execute=folder_execute,
-        asked=diya_intent.asks_for_drive_folder,
+        asked=diya_intent.asks_for_drive_folder, auto_ok=folder_auto_ok,
         tool={"type": "function", "function": {
             "name": "propose_drive_folder",
             "description": "Propose making a new folder in the user's Google Drive. This only PROPOSES it: nothing is made until the user approves it on the Actions page. Use it only when the user asks for a folder in their Drive.",
@@ -508,7 +510,7 @@ def doc_execute(config, args):
 
 def doc_kind():
     return ActionKind(
-        name="google_docs_create", label="Make a Google Doc", connector="google_drive_files", validate=doc_validate, render=doc_render, execute=doc_execute, asked=diya_intent.asks_for_google_doc,
+        name="google_docs_create", label="Make a Google Doc", connector="google_drive_files", validate=doc_validate, render=doc_render, execute=doc_execute, asked=diya_intent.asks_for_google_doc, auto_ok=doc_auto_ok,
         tool={"type": "function", "function": {
             "name": "propose_google_doc",
             "description": "Propose making a new Google Doc, with a line of text in it if the user asked for it. This only PROPOSES it: nothing is made until the user approves it on the Actions page. Use it only when the user asks for a Google Doc.",
@@ -518,6 +520,38 @@ def doc_kind():
             }, "required": ["title"]},
         }},
     )
+
+
+# ---- done straight away only when it is the person's own words (diya_autoapprove) ---------------------------------------------------------------------------------------------------------
+# A title, a name or a line of text that the model wrote and the person did not say, and a time that was filled in, are exactly what a person should see before it goes into their account: these checks send such a
+# proposal to the Approve. They hold for every proposal, switched on or not; they only decide whether the switch may be used.
+
+def _own_words(value, said):
+    """Is `value` something the person wrote (whole words, any capitals, spaces and the punctuation round it ignored)?"""
+    return isinstance(value, str) and diya_intent.said_in(value, said)
+
+
+def event_auto_ok(args, said):
+    when = args.get("when")
+    if not _own_words(args.get("title"), said) or not isinstance(when, str):
+        return False
+    try:
+        moment = diya_time.parse_when(when)
+    except diya_time.NotUnderstood:
+        return False
+    return not moment.assumed and not diya_time.disagreement(when, said)  # a time the person gave, with nothing filled in for them
+
+
+def task_auto_ok(args, said):
+    return _own_words(args.get("title"), said) and (args.get("notes") is None or _own_words(args["notes"], said))
+
+
+def folder_auto_ok(args, said):
+    return _own_words(args.get("name"), said)
+
+
+def doc_auto_ok(args, said):
+    return _own_words(args.get("title"), said) and (not args.get("body") or _own_words(" ".join(str(args["body"]).split()), said))
 
 
 def action_kinds():

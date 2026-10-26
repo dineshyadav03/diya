@@ -157,7 +157,10 @@ class ActionKind:
     model's arguments are untrusted, and a small model proposes things nobody asked for -- measured, section 6):
     `asked(text)` says whether the message asks for this kind of action at all, and a proposal is refused if not;
     `prepare(args, text)` returns the arguments with whatever the message does not support taken out, and notes (plain
-    sentences) saying what was, which the model is told. Either is None for a kind that needs neither."""
+    sentences) saying what was, which the model is told. Either is None for a kind that needs neither.
+
+    `auto_ok(args, text)` is only for a kind that may be switched to "do it straight away" (diya_autoapprove): it says whether EVERYTHING in the proposal is made of what the owner wrote in `text` (a title,
+    a name, a line of text that they said, a time that they gave and that was not filled in). If it says no, or the kind has none, the proposal waits for an Approve whatever the switch says."""
 
     name: str
     label: str
@@ -168,6 +171,7 @@ class ActionKind:
     tool: dict | None = None
     asked: object = None
     prepare: object = None
+    auto_ok: object = None
 
     @property
     def tool_name(self):
@@ -282,8 +286,8 @@ def proposed_text(action, notes=()):
 def proposal_reply(made, ran=()):
     """What to tell the person after the turn made proposals, built by code from what was recorded and never from what the model wrote (2026-10-26: the model wrote "Why? To help test my own system", offered
     to send reminders and added a private fact about a pet, and, in the same chat, two replies saying a folder and a document were "waiting for your approval" when no action had been recorded at all).
-    `made` is [(action, notes)] still waiting: each action's own sentence (the one the owner approves) and whatever was left out of it. `ran` is [action] done straight away (diya_autoapprove), each as it ended:
-    what happened is told in its own words, and an outcome that is not known is said to be not known."""
+    `made` is [(action, notes)] still waiting: each action's own sentence (the one the owner approves). The notes of `prepare` are addressed to the model ("ask the user when it starts"), so they are not shown: what
+    was left out of a proposal is plain from its sentence. `ran` is [action] done straight away (diya_autoapprove), each as it ended: what happened is told in its own words, and an outcome that is not known is said to be not known."""
     parts = []
     for action in ran:
         said = action["summary"].rstrip(".") + "."
@@ -295,7 +299,7 @@ def proposal_reply(made, ran=()):
         else:
             parts.append(f"Not done: {said}{result or ' It did not run.'}")
     if made:
-        lines = [action["summary"].rstrip(".") + "." + "".join(f" {note}" for note in notes) for action, notes in made]
+        lines = [action["summary"].rstrip(".") + "." for action, _notes in made]
         head = f"Ready for your OK: {lines[0]}" if len(lines) == 1 else "Ready for your OK:\n" + "\n".join(f"- {line}" for line in lines)
         parts.append(head + "\n\nNothing is added to your account until you press Approve (under this message, or on the Actions page).")
     return "\n\n".join(parts)
