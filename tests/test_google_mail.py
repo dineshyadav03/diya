@@ -191,7 +191,7 @@ def test_the_report_lists_each_message_and_says_what_was_not_read_and_that_nothi
     report = gm.render(gm.read_mail(config, "any email from the college?", access_token="tok"))
     assert report.startswith("Your mail, searched for from college:")
     assert "- Tue, 13 Oct 2026 09:10:00 +0530 · from Dr Rao <rao@college.example> · Exam moved" in report and "    The physics exam is now on Thursday at 10." in report
-    assert "Not established:" in report and "read-only" in report and "by the words in them, not by what they mean" in report and "Attachments are never read" in report
+    assert "Not established:" in report and "read-only" in report and "by the words in them, not by what they mean" in report and "Attachments are never opened" in report
 
 
 def test_an_empty_search_says_so(config, monkeypatch):

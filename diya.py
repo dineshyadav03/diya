@@ -37,6 +37,8 @@ import diya_google_contacts
 import diya_google_drive
 import diya_google_mail
 import diya_google_mailwrite
+import diya_google_slides
+import diya_google_write
 import diya_journal
 import diya_repostudy
 import diya_memory
@@ -1509,6 +1511,42 @@ class Agent:
         text, status = diya_google_contacts.lookup(self.config, found)
         return None if status == "nothing" else text
 
+    def _deck_from_doc(self, question):
+        """"make a deck from my Study plan doc": the Doc the person named is read by code and cut into an outline (diya_google_slides.deck_from_doc), which is PROPOSED as a deck for the owner to approve with every slide on the
+        card. The reply is the proposal's own sentence, or why it could not be made. None if the message is not such a request (or Drive read is not connected: then the chat goes on as before)."""
+        name = diya_google_slides.from_doc_request(question)
+        if name is None or not diya_connectors.is_connected(self.config, diya_google_drive.READ):
+            return None
+        kind = diya_actions.by_name(self.actions.kinds, "google_slides_create")
+        if kind is None:
+            return None
+        try:
+            title, outline = diya_google_slides.deck_from_doc(self.config, name)
+        except ValueError as exc:
+            return f"I could not make slides from that: {exc}"
+        self._turn.reads.append("read_drive")  # (the outline is the file's words: the card says so)
+        self._propose(kind, title=title, slides=outline)
+        if self._turn.proposed:
+            return ""
+        return f"I could not make that deck: {self._turn.refused[0] if self._turn.refused else 'it is not connected.'}"
+
+    def _suggestion_task(self, question, messages):
+        """"put suggestion 2 in my Google Tasks", said after a look through the mail that listed possible tasks (diya_google_mail.suggest_tasks): the words of that suggestion become a PROPOSAL to add the task, made by code
+        with no model, which the owner approves like any other. The reply is the proposal's own sentence (or why it could not be made). None if the message is not such a pick."""
+        number = diya_google_mail.suggestion_number(question)
+        if number is None:
+            return None
+        title = diya_google_mail.suggestion_in(_last_assistant_text(messages), number)
+        if title is None:
+            return f"I do not have a suggestion {number} in front of me. Ask about your mail again and I will list what I notice."
+        kind = diya_actions.by_name(self.actions.kinds, "google_tasks_add")
+        if kind is None:
+            return "Adding to Google Tasks is not set up."
+        self._propose(kind, title=title[:diya_google_write.TITLE_MAX])
+        if self._turn.proposed:
+            return ""  # the reply is built from the proposal (_settle_proposals)
+        return f"I could not put that in your Google Tasks: {self._turn.refused[0] if self._turn.refused else 'it is not connected.'}"
+
     def _github_get(self, url):
         """GET one address on GitHub's public hosts (and no other host), no credentials, no redirects followed: (status, text)."""
         response = _fetch(url, None, NETWORK_TIMEOUT, diya_repostudy.GITHUB_HOSTS)
@@ -1563,6 +1601,14 @@ class Agent:
             if contact is not None:
                 self._journal("read_contacts", {"question": question}, "ok", result=contact, started=started, kind="flow")
                 return contact, ["read_contacts"]
+        if only_tools is None:
+            made = self._deck_from_doc(question)
+            if made is not None:
+                return made, ["propose_google_slides"]
+        if only_tools is None and self.config.mail:
+            picked = self._suggestion_task(question, messages)
+            if picked is not None:
+                return picked, ["propose_google_task"]
         if only_tools is None and self.config.mail:
             started = time.monotonic()
             follow_up = diya_intent.disputes_mail_answer(question) and diya_google_mail.REPORT_MARK in _last_assistant_text(messages)

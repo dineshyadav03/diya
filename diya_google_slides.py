@@ -201,6 +201,75 @@ def add_execute(config, args):
     return f"Added {len(slides)} slide(s) to the Google Slides deck '{args['name']}' (now {len(after)}), the count and titles read back to check."
 
 
+# ---- a deck from a Doc (DIYA-142) ----------------------------------------------------------------------------------------------------------------
+#
+# "make a deck from my Study plan doc": the Doc is named by the person (an explicit source), read by code through the Drive read card, and cut into an outline by code: the blocks of the Doc that are separated by a blank line
+# become slides (a block's first line the title and the rest bullets; a one-line block followed by another is the title of the next one), a last slide names the Doc and its version, and nothing is added that the Doc does not say. The outline is
+# then PROPOSED as a deck, so the card shows every slide before anything is made (the preview), and the proposal is marked as made after reading a file. Nothing is published or shared.
+
+_FROM_DOC = (
+    re.compile(r"^\W*(?:(?:hey|hi|ok|okay|so|please|diya|and|can\s+you|could\s+you)\b[\s,]*)*(?:make|create|build|turn|convert)\s+(?:me\s+)?(?:an?\s+)?(?:(?:(?:google\s+)?(?:slides?|deck|presentation)\s+){1,2})?(?:from|out\s+of|of)\s+(?:my\s+|the\s+)?(?P<name>[A-Za-z0-9][A-Za-z0-9 '&._-]{0,78}?)(?:\s+(?:google\s+)?(?:doc|document|file))?\s*\.?$", re.IGNORECASE),
+    re.compile(r"^\W*(?:(?:hey|hi|ok|okay|so|please|diya|and|can\s+you|could\s+you)\b[\s,]*)*(?:turn|convert|make)\s+(?:my\s+|the\s+)?(?P<name>[A-Za-z0-9][A-Za-z0-9 '&._-]{0,78}?)\s+(?:google\s+)?(?:doc|document|file)\s+into\s+(?:an?\s+)?(?:(?:google\s+)?(?:slides?|deck|presentation))\s*\.?$", re.IGNORECASE),
+)
+
+
+def from_doc_request(text):
+    """The name of the Doc a message wants made into a deck ("make a deck from my Study plan doc", "turn my Study plan doc into slides"), or None."""
+    if not isinstance(text, str) or not text.strip() or len(text) > 200 or "\n" in text.strip():
+        return None
+    flat = text.replace(chr(0x2019), "'").strip()
+    for pattern in _FROM_DOC:
+        found = pattern.search(flat)
+        if found:
+            name = " ".join(found.group("name").split()).strip(" .'-")
+            if name and not re.fullmatch(r"(?:it|that|this|them)", name, re.IGNORECASE):
+                return name
+    return None
+
+
+def outline_from_text(text, source_note):
+    """The outline (see parse_slides) cut from a Doc's text by its blank lines, with a last slide that names the source. ValueError, in words, when there is nothing to make slides of."""
+    blocks, current = [], []
+    for line in str(text or "").splitlines():
+        line = " ".join(line.split())
+        if line:
+            current.append(line)
+        elif current:
+            blocks.append(current)
+            current = []
+    if current:
+        blocks.append(current)
+    slides, pending = [], None
+    for block in blocks:
+        if len(block) == 1 and len(block[0]) <= 60 and not block[0].endswith((".", ",", ";")) and pending is None:
+            pending = block[0]  # a short line on its own: the title of the next block
+            continue
+        title, bullets = (pending, block) if pending is not None else (block[0], block[1:])
+        pending = None
+        slides.append((title[:TEXT_MAX], [b[:TEXT_MAX] for b in bullets[:MAX_BULLETS]]))
+    if pending is not None:
+        slides.append((pending[:TEXT_MAX], []))
+    if not slides:
+        raise ValueError("the document has no text to make slides from")
+    slides = slides[:MAX_SLIDES - 1] + [("Source", [source_note[:TEXT_MAX]])]
+    return "||".join("|".join([t] + b) for t, b in slides)
+
+
+def deck_from_doc(config, name):
+    """(the deck's name, its outline) for the Doc the person named, read through the Drive read card; ValueError, in words, when the Doc cannot be found, read or cut into slides."""
+    file, why = gd._which_file(config, name)
+    if why is not None:
+        raise ValueError(str(why))
+    if file.get("mimeType") != gd.DOC:
+        raise ValueError(f"{diya_memory.printable(file['name'], 60)} is not a Google Doc, so it is not made into slides")
+    try:
+        text = client.read_text(config, gd.READ, gd.LABELS[gd.READ], f"{gd.FILES}/{file['id']}/export", {"mimeType": "text/plain"}, 6000)
+    except client.GoogleError as exc:
+        raise ValueError(str(exc))
+    note = f"From the Google Doc {diya_memory.printable(file['name'], 60)} (version {diya_memory.printable(file.get('version', '?'), 12)}, changed {gd._day(file.get('modifiedTime'))})"
+    return diya_memory.printable(file["name"], 100), outline_from_text(text, note)
+
+
 # ---- the kinds ----------------------------------------------------------------------------------------------------------------------------------------
 
 def _kind(name, label, tool_name, description, properties, required, **functions):

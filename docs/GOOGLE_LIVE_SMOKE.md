@@ -98,6 +98,12 @@ Before these: in your Google project switch on the Google Sheets API and the Goo
 | `propose_google_slides` | "make a Google Slides deck called Diya deck test with slides: Why | spaced practice || Plan | week 1" | A card with every slide's title (and the bullets in its fields); after approval a deck with a title slide and two slides. Look at how it looks in Slides | Delete the deck in Drive | `tests/test_google_sheets_slides.py` — `propose_google_slides` |
 | `propose_add_slides` | "add a slide to the Diya deck test deck: Revision plan | mock tests" | A card; after approval the slide is at the end | Delete the slide in Slides | `tests/test_google_sheets_slides.py` — `propose_add_slides` |
 
+## The workflows (added 2026-10-26; DIYA-078, -140, -142)
+
+- Mail with an attachment: "check my inbox" lists the attachment's name, type and size (a `.exe` is flagged), and never its contents.
+- Mail to tasks: after "any email from the college?" a *Possible tasks I noticed* list may appear; "put suggestion 1 in my Google Tasks" makes a card to approve.
+- Doc to deck: "make a deck from my Diya drive test doc" makes a card with every slide and a last slide naming the Doc.
+
 Two things to try that should be **refused**: "send an email to my boss saying hi" (no address typed: nothing is proposed) and "reply to Sam's email" when two of Sam's emails match (Diya lists them and asks which).
 
 When all eight pass, tell me, and the sheet's DIYA-216 (a smoke run on a real account) and the "needs your real account" rows (DIYA-081, -087, -093, -097) can be marked from what you saw.

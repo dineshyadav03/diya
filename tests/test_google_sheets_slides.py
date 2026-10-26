@@ -423,3 +423,46 @@ def test_every_kind_is_in_the_catalog_and_none_can_be_done_straight_away():
 def test_the_models_tools_cannot_name_an_id_a_range_to_overwrite_or_a_formula_mode():
     for kind in list(gs.action_kinds()) + list(gl.action_kinds()):
         assert not set(kind.tool["function"]["parameters"]["properties"]) & {"file_id", "version", "range", "filled", "before", "value_input_option", "valueInputOption", "formula"}, kind.name
+
+
+# ---- a deck from a Doc (DIYA-142) --------------------------------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("text, name", [("make a deck from my Study plan doc", "Study plan"), ("turn my Study plan doc into slides", "Study plan"), ("create a google slides presentation from the Exam notes", "Exam notes"),
+                                        ("make a deck called Revision with slides", None), ("make a deck from it", None), ("hello", None)])
+def test_a_request_to_make_a_deck_from_a_named_doc_is_understood(text, name):
+    assert gl.from_doc_request(text) == name
+
+
+def test_a_doc_is_cut_into_slides_by_its_blank_lines_with_a_last_slide_naming_the_source():
+    outline = gl.outline_from_text("Why revise\n\nSpaced practice\nActive recall\n\nPlan\nWeek 1: maths\nWeek 2: physics\n\nOne more paragraph that is a sentence.\nWith a second line.", "From the Google Doc X (version 3)")
+    assert gl.parse_slides(outline) == [("Why revise", ["Spaced practice", "Active recall"]), ("Plan", ["Week 1: maths", "Week 2: physics"]), ("One more paragraph that is a sentence.", ["With a second line."]), ("Source", ["From the Google Doc X (version 3)"])]
+    assert len(gl.parse_slides(gl.outline_from_text("\n\n".join(f"Title {n}\nline" for n in range(30)), "src"))) == gl.MAX_SLIDES
+    with pytest.raises(ValueError, match="no text"):
+        gl.outline_from_text("  \n\n  ", "src")
+
+
+def test_the_chat_reads_the_named_doc_and_proposes_the_deck_with_every_slide_on_the_card(config, office):
+    office.add(file("docRevision001", "Revision plan", gd.DOC, mine=False, content="Why revise\n\nSpaced practice\nActive recall\n\nPlan\nWeek 1: maths\nWeek 2: physics\n"))
+    agent = diya.Agent(config, client=FakeClient([]), action_kinds=list(gl.action_kinds()))
+    answer, tools = agent.ask([{"role": "user", "content": "make a deck from my Revision plan doc"}])
+    (action,) = agent.actions.actions()
+    assert tools == ["propose_google_slides"] and agent.client.chat_calls == [] and "Ready for your OK:" in answer and action["kind"] == "google_slides_create"
+    assert action["args"]["title"] == "Revision plan" and action["args"]["slides"].startswith("Why revise|Spaced practice|Active recall||Plan|Week 1: maths|Week 2: physics||Source|From the Google Doc Revision plan (version 1")
+    assert action["tainted"] and "read_drive" in action["taint_sources"] and office.mutations() == []
+    done = run_approved(agent)
+    assert done["status"] == "succeeded" and [s["title"] for s in office.decks[[d for d in office.decks if office.decks[d]["title"] == "Revision plan"][0]]["slides"]] == ["Revision plan", "Why revise", "Plan", "Source"]
+
+
+def test_a_doc_that_is_not_there_or_is_not_a_doc_is_said_and_nothing_is_proposed(config, office):
+    agent = diya.Agent(config, client=FakeClient([]), action_kinds=list(gl.action_kinds()))
+    answer, _ = agent.ask([{"role": "user", "content": "make a deck from my Tax return doc"}])
+    assert "I could not make slides from that" in answer and "there is no file called 'Tax return'" in answer and agent.actions.actions() == []
+    answer, _ = agent.ask([{"role": "user", "content": "make a deck from my Budget doc"}])
+    assert "is not a Google Doc" in answer and agent.actions.actions() == []
+
+
+def test_without_drive_read_connected_the_request_goes_on_to_the_chat(config, office):
+    diya_connectors.disconnect(config, gd.READ)
+    agent = diya.Agent(config, client=FakeClient([text_reply("I cannot see your Drive.")]), action_kinds=list(gl.action_kinds()))
+    answer, tools = agent.ask([{"role": "user", "content": "make a deck from my Revision plan doc"}])
+    assert answer == "I cannot see your Drive." and agent.actions.actions() == []
