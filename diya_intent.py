@@ -553,6 +553,25 @@ _NOTES_WRITE = re.compile(
 MAX_NOTES_QUESTION_CHARS = 300
 
 
+# What the person asks their notes about, as a few words to search for ("what did i write about the garden?" -> "garden"). Found 2026-10-26: asked this with the persona and the list of what is known about them in front of it,
+# the small model answered "I don't have access to your notes" instead of calling search_notes (3 of 5 questions, with the old persona as well as the new), so code makes the search and the model only words the answer.
+_NOTES_TOPIC = re.compile(
+    r"\b(?:about|regarding|on|re)\s+(?:(?:the|a|an|my|any|our)\s+)*([a-z0-9][a-z0-9 '._-]{1,60}?)\s*(?=[?.!,;]|$|\s+(?:in|from|that|which|i|we|last|this|yesterday|today)\b)",
+    re.IGNORECASE,
+)
+_NOTES_TOPIC_ABOUT = re.compile(_NOTES_TOPIC.pattern.replace("(?:about|regarding|on|re)", "(?:about|regarding|re)"), re.IGNORECASE)  # "about" wins over "on" ("what did i write on friday about the exam")
+
+
+def notes_topic(text):
+    """The few words a question about the person's own notes is about ("what did i write about the garden?" -> "garden"), or None if it names none."""
+    if not isinstance(text, str):
+        return None
+    text = text.replace(chr(0x2019), "'")
+    found = _NOTES_TOPIC_ABOUT.search(text) or _NOTES_TOPIC.search(text)
+    topic = " ".join(found.group(1).split()).strip(" .'-") if found else ""
+    return topic if len(topic) >= 2 and topic.lower() not in {"it", "that", "this", "them", "me", "my notes", "notes"} else None
+
+
 # ---- is the person asking about their own mail? (docs/GMAIL_DESIGN.md) ----
 #
 # Code decides, in words, so that a question about mail is read by the code that reads mail and answered by a model with no tools. A request to WRITE, send or delete mail is recognised too, and answered
@@ -686,6 +705,77 @@ def tidy_small_talk(reply, user_text, name, hour):
     text = " ".join(pieces)
     text = re.sub(r"\s+([,!.?])", r"\1", re.sub(r"\s{2,}", " ", text)).strip()
     return text or "Hi."
+
+
+# ---- short plain replies, like Hark's (2026-10-26) ----
+#
+# The owner put Diya's replies beside Hark's and asked for them to be short: Diya's had emoji, "Why? To help test my own system", "Want me to ... ?", "Just say the word", a P.S. about the dog, and an opening
+# "You're absolutely right and thank you for calling that out". The persona now says how to answer (diya.PERSONA), and this takes out what a small model still adds after being told not to. It only TAKES OUT, and
+# only these things: pictures, a closing offer, a P.S., and a one-word praise at the start. It never rewrites, adds, or touches anything in a code block.
+EMOJI = _EMOJI
+_PICTURES = re.compile(f"(?:{_EMOJI.pattern})+[ \\t]?")  # a run of pictures and the one space after it, so "🔥 **Bold**" does not leave a space at the start of the line
+_OFFER_START = re.compile(
+    r"^\W*(?:want\s+me\s+to|would\s+you\s+like(?:\s+me\s+to)?|do\s+you\s+want\s+me\s+to|let\s+me\s+know|feel\s+free\s+to|just\s+(?:say|ask|tell\s+me)|if\s+you(?:['’]d|\s+would)\s+like|if\s+you\s+want|"
+    r"i['’]m\s+(?:always\s+)?here\s+(?:to|if|for|whenever)|i\s+can\s+also\s+(?:help|do|set|add)|hope\s+(?:this|that)\s+helps|is\s+there\s+anything\s+else|anything\s+else\s+(?:i|you)|need\s+anything\s+else|"
+    r"happy\s+to\s+help)\b",
+    re.IGNORECASE,
+)
+_POSTSCRIPT = re.compile(r"(?:^|(?<=\s))(?:\*\*)?(?:P\.\s?S\.?|PS:)(?:\*\*)?[:.\s].*\Z", re.IGNORECASE | re.DOTALL)
+_FILLER_OPEN = re.compile(r"^\W*(?:sure|absolutely|of\s+course|certainly|great\s+question|good\s+question|nice\s+question)[!.]\s+", re.IGNORECASE)
+_RIGHT_OPEN = re.compile(r"^\W*you['’]re\s+(?:absolutely\s+|totally\s+|completely\s+)?right\b[^.!?\n]{0,70}[.!?]\s+", re.IGNORECASE)
+
+
+# The persona tells the model to be honest about being small WHEN ASKED; a fact answer ended "I'm smaller than cloud models like Claude or GPT" with nobody asking (2026-10-26). A sentence like that is taken out
+# unless the person's own message was about the model, what it is, or how it compares.
+_SMALLNESS = re.compile(r"\bsmaller\s+than\s+(?:the\s+)?(?:cloud|big|larger|bigger|other)\b|\bsmall\s+open[- ]source\s+model\b|\bmuch\s+smaller\s+than\b", re.IGNORECASE)
+_ASKED_ABOUT_THE_MODEL = re.compile(r"\b(?:model|gpt|claude|chatgpt|gemini|cloud|small|smaller|smart|smarter|intelligent|compare[ds]?|better|worse|powerful|parameters|open[- ]source|llm|ai)\b|\bwho\s+are\s+you\b|\bwhat\s+are\s+you\b", re.IGNORECASE)
+
+
+def has_a_postscript(reply):
+    """Does the reply end with a "P.S." (the model's habit of tacking a personal remark on the end)?"""
+    return isinstance(reply, str) and _POSTSCRIPT.search(reply) is not None
+
+
+def ends_with_an_offer(reply):
+    """Is the last sentence or paragraph of the reply an offer of more help ("Want me to ...?", "Let me know if ...", "Just say the word", "I'm here to help")?"""
+    if not isinstance(reply, str) or not reply.strip():
+        return False
+    last = [piece for piece in re.split(r"(?<=[.!?])\s+|\n+", _EMOJI.sub("", reply).strip()) if piece.strip()]
+    return bool(last) and _OFFER_START.search(last[-1]) is not None and len(last) > 1
+
+
+def starts_with_filler(reply):
+    """Does the reply open by praising the question or agreeing ("Great question!", "Sure!", "You're absolutely right ...")?"""
+    return isinstance(reply, str) and (_FILLER_OPEN.search(reply) is not None or _RIGHT_OPEN.search(reply) is not None)
+
+
+def tidy_reply(reply, user_text=""):
+    """An ordinary reply made short and plain by taking out only what the model should not have added: pictures (unless the person used one), a closing offer of more help, a P.S., and a one-word praise or
+    "you're right" at the start. Code blocks and `code` are left exactly as written. If nothing but those would be left, the reply is returned as it was (less its pictures)."""
+    if not isinstance(reply, str) or not reply.strip() or "```" in reply:
+        return reply
+    keep_pictures = isinstance(user_text, str) and _EMOJI.search(user_text) is not None
+    text = reply if keep_pictures else _PICTURES.sub("", reply)
+    candidate = _POSTSCRIPT.sub("", text).rstrip()
+    candidate = _FILLER_OPEN.sub("", candidate, count=1)
+    candidate = _RIGHT_OPEN.sub("", candidate, count=1)
+    if _SMALLNESS.search(candidate) and not _ASKED_ABOUT_THE_MODEL.search(user_text if isinstance(user_text, str) else ""):
+        kept = [piece for piece in re.split(r"(?<=[.!?])(\s+)", candidate) if not _SMALLNESS.search(piece)]
+        candidate = "".join(kept).strip() or candidate  # (whitespace pieces never match, so the paragraphs the model made are kept)
+    pieces = re.split(r"(?<=[.!?])(\s+)", candidate)  # sentences with their gaps kept, so the paragraphs the model made are kept
+    while len(pieces) >= 3 and _OFFER_START.search(pieces[-1]) is not None:
+        pieces = pieces[:-2]
+    candidate = "".join(pieces).rstrip()
+    # a whole last paragraph that is an offer (it may not end with a full stop)
+    paragraphs = re.split(r"\n\s*\n", candidate)
+    while len(paragraphs) > 1 and _OFFER_START.search(paragraphs[-1].strip()) is not None:
+        paragraphs = paragraphs[:-1]
+    candidate = "\n\n".join(paragraphs).strip()
+    candidate = re.sub(r"[ \t]+([,.!?;:])", r"\1", re.sub(r"[ \t]{2,}", " ", candidate))
+    candidate = re.sub(r"[ \t]+\n", "\n", candidate)
+    if " ".join(candidate.split()) == " ".join(reply.split()):
+        return reply  # nothing was taken out: exactly as the model wrote it, down to the last space
+    return candidate if len(candidate.split()) >= 1 else text.strip()
 
 
 # ---- is this a question about Diya herself: what she can do, how to connect or set something up? (2026-10-14) ----

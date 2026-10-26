@@ -28,7 +28,8 @@ def make_agent(tmp_path, replies=(), when=datetime(2026, 10, 11, 14, 20)):
 
 def test_the_voice_says_who_diya_is_and_forbids_the_stock_greeting():
     assert REAL_PERSONA.startswith("You are Diya, the user's private assistant") and "never say \"How can I assist you today\"" in REAL_PERSONA
-    assert "never make up facts" in REAL_PERSONA and len(REAL_PERSONA) < 1000  # short: it is read on every first message after a pause
+    assert "never make up facts" in REAL_PERSONA and len(REAL_PERSONA) < 1400  # short: it is read on every first message after a pause (the style rules of 2026-10-26 are part of it: docs/STYLE_BENCH.md)
+    assert REAL_PERSONA == f"{diya.PERSONA_VOICE} {diya.STYLE_RULES}"
     # it is a general assistant, not one for tasks and exams only (the owner was told "I'm built to help with your tasks, exam prep, or daily routines"), and honest about being small
     assert "talk about anything" in REAL_PERSONA and "Never describe yourself as built only for tasks" in REAL_PERSONA and "much smaller than cloud models" in REAL_PERSONA
 
@@ -47,7 +48,8 @@ def test_with_facts_the_voice_comes_first_then_what_is_known(tmp_path):
 
     diya_memory.Memory(agent.store).add_manual("name is Alex", "api")
     (system, _) = agent.with_profile([{"role": "user", "content": "hi"}])
-    assert system["content"] == f"{REAL_PERSONA} Today is Sunday 11 Oct 2026.\n\nWhat you know about the user so far:\n- name is Alex"
+    assert system["content"] == f"{REAL_PERSONA} Today is Sunday 11 Oct 2026.\n\nWhat you know about the user so far:\n- name is Alex\n\n{diya.PROFILE_REMINDER}"  # the reminder that it is only background comes last (docs/STYLE_BENCH.md)
+    assert "Do not mention any of it unless the question is about it or it changes the answer" in diya.PROFILE_REMINDER
 
 
 def test_the_day_follows_the_agents_clock(tmp_path):

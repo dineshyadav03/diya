@@ -65,10 +65,18 @@ class FixedConditions:
         return getattr(self._client, name)
 
 
+# What the model "knows about the user" in this benchmark: made up, never the owner's. The chat always puts the persona and this list in front of the model, and with them in front the small model answered
+# "I don't have access to your notes" to 3 of 5 questions about the notes that it routed correctly without them (found 2026-10-26), so the benchmark is asked the way the chat asks.
+PROFILE_LINES = ["Has a golden retriever named Rocky", "Plays the guitar", "Is studying AI at college", "Lives in Nellore", "Is allergic to peanuts"]
+
+
 def make_agent(workdir, model, client):
-    """An agent on a throwaway database with the fixture notes (as diya_evals makes it) and `model`."""
+    """An agent on a throwaway database with the fixture notes (as diya_evals makes it), the made-up profile, and `model`."""
+    profile = os.path.join(workdir, "profile.txt")
+    with open(profile, "w", encoding="utf-8", newline=chr(10)) as f:
+        f.write(chr(10).join(PROFILE_LINES) + chr(10))
     config = dataclasses.replace(
-        diya_config.load_config(), model=model, db_path=os.path.join(workdir, "heldout.db"), notes_dir=diya_evals.FIXTURE_NOTES, files_roots=(diya_evals.FIXTURE_NOTES,), auto_memory=False,
+        diya_config.load_config(), model=model, db_path=os.path.join(workdir, "heldout.db"), profile_path=profile, notes_dir=diya_evals.FIXTURE_NOTES, files_roots=(diya_evals.FIXTURE_NOTES,), auto_memory=False,
     )
     agent = diya.Agent(config, client=client)
     diya_evals.assert_isolated(agent)
@@ -116,14 +124,14 @@ def run_case(agent, case):
     before = max([e["id"] for e in agent.store.journal_recent(1)] or [0])
     started = time.monotonic()
     try:
-        answer, tools = agent.ask([{"role": "user", "content": case["prompt"]}])
+        answer, tools = agent.ask(agent.with_profile([{"role": "user", "content": case["prompt"]}]))  # as the chat asks: the persona and what is known about the person in front
         crashed = None
     except Exception as exc:  # noqa: BLE001 -- a crash is a failure to report, not a reason to stop the run
         answer, tools, crashed = "", [], f"{type(exc).__name__}: {exc}"
     seconds = time.monotonic() - started
     previews = {}
     for entry in reversed(agent.store.journal_recent(40)):
-        if entry["id"] > before and entry["kind"] == "tool":
+        if entry["id"] > before and entry["kind"] in ("tool", "flow"):  # a search that code made (the notes) is a call too: its preview is what was searched for
             previews.setdefault(entry["tool"], []).append(entry["args_preview"] or "")
     issues = [("tool", f"crashed with {crashed}")] if crashed else grade(case, answer, list(tools), previews)
     return {

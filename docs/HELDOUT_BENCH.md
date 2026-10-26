@@ -60,3 +60,9 @@ were run (ho-49 to ho-52). Third run: **41 of 45**, routing **45 of 45**. The ne
 - **ho-33** ("got a doctor visit on wednesday morning") still fails on length only (107 words after a read-only calendar look, which is allowed).
 
 Score history on this set, which changes as cases are replaced (so the numbers are not strictly comparable): 35 → 37 → 40 (labels corrected) → 41 → **42 of 45**. Case set hash `f0d54c21f3f0`.
+
+## Asked the way the chat asks (2026-10-26, evening)
+
+Until now this benchmark asked its messages with no persona and no list of what is known about the person in front of the model. The chat always has both, and with them the small model answered "I don't have access to your notes" to three of the five notes questions. The
+benchmark now asks the chat's way (`PROFILE_LINES`, a made-up profile; `agent.with_profile`), so its numbers changed meaning: with the old persona **41 of 45** (routing 43), with the new style rules **39 of 45**, and with the notes searched by code and the final persona
+**43 of 45** (routing 43, answers 45). Read docs/STYLE_BENCH.md, "What checking the routing found". The 42 of 45 above was measured before this and is not comparable.

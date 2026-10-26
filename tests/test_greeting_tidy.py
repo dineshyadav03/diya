@@ -130,7 +130,8 @@ def test_the_greeting_prompt_no_longer_invites_a_guessed_name():
     assert "otherwise use no name at all" in diya.SMALL_TALK_PROMPT and "you are Diya, they are not" in diya.SMALL_TALK_PROMPT
 
 
-def test_nothing_else_is_tidied_an_answer_with_a_picture_or_a_name_stays_as_the_model_wrote_it(tmp_path):
+def test_an_ordinary_answer_is_tidied_only_of_its_picture_and_its_praise_a_name_in_it_is_left(tmp_path):
+    # (2026-10-26, docs/STYLE_BENCH.md: replies are short and plain, so a picture and an opening "Sure!" go; this kind of tidy takes out nothing else, and it does not touch a name, which is the greeting tidy's business only)
     agent = make_agent(tmp_path, [text_reply(f"Sure! Hi Alex {SMILE} the capital is Paris."), text_reply("Got it.")])
-    assert agent.ask([{"role": "user", "content": "what is the capital of France?"}])[0] == f"Sure! Hi Alex {SMILE} the capital is Paris."
+    assert agent.ask([{"role": "user", "content": "what is the capital of France?"}])[0] == "Hi Alex the capital is Paris."
     assert agent.ask([{"role": "user", "content": "my flight is on Friday at 6"}])[0] == "Got it."

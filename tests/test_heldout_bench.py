@@ -103,9 +103,10 @@ def test_a_whole_run_on_a_scripted_model_counts_passes_and_failures_and_prints_e
     ]
     agent, client = agent_with(tmp_path, [
         text_reply("It is 36."),
-        tool_reply("search_notes", json.dumps({"query": "garden"})), text_reply("You plan to plant tomatoes and basil."),
+        text_reply("You plan to plant tomatoes and basil."),  # the notes are searched by code (2026-10-26), so the model is only asked to word what was found
         text_reply("Sure, I will remind you."),  # the model said it would and called nothing: a routing fault
     ])
+    agent.search_notes = lambda query: "Garden: plant tomatoes and basil once it warms up."
     lines = []
     records = hb.run(agent, cases, 1, say=lines.append, save=None)
     assert [r["passed"] for r in records] == [True, True, False]
@@ -116,7 +117,7 @@ def test_a_whole_run_on_a_scripted_model_counts_passes_and_failures_and_prints_e
     report = hb.render("scripted", records, {"cases_hash": hb.cases_hash(cases), "runs": 1, "temperature": 0.0, "seed": 7})
     assert "1 failure(s)" in report and "c (reminder-asked, trial 1)" in report and "expected add_reminder, got no tool" in report and "Sure, I will remind you." in report
     assert sum(1 for line in lines if line.startswith("[PASS]")) == 2 and sum(1 for line in lines if line.startswith("[FAIL]")) == 1
-    assert len(client.chat_calls) == 4
+    assert len(client.chat_calls) == 3
 
 
 def test_a_crash_is_a_failure_to_report_and_the_run_goes_on(tmp_path):
