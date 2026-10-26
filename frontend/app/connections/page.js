@@ -9,6 +9,9 @@ import { describeActionFailure, describeLoadFailure } from '../../lib/api-failur
 // Everything shown comes from the API already made safe to show, and a stored token is never sent
 // back here: only whether one exists.
 
+// Google's cards. One sign-in on Google's screen can connect all of them (the "Connect all Google" button); each still connects, and disconnects, on its own.
+const GOOGLE_CARDS = ['google_calendar', 'google_mail', 'google_calendar_edit', 'google_tasks', 'google_drive_files']
+
 async function readJson(response) {
   try {
     return await response.json()
@@ -117,6 +120,18 @@ export default function ConnectionsPage() {
     )
   }
 
+  // One trip to Google's screen for every Google card. The call waits for the owner to finish there; the answer says which cards were connected and which were left out (a permission unticked on Google's screen).
+  function connectAllGoogle() {
+    settle(
+      () => fetch('/api/connections/connect-google', { method: 'POST' }),
+      'google-all',
+      (body) =>
+        body.left_out && body.left_out.length
+          ? `Connected: ${body.connected.join(', ')}. Left off, because the permission was not allowed on Google's screen: ${body.left_out.join(', ')}.`
+          : `Connected: ${body.connected.join(', ')}.`,
+    )
+  }
+
   // The one-time setup of a connector that needs something given once (Google's client ID and secret). What was typed is sent, and then forgotten here: it is never shown again.
   function saveSetup(event, connector) {
     event.preventDefault()
@@ -155,6 +170,9 @@ export default function ConnectionsPage() {
   }
 
   const connectors = data ? data.connectors : []
+  const googleCards = connectors.filter((connector) => GOOGLE_CARDS.includes(connector.name) && connector.implemented)
+  // Offered once Google's app is set up (its id and secret are shared by every Google card) and while some Google card is still off.
+  const canConnectAllGoogle = googleCards.length > 1 && googleCards.some((connector) => connector.setup && connector.setup.done) && googleCards.some((connector) => !connector.connected)
 
   return (
     <main className="history-page memory-page connections-page">
@@ -195,8 +213,22 @@ export default function ConnectionsPage() {
                 <p className="memory-dim">No connectors are available yet.</p>
               ) : (
                 <ul className="memory-list">
+                  {canConnectAllGoogle && (
+                    <li className="memory-fact" data-status="candidate">
+                      <p className="memory-text">Connect all of Google at once</p>
+                      <p className="memory-dim">
+                        One Google screen, one Allow. It connects Calendar (reading), Gmail (reading), adding events, Tasks, and Drive and Docs (new things only). On Google&rsquo;s screen you can untick any of
+                        them: that card just stays off. You can still disconnect any card on its own afterwards, and every change Diya makes still waits for your approval.
+                      </p>
+                      <div className="memory-actions">
+                        <button type="button" className="memory-btn memory-btn--primary" onClick={connectAllGoogle} disabled={busy !== ''}>
+                          {busy === 'google-all' ? 'Waiting for your browser…' : 'Connect all Google'}
+                        </button>
+                      </div>
+                    </li>
+                  )}
                   {connectors.map((connector) => {
-                    const isBusy = busy === connector.name
+                    const isBusy = busy === connector.name || (busy === 'google-all' && GOOGLE_CARDS.includes(connector.name))
                     return (
                       <li key={connector.name} className="memory-fact" data-status={connector.connected ? 'accepted' : 'candidate'}>
                         <p className="memory-text">{connector.label}</p>
@@ -222,6 +254,11 @@ export default function ConnectionsPage() {
                                   ? 'Google says it granted something different from what was asked: '
                                   : 'Google confirmed it granted: '}
                                 <code>{permissions[connector.name].granted.join(' ')}</code>
+                              </p>
+                            )}
+                            {connector.connected && permissions[connector.name].together && (
+                              <p className="memory-dim">
+                                Connected in one sign-in with the other Google cards. Disconnecting this one stops Diya using it; Google is told to forget the permission when the last Google card is disconnected.
                               </p>
                             )}
                             {connector.connected && permissions[connector.name].signed_out && (

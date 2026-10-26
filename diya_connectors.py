@@ -189,7 +189,7 @@ def disconnect(config, name):
         removed = True
     except FileNotFoundError:
         removed = False
-    for leftover in (_granted_path(config, name), _signed_out_path(config, name)):
+    for leftover in (_granted_path(config, name), _signed_out_path(config, name), _together_path(config, name)):
         try:
             os.remove(leftover)
         except OSError:
@@ -210,6 +210,36 @@ def store_granted(config, name, scope_text):
     os.makedirs(config.connector_tokens_dir, exist_ok=True)
     with open(_granted_path(config, name), "w", encoding="utf-8", newline=chr(10)) as f:
         f.write(" ".join(scope_text.split()) + chr(10))
+
+
+def _together_path(config, name):
+    return os.path.join(config.connector_tokens_dir, f"{name}.together")
+
+
+def store_together(config, name, asked):
+    """Remember that this connection was made in ONE sign-in that asked the service for several permissions at once (Google's "Connect all"), and which: the permissions page then compares what the service
+    granted with the whole list that was asked, not with this one connector's own permission. Not a secret (it names permissions). Written beside the token and removed with it."""
+    os.makedirs(config.connector_tokens_dir, exist_ok=True)
+    with open(_together_path(config, name), "w", encoding="utf-8", newline=chr(10)) as f:
+        f.write(" ".join(sorted(set(asked))) + chr(10))
+
+
+def read_together(config, name):
+    """The permissions the one shared sign-in asked for, as a list, or None when this connection was made on its own."""
+    try:
+        with open(_together_path(config, name), encoding="utf-8") as f:
+            found = f.read().split()
+    except OSError:
+        return None
+    return found or None
+
+
+def clear_together(config, name):
+    """This connection is now made on its own (connected again by its own card): it no longer shares a sign-in."""
+    try:
+        os.remove(_together_path(config, name))
+    except OSError:
+        pass
 
 
 def read_granted(config, name):

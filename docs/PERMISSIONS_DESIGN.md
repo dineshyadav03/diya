@@ -25,3 +25,9 @@ Under the exact arguments, the card now says: **Risk level N of 4** and what tha
 ## When Google signs Diya out (2026-10-25, DIYA-065)
 
 If you remove Diya at myaccount.google.com/permissions, or a sign-in runs out, Google answers every refresh with `invalid_grant`. Diya now remembers that (`diya_connectors.mark_signed_out`: a short fingerprint of the stored token and the time, never the token), stops asking Google until you connect again, and says so: every Google reader tells you Google signed Diya out and to connect again on the Connections page, the permissions answer carries `signed_out`, and the card reads "Signed out by Google" with a "Connect again" button. Connecting again gives a new token, so the mark stops applying by itself; Disconnect clears it. Any other failure (a network fault, a busy Google) is not taken for a sign-out. `tests/test_google_signed_out.py`.
+
+## Connected in one sign-in (2026-10-26)
+
+"Connect all Google" makes one sign-in that asks Google for the five permissions at once. Each granted card keeps its own copy of the one token plus a `together` note (`<name>.together`: the list of permissions that sign-in asked for, not a secret).
+The permissions page then says so ("Connected in one sign-in with the other Google cards") and judges what Google granted against the **whole list that sign-in asked**, not against one card's own permission: its own permission present and nothing beyond what was
+asked is "matches"; anything else is flagged exactly as before. A card connected by itself again drops the note. The answer has a new boolean `together`. Proof: `tests/test_google_connect_all.py`.

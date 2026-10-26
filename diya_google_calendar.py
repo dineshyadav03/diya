@@ -242,8 +242,8 @@ def revoke_for(name):
 
 def clear_client(config):
     """Forget what the page stored. True if there was something. What the DIYA_GOOGLE_* settings say is the owner's to change, not this page's. The client is Google's and is shared by every Google
-    connector (Calendar, Gmail), and a sign-in belongs to the app it was made with, so Gmail is disconnected with it (the framework disconnects the connector whose card was used)."""
-    for name in SHARING_CLIENT:
+    connector, and a sign-in belongs to the app it was made with, so every Google card is disconnected with it, Calendar too (the framework also disconnects the card that was used; it is the same call twice)."""
+    for name in ALL_GOOGLE:
         if diya_connectors.is_connected(config, name):
             diya_connectors.disconnect(config, name)
     try:
@@ -289,6 +289,40 @@ def connect_to(config, scope, token_name, open_browser=webbrowser.open):
     """The whole flow, one call, for any Google scope (Calendar, Gmail, the adding ones): opens the owner's browser (with a PKCE challenge, RFC 7636), waits for them to finish, stores the
     refresh token under `token_name` (docs/CONNECTORS_DESIGN.md, D6). Raises ConnectorError, and stores nothing, at any
     failed step -- a cancelled or failed attempt never leaves a half-connected state."""
+    refresh_token, granted = _sign_in(config, scope, open_browser)
+    diya_connectors.store_token(config, token_name, refresh_token)
+    diya_connectors.store_granted(config, token_name, granted)  # what Google says it granted, shown on the permissions page
+    diya_connectors.clear_together(config, token_name)  # connected on its own now: it no longer shares one sign-in with the other cards
+
+
+def connect_all(config, scopes, open_browser=webbrowser.open):
+    """One Google screen for several cards at once ("Connect all"). `scopes` maps a card's connector name to the permission it asks Google for; only Google's own cards count. Google is asked for every one of
+    those permissions in ONE sign-in, and may allow only some of them (its screen lets the owner untick any): the one refresh token it returns is stored under each card whose permission was granted, and
+    every other card is left as it was. Returns (connected, left_out): the card names in each group.
+
+    Raises ConnectorError, and stores nothing, if the sign-in fails, if Google does not say which permissions it granted (nothing can be checked, so nothing is trusted), or if none of the cards' permissions was
+    granted. Each card keeps its own permission and can be disconnected on its own, as before; Google's own permission is taken back when the last one goes (revoke_for)."""
+    wanted = {name: scope for name, scope in scopes.items() if name in ALL_GOOGLE and isinstance(scope, str) and scope.strip()}
+    if not wanted:
+        raise ConnectorError("there is no Google card to connect")
+    asked = list(dict.fromkeys(wanted.values()))
+    refresh_token, granted_text = _sign_in(config, " ".join(asked), open_browser)
+    if not isinstance(granted_text, str) or not granted_text.split():
+        raise ConnectorError("Google did not say which permissions it granted, so nothing was connected -- connect the cards one by one instead")
+    granted = granted_text.split()
+    connected = [name for name, scope in wanted.items() if scope in granted]
+    if not connected:
+        raise ConnectorError("Google was not allowed to give Diya any of the permissions, so nothing was connected")
+    for name in connected:
+        diya_connectors.store_token(config, name, refresh_token)
+        diya_connectors.store_granted(config, name, granted_text)
+        diya_connectors.store_together(config, name, asked)
+    return connected, [name for name in wanted if name not in connected]
+
+
+def _sign_in(config, scope, open_browser):
+    """Google's whole sign-in for `scope` (one permission or several, separated by spaces): the browser, the redirect on the loopback port, the code exchange. Returns (the refresh token, the permissions
+    Google said it granted as one text or None). Stores nothing."""
     client_id, client_secret = _client_credentials(config)
 
     port, wait = _wait_for_redirect(CALLBACK_TIMEOUT)
@@ -315,8 +349,7 @@ def connect_to(config, scope, token_name, open_browser=webbrowser.open):
             "Google did not return a refresh token -- if you've connected before, remove Diya's access "
             "at https://myaccount.google.com/permissions and try again"
         )
-    diya_connectors.store_token(config, token_name, refresh_token)
-    diya_connectors.store_granted(config, token_name, tokens.get("scope"))  # what Google says it granted, shown on the permissions page
+    return refresh_token, tokens.get("scope")
 
 
 def _access_token(config):

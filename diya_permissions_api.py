@@ -1,6 +1,6 @@
 """What each connection can do, since when, and when it was last used (docs/PERMISSIONS_DESIGN.md), added 2026-10-18 for DIYA-072.
 
-    GET /api/permissions   {"connectors": [{"name", "label", "connected", "access": [sentences], "scope": the permission asked of the service or "", "granted": [what the service said it granted] or null, "granted_matches": bool or null, "since": ISO time or null,
+    GET /api/permissions   {"connectors": [{"name", "label", "connected", "access": [sentences], "scope": the permission asked of the service or "", "granted": [what the service said it granted] or null, "granted_matches": bool or null, "together": bool, "since": ISO time or null,
                                             "last_used": {"at", "what", "ok"} or null, "last_action": {"summary", "status", "at"} or null}]}
 
 Everything is taken from facts that are already recorded, never from the model: `access` is what the connector's code declares, `since` is when the stored sign-in was written, `last_used` is the newest row of
@@ -38,6 +38,13 @@ def overview(config, agent, connector):
             last_action = {"summary": printable(action["summary"], 200), "status": action["status"], "at": printable(action["executed_at"], 40)}
             break
     granted = diya_connectors.read_granted(config, connector.name) if connected else None
+    together = diya_connectors.read_together(config, connector.name) if connected else None  # the permissions the one shared Google sign-in asked for ("Connect all"), or None: made on its own
+    if not granted or not connector.scope:
+        matches = None
+    elif together:
+        matches = connector.scope in granted and set(granted) <= set(together)  # its own permission was granted, and nothing beyond what that sign-in asked for
+    else:
+        matches = connector.scope in granted and len(granted) == 1
     return {
         "name": connector.name,
         "label": printable(connector.label),
@@ -46,7 +53,8 @@ def overview(config, agent, connector):
         "access": [printable(line, 200) for line in connector.access],
         "scope": printable(connector.scope, 120),
         "granted": [printable(item, 120) for item in granted] if granted else None,  # what the service said it granted (None: it did not say)
-        "granted_matches": None if not granted or not connector.scope else connector.scope in granted and len(granted) == 1,
+        "granted_matches": matches,
+        "together": bool(together),  # made in one Google sign-in with the other Google cards: Google holds one permission for all of them
         "since": _since(config, connector.name) if connected else None,
         "last_used": last_used,
         "last_action": last_action,

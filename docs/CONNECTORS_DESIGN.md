@@ -273,3 +273,10 @@ variables, but two boxes on the Connections page.
 - Tested with stand-ins only: no sign-in has been made through it against the real Google. A secret pasted on a page is only as private as the files of this computer's account, like the connector tokens beside it.
 - The other idea, Diya as an **MCP client** (connectors added the way they are in Claude), is bigger: it needs a design of what an MCP server may do without asking. It is for the research-and-plan session, and
   it would still need this Google app for Google itself.
+
+## Connect all Google in one sign-in (2026-10-26)
+
+`POST /api/connections/connect-google` (same-origin route `app/api/connections/connect-google`; no body; blocks until the owner finishes in the browser) runs `diya_google_calendar.connect_all`: one Google sign-in asking for the permissions of every implemented Google card
+(`ALL_GOOGLE`), the one refresh token stored under each card whose permission Google says it granted, a `together` note beside each (see `docs/PERMISSIONS_DESIGN.md`). It answers `{connectors, connected: [labels], left_out: [labels]}`; 422 with Google's own reason when the
+sign-in fails, when Google does not say what it granted, or when none of the cards' permissions was granted, and then nothing is stored. A card that was left out is not touched. Disconnecting is per card as before; Google is told to forget only when the last Google card goes
+(`revoke_for`); forgetting Google's app (`clear_client`) now disconnects all five cards, Calendar too (it used to leave Calendar connected when another card's button was the one used).

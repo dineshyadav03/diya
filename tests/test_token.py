@@ -120,8 +120,9 @@ except ImportError:
 
 def ok_for(path):
     """What a request with the right token may answer. Web Push needs the optional cryptography package: without it every push route but /status answers 409 and says why."""
+    # The connect-google route has no Google card in this registry (a browser must never open in a test): "there is no Google card to connect" is the route answering, past the token.
     # The rename and forget routes have no chat or message here (a seeded chat would break every test that expects the app to have made none): "there is no chat 1" is the route answering, past the token.
-    return OK + ((409,) if path.startswith("/api/push/") and path != "/api/push/status" and not HAVE_PUSH_CRYPTO else ()) + ((404,) if path in ("/api/threads/1/rename", "/api/messages/1/forget") else ())
+    return OK + ((409,) if path.startswith("/api/push/") and path != "/api/push/status" and not HAVE_PUSH_CRYPTO else ()) + ((404,) if path in ("/api/threads/1/rename", "/api/messages/1/forget") else ()) + ((422,) if path == "/api/connections/connect-google" else ())
 
 
 def concrete_path(path):
@@ -188,6 +189,7 @@ ENDPOINTS = [
     ("POST", "/api/memory/merge", {"json": {"from_name": "Maya", "into_name": "Mayah"}}),
     ("GET", "/api/connections", {}),
     ("POST", "/api/connections/demo/connect", {"json": {"token": "a-token"}}),
+    ("POST", "/api/connections/connect-google", {}),
     ("POST", "/api/connections/demo/disconnect", {}),
     ("POST", "/api/connections/demo/setup", {"json": {"values": {"code": "x"}}}),
     ("POST", "/api/connections/demo/clear-setup", {}),

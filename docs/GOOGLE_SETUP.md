@@ -42,3 +42,14 @@ The Client ID and secret you pasted are shared; press **Connect** on each card y
 ## Gmail too (read-only)
 
 The same Google app serves Gmail: in the same project enable the **Gmail API**, add the scope `https://www.googleapis.com/auth/gmail.readonly` under *Data access*, and press **Connect** on the Gmail card (the Client ID and secret you pasted for Calendar are shared). Diya can then look through your mail when you ask and can never send, change or delete any. What it does and does not do, and what is not yet tried against a real account: `docs/GMAIL_DESIGN.md`.
+
+## All of it in one sign-in: "Connect all Google"
+
+Once the Client ID and secret are saved, the Connections page shows **Connect all Google** above the cards. It sends Google ONE sign-in that asks for the five permissions above (and no others), so there is one Google screen and one **Allow** instead of five.
+Before pressing it, do the project preparation once: enable the five services (Calendar, Gmail, Tasks, Drive, Docs), add the five scopes under *Data access*, and keep *Publishing status* on **In production**.
+
+- Google's screen lets you untick any permission. A card whose permission you unticked stays off (or stays as it was), and the page says which were left off. Nothing is connected unless Google says it granted that card's permission.
+- Google gives back one sign-in. Diya keeps it under each card that was granted, so every card still **disconnects on its own** (Diya then stops using that permission). Google is told to forget the whole permission when the **last** Google card is disconnected.
+- Every change Diya would make still waits for your Approve on the Actions page, one at a time, exactly as with five separate sign-ins.
+- The five separate **Connect** buttons stay, for connecting one card by itself (it then no longer shares the sign-in).
+

@@ -4,6 +4,8 @@
     POST /api/connections/{name}/connect      a token-kind connector: {"token": ...}. An oauth-kind
                                                one (unit C3): no body -- this call runs the whole
                                                browser flow itself and blocks until it finishes.
+    POST /api/connections/connect-google     every Google card in ONE sign-in (no body; blocks until the owner finishes in the browser): {"connectors", "connected": [labels], "left_out": [labels]}.
+                                               A card whose permission was unticked on Google's screen is left out and stays as it was. 422 with the reason when nothing could be connected.
     POST /api/connections/{name}/disconnect   remove a connector's stored credential (idempotent), and where the service has a way (Google) take the permission back there too:
                                                the answer says `revoked` true (done), false (could not be confirmed) or null (nothing to do, or left for the last Google card)
     POST /api/connections/{name}/setup        {"values": {"client_id": ..., "client_secret": ...}}: what a connector needs given once before it can connect (Google's client id
@@ -23,6 +25,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 import diya_connectors
+import diya_google_calendar
 from diya_connectors import ConnectorError
 from diya_memory import printable
 
@@ -35,9 +38,10 @@ class SetupBody(BaseModel):
     values: dict[str, str]
 
 
-def register(app, config, agent, connectors=diya_connectors.CONNECTORS):
+def register(app, config, agent, connectors=diya_connectors.CONNECTORS, connect_all=diya_google_calendar.connect_all):
     """Add the connections routes to `app`. `connectors` defaults to the real registry but can be
-    overridden (tests use fakes, since C1 itself registers none for real)."""
+    overridden (tests use fakes, since C1 itself registers none for real). `connect_all` is the one Google
+    sign-in for every Google card (tests stand in for Google's side of it)."""
 
     def find(name):
         connector = diya_connectors.by_name(connectors, name)
@@ -64,6 +68,20 @@ def register(app, config, agent, connectors=diya_connectors.CONNECTORS):
         except ConnectorError as exc:
             raise HTTPException(status_code=422, detail=printable(str(exc)))
         return {"connectors": diya_connectors.status(config, connectors)}
+
+    @app.post("/api/connections/connect-google")
+    def connect_google():
+        group = {c.name: c.scope for c in connectors if c.name in diya_google_calendar.ALL_GOOGLE and c.implemented and c.scope}
+        labels = {c.name: c.label for c in connectors}
+        try:
+            connected, left_out = connect_all(config, group)
+        except ConnectorError as exc:
+            raise HTTPException(status_code=422, detail=printable(str(exc)))
+        return {
+            "connectors": diya_connectors.status(config, connectors),
+            "connected": [printable(labels.get(name, name)) for name in connected],
+            "left_out": [printable(labels.get(name, name)) for name in left_out],
+        }
 
     @app.post("/api/connections/{name}/setup")
     def setup(name: str, body: SetupBody):

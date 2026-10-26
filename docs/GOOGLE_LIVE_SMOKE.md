@@ -22,3 +22,6 @@ Things to look for on every step: it answers within about fifteen seconds; the A
 plain sentence if it did not); asking the same write twice does not make two. If a step ends in "unknown", Google was reached but did not confirm: look in Google, then press the button that records what you found.
 
 When all eight pass, tell me, and the sheet's DIYA-216 (a smoke run on a real account) and the "needs your real account" rows (DIYA-081, -087, -093, -097) can be marked from what you saw.
+
+**If you connected with "Connect all Google"** (`docs/GOOGLE_SETUP.md`): before the eight steps, look at the Connections page. Each card you allowed on Google's screen should say Connected and "Connected in one sign-in with the other Google cards"; a card you unticked
+should say Not connected. Google's screen asked once, listing the permissions in plain words (it will say Diya is unverified: Advanced, then continue). If a step then answers "not connected" for a card you allowed, tell me which, and what Google's screen offered.

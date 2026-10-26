@@ -110,7 +110,7 @@ def test_no_credential_is_ever_in_the_answer(world):
     diya_connectors.store_token(config, "google_mail", "1//refresh-SECRET-5678")
     text = client.get("/api/permissions").text
     assert "SECRET" not in text and "refresh" not in text.replace("refresh token", "")
-    assert set(json.loads(text)["connectors"][0]) == {"name", "label", "connected", "signed_out", "access", "scope", "granted", "granted_matches", "since", "last_used", "last_action"}
+    assert set(json.loads(text)["connectors"][0]) == {"name", "label", "connected", "signed_out", "access", "scope", "granted", "granted_matches", "together", "since", "last_used", "last_action"}
 
 
 def test_every_catalog_entry_that_names_a_connection_names_a_real_one(world):
