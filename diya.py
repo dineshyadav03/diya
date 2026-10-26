@@ -33,6 +33,7 @@ import diya_knowledge
 import diya_mcp
 import diya_playbooks
 import diya_google_mail
+import diya_google_mailwrite
 import diya_journal
 import diya_repostudy
 import diya_memory
@@ -507,7 +508,7 @@ PROPOSAL_EXAMPLES = {
     "propose_calendar_event": "put the dentist on my calendar tomorrow at 5pm for 30 minutes", "propose_google_task": "add a Google task: renew the bus pass",
     "propose_drive_folder": "make a Drive folder called Notes", "propose_google_doc": "make a Google Doc called Plan with the line hello", "propose_todoist_task": "add a Todoist task: renew the bus pass",
 }
-MAIL_READ_ONLY = "I can look through your mail, but I can't send, write, reply to, delete or file any: my access to Gmail is read-only, on purpose. You can ask me what is in it, who wrote, or what an email says."
+MAIL_READ_ONLY = "I can look through your mail, but I can't send, write, reply to, delete or file any until you connect the Gmail cards for that on the Connections page (Gmail: drafts, send and organise); each one still asks you before it does anything, one email at a time. You can ask me what is in it, who wrote, or what an email says."
 REPO_STUDY_PROMPT = (
     "The user asked you to study a public software repository. Below is what was read from it, each line marked [observed] (read from the named file or from GitHub) or [inferred] (a guess from "
     "names). In at most five short plain sentences, say what the project is for and how it appears to be built. Use only what is below; say 'probably' for anything marked [inferred]; do not "
@@ -932,7 +933,7 @@ class Agent:
             args, notes = kind.prepare(args, said)
         try:
             if in_turn and kind.resolve is not None:  # a change to something that exists: the one thing is looked up now, by the words the person used (a read), or the proposal is refused
-                args = kind.resolve(self.config, args)
+                args = kind.resolve(self.config, args, said)
         except diya_actions.ActionError as exc:
             self._turn.refused.append(str(exc))
             return diya_actions.refused_text(exc)
@@ -1453,7 +1454,10 @@ class Agent:
         write or delete mail), or ("", the words of a search that found nothing, said by code) when the model is not to be asked, or None if the message is not about mail. Read-only; the model is given no tools
         to answer with. `follow_up`: the message disputes the mail report before it ("but there are mails"), so the recent inbox is looked at again."""
         if diya_intent.wants_mail_written(question):
-            return None, MAIL_READ_ONLY
+            state, words = diya_google_mailwrite.write_request(self.config, question)
+            if state == "ok":
+                return None  # the card for it is connected: the model may propose it, and the person approves exactly what it proposes
+            return None, words or MAIL_READ_ONLY
         if follow_up:
             question = "check my inbox"  # the person said there is mail: look at the whole recent inbox, not at the search that found none
         elif not diya_intent.asks_about_mail(question):
@@ -1522,7 +1526,7 @@ class Agent:
             mail = self._mail_study(question, on_event, follow_up)
             if mail is not None:
                 note, report = mail
-                refused = note is None and report == MAIL_READ_ONLY
+                refused = note is None and diya_intent.wants_mail_written(question)
                 self._journal("mail_write_refused" if refused else "read_mail", {"question": question}, "refused" if refused else "ok" if note is not None else "error", result=note or report, started=started,
                               kind="flow", note=None if note is not None else report)
                 if note is None:

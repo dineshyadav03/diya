@@ -162,7 +162,7 @@ class ActionKind:
     `auto_ok(args, text)` is only for a kind that may be switched to "do it straight away" (diya_autoapprove): it says whether EVERYTHING in the proposal is made of what the owner wrote in `text` (a title,
     a name, a line of text that they said, a time that they gave and that was not filled in). If it says no, or the kind has none, the proposal waits for an Approve whatever the switch says.
 
-    `resolve(config, args)` is for a kind that changes something that already exists at a service (a task, a file, an event, a message). Called by Agent while the proposal is made, AFTER `prepare`, it looks the one
+    `resolve(config, args, said)` is for a kind that changes something that already exists at a service (a task, a file, an event, a message). Called by Agent while the proposal is made, AFTER `prepare`, it looks the one
     thing up by the words the person used (a read) and returns the arguments with its exact reference in them (its id, its version), or raises InvalidArgs saying that there is none or that there are several, so that
     a change is never made to something that was only guessed at."""
 

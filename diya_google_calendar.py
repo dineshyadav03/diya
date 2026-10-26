@@ -225,11 +225,21 @@ SHARING_CLIENT = ("google_mail", "google_calendar_edit", "google_tasks", "google
 ALL_GOOGLE = ("google_calendar",) + SHARING_CLIENT
 
 
+def every_card():
+    """Every Google card there is: the first five, and the newer ones (diya_google_cards) that have been made. Looked up when asked, so that this module does not import the cards."""
+    try:
+        import diya_google_cards
+
+        return ALL_GOOGLE + tuple(name for name in diya_google_cards.names() if name not in ALL_GOOGLE)
+    except ImportError:
+        return ALL_GOOGLE
+
+
 def revoke_for(name):
     """The `revoke` step of one Google connector (diya_connectors.Connector.revoke): tell Google to forget its permission. True if Google confirmed, False if it could not be reached or refused. None, and
     nothing sent, while another Google card is still connected: Google may treat the permissions of one app as one, so revoking now could sign the others out. The last card to be disconnected revokes."""
     def revoke(config, token):
-        if any(other != name and diya_connectors.is_connected(config, other) for other in ALL_GOOGLE):
+        if any(other != name and diya_connectors.is_connected(config, other) for other in every_card()):
             return None
         try:
             response = httpx.post(REVOKE_URL, data={"token": token}, timeout=NETWORK_TIMEOUT)
@@ -243,7 +253,7 @@ def revoke_for(name):
 def clear_client(config):
     """Forget what the page stored. True if there was something. What the DIYA_GOOGLE_* settings say is the owner's to change, not this page's. The client is Google's and is shared by every Google
     connector, and a sign-in belongs to the app it was made with, so every Google card is disconnected with it, Calendar too (the framework also disconnects the card that was used; it is the same call twice)."""
-    for name in ALL_GOOGLE:
+    for name in every_card():
         if diya_connectors.is_connected(config, name):
             diya_connectors.disconnect(config, name)
     try:

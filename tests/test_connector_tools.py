@@ -677,7 +677,7 @@ def test_it_cannot_be_proposed_at_all_while_todoist_is_not_connected(config):
 
 def test_real_connectors_are_all_implemented(config):
     connectors = real_connectors(config)
-    assert {c.name for c in connectors} == {"home_assistant", "notion", "todoist", "google_calendar", "google_mail", "google_calendar_edit", "google_tasks", "google_drive_files"}
+    assert {c.name for c in connectors} == {"home_assistant", "notion", "todoist", "google_calendar", "google_mail", "google_calendar_edit", "google_tasks", "google_drive_files", "google_mail_drafts", "google_mail_send", "google_mail_organise"}
     assert all(c.implemented for c in connectors)
     token_ones = [c for c in connectors if not c.name.startswith("google_")]
     assert all(c.auth_kind == "token" and c.validate is not None for c in token_ones)

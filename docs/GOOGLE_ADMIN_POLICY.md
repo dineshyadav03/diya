@@ -5,10 +5,10 @@ future request for such a power would have to meet, so that it is a decision mad
 
 ## The rules that hold today (each is checked by `tests/test_google_admin_policy.py`)
 
-1. **The Google permissions Diya asks for are exactly five**, all about the owner's own things: `calendar.readonly`, `calendar.events`, `gmail.readonly`, `tasks`, `drive.file`. A sixth is a change to that test and a decision.
+1. **The Google permissions Diya asks for are exactly eight**, all about the owner's own things: `calendar.readonly`, `calendar.events`, `gmail.readonly`, `tasks`, `drive.file`, and the three Gmail cards added on 2026-10-26: `gmail.compose` (drafts), `gmail.send` (sending one approved email) and `gmail.modify` (filing mail). A ninth is a change to that test and a decision. Google's own meaning of `gmail.compose` and `gmail.modify` is wider than what Diya does with them (both include sending); Diya's code gives each card a list of the requests it may make (`diya_google_client.allow`), and `tests/test_google_mailwrite.py` pins that the drafts and organise cards have no way to send and that nothing can delete mail for good.
 2. **No permission that administers anything is asked for, by name or by kind**: nothing with `admin`, `directory`, `cloud-platform`, `cloud-billing`, `iam`, `compute`, `groups`, `vault`, `reseller` or `chrome.management` in it.
 3. **There is no connector for cloud administration or directory administration** in the registry, and none with those words in its name or description.
-4. **No tool or proposal can spend money or provision a resource**: the catalog (`diya_catalog.py`) has no entry at tier 3 or 4 (external-facing, destructive) and none whose effect mentions billing, a project, a resource, a role or an account.
+4. **No tool or proposal can spend money or provision a resource**: the catalog (`diya_catalog.py`) has no entry at tier 4 (destructive or privileged at scale), the entries at tier 3 (an email sent to another person, a task or draft deleted that Diya cannot bring back) are proposals the owner approves one at a time and are never done straight away, and none has an effect that mentions billing, a project, a resource, a role or an account.
 
 ## DIYA-135 Cloud administration is off by default
 

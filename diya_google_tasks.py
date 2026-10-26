@@ -122,7 +122,7 @@ def find_open_task(config, title):
     return task
 
 
-def _resolve(config, args):
+def _resolve(config, args, said=None):
     """Add the task's exact reference (id, version, name as Google has it) to the arguments; whatever the model put there is replaced."""
     task = find_open_task(config, args.get("title"))
     kept = {k: v for k, v in args.items() if k not in ("task_id", "etag", "title")}
@@ -294,11 +294,11 @@ def update_prepare(args, text):
     return kept, notes
 
 
-def update_resolve(config, args):
+def update_resolve(config, args, said=None):
     return _resolve(config, args)
 
 
-def move_resolve(config, args):
+def move_resolve(config, args, said=None):
     resolved = _resolve(config, args)
     under = resolved.pop("under", None)
     if isinstance(under, str) and under.strip():

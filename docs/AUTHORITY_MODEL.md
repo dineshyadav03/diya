@@ -45,9 +45,15 @@ One press of **Pause Diya** on the Status page (or `POST /api/pause`) stops the 
 | `propose_update_google_task` | proposal | 2 | proposes renaming a Google Task or changing its notes or due day | tasks.googleapis.com (only when approved) | by hand in Google Tasks: Diya does not keep the old words | owner approves each action | no | Google Tasks connected |
 | `propose_move_google_task` | proposal | 2 | proposes moving a Google Task to the top of the list or under another task | tasks.googleapis.com (only when approved) | by hand in Google Tasks | owner approves each action | no | Google Tasks connected |
 | `propose_delete_google_task` | proposal | 3 | proposes deleting one of the person's open Google Tasks | tasks.googleapis.com (only when approved) | Diya cannot bring it back | owner approves each action | no | Google Tasks connected |
+| `propose_gmail_draft` | proposal | 2 | proposes saving (or replacing) a draft email in the person's Drafts folder; a draft is not sent | gmail.googleapis.com (only when approved) | by hand in Gmail: the draft can be edited or deleted there | owner approves each action | no | Gmail: drafts connected |
+| `propose_discard_gmail_draft` | proposal | 3 | proposes throwing away one draft email | gmail.googleapis.com (only when approved) | Diya cannot bring it back | owner approves each action | no | Gmail: drafts connected |
+| `propose_send_gmail` | proposal | 3 | proposes sending a new email to an address the person typed | gmail.googleapis.com (only when approved) | an email that is sent cannot be taken back | owner approves each action | no | Gmail: send connected |
+| `propose_reply_gmail` | proposal | 3 | proposes replying to one email the person names, to the person who wrote it | gmail.googleapis.com (only when approved) | an email that is sent cannot be taken back | owner approves each action | no | Gmail: send and Gmail connected |
+| `propose_forward_gmail` | proposal | 3 | proposes forwarding one email the person names to an address they typed (text only) | gmail.googleapis.com (only when approved) | an email that is sent cannot be taken back | owner approves each action | no | Gmail: send and Gmail connected |
+| `propose_organise_gmail` | proposal | 2 | proposes filing one email the person names: archive, read or unread, star, one of their own labels, the bin and back | gmail.googleapis.com (only when approved) | by hand in Gmail: every one of these can be put back (the bin keeps mail for 30 days) | owner approves each action | no | Gmail: organise connected |
 | `propose_google_doc` | proposal | 2 | proposes a new Google Doc with at most a line of text | docs.googleapis.com (only when approved) | by hand in Google Drive: Diya cannot remove it | owner approves each action | no | Google Drive and Docs connected |
 | `read_mail` | flow | 0 | looks through the person's Gmail when they ask; the answer is written by a model with no tools | gmail.googleapis.com | n/a | none | yes | Gmail connected |
-| `mail_write_refused` | flow | 0 | answers a request to send, change or delete mail with the fact that access is read-only | none | n/a | none | no | - |
+| `mail_write_refused` | flow | 0 | answers a request to send, change or delete mail that cannot be proposed (the card for it is not connected, or it is for many emails at once) with the plain fact, and never lets the model guess | none | n/a | none | no | - |
 | `study_repo` | flow | 0 | reads a public GitHub repository the person names and shows the evidence | api.github.com, raw.githubusercontent.com | n/a | none | yes | - |
 | `read_calendar` | flow | 0 | reads the person's Google Calendar for the days they ask about and writes the list itself, with no model | www.googleapis.com | n/a | none | yes | Google Calendar connected |
 | `explain_connections` | flow | 0 | says which accounts are connected and what each can and cannot do, from the connection record and not from the model | none | n/a | none | no | - |
@@ -95,6 +101,12 @@ Meta's Rule of Two and Simon Willison's lethal trifecta say an agent should not,
 | `propose_update_google_task` | - | - | yes | 1 |
 | `propose_move_google_task` | - | - | yes | 1 |
 | `propose_delete_google_task` | - | - | yes | 1 |
+| `propose_gmail_draft` | - | - | yes | 1 |
+| `propose_discard_gmail_draft` | - | - | yes | 1 |
+| `propose_send_gmail` | - | - | yes | 1 |
+| `propose_reply_gmail` | - | - | yes | 1 |
+| `propose_forward_gmail` | - | - | yes | 1 |
+| `propose_organise_gmail` | - | - | yes | 1 |
 | `propose_google_doc` | - | - | yes | 1 |
 | `read_mail` | yes | yes | - | 2 |
 | `mail_write_refused` | - | - | - | 0 |

@@ -1,6 +1,7 @@
 """Diya holds no administrative or cloud power over Google (DIYA-135, -136, -137, -138; docs/GOOGLE_ADMIN_POLICY.md), added 2026-10-25.
 
-What this proves, from the source and the registries, not from a promise: the set of Google permission scopes the app asks for is exactly five, all about the owner's own calendar, mail, tasks and files; none of
+What this proves, from the source and the registries, not from a promise: the set of Google permission scopes the app asks for is exactly eight (the original five, and the three Gmail cards of 2026-10-26: drafts, send,
+organise), all about the owner's own calendar, mail, tasks and files; none of
 them, and nothing else in the app, names an administrative or cloud power; the connector registry has no connector for cloud or directory administration; the catalog has nothing at the external-facing or
 destructive tiers and nothing whose effect is about billing, projects, roles or accounts; and the policy page says what any future power would have to meet. A new scope, connector or tier-3/4 entry makes this
 fail until the decision is made on purpose.
@@ -17,6 +18,7 @@ SCOPE = re.compile(r"https://(?:www\.googleapis\.com/auth/[A-Za-z0-9._-]+|mail\.
 ALLOWED = {
     "https://www.googleapis.com/auth/calendar.readonly", "https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/tasks", "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/gmail.compose", "https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.modify",  # the Gmail cards (docs/GOOGLE_CHANGES.md)
 }
 POWER = re.compile(r"admin|directory|cloud-platform|cloud-billing|billing|\biam\b|compute|groups|vault|reseller|chrome\.management|apps\.order|ediscovery", re.IGNORECASE)
 
@@ -25,7 +27,7 @@ def app_sources():
     return [p for p in sorted(ROOT.glob("*.py")) if not p.name.startswith(("milestone", "diya_chat", "dossier"))]
 
 
-def test_the_google_permissions_the_app_asks_for_are_exactly_these_five():
+def test_the_google_permissions_the_app_asks_for_are_exactly_these_eight():
     found = set()
     for path in app_sources():
         found |= set(SCOPE.findall(path.read_text(encoding="utf-8")))

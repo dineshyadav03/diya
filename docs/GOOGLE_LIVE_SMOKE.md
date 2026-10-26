@@ -2,7 +2,8 @@
 
 Every test of the Google parts of Diya talks to a stand-in Google (`tests/test_google_fault_matrix.py` and the files named below). Nobody has yet connected them to the real Google. This is the plan for that:
 eight steps, one for each thing Diya can do with Google, each with what to say, what you should see, and how to undo it. Do them in this order; stop at the first one that does not do what the row says and tell me
-what you saw instead. It takes about ten minutes once the cards on the Connections page say Connected. Nothing here can send an invitation, share a file or delete anything.
+what you saw instead. It takes about ten minutes once the cards on the Connections page say Connected. Nothing in the first eight steps can send an invitation, share a file or delete anything for good; the
+Gmail steps further down can send an email, and the plan sends it only to your own address, only after you approve exactly that email.
 
 Before you start: Connections page, Calendar, Gmail, Tasks and Drive and Docs each show Connected (`docs/GOOGLE_SETUP.md` has the steps), and the Google project's publishing status is **In production**
 (`docs/GOOGLE_SURFACES_2026-10.md`: in Testing the sign-in dies after seven days).
@@ -24,6 +25,22 @@ Before you start: Connections page, Calendar, Gmail, Tasks and Drive and Docs ea
 
 Things to look for on every step: it answers within about fifteen seconds; the Activity page shows one line for it; for a write the Actions page shows exactly what was approved and one outcome (succeeded, or a
 plain sentence if it did not); asking the same write twice does not make two. If a step ends in "unknown", Google was reached but did not confirm: look in Google, then press the button that records what you found.
+
+## The Gmail cards (added 2026-10-26; DIYA-075, -076, -077, -078, -113)
+
+Before these: in your Google project, under Data access, add `gmail.compose`, `gmail.send` and `gmail.modify` (the Gmail API is already switched on for reading); then on the Connections page press Connect on **Gmail: drafts**,
+**Gmail: send** and **Gmail: organise** (three separate cards), and keep the plain **Gmail** card connected too: a reply and a forward find the email through it. Use your own address wherever a step needs one.
+
+| Operation | What to say to Diya | What you should see | Undo | Its stand-in test |
+|---|---|---|---|---|
+| `propose_gmail_draft` | "draft an email to YOUR-ADDRESS about the Diya smoke test, saying hello" | A card "Save a draft email to YOUR-ADDRESS: ... (a draft is not sent)" with the whole text in its fields; after approval the draft is in Gmail's Drafts, unsent | Delete the draft in Gmail | `tests/test_google_mailwrite.py` — `propose_gmail_draft` |
+| `propose_discard_gmail_draft` | "delete the draft Diya smoke test" | A card that says Diya cannot bring it back; after approval the draft is gone | Nothing: it was a test draft | `tests/test_google_mailwrite.py` — `propose_discard_gmail_draft` |
+| `propose_send_gmail` | "send an email to YOUR-ADDRESS saying this is the Diya smoke test" | A card with the address, the subject and the whole text, risk level 3; after approval "Sent ... and read back from your Sent folder", and the email arrives | Nothing unsends it: it went to you | `tests/test_google_mailwrite.py` — `propose_send_gmail` |
+| `propose_reply_gmail` | "reply to the email about the Diya smoke test saying got it" | A card naming which email and the address the reply goes to; after approval the reply is in the same conversation | Nothing unsends it: it went to you | `tests/test_google_mailwrite.py` — `propose_reply_gmail` |
+| `propose_forward_gmail` | "forward the email about the Diya smoke test to YOUR-ADDRESS" | A card "Forward ... text only without attachments"; after approval the forward arrives | Nothing unsends it: it went to you | `tests/test_google_mailwrite.py` — `propose_forward_gmail` |
+| `propose_organise_gmail` | "archive the email about the Diya smoke test" | A card; after approval the email has left your inbox (try mark as read, star and the bin too) | Move it back to the inbox in Gmail | `tests/test_google_mailwrite.py` — `propose_organise_gmail` |
+
+Two things to try that should be **refused**: "send an email to my boss saying hi" (no address typed: nothing is proposed) and "reply to Sam's email" when two of Sam's emails match (Diya lists them and asks which).
 
 When all eight pass, tell me, and the sheet's DIYA-216 (a smoke run on a real account) and the "needs your real account" rows (DIYA-081, -087, -093, -097) can be marked from what you saw.
 

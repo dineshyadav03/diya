@@ -22,5 +22,21 @@ hold for all of it, and what is built.
 | Service | Reads | Changes (each approved) | Card and permission |
 |---|---|---|---|
 | Google Tasks | the list across pages with state, due day and id; any list by name; finished tasks | complete, rename / notes / due day, move to the top or under another task, delete (level 3) | the existing Google Tasks card (`tasks`) |
+| Gmail | (the existing read card) | save or replace a draft, throw a draft away (level 3); send a new email, reply, forward (level 3); archive, read / unread, star, one of your own labels, the bin and back | three new cards: **Gmail: drafts** (`gmail.compose`), **Gmail: send** (`gmail.send`), **Gmail: organise** (`gmail.modify`) |
 
 More follow below as they are built.
+
+## Gmail (diya_google_mailwrite.py; DIYA-075, -076, -077, -078, -113)
+
+* **Three cards, so that each permission can be switched on alone.** Google's own `gmail.compose` and `gmail.modify` both include sending, which is wider than what the drafts and organise cards do; Diya's code gives each card a list of the exact
+  requests it may make (`diya_google_client.allow`) and a test pins that the drafts and organise cards have no way to send and that no card can delete mail for good.
+* **Who an email goes to.** Only an address the person typed in their own message. A name, a guess, an address from an email it read, or an address the model invented is refused when the proposal is made, and nothing is recorded. A reply goes to the Reply-To (else From) of the one
+  message found, and the card shows that address. At most 5 recipients, a copy only to a typed address, **no hidden copy and no attachment, ever**. A forward is text only.
+* **Finding the one email.** By the sender and/or the words the person used (the model's guess is used only if it is in their words), searched now with Gmail's own search over the last 60 days or the days they named. None found, or several, refuses the proposal and lists the candidates;
+  "the latest" is the one thing that picks, and the card says which email it picked.
+* **What is shown.** The card's arguments are shown as fields: every recipient, the subject and the whole text, and the approval is bound to exactly that. The text is one paragraph (Diya keeps an approval as one line). A forward sends the original's text as Gmail has it when it is sent, and sends nothing
+  if the subject is no longer what was proposed.
+* **Limits.** At most 20 emails sent a day, counted when Google answers (and when it might have). Never straight away. A send that may or may not have gone is `unknown` and is never retried; otherwise the message is read back (with the Gmail read card) and must be in Sent, to those addresses, with that subject.
+* **Filing** (archive, read / unread, star, label, bin, bring back) changes exactly the labels named, only on an email still as proposed, and is read back. A label must be one of the person's own that already exists (Diya makes none), and the system labels cannot be put on or taken off by name.
+* **A request to write mail** when the card for it is not connected is answered by code with the name of the card to connect; a request for many emails at once is refused ("one at a time"); neither asks the model.
+* **The text of an email is other people's words** when it is read, as everywhere else (docs/ORIGIN_LABELS.md): a proposal made in a turn that read mail is marked on its card.

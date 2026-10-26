@@ -100,7 +100,7 @@ def client(config):
     return TestClient(diya_web.create_app(config, agent, object()), base_url="https://localhost")
 
 
-SHARE_GOOGLES_CLIENT = ("google_calendar", "google_mail", "google_calendar_edit", "google_tasks", "google_drive_files")
+SHARE_GOOGLES_CLIENT = ("google_calendar", "google_mail", "google_calendar_edit", "google_tasks", "google_drive_files", "google_mail_drafts", "google_mail_send", "google_mail_organise")
 
 
 def google(client):

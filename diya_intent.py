@@ -588,7 +588,11 @@ _MAIL_NOT_ABOUT_MINE = re.compile(
 # connected" instead of adding the task). A message that is plainly about a to-do list, a task or a reminder is not a question about mail, whatever else it mentions.
 _MAIL_IS_A_TO_DO = re.compile(r"\b(?:to-?\s?do|task\s+list|my\s+tasks?|a\s+tasks?|add\s+(?:a\s+)?task|remind(?:ers?|\s+me))\b|^\W*(?:to-?do|task)\s*:", re.IGNORECASE)
 _MAIL_WRITE_AT_START = re.compile(r"^\W*(?:please\s+)?(?:(?:can|could|will|would)\s+you\s+)?(?:send|write|draft|compose|forward|delete|archive|trash|unsubscribe|mark|label|move|reply|respond)\b", re.IGNORECASE)
-_MAIL_WRITE_ANYWHERE = re.compile(r"\b(?:send|write|draft|compose)\s+(?:an?\s+|the\s+|my\s+|some\s+)?(?:e-?mail|mail|message|reply)\b|\b(?:delete|archive|trash)\s+(?:all\s+|my\s+|the\s+|that\s+|this\s+)?(?:e-?mails?|mails?|messages?)\b", re.IGNORECASE)
+_MAIL_WRITE_ANYWHERE = re.compile(
+    r"\b(?:send|write|draft|compose)\s+(?:an?\s+|the\s+|my\s+|some\s+)?(?:e-?mail|mail|message|reply)\b|\b(?:delete|archive|trash)\s+(?:all\s+|my\s+|the\s+|that\s+|this\s+)?(?:e-?mails?|mails?|messages?)\b"
+    r"|\b(?:put|add|apply)\s+(?:the\s+)?label\b|\b(?:star|unstar|restore|undelete|untrash|bring\s+back)\s+(?:all\s+|my\s+|the\s+|that\s+|this\s+)?(?:e-?mails?|mails?|messages?)\b(?!\s+(?:address|id|password|account|settings?|signature|app|backup))",
+    re.IGNORECASE,
+)
 MAX_MAIL_QUESTION_CHARS = 300
 
 

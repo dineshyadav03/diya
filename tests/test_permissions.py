@@ -46,7 +46,7 @@ def by_name(client):
 def test_every_real_connection_says_what_it_can_do_and_what_it_cannot(world):
     _, _, client = world
     found = by_name(client)
-    assert set(found) == {"home_assistant", "notion", "todoist", "google_calendar", "google_mail", "google_calendar_edit", "google_tasks", "google_drive_files"}
+    assert set(found) == {"home_assistant", "notion", "todoist", "google_calendar", "google_mail", "google_calendar_edit", "google_tasks", "google_drive_files", "google_mail_drafts", "google_mail_send", "google_mail_organise"}
     for name, item in found.items():
         assert item["access"] and all(isinstance(line, str) and line.endswith(".") for line in item["access"]), name
         assert any(line.startswith("Cannot") for line in item["access"]), f"{name} must say what it cannot do"
@@ -75,7 +75,7 @@ def test_the_words_match_the_code_a_connection_that_cannot_write_has_no_write_ac
         assert any("straight away" in line for line in item["access"]) == (name in straight_away), name  # the words say so exactly where the switch exists, and nowhere else (Todoist always asks)
         if name not in straight_away:
             assert all("straight away" not in line for line in item["access"]), name
-    assert {name for name, item in found.items() if any(line.startswith("Cannot send") for line in item["access"])} == {"google_mail"}
+    assert {name for name, item in found.items() if any(line.startswith("Cannot send") for line in item["access"])} == {"google_mail", "google_mail_drafts"}  # the two cards that say they cannot send; the send card is the only one that can
 
 
 def test_an_unconnected_connection_has_no_since_no_last_use_and_no_last_action(world):
