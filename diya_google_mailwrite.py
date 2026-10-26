@@ -201,6 +201,39 @@ def own_recipients(wanted, said, what="the recipient"):
     return ", ".join(chosen)
 
 
+def precheck_recipients(wanted, said, what="the recipient"):
+    """The people an email is for, as the model gave them, checked against the person's own words and kept as given: an address must be one they typed, and a name must be one they said (it is turned into an address by `people`,
+    with the contacts, when the proposal is resolved). InvalidArgs, saying what to ask, for anything else."""
+    typed = addresses_in(said)
+    items = []
+    for item in _split(wanted):
+        if EMAIL.fullmatch(item):
+            if item.lower() not in typed:
+                raise InvalidArgs(f"{item.lower()} is not an address the user typed in their message, so it is not used; ask them for the address, and use exactly what they type")
+            items.append(item.lower())
+        elif diya_intent.said_in(item, said) and len(item) <= 60:
+            items.append(item)
+        else:
+            raise InvalidArgs(f"{what} must be an email address the user typed or a name the user said; ask them ({diya_memory.printable(item, 60)!r} is neither)")
+    if not items:
+        raise InvalidArgs(f"{what} must be an email address the user typed or a name the user said; ask them")
+    return ", ".join(items)
+
+
+def people(config, wanted, said, what="the recipient"):
+    """(the addresses as one text, a note saying which came from the contacts) for the people an email is for: an address the person typed is used as typed; a name must be exactly one contact with exactly one address
+    (diya_google_contacts.resolve_names). InvalidArgs, saying what to ask, for anything else."""
+    import diya_google_contacts
+
+    items = _split(precheck_recipients(wanted, said, what))
+    addresses, notes = diya_google_contacts.resolve_names(config, items, said)
+    unique = []
+    for address in addresses:
+        if address not in unique:
+            unique.append(address)
+    return ", ".join(unique), "; ".join(notes)[:200]
+
+
 def _addresses(value, what, *, required=True):
     found = _split(value)
     if not found:
@@ -280,7 +313,7 @@ def _count_send(config):
 
 # ---- sending: a new email, a reply, a forward ----------------------------------------------------------------------------------------------------
 
-SEND_KEYS = {"mode", "to", "cc", "subject", "body", "thread_id", "in_reply_to", "references", "replying_to", "message_id", "original_subject"}
+SEND_KEYS = {"mode", "to", "cc", "subject", "body", "thread_id", "in_reply_to", "references", "replying_to", "message_id", "original_subject", "contacts"}
 
 
 def send_validate(args):
@@ -293,6 +326,7 @@ def send_validate(args):
     if len(to) + len(cc) > MAX_RECIPIENTS or {a.lower() for a in to} & {a.lower() for a in cc}:
         raise InvalidArgs(f"an email goes to at most {MAX_RECIPIENTS} different email addresses")
     _line(args.get("subject"), "the subject", SUBJECT_MAX)
+    _line(args.get("contacts"), "the note about the contacts used", 200, required=False)
     body = args.get("body")
     if mode == "forward":
         if body is not None and (not isinstance(body, str) or len(body) > BODY_MAX):
@@ -322,13 +356,14 @@ def send_validate(args):
 def send_render(args):
     to = diya_memory.printable(args["to"], 100)
     subject = diya_memory.printable(args["subject"], 70)
+    via = f" ({diya_memory.printable(args['contacts'], 60)})" if args.get("contacts") else ""
     if args["mode"] == "new":
         copy = f" (copy to {diya_memory.printable(args['cc'], 60)})" if args.get("cc") else ""
-        return f"Send an email to {to}{copy}: '{subject}'"
+        return f"Send an email to {to}{via}{copy}: '{subject}'"
     about = diya_memory.printable(args["replying_to"], 90 if args["mode"] == "reply" else 110)
     if args["mode"] == "reply":
         return f"Reply to {about} by email to {to}: '{subject}'"
-    return f"Forward {about} to {to}, text only without attachments"
+    return f"Forward {about} to {to}{via}, text only without attachments"
 
 
 def _forward_body(config, args):
@@ -382,15 +417,28 @@ def send_execute(config, args):
 def new_prepare(args, text):
     """A new email goes only to addresses the person typed; nothing about another email is taken from the model."""
     kept = {k: v for k, v in args.items() if k in ("to", "cc", "subject", "body")}
-    kept["to"] = own_recipients(kept.get("to"), text)
+    kept["to"] = precheck_recipients(kept.get("to"), text)
     if kept.get("cc"):
-        copies = [a for a in _split(own_recipients(kept["cc"], text, "a copy recipient")) if a not in _split(kept["to"])]
-        if copies:
-            kept["cc"] = ", ".join(copies)
-        else:
-            kept.pop("cc")
+        kept["cc"] = precheck_recipients(kept["cc"], text, "a copy recipient")
     kept["mode"] = "new"
     return kept, []
+
+
+def send_resolve(config, args, said):
+    """Names become addresses (one contact, one address each; the card says which); typed addresses stay as typed; a copy to someone already in `to` is dropped."""
+    to, note = people(config, args.get("to"), said)
+    resolved = dict(args, to=to)
+    if args.get("cc"):
+        cc, cc_note = people(config, args["cc"], said, "a copy recipient")
+        copies = [a for a in _split(cc) if a not in _split(to)]
+        if copies:
+            resolved["cc"] = ", ".join(copies)
+            note = "; ".join(n for n in (note, cc_note) if n)[:200]
+        else:
+            resolved.pop("cc")
+    if note:
+        resolved["contacts"] = note
+    return resolved
 
 
 def reply_resolve(config, args, said):
@@ -410,8 +458,10 @@ def reply_resolve(config, args, said):
 def forward_resolve(config, args, said):
     message = find_one_message(config, said, READ, args.get("sender"), args.get("about"))
     subject = message["subject"] if message["subject"].lower().startswith("fwd:") else f"Fwd: {message['subject']}"
-    resolved = {"mode": "forward", "to": own_recipients(args.get("to"), said, "the person to forward it to"), "subject": subject[:SUBJECT_MAX], "replying_to": _shown(message), "message_id": message["id"],
-                "original_subject": message["subject"]}
+    to, note = people(config, precheck_recipients(args.get("to"), said, "the person to forward it to"), said, "the person to forward it to")
+    resolved = {"mode": "forward", "to": to, "subject": subject[:SUBJECT_MAX], "replying_to": _shown(message), "message_id": message["id"], "original_subject": message["subject"]}
+    if note:
+        resolved["contacts"] = note
     if isinstance(args.get("body"), str) and args["body"].strip():
         resolved["body"] = args["body"]
     return resolved
@@ -419,7 +469,7 @@ def forward_resolve(config, args, said):
 
 # ---- drafts ---------------------------------------------------------------------------------------------------------------------------------------
 
-DRAFT_KEYS = {"to", "cc", "subject", "body", "replaces", "replaces_id"}
+DRAFT_KEYS = {"to", "cc", "subject", "body", "replaces", "replaces_id", "contacts"}
 
 
 def draft_validate(args):
@@ -428,6 +478,7 @@ def draft_validate(args):
     if len(to) + len(cc) > MAX_RECIPIENTS:
         raise InvalidArgs(f"a draft goes to at most {MAX_RECIPIENTS} email addresses, or to none yet")
     _line(args.get("subject"), "the subject", SUBJECT_MAX)
+    _line(args.get("contacts"), "the note about the contacts used", 200, required=False)
     _line(args.get("body"), "the text of the draft", BODY_MAX)
     _id_ok(args, "replaces_id", "the draft it replaces")
     if ("replaces" in args) != ("replaces_id" in args):
@@ -435,7 +486,7 @@ def draft_validate(args):
 
 
 def draft_render(args):
-    to = f" to {diya_memory.printable(args['to'], 100)}" if args.get("to") else " with no recipient yet"
+    to = (f" to {diya_memory.printable(args['to'], 100)}" + (f" ({diya_memory.printable(args['contacts'], 60)})" if args.get("contacts") else "")) if args.get("to") else " with no recipient yet"
     subject = diya_memory.printable(args["subject"], 70)
     if args.get("replaces_id"):
         return f"Replace the draft '{diya_memory.printable(args['replaces'], 70)}'{to}: now '{subject}' (a draft is not sent)"
@@ -445,15 +496,11 @@ def draft_render(args):
 def draft_prepare(args, text):
     kept = {k: v for k, v in args.items() if k in ("to", "cc", "subject", "body", "replaces")}
     if kept.get("to"):
-        kept["to"] = own_recipients(kept["to"], text)
+        kept["to"] = precheck_recipients(kept["to"], text)
     else:
         kept.pop("to", None)
     if kept.get("cc"):
-        copies = [a for a in _split(own_recipients(kept["cc"], text, "a copy recipient")) if a not in _split(kept.get("to"))]
-        if copies:
-            kept["cc"] = ", ".join(copies)
-        else:
-            kept.pop("cc")
+        kept["cc"] = precheck_recipients(kept["cc"], text, "a copy recipient")
     return kept, []
 
 
@@ -487,6 +534,20 @@ def _find_draft(config, subject):
 
 def draft_resolve(config, args, said):
     kept = {k: v for k, v in args.items() if k not in ("replaces", "replaces_id")}
+    notes = []
+    if kept.get("to"):
+        kept["to"], note = people(config, kept["to"], said)
+        notes.append(note)
+    if kept.get("cc"):
+        cc, note = people(config, kept["cc"], said, "a copy recipient")
+        copies = [a for a in _split(cc) if a not in _split(kept.get("to"))]
+        if copies:
+            kept["cc"] = ", ".join(copies)
+            notes.append(note)
+        else:
+            kept.pop("cc")
+    if any(notes):
+        kept["contacts"] = "; ".join(n for n in notes if n)[:200]
     replaces = args.get("replaces")
     if isinstance(replaces, str) and replaces.strip() and diya_intent.said_in(replaces, said):
         draft_id, subject, _to = _find_draft(config, replaces)
@@ -678,7 +739,7 @@ def _kind(name, label, connector, tool_name, description, properties, required, 
     )
 
 
-TO = {"type": "string", "description": "The email address, exactly as the user typed it in their message (several: separated by commas). Never guess or look one up."}
+TO = {"type": "string", "description": "The email address exactly as the user typed it in their message, or the person's name exactly as the user said it (Diya looks a name up in their contacts). Several: separated by commas. Never guess an address."}
 SUBJECT = {"type": "string", "description": "The subject, in a few words."}
 BODY = {"type": "string", "description": "The text of the email, plain, in one paragraph, in the user's voice, short. It is shown to the user in full before they approve."}
 FIND = {"sender": {"type": "string", "description": "Whose email it is, exactly as the user said it."}, "about": {"type": "string", "description": "Optional. Words from what it was about, exactly as the user said them."}}
@@ -686,7 +747,7 @@ FIND = {"sender": {"type": "string", "description": "Whose email it is, exactly 
 
 def send_kind():
     return _kind("gmail_send", "Send an email", SEND, "propose_send_gmail", "Propose sending a NEW email to an address the user typed in their message. Use it only when the user asks you to send or write an email to that address.",
-                 {"to": TO, "cc": TO, "subject": SUBJECT, "body": BODY}, ["to", "subject", "body"], validate=send_validate, render=send_render, execute=send_execute, asked=asks.sends_mail, prepare=new_prepare)
+                 {"to": TO, "cc": TO, "subject": SUBJECT, "body": BODY}, ["to", "subject", "body"], validate=send_validate, render=send_render, execute=send_execute, asked=asks.sends_mail, prepare=new_prepare, resolve=send_resolve)
 
 
 def reply_kind():

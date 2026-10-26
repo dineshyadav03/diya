@@ -74,10 +74,18 @@ def _has_address(said):
     return _ADDRESS.search(said) is not None
 
 
+_MAIL_TO_NAME = re.compile(r"\b(?:send|write|compose)\s+(?:an?\s+|the\s+)?(?:e-?mail|mail|message)\s+to\s+[A-Za-z]|\be-?mail\s+[A-Z][a-z]+\b|\bmail\s+[A-Z][a-z]+\b")
+
+
+def _mails_a_name(said):
+    """Does the message send mail to someone by NAME ("send an email to Maya", "email Maya that ..."): Diya turns a name into an address only through the contacts."""
+    return _MAIL_TO_NAME.search(said) is not None
+
+
 def sends_mail(text):
     """Send a NEW email to an address the person typed ("send an email to dad@x.com saying I will be late", "email dad@x.com that ...")."""
     said = _plain(text, MAIL_ASK_CHARS)
-    return said is not None and _NOT_A_SEND.search(said) is None and _asks(said, r"\b(?:send|e-?mail|mail|write|compose)\b", place=_has_address, limit=MAIL_ASK_CHARS)
+    return said is not None and _NOT_A_SEND.search(said) is None and _asks(said, r"\b(?:send|e-?mail|mail|write|compose)\b", place=lambda s: _has_address(s) or _mails_a_name(s), limit=MAIL_ASK_CHARS)
 
 
 def replies_to_mail(text):
@@ -98,6 +106,32 @@ def drafts_mail(text):
 def discards_draft(text):
     """Throw away one draft ("delete the draft about Sunday")."""
     return _asks(text, r"\b(?:delete|discard|remove|throw\s+away|get\s+rid\s+of|trash)\b", place=lambda said: re.search(r"\bdrafts?\b", said, re.IGNORECASE) is not None)
+
+
+# ---- Google Contacts (diya_google_contacts) -------------------------------------------------------------------------------------------------------
+
+_CONTACT = re.compile(r"\bcontacts?\b|\baddress\s*book\b", re.IGNORECASE)
+_PHONE_OR_MAIL = re.compile(r"\b(?:e-?mail|number|phone|mobile)\b", re.IGNORECASE)
+
+
+def adds_contact(text):
+    """Save a new contact ("add Maya to my contacts: maya@example.com", "save a new contact called Sam, number 98xxxxxxx")."""
+    return _asks(text, r"\b(?:add|save|create|make|put)\b", place=lambda said: _CONTACT.search(said) is not None)
+
+
+def updates_contact(text):
+    """Add an email or number to a contact ("add a number to Maya's contact: 98xxxxxxx", "update Sam's email in my contacts")."""
+    return _asks(text, r"\b(?:update|change|set|add|put|correct)\b", place=lambda said: _CONTACT.search(said) is not None and _PHONE_OR_MAIL.search(said) is not None)
+
+
+def deletes_contact(text):
+    """Delete one contact ("delete Maya from my contacts")."""
+    return _asks(text, r"\b(?:delete|remove|get\s+rid\s+of)\b", place=lambda said: _CONTACT.search(said) is not None)
+
+
+def groups_contact(text):
+    """Put a contact in a group (label), or take them out ("put Maya in my Classmates group", "remove Sam from the family group")."""
+    return _asks(text, r"\b(?:put|add|move|remove|take)\b[^.?!]{0,80}\b(?:group|label)\b", place=lambda said: _CONTACT.search(said) is not None or re.search(r"\b(?:group|label)\b", said, re.IGNORECASE) is not None and not _drive_word(said) and not _mail_word(said))
 
 
 # ---- Google Drive and Docs changes (diya_google_drive) ---------------------------------------------------------------------------------------------

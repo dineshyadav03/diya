@@ -247,7 +247,8 @@ def test_the_cards_are_real_connectors_with_their_one_permission_and_are_known_t
 @pytest.mark.parametrize("text, fn, expected", [
     ("send an email to dad@example.com saying I will be late", asks.sends_mail, True),
     ("email dad@example.com that i will be late", asks.sends_mail, True),
-    ("send an email to dad saying I will be late", asks.sends_mail, False),  # no address typed
+    ("send an email to dad saying I will be late", asks.sends_mail, True),  # a name: Diya turns it into an address only through the contacts
+    ("send an email saying I will be late", asks.sends_mail, False),  # no one named
     ("draft an email to dad@example.com about sunday", asks.sends_mail, False),  # a draft is not a send
     ("reply to maya@example.com's email saying yes", asks.sends_mail, False),  # a reply is not a new email
     ("how do i send an email to dad@example.com", asks.sends_mail, False),

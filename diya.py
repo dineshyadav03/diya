@@ -33,6 +33,7 @@ import diya_intent
 import diya_knowledge
 import diya_mcp
 import diya_playbooks
+import diya_google_contacts
 import diya_google_drive
 import diya_google_mail
 import diya_google_mailwrite
@@ -1497,6 +1498,17 @@ class Agent:
             return DRIVE_PROMPT + "\n" + report, report
         return "", report
 
+    def _contacts_study(self, question, on_event=None):
+        """For a plain question about one contact ("what is Maya's email?"): (the text built by code), or None if the message is not such a question, Contacts is not connected, or no one by that name is in them (then the chat
+        goes on as before: the person may have told Diya). Read-only; no model is asked, so what a contact holds cannot be mistaken for an instruction."""
+        found = diya_google_contacts.request(question)
+        if found is None or not diya_connectors.is_connected(self.config, diya_google_contacts.READ):
+            return None
+        if on_event is not None:
+            on_event("tool", "read_contacts")
+        text, status = diya_google_contacts.lookup(self.config, found)
+        return None if status == "nothing" else text
+
     def _github_get(self, url):
         """GET one address on GitHub's public hosts (and no other host), no credentials, no redirects followed: (status, text)."""
         response = _fetch(url, None, NETWORK_TIMEOUT, diya_repostudy.GITHUB_HOSTS)
@@ -1545,6 +1557,12 @@ class Agent:
                 self._journal("search_notes", {"query": topic}, "ok", result=note, started=started, kind="flow")
                 answer, _ = self._answer_from(messages, note, on_event)
                 return answer, ["search_notes"]
+        if only_tools is None:  # (before the mail: "what is Maya's email?" is a question about a contact, not a look through the mail)
+            started = time.monotonic()
+            contact = self._contacts_study(question, on_event)
+            if contact is not None:
+                self._journal("read_contacts", {"question": question}, "ok", result=contact, started=started, kind="flow")
+                return contact, ["read_contacts"]
         if only_tools is None and self.config.mail:
             started = time.monotonic()
             follow_up = diya_intent.disputes_mail_answer(question) and diya_google_mail.REPORT_MARK in _last_assistant_text(messages)

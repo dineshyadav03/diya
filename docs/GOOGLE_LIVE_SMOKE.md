@@ -71,6 +71,20 @@ nothing in the read card changes anything), then on the Connections page press C
 | `propose_unshare_drive_file` | "stop sharing the file Diya drive test two with YOUR-OTHER-ADDRESS" | A card; after approval they lose access | Share it again | `tests/test_google_drive.py` — `propose_unshare_drive_file` |
 | `propose_edit_google_doc` | "add a line to my Diya drive test doc saying second line", then "in my Diya drive test doc change hello to goodbye" | A card with the whole text (or the old and new words and how many places); after approval the Doc has it | Use the Doc's version history | `tests/test_google_drive.py` — `propose_edit_google_doc` |
 
+## Google Contacts (added 2026-10-26; DIYA-110, -111, -112, -113)
+
+Before these: in your Google project switch on the People API, add `contacts.readonly` and `contacts` under Data access, then on the Connections page press Connect on **Google Contacts (read)** and **Google Contacts (change)**.
+
+| Operation | What to say to Diya | What you should see | Undo | Its stand-in test |
+|---|---|---|---|---|
+| `read_contacts` | "what is YOUR-CONTACT's email?" | The name with its address and number, written by code, no model; two people with the name are listed | Nothing changes | `tests/test_google_contacts.py` — `read_contacts` |
+| `propose_add_contact` | "add Diya Test to my contacts: diya.test@example.com" | A card with the name and address; after approval the contact is in Google Contacts | Delete it there | `tests/test_google_contacts.py` — `propose_add_contact` |
+| `propose_update_contact` | "add a number to Diya Test's contact: 98765 43210" | A card with the contact and the number; after approval it is saved | Remove it there | `tests/test_google_contacts.py` — `propose_update_contact` |
+| `propose_contact_group` | "put Diya Test in my Classmates group" (a group of yours) | A card; after approval the contact is in the group | Take them out (say so) | `tests/test_google_contacts.py` — `propose_contact_group` |
+| `propose_delete_contact` | "delete Diya Test from my contacts" | A card that says Diya cannot bring it back (risk level 3); after approval it is gone | Nothing: it was a test contact | `tests/test_google_contacts.py` — `propose_delete_contact` |
+
+Also try "send an email to YOUR-CONTACT saying this is the Diya smoke test": the card should show the contact's address and "(Name, from your contacts)". A name that is two people, or nobody, is refused.
+
 Two things to try that should be **refused**: "send an email to my boss saying hi" (no address typed: nothing is proposed) and "reply to Sam's email" when two of Sam's emails match (Diya lists them and asks which).
 
 When all eight pass, tell me, and the sheet's DIYA-216 (a smoke run on a real account) and the "needs your real account" rows (DIYA-081, -087, -093, -097) can be marked from what you saw.

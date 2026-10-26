@@ -11,6 +11,7 @@ which migration it carries; the table below the notes says what each migration h
 * **Calendar, beyond adding.** Rename, move or cancel one of your own events (no guests), invite typed addresses, accept or decline an invitation, and add an event that repeats (two new cards on the permission already added). Ask "when is my dentist
   appointment?" or "when am I free tomorrow?" and the answer comes from the calendar by code, not from the model. (`docs/GOOGLE_CHANGES.md`)
 * **Google Drive and Docs.** Ask "search my drive for ..." or "read my study plan doc" and code reads it (a *Google Drive (read)* card; a model with no tools words the answer, as for mail). Rename, move, bin, bring back and share the files Diya made, and change the words in a Doc Diya made (a *Google Drive (change)* card), each only when you approve it. Sharing is with one address you typed, never public.
+* **Google Contacts.** Ask "what is Maya's email?" and code answers from your contacts; tell Diya to email, invite or share with a NAME and it uses the one contact with that name and shows which (two people with the name are refused). Add a contact, add an email or number to one, put one in a group, delete one, each only when you approve it.
 
 ## 2026-10-20
 * **Episodic recall.** A question is answered with the few earlier messages of yours closest in meaning to it, even if they are weeks old and no longer in the chat window. On invented data with the real models, the

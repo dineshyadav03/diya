@@ -250,7 +250,11 @@ def test_a_request_to_send_or_delete_mail_is_refused_plainly_with_nothing_called
     gmail = feed(monkeypatch, Gmail([EXAM]))
     agent = make_agent(tmp_path, [])
     answer, tools = ask(agent, "send an email to mum saying I am late")
-    assert answer == diya.MAIL_READ_ONLY and tools == [] and agent.client.chat_calls == [] and gmail.asked == []
+    assert "'Gmail: send'" in answer and "Connections page" in answer and tools == [] and agent.client.chat_calls == [] and gmail.asked == []  # a name: the card that sends is named
+    answer, tools = ask(agent, "write my essay and email it")
+    assert answer == diya.MAIL_READ_ONLY and tools == [] and agent.client.chat_calls == [] and gmail.asked == []  # not one of the kinds Diya can propose
+    answer, tools = ask(agent, "delete all my emails")
+    assert "one email at a time" in answer and tools == [] and agent.client.chat_calls == [] and gmail.asked == []
 
 
 def test_a_model_that_does_not_answer_still_gives_what_was_found(tmp_path, monkeypatch, connected):

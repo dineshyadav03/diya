@@ -368,7 +368,7 @@ def cancel_execute(config, args):
 def invite_prepare(args, text):
     """Guests are only addresses the person typed in their own message."""
     kept = {k: v for k, v in args.items() if k in ("title", "guests")}
-    kept["guests"] = mw.own_recipients(kept.get("guests"), text, "a guest")
+    kept["guests"] = mw.precheck_recipients(kept.get("guests"), text, "a guest")
     if len(mw._split(kept["guests"])) > MAX_GUESTS:
         raise InvalidArgs(f"at most {MAX_GUESTS} guests are invited at a time")
     return kept, []
@@ -377,24 +377,27 @@ def invite_prepare(args, text):
 def invite_resolve(config, args, said):
     event = find_event(config, GUESTS, args.get("title"), said)
     _plain_own(event, guests_ok=True)
+    guests, note = mw.people(config, args.get("guests"), said, "a guest")  # an address typed stays as typed; a name is one contact with one address (the card says so)
     have = {a["email"].lower() for a in _guests(event)}
-    new = [g for g in mw._split(args.get("guests")) if g.lower() not in have]
+    new = [g for g in mw._split(guests) if g.lower() not in have]
     if not new:
         raise InvalidArgs(f"{_shown(event)}: they are already invited")
     if len(have) + len(new) > MAX_ALL_GUESTS:
         raise InvalidArgs(f"an event invited by Diya has at most {MAX_ALL_GUESTS} guests")
-    return dict(_ref(event), guests=", ".join(new))
+    return dict(_ref(event), guests=", ".join(new), **({"contacts": note} if note else {}))
 
 
 def invite_validate(args):
-    gw._only(args, {"title", "event_id", "etag", "shown", "guests"}, "inviting guests")
+    gw._only(args, {"title", "event_id", "etag", "shown", "guests", "contacts"}, "inviting guests")
     _validate_ref(args)
+    mw._line(args.get("contacts"), "the note about the contacts used", 200, required=False)
     if not 1 <= len(mw._addresses(args.get("guests"), "a guest")) <= MAX_GUESTS:
         raise InvalidArgs(f"an invitation goes to one to {MAX_GUESTS} email addresses")
 
 
 def invite_render(args):
-    return f"Invite {diya_memory.printable(args['guests'], 120)} to {args['shown']} (Google Calendar emails them)"
+    via = f" ({diya_memory.printable(args['contacts'], 60)})" if args.get("contacts") else ""
+    return f"Invite {diya_memory.printable(args['guests'], 100)}{via} to {args['shown']} (Google Calendar emails them)"
 
 
 def _attendee_entry(attendee):
@@ -605,7 +608,7 @@ def cancel_kind():
 def invite_kind():
     return _kind("google_calendar_invite", "Invite guests to a Google Calendar event", GUESTS, "propose_invite_calendar_event",
                  "Propose inviting people to one of the user's own calendar events, by the email addresses the user typed in their message. Google Calendar emails them. Use it only when the user asks for that.",
-                 {"title": TITLE, "guests": {"type": "string", "description": "The email addresses, exactly as the user typed them (several: separated by commas). Never guess or look one up."}}, ["title", "guests"],
+                 {"title": TITLE, "guests": {"type": "string", "description": "The email addresses exactly as the user typed them, or the people's names exactly as the user said them (Diya looks a name up in their contacts). Several: separated by commas. Never guess an address."}}, ["title", "guests"],
                  validate=invite_validate, render=invite_render, execute=invite_execute, asked=asks.invites_to_event, prepare=invite_prepare, resolve=invite_resolve)
 
 

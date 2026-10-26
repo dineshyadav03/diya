@@ -28,6 +28,8 @@ hold for all of it, and what is built.
 
 | Google Drive and Docs | search your whole Drive; read a Doc, Slides, a Sheet or a text file with numbered paragraphs and a version; a file's earlier versions | rename, move (with from / to / how to undo shown), bin, bring back, share with one typed address (level 3), stop sharing; add to or change words in a Doc | two new cards: **Google Drive (read)** (`drive.readonly`) and **Google Drive (change)** (`drive.file`: only what Diya made) |
 
+| Google Contacts | a contact's email or number (code answers, no model); a NAME turned into an address for an email, an invitation or a share | add a contact, add an email or number, put in or out of a group of yours, delete one (level 3) | two new cards: **Google Contacts (read)** (`contacts.readonly`) and **Google Contacts (change)** (`contacts`) |
+
 More follow below as they are built.
 
 ## Gmail (diya_google_mailwrite.py; DIYA-075, -076, -077, -078, -113)
@@ -67,3 +69,10 @@ More follow below as they are built.
 * **The bin, not deletion**: Diya puts a file in Drive's bin (kept 30 days) and brings it back. It has no request that deletes for good (a test pins that). A folder that holds files is not binned.
 * **Sharing**: one address the person typed, a role they said (view, comment or edit), the type always "user" (never "anyone with the link", never a whole domain, never ownership). Google emails them. Stopping the sharing is its own kind (level 2).
 * **Conflicts and lost access**: a file's version is checked again when the action runs. A file changed since, in the bin, gone, or no longer visible means nothing is done, with the reason in words. A Doc is edited with `requiredRevisionId`: an edit made by anyone since means Google refuses the write and the document is exactly as it was. The words to change must be the person's own, found in the Doc 1 to 10 times, and the count is shown.
+
+## Google Contacts (diya_google_contacts.py; DIYA-110, -111, -112, -113)
+
+* **A name is not an address.** Until now an email, an invitation or a share went only to an address the person typed. A NAME ("email Maya", "invite Sam") is now turned into an address only when exactly one contact has that name and exactly one email saved (`diya_google_mailwrite.people`, one door for all three). Two
+  people, nobody, or one person with two addresses refuses the proposal and lists them; the name must be one the person said; the card says "(Maya Rao, from your contacts)". An address the person typed is used as typed, and an address they did not type is never used. This is DIYA-113: no email goes to a target that was ambiguous.
+* **Asking.** "What is Maya's email?" and "find the contact Sam" are answered by code from the contacts with no model and no tool (contacts can hold what anyone shared). When no one by that name is in them the chat goes on as before: the person may have told Diya.
+* **Changing.** Add a contact (only details the person typed; a duplicate by name or address is refused), add an email or number to one found now (against its version), put one in or out of one of the person's own groups (built-in groups cannot be changed and Diya makes none), delete one (level 3). All read back.

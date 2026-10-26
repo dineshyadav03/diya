@@ -506,7 +506,7 @@ _ROLE_WORDS = {"reader": r"\b(?:view\w*|read\w*|see)\b", "commenter": r"\bcommen
 
 def share_prepare(args, text):
     kept = {k: v for k, v in args.items() if k in ("name", "email", "role")}
-    kept["email"] = mw.own_recipients(kept.get("email"), text, "the person to share with")
+    kept["email"] = mw.precheck_recipients(kept.get("email"), text, "the person to share with")
     if len(mw._split(kept["email"])) != 1:
         raise InvalidArgs("a file is shared with one person at a time")
     pattern = _ROLE_WORDS.get(kept.get("role"))
@@ -524,6 +524,10 @@ def share_resolve(config, args, said):
     file = find_file(config, args.get("name"), said)
     if not _can(file, "canShare"):
         raise InvalidArgs(f"you may not share {diya_memory.printable(file['name'], 60)}")
+    email, note = mw.people(config, args["email"], said, "the person to share with")  # an address typed stays as typed; a name is one contact with one address (the card says so)
+    if len(mw._split(email)) != 1:
+        raise InvalidArgs("a file is shared with one person at a time")
+    args = dict(args, email=email)
     try:
         have = [p for p in _permissions(config, file["id"]) if str(p.get("emailAddress", "")).lower() == args["email"].lower()]
     except client.GoogleError as exc:
@@ -531,12 +535,13 @@ def share_resolve(config, args, said):
     order = ("reader", "commenter", "writer")
     if have and have[0].get("role") in order and order.index(have[0]["role"]) >= order.index(args["role"]):
         raise InvalidArgs(f"{args['email']} can already {ROLES[have[0]['role']]} it")
-    return dict(_ref(file), email=args["email"], role=args["role"])
+    return dict(_ref(file), email=args["email"], role=args["role"], **({"contacts": note} if note else {}))
 
 
 def share_validate(args):
-    gw._only(args, {"name", "file_id", "version", "email", "role"}, "sharing a file")
+    gw._only(args, {"name", "file_id", "version", "email", "role", "contacts"}, "sharing a file")
     _validate_ref(args)
+    mw._line(args.get("contacts"), "the note about the contacts used", 200, required=False)
     if len(mw._addresses(args.get("email"), "the person to share with")) != 1:
         raise InvalidArgs("a file is shared with one person at a time")
     if args.get("role") not in ROLES:
@@ -544,7 +549,8 @@ def share_validate(args):
 
 
 def share_render(args):
-    return f"Share the Drive file '{diya_memory.printable(args['name'], 80)}' with {args['email']} so they can {ROLES[args['role']]} it (Google emails them; only that address, never anyone with the link)"
+    via = f" ({diya_memory.printable(args['contacts'], 50)})" if args.get("contacts") else ""
+    return f"Share the Drive file '{diya_memory.printable(args['name'], 70)}' with {args['email']}{via} so they can {ROLES[args['role']]} it (Google emails them; only that address, never anyone with the link)"
 
 
 def share_execute(config, args):
@@ -718,7 +724,7 @@ def action_kinds():
               {"name": NAME}, ["name"], validate=trash_validate, render=restore_render, execute=restore_execute, asked=asks.restores_drive_file, resolve=restore_resolve),
         _kind("google_drive_share", "Share a Drive file", "propose_share_drive_file",
               "Propose sharing one file with ONE email address the user typed, as a viewer, commenter or editor as they said. Google emails them. Never for 'anyone with the link'. Use it only when the user asks for that.",
-              {"name": NAME, "email": {"type": "string", "description": "The email address, exactly as the user typed it. Never guess or look one up."}, "role": {"type": "string", "enum": list(ROLES), "description": "reader (view), commenter or writer (edit), as the user said."}},
+              {"name": NAME, "email": {"type": "string", "description": "The email address exactly as the user typed it, or the person's name exactly as the user said it (Diya looks a name up in their contacts). Never guess an address."}, "role": {"type": "string", "enum": list(ROLES), "description": "reader (view), commenter or writer (edit), as the user said."}},
               ["name", "email", "role"], validate=share_validate, render=share_render, execute=share_execute, asked=asks.shares_drive_file, prepare=share_prepare, resolve=share_resolve),
         _kind("google_drive_unshare", "Stop sharing a Drive file", "propose_unshare_drive_file", "Propose stopping the sharing of one file with one email address the user typed. Use it only when the user asks for that.",
               {"name": NAME, "email": {"type": "string", "description": "The email address, exactly as the user typed it."}}, ["name", "email"], validate=unshare_validate, render=unshare_render, execute=unshare_execute,

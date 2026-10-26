@@ -581,7 +581,8 @@ _MAIL_READ = re.compile(
     r"\b(?:check|read|show|find|search|look|any|anything|did|has|have|had|latest|newest|new|unread|recent|summari[sz]e|what|which|who|when|list|open|see|got|received|waiting|from|about|regarding)\b", re.IGNORECASE
 )
 _MAIL_NOT_ABOUT_MINE = re.compile(
-    r"\bhow\s+(?:do|does|did|to|can)\b[^?]*\b(?:work|works|set\s*up|use)\b|\bwhat\s+(?:is|are)\s+(?:an?\s+)?(?:e-?mail|gmail|inbox)\b|\bhistory\s+of\b|\b(?:my\s+)?e-?mail\s+(?:address|id|password)\b|\b(?:connect|link|set\s*up)\b",
+    r"\bhow\s+(?:do|does|did|to|can)\b[^?]*\b(?:work|works|set\s*up|use)\b|\bwhat\s+(?:is|are)\s+(?:an?\s+)?(?:e-?mail|gmail|inbox)\b|\bhistory\s+of\b|\b(?:my\s+)?e-?mail\s+(?:address|id|password)\b|\b(?:connect|link|set\s*up)\b"
+    r"|\b(?:what|whats|what's|who|whose)\b[^?]*?(?:'s|s')\s+e-?mail(?:\s+address)?\s*\??$|\be-?mail\s+(?:address\s+)?(?:of|for)\s+\w+\s*\??$",
     re.IGNORECASE,
 )
 # "put 'email professor sharma' on my to-do list" holds the word email and the word list, and is a task, not a look through the mailbox (found by the held-out benchmark on 2026-10-26: Diya answered "Gmail is not
