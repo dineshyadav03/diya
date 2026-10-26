@@ -76,7 +76,7 @@ def test_with_nothing_proposed_the_list_is_empty_and_says_what_kinds_there_are(w
     body = world.client.get("/api/actions").json()
     assert body["pending"] == [] and body["history"] == []
     assert body["counts"] == {status: 0 for status in diya_actions.STATUSES}
-    assert body["kinds"] == [{"name": "add_task", "label": "Add a task", "connector": None, "offered": True, "available": True}]
+    assert body["kinds"] == [{"name": "add_task", "label": "Add a task", "connector": None, "offered": True, "available": True, "can_auto": False, "auto": False}]
 
 
 def test_with_no_kinds_at_all_the_page_is_told_there_is_nothing_to_propose(monkeypatch):
@@ -433,5 +433,5 @@ def test_the_actions_routes_are_get_and_post_only(world):
 
 def test_every_actions_route_the_app_has_is_listed_here(world):
     paths = {route.path for route in world.app.routes if route.path.startswith("/api/actions")}
-    assert paths == {"/api/actions", "/api/actions/{action_id}", "/api/actions/{action_id}/approve",
+    assert paths == {"/api/actions", "/api/actions/auto", "/api/actions/{action_id}", "/api/actions/{action_id}/approve",
                      "/api/actions/{action_id}/reject", "/api/actions/{action_id}/resolve"}

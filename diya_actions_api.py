@@ -4,6 +4,8 @@ Actions page. The rules are diya_actions', the same ones the command line applie
     GET  /api/actions                 what is waiting for the owner, the most recent decided or finished actions, the
                                        counts, and which kinds of action Diya can propose at all
     GET  /api/actions/{id}            one action: its fields, the message it came from, and its events
+    POST /api/actions/auto            {"kind": ..., "on": true|false}  switch one kind of addition that touches only the owner to "do it straight away" (docs/ACTIONS_DESIGN.md), or back to asking;
+                                       the answer is the same as GET /api/actions. 404 for a kind Diya has not got, 409 for one that always asks
     POST /api/actions/{id}/approve    {"args_hash": ...}  approve exactly what the page showed, then run it
     POST /api/actions/{id}/reject     turn a pending action down; it is never performed
     POST /api/actions/{id}/resolve    {"happened": true|false, "note": ...|null}  record what happened to an action
@@ -26,6 +28,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, StrictBool
 
 import diya_actions
+import diya_autoapprove
 import diya_connectors
 import diya_catalog
 import diya_pause
@@ -42,6 +45,11 @@ _STATUS = ((UnknownAction, 404), (IllegalTransition, 409), (HashMismatch, 409), 
 
 class ApproveBody(BaseModel):
     args_hash: str
+
+
+class AutoBody(BaseModel):
+    kind: str
+    on: StrictBool
 
 
 class ResolveBody(BaseModel):
@@ -108,6 +116,7 @@ def register(app, config, agent):
         }
 
     def kinds():
+        enabled = set(diya_autoapprove.enabled_kinds(agent.store))
         return [
             {
                 "name": printable(kind.name),
@@ -115,6 +124,8 @@ def register(app, config, agent):
                 "connector": printable(kind.connector) if kind.connector is not None else None,
                 "offered": kind.tool is not None,
                 "available": kind.connector is None or diya_connectors.is_connected(config, kind.connector),
+                "can_auto": kind.name in diya_autoapprove.AUTO_KINDS,  # may be switched to "do it straight away" (diya_autoapprove); no other kind ever can
+                "auto": kind.name in enabled,
             }
             for kind in agent.actions.kinds
         ]
@@ -158,6 +169,17 @@ def register(app, config, agent):
                 for event, actor, at, detail in agent.actions.events(action_id)
             ],
         }
+
+    @app.post("/api/actions/auto")
+    def set_auto(body: AutoBody):
+        """Switch one kind of addition to "do it straight away" (diya_autoapprove) or back to asking. 404 for a kind Diya does not have, 409 for one that can never be done without asking."""
+        if diya_actions.by_name(agent.actions.kinds, body.kind) is None:
+            raise HTTPException(status_code=404, detail=f"there is no kind of action {printable(body.kind)}")
+        try:
+            diya_autoapprove.set_enabled(agent.store, body.kind, body.on)
+        except ValueError:
+            raise HTTPException(status_code=409, detail=f"{printable(body.kind)} always asks you first: only additions that touch just you can be done straight away")
+        return listing()
 
     @app.post("/api/actions/{action_id}/approve")
     def approve(action_id: int, body: ApproveBody):

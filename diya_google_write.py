@@ -47,10 +47,10 @@ FOLDER_TYPE = "application/vnd.google-apps.folder"
 
 # connector name -> (label, what it does, scope, the API(s) to switch on)
 GOOGLE_WRITE = {
-    "google_calendar_edit": ("Google Calendar (add events)", "Add events to your calendar, each one when you approve it.", "https://www.googleapis.com/auth/calendar.events", "Google Calendar API"),
-    "google_tasks": ("Google Tasks", "List your Google Tasks and add one when you approve it.", "https://www.googleapis.com/auth/tasks", "Google Tasks API"),
+    "google_calendar_edit": ("Google Calendar (add events)", "Add events to your calendar: each one when you approve it, or straight away if you switch that on.", "https://www.googleapis.com/auth/calendar.events", "Google Calendar API"),
+    "google_tasks": ("Google Tasks", "List your Google Tasks and add one: when you approve it, or straight away if you switch that on.", "https://www.googleapis.com/auth/tasks", "Google Tasks API"),
     "google_drive_files": (
-        "Google Drive and Docs (new things)", "Make a folder or a Google Doc when you approve it. Diya can only see what she made herself (the narrow drive.file scope).",
+        "Google Drive and Docs (new things)", "Make a folder or a Google Doc: when you approve it, or straight away if you switch that on. Diya can only see what she made herself (the narrow drive.file scope).",
         "https://www.googleapis.com/auth/drive.file", "Google Drive API and Google Docs API",
     ),
 }
@@ -74,9 +74,9 @@ def _steps(api, scope):
 
 
 ACCESS = {
-    "google_calendar_edit": ("Adds an event, just for you, to your calendar, but only when you approve that one event.", "Cannot invite anyone, and cannot change or delete events."),
-    "google_tasks": ("Lists your open Google Tasks.", "Adds a task, but only when you approve that one task.", "Cannot complete, change or delete tasks."),
-    "google_drive_files": ("Makes a folder or a new Google Doc, but only when you approve that one.", "Can see only the files and folders Diya made herself, never the rest of your Drive.", "Cannot share, move or delete anything."),
+    "google_calendar_edit": ("Adds an event, just for you, to your calendar: when you approve that one event, or straight away when you ask for it, if you switched that on.", "Cannot invite anyone, and cannot change or delete events."),
+    "google_tasks": ("Lists your open Google Tasks.", "Adds a task: when you approve that one task, or straight away when you ask for it, if you switched that on.", "Cannot complete, change or delete tasks."),
+    "google_drive_files": ("Makes a folder or a new Google Doc: when you approve that one, or straight away when you ask for it, if you switched that on.", "Can see only the files and folders Diya made herself, never the rest of your Drive.", "Cannot share, move or delete anything."),
 }
 
 

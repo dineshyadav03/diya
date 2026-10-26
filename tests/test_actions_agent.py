@@ -135,7 +135,8 @@ def test_a_proposal_is_recorded_and_the_effect_is_never_performed():
     agent = agent_with(task_kind(executed=executed),
                        replies=[tool_reply(PROPOSE, '{"title": "buy milk"}'), text_reply("It is waiting for you.")])
     answer, called = ask(agent, "add a task: buy milk", thread_id=4, message_id=9)
-    assert (answer, called) == ("It is waiting for you.", [PROPOSE])
+    assert called == [PROPOSE]
+    assert answer == "Ready for your OK: Add the task 'buy milk'.\n\nNothing is added to your account until you press Approve (under this message, or on the Actions page)."  # built by code, not the model's words
     assert executed == []  # the gate: nothing happened
     (action,) = agent.actions.actions()
     assert action["status"] == "pending" and action["kind"] == "add_task"
@@ -270,7 +271,7 @@ def test_a_proposal_the_message_did_not_ask_for_is_refused_in_one_fixed_sentence
     assert agent.actions.actions() == []
     assert tool_text(agent) == diya_actions.NOT_ASKED_TEXT == (
         "Not proposed: the user did not ask for that. Answer what they said instead, and do not propose it unless they ask.")
-    assert seen == ["I need to buy milk"]  # judged by the owner's own message, exactly
+    assert set(seen) == {"I need to buy milk"}  # judged by the owner's own message, exactly (and again after the turn, when a reply that claims a proposal is checked)
 
 
 def test_a_message_that_does_ask_gets_its_proposal_recorded():

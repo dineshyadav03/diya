@@ -51,7 +51,7 @@ MAX_TAINT_SOURCES = 20
 
 STATUSES = ("pending", "approved", "executing", "succeeded", "failed", "rejected", "expired", "unknown")
 ACTORS = ("model", "owner", "system")
-VIA = ("ui", "cli")  # how the owner decided: the page, or `python diya_actions.py`
+VIA = ("ui", "cli", "auto")  # how the owner decided: the page, `python diya_actions.py`, or "auto": the owner's standing switch for this kind (diya_autoapprove), applied to a proposal made from the owner's own message
 
 # the status each event leaves an action in; replaying an action's events in order must land on its
 # current status -- that is the integrity check
@@ -277,6 +277,46 @@ def proposed_text(action, notes=()):
         f"Proposed as action #{action['id']}: {action['summary'].rstrip('.')}.{said} Nothing has happened yet: the owner has "
         "to approve it on the Actions page. Tell the owner it is waiting for them, and do not say it is done."
     )
+
+
+def proposal_reply(made, ran=()):
+    """What to tell the person after the turn made proposals, built by code from what was recorded and never from what the model wrote (2026-10-26: the model wrote "Why? To help test my own system", offered
+    to send reminders and added a private fact about a pet, and, in the same chat, two replies saying a folder and a document were "waiting for your approval" when no action had been recorded at all).
+    `made` is [(action, notes)] still waiting: each action's own sentence (the one the owner approves) and whatever was left out of it. `ran` is [action] done straight away (diya_autoapprove), each as it ended:
+    what happened is told in its own words, and an outcome that is not known is said to be not known."""
+    parts = []
+    for action in ran:
+        said = action["summary"].rstrip(".") + "."
+        result = f" {action['result']}" if action.get("result") else ""
+        if action["status"] == "succeeded":
+            parts.append(f"Done: {said}{result}")
+        elif action["status"] == "unknown":
+            parts.append(f"Not sure it was done: {said}{result or ' What happened is not known.'} Look in Google, then record what you found on the Actions page. It will not be tried again.")
+        else:
+            parts.append(f"Not done: {said}{result or ' It did not run.'}")
+    if made:
+        lines = [action["summary"].rstrip(".") + "." + "".join(f" {note}" for note in notes) for action, notes in made]
+        head = f"Ready for your OK: {lines[0]}" if len(lines) == 1 else "Ready for your OK:\n" + "\n".join(f"- {line}" for line in lines)
+        parts.append(head + "\n\nNothing is added to your account until you press Approve (under this message, or on the Actions page).")
+    return "\n\n".join(parts)
+
+
+# Words in a reply that say something is waiting for the owner's approval. Used only when the turn recorded no proposal at all: then the claim is false, whoever wrote it.
+_CLAIMS_A_PROPOSAL = re.compile(
+    r"waiting\s+for\s+(?:your|you|the\s+owner)\b|(?:on|in)\s+(?:the|your)\s+actions\s+page|\b(?:i(?:'ve|\s+have)\s+)?proposed\b|\bapprove\s+(?:it|this)\b|\bawaiting\s+(?:your\s+)?approval",
+    re.IGNORECASE,
+)
+
+
+def claims_a_proposal(answer):
+    """Does this reply say that something has been proposed or is waiting for approval?"""
+    return isinstance(answer, str) and _CLAIMS_A_PROPOSAL.search(answer) is not None
+
+
+def nothing_was_proposed_reply(example, why=None):
+    """What to say when the person asked for an addition, the model's reply said it was waiting for approval, and no action was recorded: that nothing was set up, why if it is known, and how to ask again."""
+    reason = f" ({why.rstrip('.')})" if why else ""
+    return f"I did not set that up{reason}: nothing is waiting for your approval. Say it again in one line and I will try again, for example '{example}'."
 
 
 NOT_ASKED_TEXT = (

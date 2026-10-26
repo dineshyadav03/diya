@@ -47,8 +47,13 @@ _STOP = set(
     "a an the my me i we our us you your any anything something some there is are was were be been am do does did have has had can could would will should "
     "from about regarding on in at of for to with and or but not no yes please check read show find search look looking tell what which who whom when where why how "
     "email emails e-mail e-mails mail mails inbox gmail message messages latest newest new unread important recent recently today yesterday week month last this that these those "
-    "it its if then than so just still ever got get got sent send received receive saying says said say reply replied replies respond responded wrote write written emailed mailed messaged".split()
+    "it its if then than so just still ever got get got sent send received receive saying says said say reply replied replies respond responded wrote write written emailed mailed messaged "
+    "anyone anybody someone somebody everyone everybody nobody people came come comes coming arrived arrive arrives landed".split()
 )
+# "did anyone email me this week?" asks about mail from ANYBODY: none of these is a person's name, and searching for mail "from anyone" finds nothing (found when the owner first asked Diya about their mail on
+# 2026-10-26: Gmail had many messages and Diya said the inbox was clear).
+_NOT_A_PERSON = frozenset("anyone anybody someone somebody everyone everybody nobody no one noone people person persons whoever who they them he she it you me us ".split())
+REPORT_MARK = "Your mail, searched for"  # the first words of a report (render): a follow-up that disputes the answer is recognised by finding this in the answer before it
 _FROM = re.compile(r"\bfrom\s+(?:my\s+|the\s+)?([a-z0-9@._' -]{2,40}?)(?=\s+(?:about|regarding|on|in|since|yesterday|today|this|last|that|which|saying|says|said|with|to)\b|[?.!,;]|$)", re.IGNORECASE)
 _TIME_PHRASE = re.compile(r"(?:last|this|past|next|yesterday|today|tomorrow|the\s+last|the\s+past|a\s+few|\d+)\b", re.IGNORECASE)
 _WHO = re.compile(
@@ -68,7 +73,7 @@ def mail_query(text):
     sender_name = ""
     if sender:
         sender_name = re.sub(r"[^a-z0-9@._' -]", "", sender.group(1)).strip(" .'-")
-        if sender_name and sender_name not in _STOP and not _TIME_PHRASE.match(sender_name):
+        if sender_name and sender_name not in _STOP and sender_name not in _NOT_A_PERSON and not _TIME_PHRASE.match(sender_name):
             parts.append(f'from:"{sender_name}"')
             said.append(f"from {sender_name}")
         else:
@@ -213,7 +218,7 @@ def read_mail(config, text, get=None, access_token=None):
 
 def render(evidence):
     """The report, built by code from what was found: each message's date, sender, subject and snippet, and what was not read."""
-    out = [f"Your mail, searched for {evidence['described']}:", ""]
+    out = [f"{REPORT_MARK} {evidence['described']}:", ""]
     if evidence["messages"]:
         for m in evidence["messages"]:
             out.append(f"- {m['date']} · from {m['from']} · {m['subject']}")
@@ -223,6 +228,15 @@ def render(evidence):
         out.append("- no message matched")
     out += ["", "Not established:"] + [f"- {limit}" for limit in evidence["limits"]]
     return "\n".join(out)
+
+
+def empty_report(evidence):
+    """What to say when a search found no message, written by code: that this search found nothing, and that this does not mean the mailbox is empty. The model is not asked to word it, because it turned
+    "no message matched" into "your inbox is clear" (2026-10-26). The report of what was searched follows."""
+    return (
+        f"Nothing matched that search ({evidence['described']}). That does not mean there is no mail: Gmail finds messages by the words in them, so a name or a word of the subject may find it. "
+        "Try 'any email from the college?' or 'what did the bank email say about my card?'.\n\n" + render(evidence)
+    )
 
 
 def explain_note(evidence, prompt):

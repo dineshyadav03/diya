@@ -33,3 +33,13 @@ Up to 8 messages per question; the **text of the first 3** is read (plain text p
 2. **OAuth consent screen, Data access:** add the scope `.../auth/gmail.readonly`. Your own Google address is already a test user; keep Publishing status on *In production*.
 3. **Connections page, Gmail:** the Client ID and secret are shared with Calendar (paste them if Calendar was never set up), press **Connect**, choose your account, press **Advanced, Go to Diya (unsafe)** on the warning, then **Allow**.
 4. Ask: "any email from the college?" If it does not work, the exact message shown is what is needed.
+
+## What the first real use showed (2026-10-26)
+
+Asked "did anyone email me this week?" on the day Gmail was connected, Diya searched for mail FROM a person called "anyone", found none, and said "Your inbox is clear. No new messages" (the model's wording of "no message matched");
+told "but there are mails", the model, which has no mail tool, said it had no access to Gmail at all. Fixed in code, kept as tests in `tests/test_mail_first_day.py`:
+- anyone, anybody, someone, somebody, everyone, nobody and people are not senders, and are not search words (`diya_google_mail._NOT_A_PERSON`, `_STOP`); "came", "arrived" and the like are not search words either;
+- a search that finds nothing is reported by code (`empty_report`): that this search found nothing, that this does not mean there is no mail, and how to ask by a name or a word; the model is not asked;
+- a short message that disputes a mail report ("but there are mails", "check again", "are you sure?") straight after one looks at the recent inbox again (`diya_intent.disputes_mail_answer`; only after an answer that holds the report's first words);
+- while Gmail is connected and the message mentions mail without being a question the mail step takes, the model is told Gmail IS connected and never to say it has no access (`MAIL_CONNECTED_NOTE`).
+Not fixed: a search is still only as good as Gmail's own word search, and the model's summary of messages that were found can still be longer than it should be.

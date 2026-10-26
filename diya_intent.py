@@ -572,6 +572,29 @@ def asks_about_mail(text):
     return _MAIL_WORD.search(text) is not None and _MAIL_NOT_ABOUT_MINE.search(text) is None and _MAIL_READ.search(text) is not None
 
 
+# After Diya has told the person what her search of their mail found, a short message that argues with it ("but there are mails", "check again", "are you sure?") is a request to look again, not a new
+# subject: without this the model, which has no mail tool, told the owner it had no access to Gmail at all (2026-10-26, the first day Gmail was connected). Used only when the answer before was a mail report.
+_MAIL_DISPUTE = re.compile(
+    r"\b(?:but|there\s+(?:are|is|were|must\s+be)|i\s+(?:do\s+)?(?:have|got|see)|are\s+you\s+sure|really|wrong|not\s+true|that'?s\s+not\s+(?:right|true)|you\s+missed)\b|\b(?:check|look|search|try|read)\s+(?:it\s+)?again\b",
+    re.IGNORECASE,
+)
+MAX_DISPUTE_CHARS = 90
+
+
+def disputes_mail_answer(text):
+    """True for a short one-line message that disputes or repeats a look through the mail ("but there are mails", "i have emails", "check again", "are you sure?"). Meaningful only straight after a mail report."""
+    if not isinstance(text, str) or not text.strip() or len(text) > MAX_DISPUTE_CHARS or "\n" in text.strip():
+        return False
+    text = text.replace("’", "'")
+    again = re.search(r"\b(?:check|look|search|try|read)\s+(?:it\s+)?again\b", text, re.IGNORECASE) is not None
+    return again or (_MAIL_DISPUTE.search(text) is not None and (_MAIL_WORD.search(text) is not None or re.search(r"\bare\s+you\s+sure\b|\byou\s+missed\b", text, re.IGNORECASE) is not None))
+
+
+def mentions_mail(text):
+    """Does the message use a word for email (email, mail, inbox, gmail)? Used only to decide whether to tell the model that Gmail is connected."""
+    return isinstance(text, str) and _MAIL_WORD.search(text) is not None
+
+
 def repo_to_study(text):
     """(owner, repo) if the message gives a GitHub repository address and asks for it to be studied, explained or looked into; else None (diya_repostudy.wants_study)."""
     import diya_repostudy

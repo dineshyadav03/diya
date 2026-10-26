@@ -420,3 +420,30 @@ is_todoist_task_request`, now this kind's `asked`), any other is the list's. Tod
 card by card; it just has to be named. The tables above were measured BEFORE that change, with every one of the
 25 requests going to Todoist: only the 5 that name it would be proposed now, and the model's side of the other 20 is
 measured for the list in `docs/TASKS_DESIGN.md`.
+
+## What Diya says after she proposes, and one-tap approval (2026-10-26)
+
+The first day the Google cards were connected, the owner asked for an event, a task, a folder and a document in a long chat. The model's replies were paragraphs ("Why? To help test my own system", an offer to send reminders,
+a remark about the owner's dog), and for the folder and the document it wrote "Proposed Folder ... waiting for your approval on the Actions page" without calling the tool: no action existed. Two fixes, both in code:
+
+- **The reply is built from the action** (`diya_actions.proposal_reply`, `Agent._settle_proposals`): after a turn that recorded one or more proposals, what the person reads is each action's own sentence (the one they approve) plus anything
+  that was left out of it, and one line about approval. The model's wording is not used, and a streamed reply is taken back (`reset`) and replaced. A reply that claims a proposal is waiting when the turn recorded none, for a message that
+  did ask for an addition, is replaced by the plain fact and an example of how to ask again (with the refusal's reason when there was one). An unattended run is never touched. Proof: `tests/test_proposal_replies.py`; against the real
+  model with the owner's fluffy history replayed, the tool was called 6 of 6 and the reply was the code's.
+- **Approve under the chat** (`frontend/components/WaitingActions.jsx`): the waiting proposals are shown under the chat with Approve and Not now, the same two routes and the same hash as the Actions page. A proposal made after Diya read
+  something that is not the owner's, or above risk level 2, is only pointed to (decided on the Actions page, where the whole description is shown). After a decision the result is told, with a link when Google gave its own address.
+  Proof: `tests/test_waiting_strip.py`. Whether some kinds should need no approval at all is the owner's decision, not made here.
+
+## Do it straight away (2026-10-26, the owner's decision)
+
+Asked which of the four additions that touch only the owner (an event with nobody invited, a Google task, a Drive folder, a Google Doc) should need no Approve, the owner answered "all of them". `diya_autoapprove.py` is the whole of
+that permission and it is narrow on purpose:
+
+- only the four kinds in `AUTO_KINDS` can ever be switched on (the switch refuses every other kind, and the check refuses it again even if the database were edited by hand); each only adds something new and private, taken back by deleting it in Google;
+- each is **off** until the owner switches it on, kind by kind, on the Actions page ("Do straight away"), and can be switched off at any time; the pause switch stops them too; switching on and off is in the activity journal;
+- it applies only to a proposal made while answering the owner's own message, which the kind's own `asked` check has already said asked for exactly that thing, and **never** to one made after Diya read something that is not the owner's (a web page, a
+  note, an email, a file: `tainted`), which waits for an Approve as before; anything that sends, shares, changes, moves or deletes is not on the list and cannot be added without changing the file and the test that pins it;
+- the approval is made with the hash that was recorded (so a change in between refuses it), recorded in the action's own history as approved `via` "auto" (the actor is still the owner: it is the owner's standing decision), and the run is
+  the same single, never-repeated run as for any approved action; an outcome that is not known is told as not known and never retried;
+- the reply is built by code from what happened ("Done: ... " with Google's own link, or "Not done: ..."), never from the model's words.
+Proof: `tests/test_auto_approve.py`. Todoist is not on the list: it has never been tried against a real account.

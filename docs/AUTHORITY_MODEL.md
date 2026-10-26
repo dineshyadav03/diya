@@ -8,7 +8,7 @@ Written 2026-10-18 for the blueprint's DIYA-036, -037 and -038. The source is `d
 |---|---|
 | 0 | reads: looks, changes nothing outside Diya's own records |
 | 1 | reversible local write: changes Diya's own database where the person can see and undo it |
-| 2 | reversible remote write: adds something private to the person's own account; proposed only, the owner approves each one |
+| 2 | reversible remote write: adds something private to the person's own account; proposed only, the owner approves each one (the four Google additions the owner may switch to 'straight away' are the one exception) |
 | 3 | external-facing: reaches other people (send, invite, share). Not built |
 | 4 | destructive or privileged: delete at scale, account settings, public sharing. Not built; denied by default |
 

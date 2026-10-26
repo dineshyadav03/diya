@@ -13,7 +13,8 @@ The tiers (the blueprint's Part V, 14.7):
 0  reads. Looks at something and changes nothing outside Diya's own records: files in the allowed folders, the notes, the weather, a search, mail, a calendar.
 1  reversible local writes. Changes Diya's own database in a way the person can see and undo: a reminder, a task on Diya's own list, a fact in memory.
 2  reversible remote writes. Adds something private to one of the person's own accounts: an event, a task, a folder, a document. Only ever PROPOSED by the model; the owner approves each one,
-   exactly as shown, and Diya cannot remove it afterwards (undoing is by hand in the service).
+   exactly as shown, and Diya cannot remove it afterwards (undoing is by hand in the service). The one exception, chosen by the owner on 2026-10-26 (diya_autoapprove.py): the four Google additions in
+   AUTO_KINDS may be switched, one by one, to be done straight away when the owner asks for them in their own message and nothing outside that message was read first; everything else still waits.
 3  external-facing. Reaches other people: sends a message, invites a guest, shares a file. Not built; each would need exact per-action approval at the least.
 4  destructive or privileged. Deletes at scale, changes account settings, shares publicly. Not built, and denied by default.
 
@@ -28,7 +29,7 @@ from pathlib import Path
 TIERS = {
     0: "reads: looks, changes nothing outside Diya's own records",
     1: "reversible local write: changes Diya's own database where the person can see and undo it",
-    2: "reversible remote write: adds something private to the person's own account; proposed only, the owner approves each one",
+    2: "reversible remote write: adds something private to the person's own account; proposed only, the owner approves each one (the four Google additions the owner may switch to 'straight away' are the one exception)",
     3: "external-facing: reaches other people (send, invite, share). Not built",
     4: "destructive or privileged: delete at scale, account settings, public sharing. Not built; denied by default",
 }

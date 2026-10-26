@@ -120,9 +120,10 @@ except ImportError:
 
 def ok_for(path):
     """What a request with the right token may answer. Web Push needs the optional cryptography package: without it every push route but /status answers 409 and says why."""
+    # The switch route is asked about the seeded fake kind, which is not one of the four that can ever be switched on: "that kind always asks you first" (409) is the route answering, past the token.
     # The connect-google route has no Google card in this registry (a browser must never open in a test): "there is no Google card to connect" is the route answering, past the token.
     # The rename and forget routes have no chat or message here (a seeded chat would break every test that expects the app to have made none): "there is no chat 1" is the route answering, past the token.
-    return OK + ((409,) if path.startswith("/api/push/") and path != "/api/push/status" and not HAVE_PUSH_CRYPTO else ()) + ((404,) if path in ("/api/threads/1/rename", "/api/messages/1/forget") else ()) + ((422,) if path == "/api/connections/connect-google" else ())
+    return OK + ((409,) if path.startswith("/api/push/") and path != "/api/push/status" and not HAVE_PUSH_CRYPTO else ()) + ((404,) if path in ("/api/threads/1/rename", "/api/messages/1/forget") else ()) + ((422,) if path == "/api/connections/connect-google" else ()) + ((409,) if path == "/api/actions/auto" else ())
 
 
 def concrete_path(path):
@@ -223,6 +224,7 @@ ENDPOINTS = [
     ("POST", "/api/actions/1/approve", {"json": {"args_hash": APPROVE_ME}}),
     ("POST", "/api/actions/2/reject", {}),
     ("POST", "/api/actions/3/resolve", {"json": {"happened": True}}),
+    ("POST", "/api/actions/auto", {"json": {"kind": "add_task", "on": True}}),
     ("POST", "/api/chat", {"json": {"message": "hi"}}),
     ("POST", "/api/chat/stream", {"json": {"message": "hi"}}),
     ("POST", "/api/transcribe", {"files": {"audio": ("a.webm", b"x", "audio/webm")}}),

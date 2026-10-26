@@ -16,6 +16,7 @@ import diya
 import diya_catalog
 import diya_config
 import diya_connector_tools
+import diya_autoapprove
 import diya_connectors
 import diya_journal
 import diya_web
@@ -67,9 +68,13 @@ def test_the_words_match_the_code_a_connection_that_cannot_write_has_no_write_ac
     _, _, client = world
     found = by_name(client)
     writers = {kind.connector for kind in diya_connector_tools.real_action_kinds()}
+    straight_away = {kind.connector for kind in diya_connector_tools.real_action_kinds() if kind.name in diya_autoapprove.AUTO_KINDS}  # the connections whose additions can be switched to "do it straight away"
     for name, item in found.items():
-        says_it_adds = any("only when you approve" in line for line in item["access"])
+        says_it_adds = any("approve" in line for line in item["access"])
         assert says_it_adds == (name in writers), name
+        assert any("straight away" in line for line in item["access"]) == (name in straight_away), name  # the words say so exactly where the switch exists, and nowhere else (Todoist always asks)
+        if name not in straight_away:
+            assert all("straight away" not in line for line in item["access"]), name
     assert {name for name, item in found.items() if any(line.startswith("Cannot send") for line in item["access"])} == {"google_mail"}
 
 
