@@ -441,7 +441,6 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/pause", "/api/resume",  # the Status page's pause switch
         "/api/permissions",  # the Connections page: what each connection can do, since when, last used
         "/api/playbooks",  # the Playbooks page: the steps the person wrote, and any file that cannot be used
-        "/api/categories", "/api/categories", "/api/categories", "/api/categories",  # the Categories page: its list, a change (every change goes through one call), looking inside one, and searching your messages
         "/api/memory", "/api/memory/${id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/${fact.id}/${action}", "/api/memory/${id}/edit",
         "/api/memory/${fact.id}/replace",  # the Memory page's "replace the old one" button
         "/api/memory/${fact.id}/forget-for-good",  # the Memory page's "Forget for good" button
@@ -466,6 +465,7 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/actions/${action.id}/approve", "/api/actions/${action.id}/reject", "/api/actions/${action.id}/resolve",
         "/api/actions/${action.id}/approve", "/api/actions/${action.id}/reject",  # the same two decisions, from the strip under the chat (components/WaitingActions.jsx)
         "/api/actions/auto",  # the Actions page's switch for "do it straight away"
+        "/api/weather", "/api/weather", "/api/weather",  # the weather provider: the weather where the place was shared, sharing the place, and forgetting it
         "/session", "/session", "/session",  # the sign-in page's POST, the sidebar's "am I signed in" and its sign-out (docs/UI_LOGIN_DESIGN.md)
     ])
     assert not [p for p in browser_files() if re.search(r"fetch\(\s*[^`'\"\s]", p.read_text(encoding="utf-8"))]  # no computed URLs
@@ -516,7 +516,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
         "/api/proactive", "/api/proactive/seen",
         "/api/push/status", "/api/push/key", "/api/push/subscribe", "/api/push/unsubscribe", "/api/push/test",
         "/api/reminders", "/api/reminders/{reminder_id}/done", "/api/reminders/{reminder_id}/snooze",
-        "/api/today", "/api/scheduled", "/api/scheduled/{series_id}/pause", "/api/scheduled/{series_id}/resume",
+        "/api/today", "/api/weather", "/api/scheduled", "/api/scheduled/{series_id}/pause", "/api/scheduled/{series_id}/resume",
         "/api/scheduled/{series_id}/skip", "/api/scheduled/{series_id}/stop",
         "/api/automations", "/api/automations/{automation_id}/pause", "/api/automations/{automation_id}/resume", "/api/automations/{automation_id}/run",
         "/api/automations/{automation_id}/delete",

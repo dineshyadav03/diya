@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import WeatherProvider from './WeatherProvider'
 
 // The one navigation for every page (docs/UI_DESIGN.md, D2): a floating pill at the top with the three pages used most (Home, Chat, Memory) and a slider
 // that glides under the one you are on, a round button at the left that opens a glass menu with every page (and the theme), and the brand mark at the right.
@@ -25,7 +26,6 @@ export const NAV = [
     label: 'Assistant',
     items: [
       { href: '/', name: 'Chat' },
-      { href: '/categories', name: 'Categories' },
       { href: '/history', name: 'History' },
       { href: '/memory', name: 'Memory' },
       { href: '/knowledge', name: 'Knowledge' },
@@ -178,7 +178,11 @@ function SignOut() {
 export default function AppShell({ children }) {
   const pathname = usePathname() || '/'
   if (pathname === '/login') return <>{children}</>
-  return <Shell pathname={pathname}>{children}</Shell>
+  return (
+    <WeatherProvider>
+      <Shell pathname={pathname}>{children}</Shell>
+    </WeatherProvider>
+  )
 }
 
 function Shell({ children, pathname }) {

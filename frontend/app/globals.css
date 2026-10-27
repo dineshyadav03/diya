@@ -571,3 +571,29 @@ h1 { font-family: var(--serif); font-weight: 500; text-transform: lowercase; }
   .home-chat { display: none; }
   .home-col { width: 100%; border-right: 0; }
 }
+
+/* The sky follows the weather (docs/HOME_DESIGN.md; components/WeatherProvider.jsx sets <html data-sky data-daytime>). A tint is laid over the usual sky. Every colour below is no lighter than --bg in the
+   dark theme and no darker than --bg in the light one, so the contrast the tokens prove still holds on every pixel (tests/test_weather.py checks the numbers). Without a weather the sky is untouched. */
+:root[data-sky] body::before { background: var(--sky-night, linear-gradient(transparent, transparent)), var(--sky-weather, linear-gradient(transparent, transparent)), var(--sky); }
+:root[data-sky="clear"] { --sky-weather: radial-gradient(90% 55% at 50% 110%, rgba(255, 222, 196, 0.7), transparent 74%); }
+:root[data-sky="cloudy"] { --sky-weather: linear-gradient(180deg, rgba(238, 240, 246, 0.55), rgba(238, 240, 246, 0.3)); }
+:root[data-sky="fog"] { --sky-weather: linear-gradient(180deg, rgba(236, 238, 244, 0.6), rgba(236, 238, 244, 0.6)); }
+:root[data-sky="rain"] { --sky-weather: linear-gradient(180deg, rgba(224, 232, 248, 0.5), rgba(224, 232, 248, 0.5)); }
+:root[data-sky="storm"] { --sky-weather: linear-gradient(180deg, rgba(228, 224, 248, 0.5), rgba(228, 224, 248, 0.5)); }
+:root[data-sky="snow"] { --sky-weather: linear-gradient(180deg, rgba(244, 247, 255, 0.55), rgba(244, 247, 255, 0.4)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-sky="clear"] { --sky-weather: radial-gradient(90% 55% at 50% 110%, rgba(96, 54, 86, 0.62), transparent 74%), radial-gradient(60% 40% at 15% 10%, rgba(56, 68, 120, 0.35), transparent 70%); }
+  :root:not([data-theme="light"])[data-sky="cloudy"] { --sky-weather: linear-gradient(180deg, rgba(60, 66, 92, 0.55), rgba(64, 70, 100, 0.35)); }
+  :root:not([data-theme="light"])[data-sky="fog"] { --sky-weather: linear-gradient(180deg, rgba(66, 72, 104, 0.6), rgba(66, 72, 104, 0.6)); }
+  :root:not([data-theme="light"])[data-sky="rain"] { --sky-weather: linear-gradient(180deg, rgba(24, 36, 64, 0.6), rgba(30, 44, 74, 0.45)); }
+  :root:not([data-theme="light"])[data-sky="storm"] { --sky-weather: linear-gradient(180deg, rgba(30, 22, 56, 0.7), rgba(40, 30, 70, 0.5)); }
+  :root:not([data-theme="light"])[data-sky="snow"] { --sky-weather: linear-gradient(180deg, rgba(60, 74, 108, 0.5), rgba(64, 74, 110, 0.4)); }
+  :root:not([data-theme="light"])[data-daytime="night"] { --sky-night: linear-gradient(rgba(4, 6, 18, 0.4), rgba(4, 6, 18, 0.4)); }
+}
+:root[data-theme="dark"][data-sky="clear"] { --sky-weather: radial-gradient(90% 55% at 50% 110%, rgba(96, 54, 86, 0.62), transparent 74%), radial-gradient(60% 40% at 15% 10%, rgba(56, 68, 120, 0.35), transparent 70%); }
+:root[data-theme="dark"][data-sky="cloudy"] { --sky-weather: linear-gradient(180deg, rgba(60, 66, 92, 0.55), rgba(64, 70, 100, 0.35)); }
+:root[data-theme="dark"][data-sky="fog"] { --sky-weather: linear-gradient(180deg, rgba(66, 72, 104, 0.6), rgba(66, 72, 104, 0.6)); }
+:root[data-theme="dark"][data-sky="rain"] { --sky-weather: linear-gradient(180deg, rgba(24, 36, 64, 0.6), rgba(30, 44, 74, 0.45)); }
+:root[data-theme="dark"][data-sky="storm"] { --sky-weather: linear-gradient(180deg, rgba(30, 22, 56, 0.7), rgba(40, 30, 70, 0.5)); }
+:root[data-theme="dark"][data-sky="snow"] { --sky-weather: linear-gradient(180deg, rgba(60, 74, 108, 0.5), rgba(64, 74, 110, 0.4)); }
+:root[data-theme="dark"][data-daytime="night"] { --sky-night: linear-gradient(rgba(4, 6, 18, 0.4), rgba(4, 6, 18, 0.4)); }

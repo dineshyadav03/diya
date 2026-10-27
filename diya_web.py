@@ -21,6 +21,7 @@ import diya
 import diya_actions_api
 import diya_brief_api
 import diya_home_api
+import diya_weather_api
 import diya_categories
 import diya_categories_api
 import diya_feedback_api
@@ -357,11 +358,11 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
             raise HTTPException(status_code=404, detail="No such thread")
         if number == main:
             messages, more_before = agent.store.get_messages_tail(number, MAX_PAGE_MESSAGES)
-            tags = diya_categories.Book(agent.store).tags([m["id"] for m in messages if m["role"] == "user"])
+            tags = diya_categories.Book(agent.store).tags([m["id"] for m in messages if m["role"] == "user"]) if config.categories else {}  # with sorting off the chat shows no category
             messages = [dict(m, category=tags[m["id"]]) if m["id"] in tags else m for m in messages]
         else:
             messages, more_before = agent.store.get_messages(number), False  # an earlier chat is read whole; its messages carry ids and categories too (so a tag can be moved)
-            tags = diya_categories.Book(agent.store).tags([m["id"] for m in messages if m["role"] == "user"])
+            tags = diya_categories.Book(agent.store).tags([m["id"] for m in messages if m["role"] == "user"]) if config.categories else {}  # with sorting off the chat shows no category
             messages = [dict(m, category=tags[m["id"]]) if m["id"] in tags else m for m in messages]
         times = agent.store.message_times([m["id"] for m in messages])  # when each was written, so the page can put them under their days (docs/ONE_CHAT_DESIGN.md, task DIYA-158)
         messages = [dict(m, at=times[m["id"]]) if m["id"] in times else m for m in messages]
@@ -618,6 +619,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     diya_reminders_api.register(app, config, agent)
     diya_tasks_api.register(app, config, agent)  # the to-do list inside Diya (docs/TASKS_DESIGN.md, unit T2)
     diya_schedule_api.register(app, config, agent)  # repeating reminders and snooze (docs/SCHEDULE_DESIGN.md, unit R4)
+    diya_weather_api.register(app, config, agent)  # the weather where the person shared their place: Home's panel and the colour of the sky
     diya_home_api.register(app, config, agent)  # Home: the cards for today, found by code (docs/HOME_DESIGN.md)
     diya_brief_api.register(app, config, agent)  # the day: what is due, overdue and coming (docs/SCHEDULE_DESIGN.md, unit R5)
     diya_connections_api.register(app, config, agent, connectors=connectors)
