@@ -50,7 +50,7 @@ def register(app, config, agent):
 
     @app.get("/api/questions")
     def list_questions():
-        if not config.auto_memory:
+        if not config.auto_memory or not config.ask_memory:
             return {"questions": []}
         memory, queue, now = diya_memory.open_memory(agent.store, agent.config), questions(), agent.now()
         queue.refill(memory, now)

@@ -319,6 +319,8 @@ class Dreamer:
         import diya_questions
         from datetime import datetime
 
+        if not self.config.ask_memory:
+            return 0  # no questions are made (DIYA_ASK_MEMORY=0)
         questions = diya_questions.Questions(self.store)
         gone = questions.retire_gone(memory, datetime.now())  # facts whose day has passed: retired by themselves (with Undo), not asked about
         if gone:
@@ -329,9 +331,13 @@ class Dreamer:
         """Every candidate in its lane (diya_autonomy.apply), asking the models the policy asks. What it did, as diya_autonomy.Report."""
         import diya_autonomy
 
-        return diya_autonomy.apply(
+        report = diya_autonomy.apply(
             memory, private=self._privacy_judge(), replaces=self._replace_judge(memory), corrects=self._correction_judge(), adds=lambda fact: diya_autonomy.says_it_adds(self._source_texts(fact))
         )
+        if not self.config.ask_memory:  # DIYA_ASK_MEMORY=0: what was held back to be asked about is remembered instead (diya_autonomy.settle)
+            settled = diya_autonomy.settle(memory)
+            report = report._replace(remembered=report.remembered + settled, asked=max(0, report.asked - settled))
+        return report
 
     def look_for_categories(self, now=None, max_sorted=200):
         """Each cycle, if categories are on (DIYA_CATEGORIES): sort the person's messages that are in no category yet (up to `max_sorted` a cycle, so the earlier chats are done over a few), and at most

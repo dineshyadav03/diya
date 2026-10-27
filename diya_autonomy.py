@@ -416,6 +416,56 @@ def apply(memory, *, now=None, limit=DAILY_AUTO_LIMIT, breaker_limit=BREAKER_LIM
     return Report(remembered, asked, never, held, replaced)
 
 
+_SETTLED_KINDS = (KIND_SENSITIVE, KIND_CONFLICT, KIND_DOUBT)
+# Holds that are not about doubt but about a limit or a failure: a full memory, the daily cap, the breaker that opens when the owner took back too many, a model that could not be asked. They stay as they are.
+_KEPT_WAITING = ("memory_full", "daily_cap", "breaker_open", "privacy_check_failed", "replace_check_failed")
+
+
+def settle(memory, *, actor="auto"):
+    """Remember what was held back to be asked about, without asking (DIYA_ASK_MEMORY=0; the owner's choice of 2026-10-27: Hark does not ask, it remembers what it is told).
+
+    Run after `apply`. A candidate that carries an `ask:` flag of kind sensitive, doubt or conflict is accepted. One that was held as a conflict with a known fact (`similar:N`, `replaces:N`) replaces it,
+    the newer words winning as they would between two people (Memory.supersede; the old fact stays in the trail and Undo brings it back); one that cannot replace is kept beside it. What `apply` has
+    already thrown away (a secret, a copy of a fact already known, what the person never said, what they asked not to keep) is no longer a candidate and is not touched. A hold that is a limit or a failure
+    (_KEPT_WAITING) is left. Returns how many were remembered."""
+    import diya_memory
+
+    remembered = 0
+    for fact in memory.facts("candidate"):
+        ask = next((flag[len(diya_memory.ASK_PREFIX):] for flag in fact["flags"] if flag.startswith(diya_memory.ASK_PREFIX)), None)
+        if ask is None:
+            continue
+        kind, _, reason = ask.partition(":")
+        if kind not in _SETTLED_KINDS or reason in _KEPT_WAITING:
+            continue
+        why = {"lane": LANE_REMEMBER, "reasons": ["no_questions", ask]}
+        old = reason.partition(":")[2]
+        if kind == KIND_CONFLICT and old.isdigit():
+            try:
+                memory.supersede(fact["id"], int(old), actor, why=why)
+            except diya_memory.FactError:
+                pass  # the old fact is gone or already says the same: it is accepted beside what is known, below
+            else:
+                _clear_ask(memory, fact["id"], actor)
+                remembered += 1
+                continue
+        try:
+            memory.decide(fact["id"], "accept", actor, why)
+        except diya_memory.DuplicateFact as duplicate:
+            _said_again(memory, fact, actor, duplicate.twin)
+            memory.decide(fact["id"], "reject", actor, {"lane": LANE_NEVER, "reasons": ["duplicate"]})
+            _clear_ask(memory, fact["id"], actor)
+        except diya_memory.BudgetExceeded:
+            continue  # no room: it waits
+        except diya_memory.InvalidFact:
+            memory.decide(fact["id"], "reject", actor, {"lane": LANE_NEVER, "reasons": ["too_long"]})
+            _clear_ask(memory, fact["id"], actor)
+        else:
+            _clear_ask(memory, fact["id"], actor)
+            remembered += 1
+    return remembered
+
+
 def _said_again(memory, fact, actor, twin):
     """The person said again what Diya already knows: the message becomes a mention of the fact that says it (docs/FADING_DESIGN.md), which renews one that would fade. Nothing happens, and nothing
     fails, when the twin is not an accepted fact (it may itself still be waiting) or the message the words came from is not recorded."""

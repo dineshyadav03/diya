@@ -71,6 +71,9 @@ class Config:
     # Memory that remembers on its own (docs/AUTO_MEMORY_DESIGN.md): when on, what Dreaming stages is put in a lane by diya_autonomy
     # instead of waiting for a person to accept it. OFF until the measurement in the design (unit A6) has been read and the owner says so.
     auto_memory: bool = False  # DIYA_AUTO_MEMORY
+    # With automatic memory on, a fact that is doubtful, private-looking or like a known one used to wait for the person's yes (a question card). DIYA_ASK_MEMORY=0 (the owner's choice of 2026-10-27, "remember
+    # whatever I mention", as Hark does) remembers it without asking: diya_autonomy.settle. Secrets, copies and what the person never said are still never kept, and a fact the same as one known is not kept twice.
+    ask_memory: bool = True  # DIYA_ASK_MEMORY
     # Which model answers "is this private?" before a fact is remembered without asking (diya_autonomy.privacy_verdict). Empty means the chat
     # model. It is a setting because the answer depends on the model: measured, qwen2.5:3b flagged every private sentence and
     # qwen3:4b-instruct missed some (docs/AUTO_MEMORY_DESIGN.md, section 8).
@@ -343,7 +346,7 @@ def load_config(env=None) -> Config:
     if read_flag("DIYA_LAN"):
         values["lan"] = True
     for field, name in (("require_token", "DIYA_REQUIRE_TOKEN"), ("rotate_token", "DIYA_ROTATE_TOKEN"),
-                        ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"),
+                        ("notify_show_text", "DIYA_NOTIFY_SHOW_TEXT"), ("auto_memory", "DIYA_AUTO_MEMORY"), ("ask_memory", "DIYA_ASK_MEMORY"),
                         ("push", "DIYA_PUSH"), ("push_show_text", "DIYA_PUSH_SHOW_TEXT"), ("telegram", "DIYA_TELEGRAM"), ("keep_warm", "DIYA_KEEP_WARM"), ("proactive", "DIYA_PROACTIVE"), ("automations", "DIYA_AUTOMATIONS"), ("lookup", "DIYA_LOOKUP"), ("recall", "DIYA_RECALL"), ("episodic", "DIYA_EPISODIC"), ("playbooks", "DIYA_PLAYBOOKS"), ("categories", "DIYA_CATEGORIES"), ("repo_study", "DIYA_REPO_STUDY"), ("mail", "DIYA_MAIL"), ("protect_secrets", "DIYA_PROTECT_SECRETS"), ("backup", "DIYA_BACKUP"), ("knowledge_chat", "DIYA_KNOWLEDGE_CHAT"), ("journal_previews", "DIYA_JOURNAL_PREVIEWS"), ("mcp", "DIYA_MCP"), ("privacy_unsure_asks", "DIYA_PRIVACY_UNSURE_ASKS")):
         flag = read_flag(name)
         if flag is not None:
