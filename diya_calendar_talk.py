@@ -6,7 +6,8 @@ itself: no model call, so no changed digits and no waiting for it to load.
 
 Taken: a short, plain QUESTION about the calendar ("what's on my calendar?", "any meetings tomorrow?", "what do I have on Saturday?", "what's on my calendar this week?", "events on 28 Oct", "next 3 days"). The days come
 from diya_when (today, tomorrow, this or next week, this weekend, a weekday name, a date); a question that names no day gets the next two weeks. Not taken, so the model and its tools answer as before: a request
-to add, move, cancel or book anything, "next Friday" (which people mean two ways), a long message, and a question that is not about the calendar. Read only; one request to Google; the event titles are other
+to add, move, cancel or book anything, a long message, and a question that is not about the calendar. "Next Friday" is the Friday of next week, picked by code (diya_when.next_weekday, 2026-10-27) and said with its
+date; "what am I doing next Tuesday?" and "what's on Tuesday?" are taken too, when a day is named. Read only; one request to Google; the event titles are other
 people's words and are cleaned (control and invisible characters removed) and cut. Importing this module has no side effects.
 """
 from __future__ import annotations
@@ -35,10 +36,15 @@ _HAVE_ON = re.compile(r"^\W*(?:(?:hey|hi|ok|okay|so|please|diya|and)\b[\s,]*)*wh
 _NOT_CALENDAR = re.compile(r"\b(?:list|tasks?|to-?do|reminders?|bills?|pay|buy|left\s+to|homework|exams?|know|think|remember)\b", re.IGNORECASE)
 _REQUEST = re.compile(r"\b(?:add|create|make|book|set\s+up|put|remind|move|cancel|delete|remove|reschedule|schedule\s+(?:a|an|the|me|my)|invite|send|plan|organi[sz]e)\b", re.IGNORECASE)
 _NEXT_DAYS = re.compile(r"\bnext\s+(\d{1,2})\s+days?\b", re.IGNORECASE)
+# "what am I doing next Tuesday?" names no calendar word either; taken only when a day is named (so "what am I doing wrong?" and "what's on my mind" are not), and not about television or a menu
+_DOING = re.compile(
+    r"^\W*(?:(?:hey|hi|ok|okay|so|please|diya|and)\b[\s,]*)*(?:what\s+(?:am\s+i|are\s+we)\s+doing|what(?:'s|\s+is)\s+(?:on|happening|planned|going\s+on)|what\s+plans\s+do\s+i\s+have|am\s+i\s+(?:free|busy)"
+    r"|do\s+i\s+have\s+(?:anything|any\s+plans|plans))\b", re.IGNORECASE)
+_NOT_DOING = re.compile(r"\b(?:tv|telly|netflix|menu|radio|news|sale|mind|screen)\b", re.IGNORECASE)
 
 
-def _day_name(day, today):
-    text = f"{diya_when.DAYS[day.weekday()]} {day.day} {diya_when.MON[day.month - 1]}"
+def _day_name(day, today, full=False):
+    text = f"{(diya_when.DAYS_FULL if full else diya_when.DAYS)[day.weekday()]} {day.day} {diya_when.MON[day.month - 1]}"
     return text if day.year == today.year else f"{text} {day.year}"
 
 
@@ -53,7 +59,8 @@ def asks(text, today=None):
     if not isinstance(text, str) or not text.strip() or len(text) > MAX_CHARS or "\n" in text:
         return None
     flat = text.replace(chr(0x2019), "'").strip()
-    asked = (_SUBJECT.search(flat) and _FRAME.search(flat)) or _HAVE_ON.search(flat)
+    doing = _DOING.search(flat) and not _NOT_DOING.search(flat)
+    asked = (_SUBJECT.search(flat) and _FRAME.search(flat)) or _HAVE_ON.search(flat) or doing
     if not asked or _REQUEST.search(flat) or _NOT_CALENDAR.search(flat) and not _SUBJECT.search(flat):
         return None
     today = today.date() if isinstance(today, datetime) else (today or datetime.now().astimezone().date())
@@ -61,14 +68,17 @@ def asks(text, today=None):
     if found:
         days = max(1, min(int(found.group(1)), 31))
         return today, today + timedelta(days=days - 1), f"the next {days} days"
-    if re.search(r"\bnext\s+(?:mon|tue|wed|thu|fri|sat|sun)", flat, re.IGNORECASE):
-        return None  # "next Friday" is not guessed (diya_when.find leaves it too)
+    coming = diya_when.next_weekday(flat, today)
+    if coming is not None:  # "next Friday": the day is picked by code (the Friday of next week) and said with its date, so a different meaning is seen at once
+        return coming, coming, f"{_day_name(coming, today, full=True)} (next {diya_when.DAYS_FULL[coming.weekday()]})"
     span = diya_when.window(flat, today)
     if span is not None:
         return span[0], span[1], _label(span[0], span[1], today)
     day = diya_when.upcoming_day(flat, today)
     if day is not None:
         return day, day, _label(day, day, today)
+    if doing and not _SUBJECT.search(flat):
+        return None  # no day named, no calendar word: "what's on my mind" is not a calendar question
     return today, today + timedelta(days=DEFAULT_DAYS - 1), "the next two weeks"
 
 

@@ -41,8 +41,8 @@ def test_a_plain_question_is_taken_for_the_days_it_asks_about(question, first, l
 
 
 @pytest.mark.parametrize("text", [
-    "add dentist to my calendar", "schedule a meeting tomorrow", "cancel my meeting on friday", "move the event to saturday", "remind me about the meeting", "what's on my calendar next friday",
-    "what do I have to do today", "what do I have on my list", "what's the weather", "what do you know about my calendar habits", "how are you", "what is the capital of France",
+    "add dentist to my calendar", "schedule a meeting tomorrow", "cancel my meeting on friday", "move the event to saturday", "remind me about the meeting",
+    "what am I doing wrong", "what's on my mind", "what's on tv tonight", "what am I doing with my life", "what's on my list today", "what do I have to do today", "what do I have on my list", "what's the weather", "what do you know about my calendar habits", "how are you", "what is the capital of France",
     "x" * 200, "what's on my\ncalendar", "", None, 5,
 ])
 def test_a_request_or_anything_else_goes_on_to_the_model(text):
@@ -54,6 +54,36 @@ def test_a_weekday_name_is_its_next_day_and_next_friday_is_not_guessed():
     assert diya_when.upcoming_day("on wednesday", TODAY) == TODAY and diya_when.upcoming_day("next friday", TODAY) is None
     assert diya_when.upcoming_day("on 3 jan", TODAY) == date(2027, 1, 3) and diya_when.upcoming_day("on 20 oct", TODAY) == date(2027, 10, 20)  # a day already gone is next year's
     assert diya_when.upcoming_day("nothing", TODAY) is None and diya_when.upcoming_day(None, TODAY) is None and diya_when.upcoming_day("on 31 feb", TODAY) is None
+
+
+TUE = date(2026, 10, 27)  # a Tuesday: the day the model answered "next Tuesday" with Sunday 22 Nov
+
+
+@pytest.mark.parametrize("today, question, day", [
+    (TUE, '"what am I doing next Tuesday?', date(2026, 11, 3)),  # the exact message, quote mark and all
+    (TUE, "what's on next tuesday", date(2026, 11, 3)), (TUE, "what do I have next tuesday", date(2026, 11, 3)),
+    (date(2026, 10, 26), "what am I doing next Tuesday?", date(2026, 11, 3)),  # a Monday: this Tuesday is tomorrow, next Tuesday is the one after
+    (date(2026, 10, 25), "what am I doing next Tuesday?", date(2026, 10, 27)),  # a Sunday: next week starts tomorrow
+    (TUE, "any meetings next friday?", date(2026, 11, 6)), (TODAY, "what's on my calendar next friday", date(2026, 10, 30)),
+    (TUE, "am I free next monday?", date(2026, 11, 2)), (TUE, "what's on tuesday?", TUE), (TUE, "what am I doing tomorrow", date(2026, 10, 28)),
+])
+def test_next_weekday_is_picked_by_code_not_by_the_model(today, question, day):
+    found = ct.asks(question, today)
+    assert found is not None and found[0] == found[1] == day
+
+
+def test_the_answer_says_the_date_it_picked():
+    first, last, label = ct.asks('"what am I doing next Tuesday?', TUE)
+    assert label == "Tuesday 3 Nov (next Tuesday)"
+    assert ct.format_events([], first, last, label, TUE) == "Nothing on your calendar for Tuesday 3 Nov (next Tuesday)."
+
+
+def test_next_weekday_is_the_same_weekday_of_the_following_week():
+    for offset in range(14):  # whatever day it is asked on, a Tuesday of next week, 1 to 13 days ahead, never in the past
+        today = TUE + timedelta(days=offset)
+        day = diya_when.next_weekday("next tuesday", today)
+        assert day.weekday() == 1 and 1 <= (day - today).days <= 13 and day > diya_when._monday(today) + timedelta(days=6)
+    assert diya_when.next_weekday("on tuesday", TUE) is None and diya_when.next_weekday(None, TUE) is None and diya_when.next_weekday("next tuesday", None) is None
 
 
 def event(title, start, end, all_day=False):

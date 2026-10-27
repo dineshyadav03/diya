@@ -322,7 +322,7 @@ class AgentAsker:
         store = self.agent.store
         thread_id = store.main_thread()  # the phone and the page are one conversation (docs/ONE_CHAT_DESIGN.md)
         saved = store.get_messages(thread_id)
-        history = self.agent.with_profile([{"role": m["role"], "content": m["content"]} for m in saved])
+        history = self.agent.with_profile([{"role": m["role"], "content": m["content"]} for m in saved], message=text)
         message_id = store.add_message(thread_id, "user", text)
         history.append({"role": "user", "content": text})
         answer, _ = self.agent.ask(history, thread_id=thread_id, message_id=message_id)

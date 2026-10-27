@@ -409,3 +409,91 @@ def test_the_vector_of_a_fact_that_is_no_longer_accepted_is_removed(store, memor
     memory.decide(gone, "retire", "api")
     diya_recall.vectors(store, accepted(), fake_embed, "m")
     assert stored() == {kept}
+
+
+# --- tight mode: only what is for THIS message, even when everything would fit (2026-10-27) ------------------------------
+
+
+def tight(memory, focus, embed=fake_embed):
+    return memory.render_for_model(query=focus, embed=embed, model="fake", focus=focus)
+
+
+def small_memory(memory):
+    memory.add_manual("Name is Alex.", "api")
+    memory.add_manual("Allergic to peanuts.", "api")
+    memory.add_manual(ABOUT["dog"], "api")
+    memory.add_manual(ABOUT["knee"], "api")
+    memory.add_manual(ABOUT["trip"], "api")
+
+
+def test_a_message_not_about_a_fact_is_not_told_it_though_everything_fits(memory):
+    small_memory(memory)
+    assert len(memory.render_for_model()) < diya_memory.MAX_PROFILE_CHARS  # everything would fit
+    text = tight(memory, "tell me a joke")
+    assert "Alex" in text and "peanuts" in text  # the always-on facts
+    assert "dog" not in text and "knee" not in text and "trip" not in text
+    assert "more facts are not shown" in text  # honest about being partial
+
+
+def test_a_message_about_a_fact_is_told_that_fact_and_not_the_others(memory):
+    small_memory(memory)
+    text = tight(memory, "how is my dog doing")
+    assert ABOUT["dog"] in text and "Alex" in text
+    assert "knee" not in text and "trip" not in text
+
+
+def test_asking_what_diya_knows_about_the_person_is_told_everything(memory):
+    small_memory(memory)
+    for ask in ["what do you know about me", "What do you remember?", "tell me everything you know"]:
+        text = tight(memory, ask)
+        assert ABOUT["dog"] in text and ABOUT["knee"] in text and "more facts are not shown" not in text
+
+
+def test_asking_what_diya_knows_about_one_thing_is_still_only_that_thing(memory):
+    small_memory(memory)
+    text = tight(memory, "what do you know about my knee")
+    assert ABOUT["knee"] in text and "dog" not in text
+
+
+def test_without_embeddings_tight_mode_falls_back_to_the_always_on_facts_and_shared_words(memory):
+    small_memory(memory)
+    text = tight(memory, "how is my knee", embed=broken)
+    assert "Alex" in text and ABOUT["knee"] in text and "dog" not in text
+    assert "dog" not in tight(memory, "tell me a joke", embed=broken)
+
+
+def test_tight_mode_tells_at_most_a_few_facts_for_one_message(memory):
+    small_memory(memory)
+    for n in range(10):
+        memory.add_manual(f"Walks the dog {n} times a week.", "api")
+    text = tight(memory, "about my dog")
+    assert sum("dog" in line for line in text.splitlines()) <= diya_recall.TOP + 1
+
+
+def test_a_message_added_after_the_profile_is_still_what_the_facts_are_matched_to(agent, monkeypatch):
+    """The web page and the phone build the profile from the earlier messages and add the new one afterwards: they pass it as `message`."""
+    small_memory(open_memory(agent.store, agent.config))
+    monkeypatch.setattr(agent, "embed", fake_embed)
+    earlier = [{"role": "user", "content": "how is my dog doing"}, {"role": "assistant", "content": "Fine."}]
+
+    def told(message):
+        return "\n".join(m["content"] for m in agent.with_profile(earlier, message=message) if m["role"] == "system")
+
+    assert ABOUT["knee"] in told("how is my knee") and "dog" not in told("how is my knee")
+    assert "Alex" in told("tell me a joke") and "dog" not in told("tell me a joke") and "knee" not in told("tell me a joke")
+
+
+def test_a_chat_that_ends_with_an_answer_has_no_message_yet_so_everything_is_told(agent, monkeypatch):
+    """The terminal chat is set up once and talks on: there is no message to match, so it is told all it knows, as before."""
+    small_memory(open_memory(agent.store, agent.config))
+    monkeypatch.setattr(agent, "embed", broken)
+    system = "\n".join(m["content"] for m in agent.with_profile([{"role": "user", "content": "hi"}, {"role": "assistant", "content": "Hello."}]) if m["role"] == "system")
+    assert ABOUT["dog"] in system and ABOUT["knee"] in system and "more facts are not shown" not in system
+
+
+def test_the_chat_is_told_only_the_facts_for_the_message_just_sent(agent, monkeypatch):
+    memory = open_memory(agent.store, agent.config)
+    small_memory(memory)
+    monkeypatch.setattr(agent, "embed", fake_embed)
+    system = "\n".join(m["content"] for m in agent.with_profile([{"role": "user", "content": "how is my dog doing"}, {"role": "assistant", "content": "Fine."}, {"role": "user", "content": "tell me a joke"}]) if m["role"] == "system")
+    assert "Alex" in system and "dog" not in system  # the joke is not about the dog, though the message before it was

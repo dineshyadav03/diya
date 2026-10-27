@@ -25,6 +25,7 @@ from datetime import date, datetime, timedelta, timezone
 MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
 MON = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+DAYS_FULL = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 _WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 _NUMBERS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12}
 _COUNT = r"(?P<n>\d{1,3}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"
@@ -374,6 +375,22 @@ def upcoming_day(question, today):
         wanted = _WEEKDAY_INDEX[match.group("w").lower()[:3]]
         return today + timedelta(days=(wanted - today.weekday()) % 7)
     return None
+
+
+_NEXT_WEEKDAY = re.compile(r"\bnext\s+(?P<w>monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tues|tue|wed|thurs|thur|thu|fri|sat|sun)\b", re.IGNORECASE)
+
+
+def next_weekday(question, today):
+    """The day "next Tuesday" means, decided by code (2026-10-27: asked on Tue 27 Oct, the 4B model answered "next Tuesday" with Sun 22 Nov). The rule people use and that is said back with the date: "this Tuesday" is in this
+    calendar week (Monday to Sunday) and "next Tuesday" is that weekday in the following week. So on Tue 27 Oct, or Mon 26 Oct, "next Tuesday" is Tue 3 Nov, and on Sun 25 Oct it is Tue 27 Oct. None when the question
+    has no "next <weekday>". `find` and `upcoming_day` still leave it alone: they feed memory and a calendar window, where the answer does not carry the date back to the person."""
+    if not isinstance(question, str) or not isinstance(today, date):
+        return None
+    today = today.date() if isinstance(today, datetime) else today
+    match = _NEXT_WEEKDAY.search(question)
+    if match is None:
+        return None
+    return _monday(today) + timedelta(days=7 + _WEEKDAY_INDEX[match.group("w").lower()[:3]])
 
 
 def strip_days(text, today=None):

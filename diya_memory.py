@@ -569,16 +569,20 @@ class Memory:
         told = Memory._told_texts(conn, [(i, text, created, flags, first, last) for i, text, _person, created, flags, first, last in found])
         return [(told[i], person) for i, _text, person, _created, _flags, _first, _last in found]
 
-    def render_for_model(self, query="", embed=None, model=""):
+    def render_for_model(self, query="", embed=None, model="", focus=""):
         """The accepted facts as the model is actually given them (docs/PERSON_MEMORY_DESIGN.md, M4):
         self facts as a plain list, then a labelled block per named person. '' when there are none.
 
         When they all fit in MAX_PROFILE_CHARS that is every one of them, as it always was. When there are more than fit (possible once the store is larger than the room, docs/RECALL_DESIGN.md),
-        the ones for this `query` are chosen (diya_recall.choose); `embed(text)` and `model` rank them by meaning, and without them the newest are told after the lasting ones."""
+        the ones for this `query` are chosen (diya_recall.choose); `embed(text)` and `model` rank them by meaning, and without them the newest are told after the lasting ones.
+
+        With recall on and a `focus` (the message just sent) the model is told only the few always-on facts and those close to that message, even when every fact would fit (diya_recall.pick, tight mode)."""
         with self._read() as conn:
             rows = self._accepted_with_person(conn)
             everything = render_grouped(rows)
-            if len(everything) <= MAX_PROFILE_CHARS or self.store_limit <= MAX_PROFILE_CHARS:  # all of them: they fit, or recall is off and what is kept is what is told
+            if not rows or self.store_limit <= MAX_PROFILE_CHARS:  # recall is off: what is kept is what is told
+                return everything
+            if len(everything) <= MAX_PROFILE_CHARS and not (focus or "").strip():  # no message to match against: all of them, they fit
                 return everything
             import diya_recall
 
@@ -586,7 +590,12 @@ class Memory:
                 "SELECT f.id, f.text, f.text_key, p.name, f.created_at, f.flags, f.batch_first, f.batch_last FROM facts f LEFT JOIN people p ON p.id = f.person_id WHERE f.status = 'accepted' ORDER BY f.id").fetchall()
             told = self._told_texts(conn, [(r[0], r[1], r[4], r[5], r[6], r[7]) for r in every])
             facts = [{"id": r[0], "text": r[1], "text_key": r[2], "person": r[3], "told": told[r[0]]} for r in every]
-        chosen = diya_recall.choose(facts, query, MAX_PROFILE_CHARS - PARTIAL_NOTE_ROOM, lambda picked: render_grouped([(f["told"], f["person"]) for f in picked]), store=self.store, embed=embed, model=model)
+        render = lambda picked: render_grouped([(f["told"], f["person"]) for f in picked])  # noqa: E731
+        room = MAX_PROFILE_CHARS - PARTIAL_NOTE_ROOM
+        if (focus or "").strip():
+            chosen = diya_recall.pick(facts, focus, room, render, store=self.store, embed=embed, model=model)
+        else:
+            chosen = diya_recall.choose(facts, query, room, render, store=self.store, embed=embed, model=model)
         text = render_grouped([(f["told"], f["person"]) for f in chosen])
         if len(chosen) < len(facts):  # honest about being partial (supermemory's company-brain says "this is not the complete set"): the model must not read what is missing as what is not known
             text += "\n" + partial_note(len(facts) - len(chosen))

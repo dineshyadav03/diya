@@ -487,7 +487,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
         # after a failed turn. That message is used again, not saved a second time, so a retry leaves one message, not two.
         retry = bool(saved) and saved[-1]["role"] == "user" and saved[-1]["content"] == req.message
         earlier = saved[:-1] if retry else saved
-        history = agent.with_profile([{"role": m["role"], "content": m["content"]} for m in earlier])
+        history = agent.with_profile([{"role": m["role"], "content": m["content"]} for m in earlier], message=req.message)  # the facts told are the ones for this message, which is added below
         # With automatic memory on, the job to read the message for facts is written in the same transaction as the message (DIYA-019): written down before the turn is answered, so a restart
         # cannot lose it, and the reading that follows takes it in its turn. A retry reuses the message, whose job is already there (and is put there if a restart lost it).
         message_id = saved[-1]["id"] if retry else agent.store.add_message(thread_id, "user", req.message, capture=config.auto_memory)

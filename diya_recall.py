@@ -11,6 +11,12 @@ What is changed is only what is TOLD, never what is KEPT or what is accepted:
   memory; the Memory page still lists every fact.
 * If the embeddings cannot be had (Ollama down, the embedding model missing), the facts told are the core ones and then the newest, so a chat never fails because recall did.
 
+Tight mode (`pick`, 2026-10-27): a store that fits is no longer a reason to tell everything. Told every fact on every message, the 4B model kept bringing up a dog and a favourite colour in answers that were
+not about them. With recall on, a message is now told only (1) the few always-on facts (a name, an allergy or condition, pronouns, a time zone: `is_always`, at most 25% of the room) and (2) the facts whose
+meaning is close to THIS message (cosine at least THRESHOLD, at most TOP of them). Measured on 13 real facts and 12 messages with nomic-embed-text: facts that were for the message scored 0.52 to 0.68, facts that
+were not scored up to 0.49. A question about the memory itself ("what do you know about me") is still told everything. The note that the view is partial stays, so a fact out of view is "maybe not in view",
+never "never told".
+
 Embeddings are kept in the `fact_embeddings` table, one row per fact and per embedding model, made the first time recall is needed and again only for a fact whose words have changed.
 No model writes anything here: ranking is arithmetic over vectors and the facts' own text.
 """
@@ -21,6 +27,9 @@ import math
 import re
 
 CORE_SHARE = 0.45  # of the room, at most, for the facts that are always told
+ALWAYS_SHARE = 0.25  # of the room, at most, for the always-on facts in tight mode
+THRESHOLD = 0.52  # cosine of a fact with the message just sent, from which the fact counts as being for it (measured 2026-10-27: for it 0.52 to 0.68, not for it up to 0.49)
+TOP = 6  # facts at most that tight mode tells for one message, besides the always-on ones
 QUERY_CHARS = 400  # of the last two messages the person sent, what the facts are matched against
 # A lasting fact about who the person is: told whatever they ask. Deliberately short and in code, like the other checks: a miss only means the fact has to be relevant to be told.
 _CORE = re.compile(
@@ -28,6 +37,10 @@ _CORE = re.compile(
     r"studies|student|married|wife|husband|partner|mother|father|sister|brother|son|daughter|timezone|time\s+zone|language)\b",
     re.IGNORECASE,
 )
+# Tight mode's always-on facts: only what must never be missed whatever is asked (a name, an allergy or condition, pronouns, a time zone). Much narrower than _CORE, which also took "from" and "student".
+_ALWAYS = re.compile(r"\b(?:name\s+is|called|nickname|allerg\w*|intoleran\w*|diabet\w*|asthma\w*|medicat\w*|vegetarian|vegan|pronouns?|time\s*zone)\b", re.IGNORECASE)
+# A question about the memory itself wants all of it.
+_ASKS_ALL = re.compile(r"\bwhat\s+(?:do|did|can)\s+you\s+(?:know|remember)(?:\s+about\s+me)?\s*[?.!]*\s*$|\b(?:know|knew|remember|remembered)\b[^.?!]{0,30}\babout\s+me\b|\beverything\s+you\s+(?:know|remember)\b", re.IGNORECASE)
 _WORD = re.compile(r"[^\W_]{3,}")
 _COMMON = frozenset("the and for with that this have has from your what when where which who how are was were you not but can will about there their they them she her his him its out any all".split())
 
@@ -98,6 +111,53 @@ def choose(facts, query, limit, render, store=None, embed=None, model=""):
     if ranked is None:
         ranked = sorted(left, key=lambda f: -f["id"])  # the newest first
     for fact in ranked:
+        if len(render(chosen + [fact])) <= limit:
+            chosen.append(fact)
+    return sorted(chosen, key=lambda f: f["id"])
+
+
+def is_always(text):
+    """Is this a fact that belongs in every message (a name, an allergy or condition, pronouns, a time zone)?"""
+    return _ALWAYS.search(text) is not None
+
+
+def last_of(messages):
+    """The message the person just sent, cut: what tight mode matches the facts against."""
+    users = [m["content"] for m in messages if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str)]
+    return users[-1][-QUERY_CHARS:].strip() if users else ""
+
+
+def pick(facts, focus, limit, render, store=None, embed=None, model=""):
+    """Tight mode: the always-on facts, then the facts whose meaning is close to `focus` (the message just sent), at most TOP of them, in their own order. A question about the memory itself gets `choose`
+    (everything that fits). Without embeddings (Ollama down, or too slow) only a fact sharing a meaningful word (as a stem) with the message is added, so a chat never fails because recall did."""
+    if _ASKS_ALL.search(focus):
+        return choose(facts, focus, limit, render, store=store, embed=embed, model=model)
+    chosen, always_room = [], limit * ALWAYS_SHARE
+    for fact in facts:
+        if is_always(fact["text"]) and len(render(chosen + [fact])) <= always_room:
+            chosen.append(fact)
+    left = [f for f in facts if f not in chosen]
+    wanted = have = None
+    if embed is not None and store is not None and focus and left:
+        try:
+            wanted = embed(focus)
+            have = vectors(store, left, embed, model)
+        except Exception:  # noqa: BLE001 -- Ollama down or the model missing
+            wanted = have = None
+    if wanted is None:
+        import diya_checks  # (here, not at the top: diya_checks and diya_memory import each other's neighbours)
+
+        asked = diya_checks.content_words(focus) - {"user"}  # stems, so "name" finds "named" and "dog's" finds "dog"
+    scored = []
+    for fact in left:
+        if wanted is not None:
+            score = cosine(wanted, have[fact["id"]])
+            if score >= THRESHOLD:
+                scored.append((score, fact))
+        elif asked & diya_checks.content_words(fact["text"]):
+            scored.append((1.0, fact))
+    scored.sort(key=lambda row: (-row[0], -row[1]["id"]))
+    for _score, fact in scored[:TOP]:
         if len(render(chosen + [fact])) <= limit:
             chosen.append(fact)
     return sorted(chosen, key=lambda f: f["id"])

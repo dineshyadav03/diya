@@ -46,3 +46,16 @@ a few weeks, and the Memory page will show when more is kept than told.
 
 `DIYA_RECALL=0` restores the old behaviour: the old 2,000-character limit on what is kept, and every fact told. Facts kept above 2,000 characters while recall was on stay in the memory, and with recall
 off the model is told all of them, however long: that is the long list recall exists to avoid, so turn it off only while the memory is still under the old limit.
+
+## Tight mode (2026-10-27): the facts for THIS message, even when everything fits
+
+Found when the owner asked for a joke and got a dog and a favourite colour: the 4B model was told every accepted fact on every message and kept wanting to use them. With recall on, a message is now told
+only the always-on facts (`diya_recall.is_always`: a name, an allergy or condition, pronouns, a time zone; at most 25% of the room) and the facts whose meaning is close to the message
+(`diya_recall.pick`: cosine at least `THRESHOLD` = 0.52, at most `TOP` = 6). Measured with nomic-embed-text on the 13 real accepted facts: facts that were for a message scored 0.52 to 0.68, facts that were
+not scored up to 0.49; of 18 messages none brought in a fact it was not about. "What do you know about me?" is still told everything. The partial note stays. If the embedding model is slow or down (6 seconds,
+`Agent.embed_in_time`), a fact that shares a meaningful word with the message is added instead.
+
+The message is `Agent.with_profile(history, message=...)`: the web page and the phone add the new message to the history only after the profile is built, so they pass it. A history that already ends with
+the person's message (the benches, an automation) needs no `message`. A history that ends with an answer (the terminal chat, set up once) has no message yet and is told everything.
+
+Cost: the profile now changes with the topic, so the first turn after it changes re-reads the tools and the chat after it (measured 4 s for a one-message chat). Turn it off with `DIYA_RECALL=0`.

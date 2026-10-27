@@ -32,6 +32,8 @@ def build(folder, client, **changes):
         profile_path=str(folder / "profile.txt"), auto_memory=True, require_token=False, categories=False, lookup=False, **changes,
     )
     agent = diya.Agent(config, client=client)
+    # The model is now told the facts that match the message (diya_recall.pick), by meaning; this stand-in embedder sees a dog in "dog" and "Hog" the way the real one does (measured on 2026-10-27).
+    agent.embed = lambda text: [float(word in text.lower()) for word in ("dog", "hog", "max", "rocky")]
     return TestClient(diya_web.create_app(config, agent, Quiet()), base_url=LOCAL), agent
 
 

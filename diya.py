@@ -1157,7 +1157,7 @@ class Agent:
         result = diya_memory.import_legacy_profile(memory, self.config)
         return result if result.imported else None
 
-    def with_profile(self, history):
+    def with_profile(self, history, message=None):
         """Prepend what the model knows about the user -- the ACCEPTED facts of reviewed memory, never a
         candidate, a rejected or a retired one -- as a system message, if there are any. Shared by every
         entry point (terminal, web) so this can't silently be missing from one of them. Injected fresh
@@ -1166,11 +1166,17 @@ class Agent:
         person sits in its own labelled block instead (docs/PERSON_MEMORY_DESIGN.md, M4).
 
         The first call also makes sure the old profile file has been imported (ensure_profile_imported),
-        so no entry point can start without the facts the model used to be given."""
+        so no entry point can start without the facts the model used to be given.
+
+        What the model is told about the person is matched to the message being answered (diya_recall.pick). That is `message`, for a caller that adds it to `history` only afterwards (the web page and the
+        phone do), or the last message of `history` when that is the person's. A history that ends with an answer (the terminal chat, which is set up once) has no message yet: everything known is told."""
         if not self._profile_import_checked:
             self.ensure_profile_imported()
             self._profile_import_checked = True
-        profile = diya_memory.open_memory(self.store, self.config).render_for_model(query=diya_recall.query_of(history), embed=self.embed, model=self.config.embed_model)
+        seen = list(history) + ([{"role": "user", "content": message}] if isinstance(message, str) and message.strip() else [])
+        asked = seen and isinstance(seen[-1], dict) and seen[-1].get("role") == "user"
+        # embed_in_time: a cold embedding model never holds the chat up
+        profile = diya_memory.open_memory(self.store, self.config).render_for_model(query=diya_recall.query_of(seen), embed=self.embed_in_time, model=self.config.embed_model, focus=diya_recall.last_of(seen) if asked else "")
         now = self.now()
         persona = f"{PERSONA} Today is {diya_time.DAY_NAMES[now.weekday()]} {now.day} {diya_time.MONTH_NAMES[now.month - 1]} {now.year}." if PERSONA else ""
         known = f"What you know about the user so far:\n{profile}" + (f"\n\n{PROFILE_REMINDER}" if PERSONA and PROFILE_REMINDER else "") if profile else ""
@@ -1997,7 +2003,7 @@ def main():
     else:
         thread_id = int(thread_arg)
 
-    history = agent.with_profile(agent.store.get_history(thread_id))
+    history = agent.with_profile(agent.store.get_history(thread_id), message=message)
 
     if message is not None:
         # one-off mode: useful for scripts/scheduled tasks, not for talking to it yourself
