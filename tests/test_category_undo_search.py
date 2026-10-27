@@ -290,7 +290,8 @@ def test_a_search_works_through_the_page_and_refuses_what_it_cannot_read(tmp_pat
 
 # ---- the page and the API do the same things (task DIYA-237) -------------------------------------------------------------------
 
-def test_every_thing_the_categories_api_can_do_has_a_control_on_a_page():
+def test_the_categories_api_keeps_its_actions_though_no_page_has_a_control_for_them_any_more():
+    """The Categories page and the chat's chips were removed on 2026-10-27 at the owner's request (DIYA_CATEGORIES=0 turns the sorting off): the actions stay in the API, unused by any page."""
     import re
     from pathlib import Path
 
@@ -298,9 +299,7 @@ def test_every_thing_the_categories_api_can_do_has_a_control_on_a_page():
     api = (root / "diya_categories_api.py").read_text(encoding="utf-8")
     actions = set(re.findall(r'body\.action == "([a-z_]+)"', api))
     assert {"assign", "add", "rename", "merge", "browse", "undo_merge", "search", "suggest", "sort_earlier", "answer_suggestion"} <= actions
-    pages = "\n".join(path.read_text(encoding="utf-8") for path in (root / "frontend" / "app").rglob("*.js"))
-    missing = [action for action in sorted(actions) if not re.search(rf"action: '{action}'", pages)]
-    assert missing == []
+    assert not (root / "frontend" / "app" / "categories").exists()
 
 
 # ---- what the person chose is not overwritten (task DIYA-157) and sorting the earlier chats resumes cleanly (task DIYA-159) ------------

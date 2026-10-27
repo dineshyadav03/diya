@@ -21,20 +21,25 @@ class Place(BaseModel):
 
 
 def register(app, config, agent):
-    """Add the routes to `app`, directly, like every other route. Nothing is read here."""
-    weather = diya_weather.Weather(agent.store, getattr(config, "tool_allowed_hosts", diya_config.DEFAULT_TOOL_ALLOWED_HOSTS))
+    """Add the routes to `app`, directly, like every other route. Nothing is touched here: the store is looked up when the first request comes."""
+    held = {}
+
+    def weather():
+        if "it" not in held:
+            held["it"] = diya_weather.Weather(agent.store, getattr(config, "tool_allowed_hosts", diya_config.DEFAULT_TOOL_ALLOWED_HOSTS))
+        return held["it"]
 
     @app.get("/api/weather")
     def current():
-        return weather.payload()
+        return weather().payload()
 
     @app.post("/api/weather")
     def share(body: Place):
-        if not weather.set_location(body.lat, body.lon):
+        if not weather().set_location(body.lat, body.lon):
             raise HTTPException(status_code=422, detail="that is not a place on Earth")
-        return weather.payload()
+        return weather().payload()
 
     @app.delete("/api/weather")
     def forget():
-        weather.forget()
+        weather().forget()
         return {"known": False}

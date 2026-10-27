@@ -156,9 +156,10 @@ def register(app, config, agent, tail_limit):
 
     @app.get("/api/categories")
     def categories():
-        if not config.categories:  # sorting is off (DIYA_CATEGORIES=0): the page shows no category at all
-            return {"categories": [], "tags": {}, "suggestions": [], "job": job.snapshot()}
-        return everything()
+        body = everything()
+        if not config.categories:  # sorting is off (DIYA_CATEGORIES=0): the chat shows no category at all
+            body.update(categories=[], tags={}, suggestions=[])
+        return body
 
     @app.post("/api/categories")
     def change(body: Action):
