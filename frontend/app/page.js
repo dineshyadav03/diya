@@ -675,6 +675,32 @@ export default function ChatPage() {
   for (const name of Object.values(tags)) counts[name] = (counts[name] || 0) + 1
   const chips = categories.filter((c) => counts[c.name]).map((c) => [c.name, counts[c.name]])
 
+  // A card on Home asks Diya something in this chat (components/HomeCards.jsx): said as the person's own message, once the chat has loaded and is not busy. On a screen with no chat beside the cards,
+  // the card opens this page with ?ask=... instead, and the message is sent when the chat is ready. Either way it is only a message: whatever it makes Diya do is asked about, in the strip below.
+  const askRef = useRef(null)
+  askRef.current = (text) => {
+    if (!ready || loadingChat || loadProblem || earlierChat || thinking || speaking) return false
+    handleSend(text)
+    return true
+  }
+  const pendingAsk = useRef(null)
+  useEffect(() => {
+    const asked = new URLSearchParams(window.location.search).get('ask')
+    if (asked && asked.trim()) {
+      pendingAsk.current = asked.trim().slice(0, 500)
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+    const onAsk = (event) => {
+      const text = event.detail && event.detail.text
+      if (typeof text === 'string' && text.trim() && askRef.current(text.trim().slice(0, 500))) event.detail.handled = true
+    }
+    window.addEventListener('diya-ask', onAsk)
+    return () => window.removeEventListener('diya-ask', onAsk)
+  }, [])
+  useEffect(() => {
+    if (ready && pendingAsk.current && askRef.current(pendingAsk.current)) pendingAsk.current = null
+  }, [ready])
+
   return (
     <div className="chat">
       <div className="chat-bar">
@@ -713,9 +739,6 @@ export default function ChatPage() {
               {tagProblem}
             </span>
           )}
-          <Link href="/categories" className="chip chip-link">
-            {suggestions > 0 ? 'A new category is suggested' : 'Edit categories'}
-          </Link>
         </div>
       )}
       {earlierChat && (

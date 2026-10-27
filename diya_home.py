@@ -11,6 +11,7 @@ A card `needs` the person (a reminder due now, an overdue task, a question, an a
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 
 CALENDAR_HOURS = 8  # an event is "next" when it starts within this many hours
@@ -19,6 +20,7 @@ APPROVALS_SHOWN = 3
 LATER_SHOWN = 4
 REMIND_BEFORE_MINUTES = 30
 TITLE_CHARS = 100
+MAIL_SHOWN = 3
 MAX_CARDS = 14
 _WORDS = ("Nothing", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten")
 _ANSWERED = {"yes": "Noted.", "no": "Dropped. I will not use it.", "keep": "Kept both."}
@@ -40,6 +42,35 @@ def _card(card_id, kind, icon, source, title, detail=None, needs=True, ask=False
 def _time_of(due_text):
     """"Tuesday 27 October 2026, 18:00" -> "18:00"."""
     return due_text.rsplit(", ", 1)[-1] if due_text and ", " in due_text else due_text
+
+
+def speakable(name):
+    """A sender's name as it may go into a message that Diya is asked: letters, spaces and . ' - only, at most five words and 40 characters. A name is a stranger's word, so nothing else of a mail
+    (above all its subject) is ever put into what the person seems to have said."""
+    words = [w for w in re.sub(r"[^\w .'-]", " ", name or "", flags=re.UNICODE).split() if w][:5]
+    return " ".join(words)[:40]
+
+
+def _ago(sent, now):
+    days = (now.date() - sent.date()).days
+    if days <= 0:
+        return f"today, {sent:%H:%M}"
+    return f"yesterday, {sent:%H:%M}" if days == 1 else f"{days} days ago"
+
+
+def mail_cards(items, now):
+    """A card for each of the first few mails waiting for a reply (diya_mail_waiting). Its one button asks Diya IN THE CHAT to draft the reply: Diya reads the mail itself with its own tool, and the draft is
+    then asked about in the chat before anything is saved. The sentence that is asked holds only the sender's name."""
+    cards = []
+    for item in list(items)[:MAIL_SHOWN]:
+        who = speakable(item["from_name"])
+        ask = f"Draft a reply to the email from {who} that I have not answered yet." if who else "Draft a reply to the email I have not answered yet."
+        shown = item["from_name"] or item["from_address"]
+        cards.append(_card(
+            f"mail-{item['thread']}", "mail", "mail", "Gmail, read only", f'{shown} is waiting for a reply: "{item["subject"]}"', f"Sent {_ago(item['sent'], now)}",
+            actions=[{"label": "Draft a reply", "ask": ask, "done": "Asked in the chat. Diya will ask before saving anything."}], verb="Reply",
+        ))
+    return cards
 
 
 def approval_cards(pending):
@@ -139,15 +170,15 @@ def _joined(names):
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
 
-def build(now, brief, questions=(), pending=(), events=(), calendar=False, problems=()):
+def build(now, brief, questions=(), pending=(), events=(), calendar=False, problems=(), mail=(), gmail=False, looking=()):
     """The Home page for the local day of `now` (a naive datetime). `brief` is diya_brief.build's answer; `questions` are the described questions; `pending` the actions waiting; `events` today's calendar
-    events as diya_google_calendar.events_between gives them; `calendar` whether the calendar was looked at; `problems` what could not be read, in words."""
-    needing = approval_cards(pending) + due_reminder_cards(brief) + task_cards(brief["tasks_overdue"]) + question_cards(questions) + task_cards(brief["tasks_today"])
+    events as diya_google_calendar.events_between gives them; `calendar` whether the calendar was looked at; `problems` what could not be read, in words; `mail` the threads waiting for a reply (diya_mail_waiting); `gmail` whether the mail was looked at; `looking` the accounts whose first reading is still going (the page asks again soon)."""
+    needing = approval_cards(pending) + due_reminder_cards(brief) + task_cards(brief["tasks_overdue"]) + mail_cards(mail, now) + question_cards(questions) + task_cards(brief["tasks_today"])
     upcoming = calendar_cards(events, now) + later_reminder_cards(brief)
     cards = (needing + upcoming)[:MAX_CARDS]
     needs = sum(1 for c in cards if c["needs"])
     soonest = _upcoming(events, now)[:1]
-    looked = ["reminders", "tasks", "memory questions", "waiting actions"] + (["Google Calendar"] if calendar else [])
+    looked = ["reminders", "tasks", "memory questions", "waiting actions"] + (["Google Calendar"] if calendar else []) + (["Gmail"] if gmail else [])
     return {
         "date": brief["date"],
         "headline": headline(needs, len(cards) - needs),
@@ -156,4 +187,5 @@ def build(now, brief, questions=(), pending=(), events=(), calendar=False, probl
         "counts": {"needs": needs, "upcoming": len(cards) - needs},
         "panel": {"tiles": [{"label": "Needs you", "value": str(needs)}, {"label": "Coming up", "value": str(len(cards) - needs)}, {"label": "Next event", "value": f"{soonest[0][0]:%H:%M}" if soonest else "None"}]},
         "problems": list(problems),
+        "looking": list(looking),
     }

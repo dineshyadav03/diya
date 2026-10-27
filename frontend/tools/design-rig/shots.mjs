@@ -90,6 +90,9 @@ const SCENARIOS = [
       { name: 'nothing is still loading', js: `!document.querySelector('.thread-skeleton')` },
     ],
   })),
+  // The sky follows the weather (components/WeatherProvider.jsx): the page is given a sky as the provider would, so the tint can be seen without sharing a place.
+  { name: 'home-sky-rain-night', path: '/home', stub: {}, steps: [`await __wait(1500); document.documentElement.dataset.sky = 'rain'; document.documentElement.dataset.daytime = 'night'; await __wait(300)`] },
+  { name: 'home-sky-clear-day', path: '/home', stub: {}, steps: [`await __wait(1500); document.documentElement.dataset.sky = 'clear'; document.documentElement.dataset.daytime = 'day'; await __wait(300)`] },
   { name: 'chat-empty', path: '/', stub: {}, steps: [] },
   // Leaving the chat while Diya is thinking and coming back: the history says she is still answering, so the page says so and looks again; when the reply is there the message goes and the reply is shown.
   {
