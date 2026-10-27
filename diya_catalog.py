@@ -113,6 +113,7 @@ CATALOG = {e.name: e for e in (
     E("read_calendar", "flow", 0, "reads the person's Google Calendar for the days they ask about and writes the list itself, with no model", "www.googleapis.com", "n/a", "none", True, "Google Calendar connected", "google_calendar"),
     E("explain_connections", "flow", 0, "says which accounts are connected and what each can and cannot do, from the connection record and not from the model", "none", "n/a", "none", False),
     E("explain_memory", "flow", 0, "says where a remembered fact came from, from the memory's own record", "none", "n/a", "none", False),
+    E("approve_in_chat", "flow", 1, "approves or drops the one action Diya has just asked about when the person's whole message is a yes or a no, read by code; never approves an action that came from outside text, and does exactly what the Approve button does", "whatever the approved action reaches (only when approved)", "as the action's own card says; a no changes nothing", "owner approves each action", False),
     E("use_playbook", "flow", 0, "adds the steps of a playbook the person wrote themselves (named in the message or close in meaning) to the turn as their instructions; grants no tool and skips no approval", "none", "n/a", "none", False),
 )}
 # A flow shares a name with a tool when the same thing is done in code instead of by the model's choice: it is journalled under that name with kind="flow".

@@ -85,6 +85,7 @@ One press of **Pause Diya** on the Status page (or `POST /api/pause`) stops the 
 | `read_calendar` | flow | 0 | reads the person's Google Calendar for the days they ask about and writes the list itself, with no model | www.googleapis.com | n/a | none | yes | Google Calendar connected |
 | `explain_connections` | flow | 0 | says which accounts are connected and what each can and cannot do, from the connection record and not from the model | none | n/a | none | no | - |
 | `explain_memory` | flow | 0 | says where a remembered fact came from, from the memory's own record | none | n/a | none | no | - |
+| `approve_in_chat` | flow | 1 | approves or drops the one action Diya has just asked about when the person's whole message is a yes or a no, read by code; never approves an action that came from outside text, and does exactly what the Approve button does | whatever the approved action reaches (only when approved) | as the action's own card says; a no changes nothing | owner approves each action | no | - |
 | `use_playbook` | flow | 0 | adds the steps of a playbook the person wrote themselves (named in the message or close in meaning) to the turn as their instructions; grants no tool and skips no approval | none | n/a | none | no | - |
 
 Tools of MCP servers the person added (`mcp_...`) are not listed one by one: each is read-only, approved by the person one at a time, and pinned (`docs/MCP_DESIGN.md`).
@@ -168,6 +169,7 @@ Meta's Rule of Two and Simon Willison's lethal trifecta say an agent should not,
 | `read_calendar` | yes | yes | - | 2 |
 | `explain_connections` | - | - | - | 0 |
 | `explain_memory` | - | yes | - | 1 |
+| `approve_in_chat` | - | - | - | 0 |
 | `use_playbook` | - | yes | - | 1 |
 
 **No single entry has all three.** The one open accounting is the session: a chat offers `list_calendar_events`, `list_files`, `list_google_tasks`, `list_todoist_tasks`, `search_home_assistant`, `search_notes`, `search_notion` (private data and untrusted words, legs A and B) next to `get_weather`, `web_search` (free text out, leg C, no approval), so all three legs exist in one turn even though no tool has them alone. What stands in the way: the model has no tool that names an address, a header or a credential; what a service returns is data, never an instruction; mail, repositories and notes are read by a model with no tools; every write to an account is a proposal the owner approves exactly as shown, and the tools that ran earlier in the turn are shown on the card as a warning. What is not closed: a query or a place name can carry words the model took from what it read. Closing it would mean approving each search, or a search that sees no private text; neither is built, and it is a decision for the owner, not a default.
