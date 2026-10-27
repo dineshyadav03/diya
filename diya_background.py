@@ -1,9 +1,10 @@
-"""Keep what Diya remembers about the person's pets and instruments out of replies that are not about them (2026-10-27).
+"""Keep what Diya remembers about the person's pets, instruments and favourites out of replies that are not about them (2026-10-27).
 
 The owner asked "what am I doing next Tuesday?" and the reply ended "...and your dog Hog will be proud." The persona and the reminder after the list of facts already tell the model never to bring up a pet or a hobby
 (diya.PERSONA, diya.PROFILE_REMINDER), and a small model still does it: it is a request, not a rule. This is the rule, in code, on the finished reply:
 
-* A fact is "about a pet" or "about an instrument" when it says so (a word from PET_WORDS or INSTRUMENT_WORDS); the other words of that fact (the dog's name, its breed) belong to the same topic.
+* A fact is "about a pet", "about an instrument" or "about a favourite" (a favourite colour) when it says so (a word from PET_WORDS, INSTRUMENT_WORDS or FAVOURITE_WORDS); the other words of that fact (the dog's name, its breed,
+  the colour) belong to the same topic.
 * A reply that says any of those words, when nothing in the person's own message touched that topic, has the sentence (or the clause after a dash) that says it taken out. The rest is left exactly as the model wrote it.
 * If the message did touch the topic ("what is my dog's name?"), nothing is taken out. If taking it out would leave nothing, the reply is returned as it was.
 * Only a topic the person's accepted facts actually cover is guarded: with no fact about a pet, a pet in a reply is the model's own invention, which this does not judge.
@@ -16,7 +17,8 @@ import re
 
 PET_WORDS = frozenset("dog dogs puppy puppies pup cat cats kitten kittens pet pets parrot rabbit hamster retriever labrador poodle beagle husky".split())
 INSTRUMENT_WORDS = frozenset("guitar guitars piano violin drums ukulele flute saxophone cello".split())
-TOPICS = {"pet": PET_WORDS, "instrument": INSTRUMENT_WORDS}
+FAVOURITE_WORDS = frozenset("favorite favorites favourite favourites color colors colour colours".split())  # "Favorite color is teal." brought "Teal today, just like the mood." into a joke (2026-10-27)
+TOPICS = {"pet": PET_WORDS, "instrument": INSTRUMENT_WORDS, "favourite": FAVOURITE_WORDS}
 # words of a fact that say nothing about its topic (so they never count as a mention of it)
 _FILLER = frozenset("""has have had my your his her its the and for with who that this you not are was were been from into new another got get bought buy own owns named name called user users one two
  lives live about golden""".split())
@@ -47,7 +49,7 @@ def drop_unasked(reply, user_text, fact_texts):
     guarded = set()
     for _topic, words in topics_of(fact_texts).items():
         if not (said & words):
-            guarded |= words
+            guarded |= words - FAVOURITE_WORDS  # (the word "color" itself is ordinary in a reply about the sky; only "teal" is the person's)
     if not guarded:
         return reply
 

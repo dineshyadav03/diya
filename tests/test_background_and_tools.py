@@ -53,6 +53,18 @@ def test_the_guitar_is_guarded_by_its_own_message_not_the_dogs():
     assert background.drop_unasked(reply, "tips for my dog", FACTS) == "Your dog Hog is great."  # about the dog: the dog stays, the guitar goes
 
 
+def test_a_favourite_colour_the_message_did_not_touch_is_taken_out_too():
+    said = background.drop_unasked("Why did the neuron go to therapy? Overfitting.\n\nTeal today, just like the mood.", "tell me a joke", FACTS)
+    assert said == "Why did the neuron go to therapy? Overfitting."
+    assert background.drop_unasked("Teal is your favorite color, so try a calm, cool blue dish. Skip peanuts.", "what should I eat for dinner tonight", FACTS) == "Skip peanuts."
+    reply = "Teal suits you."
+    assert background.drop_unasked(reply, "what is my favorite color?", FACTS) == reply
+    assert background.drop_unasked(reply, "what colour should I paint the wall", FACTS) == reply
+    assert background.drop_unasked("Skip peanuts, with your allergy.", "what should I eat", FACTS + ["I'm allergic to peanuts"]) == "Skip peanuts, with your allergy."  # a fact that matters is not guarded
+    sky = "The sky looks blue because air scatters blue light. It is a favorite question of children, and the color changes at sunset."
+    assert background.drop_unasked(sky, "why is the sky blue", FACTS) == sky  # ordinary words of the topic ("color", "favorite") are not the person's
+
+
 def test_with_no_fact_about_a_pet_nothing_is_guarded_and_a_reply_of_only_the_mention_is_kept():
     assert background.drop_unasked("Your dog is cute.", "hi", ["Favorite color is teal."]) == "Your dog is cute."
     assert background.drop_unasked("Your dog Hog will be proud.", "hi", FACTS) == "Your dog Hog will be proud."  # it would leave nothing
