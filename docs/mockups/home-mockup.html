@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diya Home, two options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{font-family:"Schibsted Grotesk",system-ui,sans-serif;background:#0b0d12}
+:focus-visible{outline:3px solid #4C8DFF;outline-offset:2px}
+button{font:inherit;cursor:pointer}
+.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* the switch above both mock-ups: not part of Diya */
+.switch{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:10px 16px;background:#1a1d26;color:#e8eaf0;font:14px/1.3 system-ui,sans-serif}
+.switch b{font-weight:600}
+.switch .tabs{display:flex;gap:6px}
+.switch button{min-height:40px;padding:0 14px;border-radius:8px;border:1px solid #3a4052;background:transparent;color:#e8eaf0}
+.switch button[aria-pressed="true"]{background:#e8eaf0;color:#1a1d26;border-color:#e8eaf0}
+.switch span{color:#aab0c0}
+
+/* shared parts of a card */
+.btn{min-height:44px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:600}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.quiet{border-color:transparent;background:transparent;color:var(--muted);font-weight:500}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.src{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:14px;color:var(--muted)}
+.why{margin:8px 0 0;font-size:13.5px;color:var(--muted)}
+.later{margin:10px 0 0;font-size:13.5px;color:var(--muted)}
+.later .btn{min-height:36px;margin-right:8px;font-size:14px}
+.preview dl{margin:12px 0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:15px}
+.preview dt{color:var(--muted)}
+.preview dd{margin:0}
+.preview .safe{margin:0 0 12px;font-size:14px;color:var(--muted)}
+.preview .acts{display:flex;flex-wrap:wrap;gap:8px}
+.done{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:15px}
+.done .btn{min-height:36px;margin-left:auto;font-size:14px}
+.done .i{color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);font-size:14.5px}
+.composer{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 18px;border-radius:16px;background:var(--surface);border:1px solid var(--line)}
+.composer input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;min-height:44px}
+.composer .btn{width:44px;padding:0;display:grid;place-items:center}
+
+/* ---------- option A: one list, one thing per row ---------- */
+.a{--bg:#EDF2EE;--surface:#FBFCFA;--ink:#14201D;--muted:#566660;--line:#D2DBD5;--accent:#0F5C4D;--accent-ink:#fff;--flame:#E3A008;background:var(--bg);color:var(--ink);min-height:calc(100vh - 56px);font-family:"Schibsted Grotesk",system-ui,sans-serif}
+.a .bar{display:flex;align-items:center;gap:16px;max-width:760px;margin:0 auto;padding:14px 24px}
+.a .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:19px;letter-spacing:-.01em}
+.a .brand .i{color:var(--flame);fill:var(--flame);stroke:none}
+.a nav{display:flex;gap:2px;margin-left:auto}
+.a nav a{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border-radius:999px;color:var(--muted);font-weight:500;text-decoration:none}
+.a nav a[aria-current]{background:var(--ink);color:#fff}
+.a .wrap{max-width:760px;margin:0 auto;padding:20px 24px 150px}
+.a h1{margin:10px 0 8px;max-width:18ch;font-size:clamp(34px,6vw,52px);line-height:1.04;letter-spacing:-.03em;font-weight:700}
+.a .date{margin:0;color:var(--muted);font-size:17px}
+.a .key{margin:22px 0 14px;display:flex;flex-wrap:wrap;gap:6px 22px;font-size:13.5px;color:var(--muted)}
+.a .key span{display:flex;align-items:center;gap:8px}
+.a .key i{display:inline-block;width:3px;height:16px;border-radius:2px;background:var(--accent)}
+.a .key i.dash{background:repeating-linear-gradient(var(--muted) 0 3px,transparent 3px 6px)}
+.a ul{list-style:none;margin:0;padding:0}
+.a .row{position:relative;padding:20px 0 20px 20px;border-top:1px solid var(--line)}
+.a .row::before{content:"";position:absolute;left:0;top:22px;bottom:22px;width:3px;border-radius:2px;background:var(--accent)}
+.a .row.ask::before{background:repeating-linear-gradient(var(--muted) 0 4px,transparent 4px 8px)}
+.a .row.fin{padding-top:14px;padding-bottom:14px}
+.a .row.fin::before{background:var(--line)}
+.a .row h3{margin:0;font-size:clamp(18px,2.6vw,21px);line-height:1.3;font-weight:600;letter-spacing:-.01em;max-width:34ch}
+.a .main{display:grid;grid-template-columns:1fr auto;gap:12px 24px;align-items:end}
+.a .acts{display:flex;flex-wrap:wrap;gap:8px}
+.a .preview{margin-top:14px;padding:16px 18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
+.a .dock{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(712px,calc(100% - 32px));display:grid;gap:10px}
+.a .dock .chips{justify-content:flex-start}
+.a .dock .chips button{background:var(--bg)}
+.a .dock .composer{box-shadow:0 8px 30px rgba(20,32,29,.12)}
+.a .dock::before{content:"";position:absolute;left:-24px;right:-24px;top:-30px;bottom:-16px;z-index:-1;background:linear-gradient(to bottom,transparent,var(--bg) 40%)}
+@media (max-width:640px){.a .main{grid-template-columns:1fr}.a nav a span{display:none}.a nav a{padding:0 12px}}
+
+/* ---------- option B: the chat is home, cards ride above the box, today sits beside it ---------- */
+.b{--bg:#0F1424;--surface:#161C30;--raise:#1F2744;--ink:#ECE8DD;--muted:#9AA2BC;--line:#2A3352;--accent:#FFB84A;--accent-ink:#2A1B00;display:grid;grid-template-columns:72px minmax(0,1fr) 340px;min-height:calc(100vh - 56px);background:var(--bg);color:var(--ink);font-family:Figtree,system-ui,sans-serif}
+.b .rail{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 0;border-right:1px solid var(--line)}
+.b .rail .logo{width:44px;height:44px;display:grid;place-items:center;color:var(--accent)}
+.b .rail .logo .i{fill:var(--accent);stroke:none;width:26px;height:26px}
+.b .rail a{width:56px;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:12px;color:var(--muted);text-decoration:none;font-size:12px;font-weight:500}
+.b .rail a[aria-current]{background:var(--raise);color:var(--ink)}
+.b .center{display:flex;flex-direction:column;min-width:0;height:calc(100vh - 56px)}
+.b .log{flex:1;overflow:auto;padding:28px clamp(16px,4vw,48px) 12px;display:flex;flex-direction:column;justify-content:flex-end;gap:16px}
+.b .msg{max-width:60ch;font-size:16.5px;line-height:1.5}
+.b .msg.me{align-self:flex-end;background:var(--raise);padding:10px 16px;border-radius:18px 18px 4px 18px}
+.b .msg small{display:block;margin-top:6px;font-size:13px;color:var(--muted)}
+.b .tray{padding:0 clamp(16px,4vw,48px)}
+.b .tray h2{margin:10px 0 10px;font-size:15px;font-weight:600;color:var(--muted)}
+.b .slips{display:flex;gap:10px;overflow-x:auto;padding-bottom:12px;scroll-snap-type:x proximity}
+.b .slip{flex:0 0 auto;width:268px;scroll-snap-align:start;padding:14px;border-radius:14px;background:var(--surface);border:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.b .slip.ask{border-style:dashed}
+.b .slip p{margin:0;font-size:15px;line-height:1.35;font-weight:600}
+.b .slip .src{margin:0;font-size:13px}
+.b .slip .btn{min-height:40px;font-size:14.5px}
+.b .slip .row2{display:flex;flex-direction:column;align-items:stretch;gap:2px;margin-top:auto}
+.b .slip .row2 .btn.quiet{align-self:flex-start;min-height:36px;padding:0 6px}
+.b .slip.fin{opacity:.8;justify-content:space-between}
+.b .box{padding:4px clamp(16px,4vw,48px) 18px}
+.b .side{border-left:1px solid var(--line);padding:24px 22px;overflow:auto;height:calc(100vh - 56px)}
+.b .side h2{margin:0 0 2px;font-size:20px;letter-spacing:-.01em}
+.b .side .sub{margin:0 0 16px;color:var(--muted);font-size:14px}
+.b .tl{list-style:none;margin:0 0 26px;padding:0}
+.b .tl li{display:grid;grid-template-columns:56px 1fr;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:15px}
+.b .tl time{color:var(--muted);font-variant-numeric:tabular-nums}
+.b .tl li.now{color:var(--accent);font-weight:600}
+.b .tl li small{display:block;color:var(--muted);font-weight:400;font-size:13px}
+.b .panel{padding:16px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
+.b .panel h3{margin:0 0 4px;font-size:16px}
+.b .panel p{margin:0 0 12px;font-size:14px;color:var(--muted)}
+.b .bar{height:8px;border-radius:99px;background:var(--raise);overflow:hidden}
+.b .bar i{display:block;height:100%;width:37.5%;background:var(--accent)}
+.b .panel .nums{display:flex;justify-content:space-between;margin:8px 0 12px;font-size:13.5px;color:var(--muted)}
+.b .sheet{position:fixed;right:24px;bottom:24px;width:min(420px,calc(100% - 32px));z-index:10;padding:18px;border-radius:16px;background:var(--raise);border:1px solid var(--accent);box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.b .sheet h3{margin:0 0 2px;font-size:17px}
+@media (max-width:1000px){
+  .b{grid-template-columns:1fr}
+  .b .rail{position:fixed;z-index:9;left:0;right:0;bottom:0;flex-direction:row;justify-content:space-around;padding:6px;background:var(--bg);border-right:0;border-top:1px solid var(--line)}
+  .b .rail .logo{display:none}
+  .b .center{height:auto}
+  .b .log{overflow:visible}
+  .b .side{border-left:0;border-top:1px solid var(--line);height:auto;padding-bottom:110px}
+}
+@media (prefers-reduced-motion:no-preference){.a .row,.b .slip{transition:opacity .2s}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></symbol>
+  <symbol id="i-bill" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
+  <symbol id="i-idea" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.4 1 2.5h6c0-1.1.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7zM10 20a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10"/></symbol>
+  <symbol id="i-set" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 2c2.4 3.4 6 5.6 6 10.2A6 6 0 0 1 6 12.4c0-2.2 1-3.6 2.4-4.8.3 1.8 1.1 2.6 2.3 2.8C10.3 7.6 10.8 4.8 12 2z"/></symbol>
+</svg>
+
+<div class="switch">
+  <b>Diya Home, two options</b>
+  <div class="tabs" role="group" aria-label="Option">
+    <button type="button" id="tabA" aria-pressed="true">A: a list, one thing per row</button>
+    <button type="button" id="tabB" aria-pressed="false">B: chat first, today beside it</button>
+  </div>
+  <span>Fake data. Press the buttons: they work.</span>
+</div>
+
+<!-- ============ OPTION A ============ -->
+<main class="a" id="optA">
+  <div class="bar">
+    <div class="brand"><svg class="i"><use href="#i-flame"/></svg>Diya</div>
+    <nav aria-label="Main">
+      <a href="#" aria-current="page"><svg class="i"><use href="#i-home"/></svg><span>Home</span></a>
+      <a href="#"><svg class="i"><use href="#i-chat"/></svg><span>Chat</span></a>
+      <a href="#"><svg class="i"><use href="#i-book"/></svg><span>Memory</span></a>
+      <a href="#"><svg class="i"><use href="#i-set"/></svg><span>Settings</span></a>
+    </nav>
+  </div>
+  <div class="wrap">
+    <h1 id="aHead"></h1>
+    <p class="date">Tuesday 27 October. I looked at your mail, calendar and reminders on this laptop.</p>
+    <div class="key" aria-label="How to read the bars">
+      <span><i></i>Solid bar: I will stage something and you approve it.</span>
+      <span><i class="dash"></i>Dashed bar: I am only asking.</span>
+    </div>
+    <ul id="feedA"></ul>
+  </div>
+  <div class="dock">
+    <div class="chips"><button type="button">What is on tomorrow?</button><button type="button">Plan my study week</button></div>
+    <div class="composer"><input aria-label="Message Diya" placeholder="Ask Diya anything"><button class="btn quiet" type="button" aria-label="Speak"><svg class="i"><use href="#i-mic"/></svg></button><button class="btn primary" type="button" aria-label="Send"><svg class="i"><use href="#i-send"/></svg></button></div>
+  </div>
+</main>
+
+<!-- ============ OPTION B ============ -->
+<main class="b" id="optB" hidden>
+  <nav class="rail" aria-label="Main">
+    <div class="logo"><svg class="i"><use href="#i-flame"/></svg></div>
+    <a href="#" aria-current="page"><svg class="i"><use href="#i-home"/></svg>Home</a>
+    <a href="#"><svg class="i"><use href="#i-chat"/></svg>Chat</a>
+    <a href="#"><svg class="i"><use href="#i-book"/></svg>Memory</a>
+    <a href="#"><svg class="i"><use href="#i-set"/></svg>Settings</a>
+  </nav>
+  <section class="center">
+    <div class="log" aria-label="Conversation">
+      <div class="msg me">what am I doing next Tuesday?</div>
+      <div class="msg">Tuesday 3 Nov (next Tuesday): nothing on your calendar.<small>From Google Calendar. Code picked the date.</small></div>
+      <div class="msg me">tell me a joke</div>
+      <div class="msg">Why did the coffee file a police report? It got mugged.<small>Told to the model about you: only your peanut allergy.</small></div>
+    </div>
+    <div class="tray">
+      <h2 id="bHead"></h2>
+      <div class="slips" id="slipsB"></div>
+    </div>
+    <div class="box">
+      <div class="composer"><input aria-label="Message Diya" placeholder="Ask Diya anything"><button class="btn quiet" type="button" aria-label="Speak"><svg class="i"><use href="#i-mic"/></svg></button><button class="btn primary" type="button" aria-label="Send"><svg class="i"><use href="#i-send"/></svg></button></div>
+    </div>
+  </section>
+  <aside class="side" aria-label="Today">
+    <h2>Today</h2>
+    <p class="sub">Tuesday 27 October</p>
+    <ol class="tl">
+      <li><time>10:00</time><span>Lab session<small>Google Calendar</small></span></li>
+      <li><time>13:00</time><span>Lunch with Meera<small>Google Calendar</small></span></li>
+      <li class="now"><time>15:42</time><span>Now</span></li>
+      <li><time>18:00</time><span>Study group<small>Google Calendar</small></span></li>
+      <li><time>Wed</time><span>Return library books<small>Your reminder</small></span></li>
+    </ol>
+    <div class="panel">
+      <h3>NVIDIA deep learning certificate</h3>
+      <p>A panel you made. Diya fills it from your notes.</p>
+      <div class="bar" role="img" aria-label="3 of 8 lessons"><i></i></div>
+      <div class="nums"><span>3 of 8 lessons</span><span>about 40 min next</span></div>
+      <button class="btn primary" type="button" style="width:100%">Start gradient descent drills</button>
+    </div>
+  </aside>
+  <div id="sheetB"></div>
+</main>
+
+<script>
+var CARDS = [
+  {id:'mail', icon:'mail', src:'Gmail, read only', ask:false,
+   title:'Priya Nair asked for the lab notes by Thursday. You have not replied.', short:'Priya is waiting on the lab notes',
+   actions:[{label:'Draft a reply', preview:{head:'Save a draft in Gmail', lines:[['To','Priya Nair'],['Subject','Re: Lab notes'],['Text','Hi Priya, I will send the lab notes on Thursday morning. Thanks for waiting.']], approve:'Save draft', done:'Draft saved in Gmail. Nothing was sent.'}}]},
+  {id:'cal', icon:'calendar', src:'Google Calendar', ask:false,
+   title:'Study group is at 6:00 pm. Your notes folder has nothing for week 3.', short:'Study group at 6:00 pm',
+   actions:[{label:'Remind me at 5:30', preview:{head:'Set a reminder', lines:[['When','Today, 5:30 pm'],['Text','Study group at 6: bring the week 3 notes']], approve:'Set reminder', done:'Reminder set for 5:30 pm today.'}}]},
+  {id:'bill', icon:'bill', src:'Gmail, read only', ask:false,
+   title:'The electricity bill, Rs 1,840, is due Friday 30 October. It came by email on 24 October.', short:'Electricity bill due Friday',
+   actions:[{label:'Remind me Thursday 9 am', preview:{head:'Set a reminder', lines:[['When','Thursday 29 Oct, 9:00 am'],['Text','Pay the electricity bill, Rs 1,840, due Friday']], approve:'Set reminder', done:'Reminder set for Thursday 9 am.'}}],
+   later:{label:'Pay it for me', note:'Later. Paying on a website needs a scripted job that is not built yet.'}},
+  {id:'mem', icon:'idea', src:'From your chat on 21 October', ask:true,
+   title:'Is this right? You are preparing for the NVIDIA deep learning certificate.', short:'Is the NVIDIA exam right?',
+   actions:[{label:'Yes, remember it', done:'Remembered.'},{label:'No', done:'Dropped. I will not use it.'}]},
+  {id:'rem', icon:'bell', src:'Your reminder', ask:false,
+   title:'Return the library books to the Lisbon branch. They are due tomorrow.', short:'Library books due tomorrow',
+   actions:[{label:'Mark done', done:'Marked done.'},{label:'Snooze to 10 am tomorrow', done:'Moved to 10 am tomorrow.'}]},
+  {id:'plan', icon:'doc', src:'Google Calendar and your tasks', ask:false,
+   title:'Next week starts in 6 days. Want a plan from your calendar and tasks?', short:'Plan for next week',
+   actions:[{label:'Draft the plan', preview:{head:'Create a Google Doc', lines:[['Name','Week of 2 November'],['Holds','4 events and 2 tasks, day by day']], approve:'Create the doc', done:'Doc created: Week of 2 November. Nothing else changed.'}}]}
+];
+var WHY = 'Found by code. The model only worded this line.';
+var S = {}; CARDS.forEach(function(c){ S[c.id] = {phase:'open', i:0, msg:''}; });
+var WORDS = ['Nothing','One','Two','Three','Four','Five','Six'];
+
+function ic(n){ return '<svg class="i"><use href="#i-'+n+'"/></svg>'; }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function waiting(){ return CARDS.filter(function(c){ return S[c.id].phase==='open' || S[c.id].phase==='preview'; }).length; }
+
+function previewHtml(c){
+  var a = c.actions[S[c.id].i], p = a.preview;
+  return '<div class="preview"><strong>'+esc(p.head)+'</strong><dl>'+p.lines.map(function(l){ return '<dt>'+esc(l[0])+'</dt><dd>'+esc(l[1])+'</dd>'; }).join('')+'</dl>'
+    + '<p class="safe">Nothing happens until you press '+esc(p.approve)+'.</p>'
+    + '<div class="acts"><button class="btn primary" data-act="approve" data-id="'+c.id+'">'+esc(p.approve)+'</button><button class="btn" data-act="cancel" data-id="'+c.id+'">Cancel</button></div></div>';
+}
+function doneHtml(c){ return '<div class="done">'+ic('check')+'<span>'+esc(S[c.id].msg)+'</span><button class="btn quiet" data-act="undo" data-id="'+c.id+'">Undo</button></div>'; }
+function actionButtons(c){
+  return c.actions.map(function(a,i){ return '<button class="btn'+(i===0?' primary':'')+'" data-act="pick" data-id="'+c.id+'" data-i="'+i+'">'+esc(a.label)+'</button>'; }).join('');
+}
+
+function renderA(){
+  document.getElementById('aHead').textContent = waiting() ? WORDS[waiting()] + (waiting()>1?' things need':' thing needs') + ' you today.' : 'All clear for today.';
+  document.getElementById('feedA').innerHTML = CARDS.map(function(c){
+    var s = S[c.id];
+    if (s.phase==='done' || s.phase==='hidden') return '<li class="row fin">'+doneHtml(c)+'</li>';
+    var later = c.later ? '<p class="later"><button class="btn" disabled>'+esc(c.later.label)+'</button>'+esc(c.later.note)+'</p>' : '';
+    var body = '<p class="src">'+ic(c.icon)+esc(c.src)+'</p><h3>'+esc(c.title)+'</h3>';
+    if (s.phase==='preview') return '<li class="row'+(c.ask?' ask':'')+'">'+body+previewHtml(c)+'</li>';
+    return '<li class="row'+(c.ask?' ask':'')+'"><div class="main"><div>'+body+(c.ask?'':'<p class="why">'+WHY+'</p>')+later+'</div><div class="acts">'+actionButtons(c)+'<button class="btn quiet" data-act="hide" data-id="'+c.id+'">Not now</button></div></div></li>';
+  }).join('');
+}
+
+function renderB(){
+  document.getElementById('bHead').textContent = waiting() ? 'Waiting for you: ' + waiting() : 'Nothing is waiting for you';
+  document.getElementById('slipsB').innerHTML = CARDS.map(function(c){
+    var s = S[c.id];
+    if (s.phase==='done' || s.phase==='hidden') return '<div class="slip fin">'+doneHtml(c)+'</div>';
+    var wait = s.phase==='preview';
+    return '<div class="slip'+(c.ask?' ask':'')+'"><p class="src">'+ic(c.icon)+esc(c.src)+'</p><p>'+esc(c.short)+'</p><div class="row2">'
+      + (wait ? '<button class="btn" disabled>Waiting for your approval</button>' : '<button class="btn primary" data-act="pick" data-id="'+c.id+'" data-i="0">'+esc(c.actions[0].label)+'</button><button class="btn quiet" data-act="hide" data-id="'+c.id+'">Not now</button>')
+      + '</div></div>';
+  }).join('');
+  var open = CARDS.filter(function(c){ return S[c.id].phase==='preview'; })[0];
+  document.getElementById('sheetB').innerHTML = open ? '<div class="sheet" role="dialog" aria-label="Approve"><h3>'+esc(open.short)+'</h3><p class="src" style="margin-bottom:8px">'+esc(WHY)+'</p>'+previewHtml(open)+'</div>' : '';
+}
+function render(){ renderA(); renderB(); }
+
+document.addEventListener('click', function(e){
+  var t = e.target.closest('[data-act]'); if (!t) return;
+  var c = CARDS.filter(function(x){ return x.id===t.dataset.id; })[0], s = S[c.id], act = t.dataset.act;
+  if (act==='pick'){ var i = +t.dataset.i, a = c.actions[i]; s.i = i; if (a.preview){ s.phase='preview'; } else { s.phase='done'; s.msg=a.done; } }
+  if (act==='approve'){ s.phase='done'; s.msg=c.actions[s.i].preview.done; }
+  if (act==='cancel'){ s.phase='open'; }
+  if (act==='hide'){ s.phase='hidden'; s.msg='Hidden until tomorrow.'; }
+  if (act==='undo'){ s.phase='open'; }
+  render();
+});
+
+function show(which){
+  document.getElementById('optA').hidden = which!=='a';
+  document.getElementById('optB').hidden = which!=='b';
+  document.getElementById('tabA').setAttribute('aria-pressed', which==='a');
+  document.getElementById('tabB').setAttribute('aria-pressed', which==='b');
+  history.replaceState(null,'','#'+which);
+}
+document.getElementById('tabA').onclick = function(){ show('a'); };
+document.getElementById('tabB').onclick = function(){ show('b'); };
+render();
+show(location.hash==='#b' ? 'b' : 'a');
+</script>
+</body>
+</html>

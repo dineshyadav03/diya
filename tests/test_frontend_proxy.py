@@ -433,6 +433,8 @@ def test_every_browser_fetch_is_a_same_origin_api_path():
         "/api/categories", "/api/categories",  # the chat's category chips and tags: the list, and a message moved to another category
         "/api/feedback",  # the chat: what the person thinks of each reply (one function sends list, put and delete)
         "/api/feedback",  # the Activity page: the replies marked not helpful, read back (2026-10-25)
+        "/api/home",  # the Home column: the cards Diya found for today
+        "/api/${found[1]}/${found[2]}/${found[3]}", "/api/reminders",  # its buttons: mark done, snooze, a task done, a question answered, and a reminder added: matched to a fixed shape first, never a computed URL
         "/api/journal",  # the Activity page: what Diya did with a tool or an account
         "/api/health",  # the Status page: is Diya well
         "/api/dreaming",  # the Activity page: what Dreaming read and did
@@ -507,7 +509,7 @@ def test_every_api_route_has_a_same_origin_proxy_route_for_the_same_methods(tmp_
     routes, proxies = api_routes(tmp_path), proxy_route_files()
     assert set(routes) == {
         "/api/threads", "/api/threads/search", "/api/threads/{thread_id}/rename", "/api/history/{thread_id}", "/api/chat", "/api/chat/stream", "/api/transcribe",
-        "/api/categories", "/api/feedback", "/api/journal", "/api/health", "/api/dreaming", "/api/pause", "/api/resume", "/api/permissions", "/api/playbooks",
+        "/api/categories", "/api/feedback", "/api/home", "/api/journal", "/api/health", "/api/dreaming", "/api/pause", "/api/resume", "/api/permissions", "/api/playbooks",
         "/api/memory", "/api/memory/{fact_id}", "/api/memory/ingest", "/api/memory/add", "/api/memory/merge", "/api/memory/{fact_id}/{action}",
         "/api/memory/{fact_id}/replace", "/api/memory/{fact_id}/undo-replace", "/api/memory/learned", "/api/memory/{fact_id}/forget-for-good", "/api/messages/{message_id}/forget",
         "/api/questions", "/api/questions/seen", "/api/questions/{question_id}/answer",

@@ -80,7 +80,7 @@ const SCENARIOS = [
   // The content pages, against the real (scratch) API behind the dev server: anything the rig does not stub passes through. Seed the
   // scratch database first (a few reminders, tasks, repeating reminders and facts); an empty list is audited too, but it is a poorer test.
   ...[
-    ['today', '/today', 'Today'], ['reminders', '/reminders', 'Reminders'], ['scheduled', '/scheduled', 'Scheduled'], ['tasks', '/tasks', 'Tasks'],
+    ['home', '/home', 'Home'], ['today', '/today', 'Today'], ['reminders', '/reminders', 'Reminders'], ['scheduled', '/scheduled', 'Scheduled'], ['tasks', '/tasks', 'Tasks'],
     ['memory', '/memory', 'Memory'], ['actions', '/actions', 'Actions'], ['connections', '/connections', 'Connections'],
   ].map(([id, route, name]) => ({
     name: `page-${id}`, path: route, stub: {}, steps: [`await __wait(1500)`],

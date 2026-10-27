@@ -20,6 +20,7 @@ from pydantic import BaseModel
 import diya
 import diya_actions_api
 import diya_brief_api
+import diya_home_api
 import diya_categories
 import diya_categories_api
 import diya_feedback_api
@@ -617,6 +618,7 @@ def create_app(config=None, agent=None, transcriber=None, connectors=None):
     diya_reminders_api.register(app, config, agent)
     diya_tasks_api.register(app, config, agent)  # the to-do list inside Diya (docs/TASKS_DESIGN.md, unit T2)
     diya_schedule_api.register(app, config, agent)  # repeating reminders and snooze (docs/SCHEDULE_DESIGN.md, unit R4)
+    diya_home_api.register(app, config, agent)  # Home: the cards for today, found by code (docs/HOME_DESIGN.md)
     diya_brief_api.register(app, config, agent)  # the day: what is due, overdue and coming (docs/SCHEDULE_DESIGN.md, unit R5)
     diya_connections_api.register(app, config, agent, connectors=connectors)
     diya_permissions_api.register(app, config, agent, connectors)  # what each connection can do, since when, last used (docs/PERMISSIONS_DESIGN.md)

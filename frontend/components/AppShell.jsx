@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-// The one navigation for every page (docs/UI_DESIGN.md, D2): a floating pill at the top with the three pages used most (Today, Chat, Memory) and a slider
+// The one navigation for every page (docs/UI_DESIGN.md, D2): a floating pill at the top with the three pages used most (Home, Chat, Memory) and a slider
 // that glides under the one you are on, a round button at the left that opens a glass menu with every page (and the theme), and the brand mark at the right.
 // A page says <AppShell> and puts its content inside; it carries no header of its own, so a link to every page from every page is one list, here.
 // Every /api/... call is same-origin: this app's own route handlers (app/api) forward it to the Python API with the token, on the server.
@@ -13,6 +13,7 @@ export const NAV = [
   {
     label: 'Your day',
     items: [
+      { href: '/home', name: 'Home' },
       { href: '/today', name: 'Today' },
       { href: '/reminders', name: 'Reminders', badge: 'due' },
       { href: '/scheduled', name: 'Scheduled' },
@@ -44,7 +45,7 @@ export const NAV = [
 
 // The pill: the pages used most. Everything else is in the menu, grouped as in NAV.
 export const TABS = [
-  { href: '/today', name: 'Today' },
+  { href: '/home', name: 'Home' },
   { href: '/', name: 'Chat' },
   { href: '/memory', name: 'Memory' },
 ]
@@ -238,7 +239,7 @@ function Shell({ children, pathname }) {
           ))}
         </nav>
         <div className="hub-right">
-          <Link className="hub-btn" href="/" aria-label="Diya: back to the chat">
+          <Link className="hub-btn" href="/home" aria-label="Diya: Home">
             <img src="/diya-flame.svg" alt="" className="hub-mark" />
           </Link>
         </div>

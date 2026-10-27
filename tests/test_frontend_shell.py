@@ -39,8 +39,8 @@ def listed(name):
     return re.findall(r"href: '([^']+)', name: '([^']+)'", body)
 
 
-def test_the_pill_holds_today_chat_and_memory_and_every_page_is_in_the_menu():
-    assert listed("TABS") == [("/today", "Today"), ("/", "Chat"), ("/memory", "Memory")]
+def test_the_pill_holds_home_chat_and_memory_and_every_page_is_in_the_menu():
+    assert listed("TABS") == [("/home", "Home"), ("/", "Chat"), ("/memory", "Memory")]
     menu = {href for href, _name in listed("NAV")}
     pages = {"/" + path.parent.name for path in (ROOT / "frontend" / "app").glob("*/page.js")} | {"/"}
     pages.discard("/login")  # the sign-in page is drawn without the shell
