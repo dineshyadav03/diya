@@ -191,6 +191,10 @@ def test_the_morning_message_goes_into_the_chat_the_person_is_already_in(store):
     store.add_message(chat, "user", "my chat, in use")
     store.add_message(chat, "assistant", "yes")
     from datetime import datetime
+
+    import diya_time
+
+    store.add_reminder("call the bank", "when", diya_time.iso_of_local(datetime(2026, 10, 12, 16, 0)))  # a day with nothing on it gets no morning message (2026-10-27)
     (row,) = pro.Proactive(store).make(datetime(2026, 10, 12, 8, 45))
     assert row["thread_id"] == chat
     assert store.get_history(chat)[-1] == {"role": "assistant", "content": row["text"]}
