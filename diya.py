@@ -20,6 +20,7 @@ from openai import OpenAI, OpenAIError
 import diya_actions
 import diya_autoapprove
 import diya_automations
+import diya_background
 import diya_config
 import diya_calendar_find
 import diya_calendar_talk
@@ -745,6 +746,12 @@ class Agent:
         result.extend(self._mcp.specs())  # a tool of an MCP server only while the person has it approved, and DIYA_MCP is on
         return result
 
+    def _tools_asked_for(self, tools, text):
+        """`tools` without the proposal tools the message did not ask for. A proposal tool (ActionKind.asked) is refused by `_propose` unless the message asks for that kind of action, so offering it to the model
+        on any other message only costs reading its description: the 39 of them were about nine thousand tokens on every turn, minutes on this computer (docs/SPEED_DESIGN.md, section 4). The rest are offered as before."""
+        gates = {kind.tool_name: kind.asked for kind in self.actions.kinds if kind.tool is not None and kind.asked is not None}
+        return [spec for spec in tools if spec["function"]["name"] not in gates or gates[spec["function"]["name"]](text)]
+
     def now(self):
         """The current local time, naive: the agent's clock (real unless a test gave it another)."""
         return self._clock()
@@ -1233,7 +1240,12 @@ class Agent:
                 name = None
             return diya_intent.tidy_small_talk(content, user_text, name, self.now().hour)
         if TIDY_REPLIES and isinstance(content, str):
-            return diya_intent.tidy_reply(content, user_text)  # pictures, a closing offer, a P.S. and a praise at the start taken out: short and plain (docs/STYLE_BENCH.md)
+            tidied = diya_intent.tidy_reply(content, user_text)  # pictures, a closing offer, a P.S. and a praise at the start taken out: short and plain (docs/STYLE_BENCH.md)
+            try:
+                facts = diya_memory.open_memory(self.store, self.config).accepted_texts()
+            except sqlite3.Error:
+                return tidied
+            return diya_background.drop_unasked(tidied, user_text, facts)  # a pet or an instrument the message did not touch is not brought up (diya_background)
         return content
 
     def briefing(self, instruction):
@@ -1767,6 +1779,8 @@ class Agent:
         # A greeting or a thank-you cannot need a tool, and the tools' descriptions are about a thousand tokens the model would read first (docs/SPEED_DESIGN.md).
         small_talk = only_tools is None and not fact_share and diya_intent.is_small_talk(_last_user_text(messages))
         tools = None if fact_share or small_talk else self.tools
+        if tools is not None and only_tools is None:
+            tools = self._tools_asked_for(tools, _last_user_text(messages))
         if only_tools is not None:
             tools = [spec for spec in tools if spec["function"]["name"] in only_tools]
         offered = frozenset(spec["function"]["name"] for spec in tools or ())

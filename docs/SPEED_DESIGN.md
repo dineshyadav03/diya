@@ -61,3 +61,32 @@ A bare "morning", "afternoon" or "evening" is a greeting now (it was sent to the
 code still let through a bare "morning", which went down the full turn and was answered "How can I assist you today?" with a picture, and "Hello again, Diya."; those are the last two rules
 above.) **Not fixed, because it is the model's voice and not a fact:** the replies are often only "Good morning." (right for the hour, but said even to "thanks"), and the model does not use
 the name it is given (it never said "Priya"). A reply with no name is safe, so the name is only ever *kept*, never added. Twelve greetings, two runs: a measurement of this fix, not a benchmark.
+
+## 5. Why every reply took five to fifteen minutes, and the two things that fixed it (2026-10-27)
+
+The owner's replies had slowed to **5-7 minutes each, and 15 for the last** (`turn_stats` in the database; a greeting, which sends no tools, still took 12 seconds). Measured on this computer, calling Ollama directly with
+the model Diya uses and a prompt the size of one chat turn (`scratchpad/speed_probe.py`, a 9,117-token prompt):
+
+| | Reading the prompt | Where it ran |
+|---|---|---|
+| Before | 9,117 tokens in 288 s = **32 tokens a second** | `ollama ps`: 100% CPU (the Intel Arc graphics was found but dropped: "dropping integrated GPU; to enable, set OLLAMA_IGPU_ENABLE=1") |
+| After `OLLAMA_IGPU_ENABLE=1` | 9,117 tokens in 146 s = **62 tokens a second** | `ollama ps`: 100% GPU |
+
+And what a turn sent: **49 tools, 34,100 characters, about 9,000 tokens, on every message that was not a greeting.** 39 of the 49 are *proposal* tools (one per kind of Google action, added 2026-10-25 to 27); the
+other ten are the older read tools. At 32 tokens a second, nine thousand tokens is the five minutes. Memory made it worse: free memory was 0.3-0.5 GB of 16 GB with 8,450 pages a second going to the paging file
+(Claude's own window, three browsers, Dropbox and Discord hold about 6 GB; Diya's old Python and node processes are under 100 MB and were not the cause).
+
+**What was done.**
+1. *The graphics card.* The user-level variable `OLLAMA_IGPU_ENABLE=1` is set and Ollama was restarted with it (a process started from an older shell does not see a variable set after that shell began; the
+   server log's "inference compute ... library=Vulkan ... type=iGPU" line says it is on). It is shared memory, not a card of its own, so it is about twice as fast, not ten times.
+2. *Only the tools a message asks for.* `Agent._tools_asked_for`: a proposal tool is offered only when its kind's `asked` test says the message asks for that action, which is the same test `_propose` already used to
+   refuse it ("NOT_ASKED_TEXT"). So no answer can change, and a message that asks for nothing sends **10 tools (about 1,800 tokens) instead of 49 (about 11,000 by the same count)**; "make a Drive folder called X" sends 11.
+
+**What was not done.** The model is still on a machine with 16 GB shared with a lot else; the memory the model itself holds (about 5 GB with its 16,384-token window) is unchanged. Closing the browsers is the owner's
+to do, and the biggest remaining lever once the above is in.
+
+### And the dog (2026-10-27)
+
+"What am I doing next Tuesday?" ended "...and your dog Hog will be proud." The persona and `PROFILE_REMINDER` ask the model not to bring up pets or hobbies; a 4B model does it anyway (STYLE_BENCH: 9 of 24 replies before
+the reminder). `diya_background.drop_unasked` is the rule in code: on the finished reply, a sentence (or the clause after a dash) that mentions a pet or an instrument the person's *accepted facts* cover is taken out,
+unless the person's own message touched that topic ("what is my dog's name?"). Nothing else is changed, and a reply that would be left empty is kept as it was. Tests: `tests/test_background_and_tools.py`.

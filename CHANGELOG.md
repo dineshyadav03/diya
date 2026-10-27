@@ -3,6 +3,10 @@
 What changed for the person using Diya, newest first, from the git history (commit ids are in `git log`). It starts on 2026-10-10, when the project began to be used day to day. Each release that changes the database says
 which migration it carries; the table below the notes says what each migration holds and how to come back from one.
 
+## 2026-10-27
+* **Replies are much quicker.** Every message was sending Diya's model the description of 49 tools (about nine thousand tokens), which on this computer was five to fifteen minutes. Now it sends only the tools the message asks for (10 instead of 49 on an ordinary question), and Ollama is set to use the Intel graphics card (about twice as fast). The answer to any message is the same as before. (`docs/SPEED_DESIGN.md`, section 5)
+* **The dog stays out.** A reply that brings up your pet or your guitar when you did not ask about it has that sentence taken out by code, not just asked of the model. Ask about the dog and it answers. (`diya_background.py`)
+
 ## 2026-10-26
 * **Gmail beyond reading, three new cards.** *Gmail: drafts*, *Gmail: send* and *Gmail: organise* (each its own Google permission, off until you add it and press Connect). Diya can save or replace a draft, send an email, reply or forward, and archive,
   mark read or unread, star, label and bin one email, each only when you approve exactly what the card shows. An email goes only to an address you typed; the email a reply or forward is about is found from your words (several matches: it asks which);
