@@ -67,6 +67,7 @@ One press of **Pause Diya** on the Status page (or `POST /api/pause`) stops the 
 | `propose_sheet_header` | proposal | 2 | proposes making the first row of a sheet that Diya made bold and keeping it in view | sheets.googleapis.com (only when approved) | by hand in Google Sheets | owner approves each action | no | Google Drive (change) connected |
 | `propose_google_slides` | proposal | 2 | proposes a new Google Slides deck from an outline shown whole on the card | slides.googleapis.com (only when approved) | by hand in Google Drive: Diya cannot remove it | owner approves each action | no | Google Drive (change) connected |
 | `propose_add_slides` | proposal | 2 | proposes adding slides from an outline to a deck that Diya made | slides.googleapis.com (only when approved) | by hand in the deck's version history | owner approves each action | no | Google Drive (change) connected |
+| `propose_cited_google_doc` | proposal | 2 | proposes a new Google Doc whose text cites sources: only web addresses a search showed in this turn or the person typed, each cited as [1], [2] and listed at the end | docs.googleapis.com (only when approved) | by hand in Google Drive: Diya cannot remove it | owner approves each action | no | Google Drive and Docs connected |
 | `propose_google_form` | proposal | 2 | proposes a new Google Form with the questions shown on the card; it is not shared with anyone | forms.googleapis.com (only when approved) | by hand in Google Drive: Diya cannot remove it | owner approves each action | no | Google Drive (change) connected |
 | `propose_form_questions` | proposal | 2 | proposes adding questions to a form that Diya made | forms.googleapis.com (only when approved) | by hand in Google Forms | owner approves each action | no | Google Drive (change) connected |
 | `propose_gmail_draft` | proposal | 2 | proposes saving (or replacing) a draft email in the person's Drafts folder; a draft is not sent | gmail.googleapis.com (only when approved) | by hand in Gmail: the draft can be edited or deleted there | owner approves each action | no | Gmail: drafts connected |
@@ -149,6 +150,7 @@ Meta's Rule of Two and Simon Willison's lethal trifecta say an agent should not,
 | `propose_sheet_header` | - | - | yes | 1 |
 | `propose_google_slides` | - | - | yes | 1 |
 | `propose_add_slides` | - | - | yes | 1 |
+| `propose_cited_google_doc` | - | - | yes | 1 |
 | `propose_google_form` | - | - | yes | 1 |
 | `propose_form_questions` | - | - | yes | 1 |
 | `propose_gmail_draft` | - | - | yes | 1 |

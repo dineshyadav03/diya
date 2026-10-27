@@ -511,9 +511,17 @@ def doc_execute(config, args):
     return f"Made the Google Doc {args['title']} and read it back to check.{link}"
 
 
+_ASKS_FOR_SOURCES = re.compile(r"\b(?:sources?|cite|cited|citations?|references?|with\s+links?)\b", re.IGNORECASE)
+
+
+def _plain_doc_asked(text):
+    """A Doc is asked for AND the message does not ask for sources: a Doc with sources is the cited kind's (diya_google_cited), which allows only addresses that were actually found."""
+    return diya_intent.asks_for_google_doc(text) and not (isinstance(text, str) and _ASKS_FOR_SOURCES.search(text))
+
+
 def doc_kind():
     return ActionKind(
-        name="google_docs_create", label="Make a Google Doc", connector="google_drive_files", validate=doc_validate, render=doc_render, execute=doc_execute, asked=diya_intent.asks_for_google_doc, auto_ok=doc_auto_ok,
+        name="google_docs_create", label="Make a Google Doc", connector="google_drive_files", validate=doc_validate, render=doc_render, execute=doc_execute, asked=_plain_doc_asked, auto_ok=doc_auto_ok,
         tool={"type": "function", "function": {
             "name": "propose_google_doc",
             "description": "Propose making a new Google Doc, with a line of text in it if the user asked for it. This only PROPOSES it: nothing is made until the user approves it on the Actions page. Use it only when the user asks for a Google Doc.",

@@ -27,12 +27,11 @@ is held to the main calendar. If it is ever wanted it is its own card, off until
 
 ## Tasks
 
-**DIYA-099 Which list is the truth.** Diya's own to-do list (the Tasks page) and Google Tasks are two lists and **nothing copies one into the other**. Google Tasks is read live from Google every time and Diya keeps no copy of it (only the
-activity record's short line); Diya's own list lives in Diya's database. Because nothing writes in either direction by itself, there is no loop to guard. A copy from one to the other would be a proposal the owner approves, never background work.
+**DIYA-099 Which list is the truth.** Settled by the owner's decision 229 (`docs/DECISIONS_2026-10-18.md`): **Diya's own to-do list is the master, and the direction is one way**: a task reaches Google Tasks only as a proposal the owner approves (`propose_google_task`). Google Tasks is read live from Google every time and never copied back or mirrored into Diya's list; completing, renaming, moving or deleting a task in Google Tasks through Diya (added 2026-10-26) acts on Google's copy only and does not touch Diya's own. Because nothing is written in the other direction, and nothing is written at all without an approval, there is no loop to guard.
 
 **DIYA-100 Repeating tasks, duplicates and restarts.** Google's Tasks service has no repeat that its API can set, so Diya sets none and says so; a task that repeats is made in Google Tasks itself. Duplicates: the same proposal cannot wait twice (the
 approval is bound to the exact arguments), an event added twice from one request gets the same id and the second is found, not made (`tests/test_google_write.py`), and nothing is kept in Diya that could disagree with Google after a restart: the
-waiting proposals are in the database and run once (`tests/test_actions_multi_process.py`).
+waiting proposals are in the database and run once (`tests/test_google_restart.py`, `tests/test_actions_multi_process.py`).
 
 ## Forms
 

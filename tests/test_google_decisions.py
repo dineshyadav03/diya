@@ -39,7 +39,7 @@ def test_the_page_answers_every_task_it_says_it_does():
     assert {66, 73, 79, 85, 99, 100, 114, 144, 145} | set(range(118, 139)) <= tasks_on_the_page()
     for service in ("Google Chat", "Google Meet", "Google Keep", "Google Classroom", "Google Photos", "Maps and Places", "YouTube"):
         assert service in PAGE
-    assert "No connector is exposed" in PAGE and "nothing copies one into the other" in PAGE and "never** queued" in PAGE
+    assert "No connector is exposed" in PAGE and "the direction is one way" in PAGE and "never** queued" in PAGE
 
 
 def test_the_mcp_client_never_touches_a_google_sign_in():

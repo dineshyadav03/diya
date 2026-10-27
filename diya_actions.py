@@ -177,6 +177,7 @@ class ActionKind:
     prepare: object = None
     auto_ok: object = None
     resolve: object = None
+    uses_urls: bool = False  # `prepare(args, text, seen_urls)` is also told the web addresses that tools showed earlier in the turn (a cited document may name only those or the ones the person typed)
 
     @property
     def tool_name(self):

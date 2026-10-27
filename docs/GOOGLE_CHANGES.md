@@ -106,3 +106,9 @@ More follow below as they are built.
   **No plan kind is registered for it yet:** approving several steps as one plan is a different gate from approving each, and that is a decision for the owner.
 * **Your data (diya_google_data.py).** `show`, `export --out FILE` (a new file only, no secret in it) and `purge --what actions|activity|replies|connections [--yes]`: what Diya keeps because of Google can be seen, taken away and cut off, each separately and only with `--yes`.
 * **What is decided and not built:** `docs/GOOGLE_DECISIONS_2026-10-27.md` (one account, direct calls and not a Google tool server, no filters or permanent deletion, no calendar making, no sync between lists, no queue of writes, and the services Diya does not have), pinned by `tests/test_google_decisions.py`.
+
+## A Doc that cites its sources (diya_google_cited.py; DIYA-096)
+
+"Research spaced practice and put it in a Google Doc with sources." The model writes the text; code decides what may be cited. A source is only a web address that a search showed in this same turn, or that the person typed; any other address the model offers is dropped (none left refuses the Doc) and a text that names an
+address not on that list is refused. The text must cite with [1], [2] and every number must be a source; the numbered list is added by code at the end and is never cut. That a page says what the text claims is **not checked**: the card carries the whole text and every address, says so, and the owner reads it before approving. It is the existing "make a Google Doc"
+(same card, same read-back, never straight away), and a message that asks for sources is not the plain Doc kind's, so a sourced Doc cannot be made without this check.

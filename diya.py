@@ -34,6 +34,7 @@ import diya_knowledge
 import diya_mcp
 import diya_playbooks
 import diya_drive_tidy
+import diya_google_cited
 import diya_google_contacts
 import diya_google_drive
 import diya_google_mail
@@ -942,7 +943,7 @@ class Agent:
         notes = []
         try:
             if in_turn and kind.prepare is not None:  # (may refuse: an address the person did not type, a repeat they did not say)
-                args, notes = kind.prepare(args, said)
+                args, notes = kind.prepare(args, said, tuple(sorted(getattr(self._turn, "urls", ())))) if kind.uses_urls else kind.prepare(args, said)
             if in_turn and kind.resolve is not None:  # a change to something that exists: the one thing is looked up now, by the words the person used (a read), or the proposal is refused
                 args = kind.resolve(self.config, args, said)
         except diya_actions.ActionError as exc:
@@ -1276,6 +1277,7 @@ class Agent:
         self._turn.proposed = []  # [(action, notes)]: what this turn recorded for the owner to approve
         self._turn.refused = []  # why a proposal this turn was refused, in words
         self._turn.lead = None  # words to put before the proposals in the reply (a weekly plan)
+        self._turn.urls = set()  # the web addresses that a search showed this turn (a cited document may name only those, or ones the person typed)
         self._turn.note = "\n\n".join(part for part in (self._done_note(self._turn.user_text), ABOUT_DIYA_NOTE if diya_intent.asks_about_diya(self._turn.user_text) else None, self._playbook_note(self._turn.user_text), self._earlier_note(self._turn.user_text, message_id, messages), self._mail_connected_note(self._turn.user_text)) if part) or None if only_tools is None else None
         self._turn.active = True
         try:
@@ -1293,6 +1295,7 @@ class Agent:
             self._turn.proposed = []
             self._turn.refused = []
             self._turn.lead = None
+            self._turn.urls = set()
 
     def _settle_proposals(self, answer, on_event, only_tools):
         """The reply after a turn that proposed something is built by code (diya_actions.proposal_reply). And a reply that says something is waiting for approval when this turn recorded nothing is replaced
@@ -1375,7 +1378,13 @@ class Agent:
             return None
         if not isinstance(results, str) or results.startswith(("Couldn't reach", "No results")):
             return None
+        self._note_urls(results)
         return LOOKUP_PROMPT + "\n" + results
+
+    def _note_urls(self, text):
+        """Remember the web addresses a search showed in this turn, so that a cited document can name them and nothing else (diya_google_cited)."""
+        if isinstance(text, str):
+            self._turn.urls = set(getattr(self._turn, "urls", ())) | set(diya_google_cited.urls_in(text))
 
     def _calendar_answer(self, question):
         """(the list, whether Google answered) for a plain question about the calendar (diya_calendar_talk), or None when the message is not that (the chat then goes on as it would have). Never raises."""
@@ -1827,6 +1836,8 @@ class Agent:
             self._journal(name, args, "error", result=result, started=started, note=type(exc).__name__)
             return result
         self._journal(name, args, "error" if isinstance(result, str) and result.startswith("Error:") else "ok", result=result, started=started)
+        if name == "web_search":
+            self._note_urls(result)
         return diya_origin.label(name, result)  # words someone else wrote start with a line saying so (DIYA-043, docs/ORIGIN_LABELS.md)
 
     def _journal(self, tool, args, status, *, result=None, started=None, kind="tool", note=None):

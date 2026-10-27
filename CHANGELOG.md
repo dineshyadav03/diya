@@ -16,6 +16,7 @@ which migration it carries; the table below the notes says what each migration h
 * **Mail attachments, mail to tasks, Doc to deck.** The mail look-through lists attachments by name and size and flags risky ones (never opened); sentences that ask for something to be done are suggested as tasks you can pick by number; "make a deck from my Study plan doc" proposes a deck with every slide on the card.
 * **Forms, a weekly plan, a Drive tidy-up, and your Google data.** Make a form or add questions, and read a form's answers (never the email address of who answered); "plan my week: study physics 3 times for 1 hour" places sessions in the free gaps of your calendar and proposes the first three; "tidy my Drive" shows a plan with how to undo each move; `python diya_google_data.py` shows, exports and removes what Diya keeps because of Google.
 * **One more Connect button.** *Connect the newer Google cards* sends Google one sign-in for all the cards added since 2026-10-26 (`docs/GOOGLE_SETUP.md` has the table of permissions and the two broad ones).
+* **A Google Doc with sources.** "Research X and make a Google Doc with sources" cites only web addresses a search actually showed (or you typed), as [1], [2] with the list added by code; a made-up source is refused. What a page claims is not checked, and the card says so.
 
 ## 2026-10-20
 * **Episodic recall.** A question is answered with the few earlier messages of yours closest in meaning to it, even if they are weeks old and no longer in the chat window. On invented data with the real models, the

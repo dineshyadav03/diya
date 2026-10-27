@@ -134,6 +134,17 @@ def groups_contact(text):
     return _asks(text, r"\b(?:put|add|move|remove|take)\b[^.?!]{0,80}\b(?:group|label)\b", place=lambda said: _CONTACT.search(said) is not None or re.search(r"\b(?:group|label)\b", said, re.IGNORECASE) is not None and not _drive_word(said) and not _mail_word(said))
 
 
+# ---- A Doc that cites its sources (diya_google_cited) ------------------------------------------------------------------------------------------------
+
+_CITES = re.compile(r"\b(?:sources?|cite|cited|citations?|references?|with\s+links?)\b", re.IGNORECASE)
+
+
+def asks_for_cited_doc(text):
+    """Make a Google Doc that names its sources ("research X and put it in a Google Doc with sources")."""
+    said = _plain(text, 900)
+    return said is not None and intent.asks_for_google_doc(said) and _CITES.search(said) is not None
+
+
 # ---- Google Forms (diya_google_forms) -----------------------------------------------------------------------------------------------------------
 
 _FORM_WORD = re.compile(r"\b(?:google\s+)?(?:forms?|surveys?|questionnaires?)\b", re.IGNORECASE)
