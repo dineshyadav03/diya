@@ -55,10 +55,16 @@ and the sky is the usual one.
 
 ## What is not here yet
 
-Bills and websites: nothing in Diya touches a website. Custom panels, Projects. A typed "yes" in the chat that approves the waiting action (it would have to be read by code, never by the model, and never for an
-action that came from outside text). A weather place from the person's own words ("I live in Pune").
+Bills and websites: nothing in Diya touches a website. Custom panels, Projects. A weather place from the person's own words ("I live in Pune").
 
 ## Parts
 
 `diya_home.py` (the cards, pure), `diya_home_api.py` (`GET /api/home`; Calendar and Gmail read in the background; a source that cannot be read is named in `problems`), `diya_mail_waiting.py`, `diya_weather.py` and `diya_weather_api.py`,
 `frontend/components/HomeCards.jsx`, `frontend/app/home/page.js` (the column and the chat, the same chat as the Chat tab), `tests/test_home.py`.
+
+## Typing yes in the chat
+
+A message that is only a yes ("yes", "ok", "go ahead", "do it") or a no ("no", "cancel", "never mind") answers the action Diya has just asked about (`Agent._approval_reply`, `tests/test_typed_yes.py`). It is read by
+code and the model is not asked. It counts only when exactly one action is waiting that was proposed while answering the person's message BEFORE this one, in this chat, so a yes to anything else said since is
+not taken for it. A yes for an action that came from outside text (a mail, a page, a file) is refused and says to press Approve; a no is always taken. Approving is the button's own two calls (the exact action
+with its own hash, then run), and a paused Diya does nothing. A mail draft is always from outside text, so its Approve stays a button.

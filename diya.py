@@ -543,6 +543,9 @@ ABOUT_DIYA_NOTE = (
 MAX_DONE_SHOWN = 15  # how many ticked-off reminders, and how many tasks, a question about what they did is given
 EMBED_TURN_SECONDS = 6.0  # the longest a chat waits for the embedding model to help it (earlier words, a playbook): a cold or starved computer gets the chat without the extra, not a long wait
 EMBED_COOLDOWN_SECONDS = 60.0  # and after one such timeout it is not asked again for this long
+# A typed yes or no to the action Diya has just asked about (Agent._approval_reply): the whole message, nothing else in it.
+_TYPED_YES = re.compile(r"^\W*(?:yes|yeah|yep|yup|sure|ok|okay|approve|approved|confirm|go ahead|do it|please do|sounds good)(?:[,.]?\s+(?:please|do it|go ahead|thanks|thank you))?\W*$", re.IGNORECASE)
+_TYPED_NO = re.compile(r"^\W*(?:no|nope|cancel|stop|reject|don'?t|do not|never ?mind|no thanks|don'?t do it)(?:[,.]?\s+(?:thanks|thank you|please))?\W*$", re.IGNORECASE)
 # Added to an automation's run (Agent.briefing, docs/AUTOMATIONS_DESIGN.md): the person set this up earlier and is not there to answer, so no question back, and only what a tool found.
 BRIEFING_PROMPT = (
     "The user set up this task earlier to run by itself on a schedule, and they are not waiting at the keyboard. Do the task now with the tools you have (they only read), then write the "
@@ -1404,6 +1407,46 @@ class Agent:
         if isinstance(text, str):
             self._turn.urls = set(getattr(self._turn, "urls", ())) | set(diya_google_cited.urls_in(text))
 
+    def _approval_reply(self, question):
+        """A typed yes or no to the action Diya has just asked about (2026-10-27: Hark asks in the chat and the person answers there). Read by CODE, never by the model, and only when ALL of this holds: the
+        message is nothing but a yes or a no, typed into a chat; exactly one action is waiting that was proposed while answering the person's message BEFORE this one, in this chat (so a yes to anything else
+        said since belongs to that); and, for a yes, the action did not come from text outside the chat (a mail, a page, a file: `tainted`), which still needs the Approve button. A no is always safe and always
+        taken. Approving is the same two calls as the button's (the exact action, its own hash, then run). None when this is not that, and the message goes on as any message does."""
+        if not isinstance(question, str) or len(question) > 40:
+            return None
+        yes = _TYPED_YES.match(question) is not None
+        if not yes and _TYPED_NO.match(question) is None:
+            return None
+        thread_id, message_id = self._turn.thread_id, self._turn.message_id
+        if thread_id is None or message_id is None:
+            return None  # only a message typed into a chat
+        previous = self.store.previous_user_message_id(thread_id, message_id)
+        asked = [a for a in self.actions.pending() if previous is not None and a["thread_id"] == thread_id and a["message_id"] == previous]
+        if not asked:
+            return None  # nothing was just asked: this yes or no belongs to whatever else was said
+        if len(asked) > 1:
+            return "More than one thing is waiting for you, so I will not guess which one: answer with the buttons under my last message."
+        action = asked[0]
+        summary = diya_memory.printable(action["summary"], 200)
+        if not yes:
+            try:
+                self.actions.reject(action["id"], "ui")
+            except diya_actions.ActionError:
+                return None
+            return f"Dropped: {summary}"
+        if action["tainted"]:
+            return "That one came from text outside this chat (a mail, a page or a file), so typing yes is not enough: press Approve on the card under my last message."
+        import diya_pause
+
+        if diya_pause.is_paused(self.store):
+            return "Diya is paused, so nothing is done. Resume it on the Status page, then say yes again."
+        try:
+            self.actions.approve(action["id"], action["args_hash"], "ui")
+            done = self.actions.run(action["id"])
+        except diya_actions.ActionError as exc:
+            return f"I could not do that: {diya_memory.printable(str(exc), 200)}"
+        return f"Done: {summary}" if done["status"] == "succeeded" else f"It did not go through ({done['status']}). The Actions page has the details."
+
     def _calendar_answer(self, question):
         """(the list, whether Google answered) for a plain question about the calendar (diya_calendar_talk), or None when the message is not that (the chat then goes on as it would have). Never raises."""
         try:
@@ -1657,6 +1700,10 @@ class Agent:
         searched = False  # a search was already made for this question, whatever it found: it is not made twice
         if only_tools is None:
             started = time.monotonic()
+            typed = self._approval_reply(question)
+            if typed is not None:  # a typed yes or no to the action just asked about: decided by code, the model is not asked
+                self._journal("approve_in_chat", {"question": question}, "ok", result=typed, started=started, kind="flow")
+                return typed, []
             where_from = self._where_from(question, messages)
             if where_from is not None:  # "how do you know that?": answered by code from the memory's own record, never by the model (docs/PROVENANCE_DESIGN.md)
                 self._journal("explain_memory", {"question": question}, "ok", result=where_from, started=started, kind="flow")

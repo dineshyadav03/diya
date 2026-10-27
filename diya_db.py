@@ -1195,6 +1195,15 @@ class Store:
         conn.close()
         return [{"id": r[0], "created_at": r[1], "preview": r[2] or "(empty thread)", "match": _around(r[3] or r[2] or "", query)} for r in rows]
 
+    def previous_user_message_id(self, thread_id, before_id):
+        """The id of the newest message the person wrote in this chat before message `before_id`, or None."""
+        conn = self.connect()
+        try:
+            row = conn.execute("SELECT id FROM messages WHERE thread_id = ? AND role = 'user' AND id < ? ORDER BY id DESC LIMIT 1", (thread_id, before_id)).fetchone()
+        finally:
+            conn.close()
+        return row[0] if row else None
+
     def get_messages_between(self, first_id, last_id):
         """All messages across every thread with first_id <= id <= last_id (both ends included), oldest
         first: the messages a batch of staged facts was extracted from. Read-only."""
