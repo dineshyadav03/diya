@@ -61,8 +61,8 @@ def morning_text(brief, today):
     greeting = GREETINGS[today.toordinal() % len(GREETINGS)]
     lines = _item_lines(brief)
     if not lines:
-        return f"{greeting} Nothing is on your list today. Tell me if you want me to remind you of anything."
-    return f"{greeting} {brief['headline']}\n{_listed(lines)}"
+        return None  # nothing found, nothing said: a brief is written only when there is something to act on (the owner's choice of 2026-10-27, as Hark does)
+    return f"{greeting} {brief['headline']}\n{_listed(lines)}\nWant me to move or drop any of it? Just tell me."
 
 
 def evening_text(brief):

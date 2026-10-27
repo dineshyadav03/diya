@@ -30,6 +30,28 @@ def store(tmp_path):
     return Store(str(tmp_path / "p.db"))
 
 
+@pytest.fixture
+def empty_day():
+    """Ask for this to test a day with nothing on it: the morning message is then not written at all (2026-10-27)."""
+
+
+@pytest.fixture(autouse=True)
+def a_day_with_something_on_it(monkeypatch, request):
+    """Most of these tests are about the messages themselves, and a morning message is only written when the day has something on it, so the day gets one stand-in reminder at 17:00 unless the test asks for `empty_day`."""
+    if "empty_day" in request.fixturenames:
+        return
+    real = diya_events.day_brief
+
+    def busy(store, now):
+        brief = real(store, now)
+        if not (brief["due_now"] or brief["later_today"] or brief["tasks_overdue"] or brief["tasks_today"]):
+            due = diya_time.iso_of_local(datetime(now.year, now.month, now.day, 17, 0))
+            brief["later_today"] = [{"id": 0, "content": "stand-in", "due": due, "due_text": None, "told": False, "repeats": False}]
+        return brief
+
+    monkeypatch.setattr(diya_events, "day_brief", busy)
+
+
 def talker(store, **kwargs):
     return pro.Proactive(store, **kwargs)
 
@@ -77,9 +99,15 @@ def test_the_morning_time_is_a_setting_and_off_means_never(store):
     assert talker(store, morning=None, evening=None).make(MORNING) == []
 
 
-def test_a_day_with_nothing_on_it_still_gets_a_good_morning_that_says_so(store):
+def test_a_day_with_nothing_on_it_gets_no_morning_message(store, empty_day):
+    """Hark writes a brief only when there is something to act on; 15 mornings of "Nothing is on your list" in 14 days were noise (the owner, 2026-10-27)."""
+    assert talker(store).make(MORNING) == [] and talker(store).make(MORNING + timedelta(hours=3)) == []
+
+
+def test_a_morning_message_ends_with_an_offer_to_move_or_drop_what_is_on_it(store):
+    remind(store, "call the bank", datetime(2026, 10, 12, 16, 0))
     (row,) = talker(store).make(MORNING)
-    assert "Nothing is on your list today." in row["text"] and "remind you" in row["text"]
+    assert row["text"].endswith("Want me to move or drop any of it? Just tell me.") and "- 16:00 call the bank" in row["text"]
 
 
 def test_the_greeting_changes_from_day_to_day(store):
@@ -91,7 +119,7 @@ def test_a_long_day_lists_six_and_says_how_many_more(store):
     for n in range(9):
         remind(store, f"item {n}", datetime(2026, 10, 12, 9 + n // 2, 0))
     text = talker(store).make(MORNING)[0]["text"]
-    assert text.count("\n- ") == 7 and text.endswith("- and 3 more")  # six items and the line that says how many more
+    assert text.count("\n- ") == 7 and text.removesuffix("\nWant me to move or drop any of it? Just tell me.").endswith("- and 3 more")  # six items and the line that says how many more, then the offer
 
 
 def test_tasks_are_listed_with_overdue_ones_marked(store):
