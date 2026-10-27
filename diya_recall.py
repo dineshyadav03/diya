@@ -39,6 +39,8 @@ _CORE = re.compile(
 )
 # Tight mode's always-on facts: only what must never be missed whatever is asked (a name, an allergy or condition, pronouns, a time zone). Much narrower than _CORE, which also took "from" and "student".
 _ALWAYS = re.compile(r"\b(?:name\s+is|called|nickname|allerg\w*|intoleran\w*|diabet\w*|asthma\w*|medicat\w*|vegetarian|vegan|pronouns?|time\s*zone)\b", re.IGNORECASE)
+# A short follow-up that points back ("what should I feed him?"): the facts for the message before it are told too.
+_ANAPHORA = re.compile(r"\b(?:he|him|his|she|her|hers|it|its|they|them|their|that|this|these|those|there)\b", re.IGNORECASE)
 # A question about the memory itself wants all of it.
 _ASKS_ALL = re.compile(r"\bwhat\s+(?:do|did|can)\s+you\s+(?:know|remember)(?:\s+about\s+me)?\s*[?.!]*\s*$|\b(?:know|knew|remember|remembered)\b[^.?!]{0,30}\babout\s+me\b|\beverything\s+you\s+(?:know|remember)\b", re.IGNORECASE)
 _WORD = re.compile(r"[^\W_]{3,}")
@@ -127,9 +129,15 @@ def last_of(messages):
     return users[-1][-QUERY_CHARS:].strip() if users else ""
 
 
-def pick(facts, focus, limit, render, store=None, embed=None, model=""):
+def previous_of(messages):
+    """The message the person sent before the one just sent, cut: for a follow-up that points back at it."""
+    users = [m["content"] for m in messages if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str)]
+    return users[-2][-QUERY_CHARS:].strip() if len(users) > 1 else ""
+
+
+def pick(facts, focus, limit, render, store=None, embed=None, model="", before=""):
     """Tight mode: the always-on facts, then the facts whose meaning is close to `focus` (the message just sent), at most TOP of them, in their own order. A question about the memory itself gets `choose`
-    (everything that fits). Without embeddings (Ollama down, or too slow) only a fact sharing a meaningful word (as a stem) with the message is added, so a chat never fails because recall did."""
+    (everything that fits). A follow-up that points back ("what should I feed him?": `_ANAPHORA`) is also matched against `before`, the message before it, so the fact it points at is still told. Without embeddings (Ollama down, or too slow) only a fact sharing a meaningful word (as a stem) with the message is added, so a chat never fails because recall did."""
     if _ASKS_ALL.search(focus):
         return choose(facts, focus, limit, render, store=store, embed=embed, model=model)
     chosen, always_room = [], limit * ALWAYS_SHARE
@@ -137,21 +145,25 @@ def pick(facts, focus, limit, render, store=None, embed=None, model=""):
         if is_always(fact["text"]) and len(render(chosen + [fact])) <= always_room:
             chosen.append(fact)
     left = [f for f in facts if f not in chosen]
-    wanted = have = None
+    wanted = have = wanted_before = None
+    follow_up = bool(before) and _ANAPHORA.search(focus) is not None
     if embed is not None and store is not None and focus and left:
         try:
             wanted = embed(focus)
             have = vectors(store, left, embed, model)
+            wanted_before = embed(before) if follow_up else None
         except Exception:  # noqa: BLE001 -- Ollama down or the model missing
-            wanted = have = None
+            wanted = have = wanted_before = None
     if wanted is None:
         import diya_checks  # (here, not at the top: diya_checks and diya_memory import each other's neighbours)
 
-        asked = diya_checks.content_words(focus) - {"user"}  # stems, so "name" finds "named" and "dog's" finds "dog"
+        asked = diya_checks.content_words(focus + (" " + before if follow_up else "")) - {"user"}  # stems, so "name" finds "named" and "dog's" finds "dog"
     scored = []
     for fact in left:
         if wanted is not None:
             score = cosine(wanted, have[fact["id"]])
+            if wanted_before is not None:
+                score = max(score, cosine(wanted_before, have[fact["id"]]))
             if score >= THRESHOLD:
                 scored.append((score, fact))
         elif asked & diya_checks.content_words(fact["text"]):

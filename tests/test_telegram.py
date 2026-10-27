@@ -885,7 +885,7 @@ def test_the_turn_tells_the_agent_which_thread_and_message_it_belongs_to(tmp_pat
     class Agent:
         store = Store(str(tmp_path / "s.db"))
 
-        def with_profile(self, history):
+        def with_profile(self, history, message=None):
             return list(history)
 
         def ask(self, history, *, thread_id=None, message_id=None):

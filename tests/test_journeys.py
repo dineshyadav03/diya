@@ -41,6 +41,8 @@ def build(tmp_path, client, **changes):
     )
     config = dataclasses.replace(diya_config.load_config({}), **{**settings, **changes})
     agent = diya.Agent(config, client=client)
+    # The model is told the facts that match the message (diya_recall.pick); this stand-in embedder sees a dog in "dog" and "Hog" the way the real one does.
+    agent.embed = lambda text: [float(word in text.lower()) for word in ("dog", "hog")]
     return config, agent, TestClient(diya_web.create_app(config, agent, Quiet()), base_url=LOCAL)
 
 

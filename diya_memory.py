@@ -569,7 +569,7 @@ class Memory:
         told = Memory._told_texts(conn, [(i, text, created, flags, first, last) for i, text, _person, created, flags, first, last in found])
         return [(told[i], person) for i, _text, person, _created, _flags, _first, _last in found]
 
-    def render_for_model(self, query="", embed=None, model="", focus=""):
+    def render_for_model(self, query="", embed=None, model="", focus="", before=""):
         """The accepted facts as the model is actually given them (docs/PERSON_MEMORY_DESIGN.md, M4):
         self facts as a plain list, then a labelled block per named person. '' when there are none.
 
@@ -593,7 +593,7 @@ class Memory:
         render = lambda picked: render_grouped([(f["told"], f["person"]) for f in picked])  # noqa: E731
         room = MAX_PROFILE_CHARS - PARTIAL_NOTE_ROOM
         if (focus or "").strip():
-            chosen = diya_recall.pick(facts, focus, room, render, store=self.store, embed=embed, model=model)
+            chosen = diya_recall.pick(facts, focus, room, render, store=self.store, embed=embed, model=model, before=before)
         else:
             chosen = diya_recall.choose(facts, query, room, render, store=self.store, embed=embed, model=model)
         text = render_grouped([(f["told"], f["person"]) for f in chosen])

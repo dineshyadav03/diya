@@ -1176,7 +1176,7 @@ class Agent:
         seen = list(history) + ([{"role": "user", "content": message}] if isinstance(message, str) and message.strip() else [])
         asked = seen and isinstance(seen[-1], dict) and seen[-1].get("role") == "user"
         # embed_in_time: a cold embedding model never holds the chat up
-        profile = diya_memory.open_memory(self.store, self.config).render_for_model(query=diya_recall.query_of(seen), embed=self.embed_in_time, model=self.config.embed_model, focus=diya_recall.last_of(seen) if asked else "")
+        profile = diya_memory.open_memory(self.store, self.config).render_for_model(query=diya_recall.query_of(seen), embed=self.embed_in_time, model=self.config.embed_model, focus=diya_recall.last_of(seen) if asked else "", before=diya_recall.previous_of(seen) if asked else "")
         now = self.now()
         persona = f"{PERSONA} Today is {diya_time.DAY_NAMES[now.weekday()]} {now.day} {diya_time.MONTH_NAMES[now.month - 1]} {now.year}." if PERSONA else ""
         known = f"What you know about the user so far:\n{profile}" + (f"\n\n{PROFILE_REMINDER}" if PERSONA and PROFILE_REMINDER else "") if profile else ""

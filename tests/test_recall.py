@@ -497,3 +497,25 @@ def test_the_chat_is_told_only_the_facts_for_the_message_just_sent(agent, monkey
     monkeypatch.setattr(agent, "embed", fake_embed)
     system = "\n".join(m["content"] for m in agent.with_profile([{"role": "user", "content": "how is my dog doing"}, {"role": "assistant", "content": "Fine."}, {"role": "user", "content": "tell me a joke"}]) if m["role"] == "system")
     assert "Alex" in system and "dog" not in system  # the joke is not about the dog, though the message before it was
+
+
+def test_a_follow_up_that_points_back_is_told_the_fact_for_the_message_before_it(memory):
+    small_memory(memory)
+    told = memory.render_for_model(query="x", embed=fake_embed, model="fake", focus="what should I feed him?", before="how is my dog doing")
+    assert ABOUT["dog"] in told and "knee" not in told  # "him" points back at the dog
+    plain = memory.render_for_model(query="x", embed=fake_embed, model="fake", focus="tell me a joke", before="how is my dog doing")
+    assert "dog" not in plain  # no pointer: the message before is not what this one is about
+
+
+def test_a_follow_up_still_finds_its_fact_without_embeddings(memory):
+    small_memory(memory)
+    told = memory.render_for_model(query="x", embed=broken, model="fake", focus="what should I feed him?", before="how is my knee doing")
+    assert ABOUT["knee"] in told and "dog" not in told
+
+
+def test_the_chat_passes_the_message_before_for_a_follow_up(agent, monkeypatch):
+    small_memory(open_memory(agent.store, agent.config))
+    monkeypatch.setattr(agent, "embed", fake_embed)
+    earlier = [{"role": "user", "content": "how is my dog doing"}, {"role": "assistant", "content": "Fine."}]
+    system = "\n".join(m["content"] for m in agent.with_profile(earlier, message="what should I feed him?") if m["role"] == "system")
+    assert ABOUT["dog"] in system and "knee" not in system
