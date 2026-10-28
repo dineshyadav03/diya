@@ -54,3 +54,12 @@ SOFTWARE.
 The folder `harness/` is a plain copy of the files of https://github.com/deepseek-ai/deepseek-harness (commit `687f282e8625c6b8d11ff58211a90524be2e4317`, 2026-10-17), kept as received: no history, no submodule, nothing
 installed, nothing built, and nothing in Diya depends on it or runs it. Its licence is `harness/LICENSE` (MIT, copyright DeepSeek AI): MIT asks that the copyright notice and the licence text stay with every copy
 or substantial portion of the code, so that file is never removed. Where Diya's own code is written from it, the file says so and our changes are marked as ours.
+
+## Atticus (SaarthurR) - MIT
+
+Diya's shortcuts (`diya_shortcuts.py`) and its prompt budget (`tests/test_budget.py`) take their IDEAS from Atticus for macOS, https://github.com/SaarthurR/atticus-mac (version 1.5.3, read from a copy downloaded on
+2026-10-28): "when I say X, do Y" that is learned once and answered at once, and a budget for what each ask may cost that tests enforce. No Atticus file is copied into this repository and none of its code is run;
+Diya's versions are written for Diya's own design (the person's own words are saved, not commands, and every gate still applies). Its README says MIT ("See LICENSE"); the zip we were given had no LICENSE file,
+so before any of Atticus's code is copied here, get it from the upstream repository and add its copyright line to this section. Atticus itself credits `ui/orbs.js` (thinking-orbs, MIT, Jakub Antalik) and ideas
+from Plip (MIT); nothing of those is used here.
+

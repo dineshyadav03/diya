@@ -85,6 +85,8 @@ One press of **Pause Diya** on the Status page (or `POST /api/pause`) stops the 
 | `read_calendar` | flow | 0 | reads the person's Google Calendar for the days they ask about and writes the list itself, with no model | www.googleapis.com | n/a | none | yes | Google Calendar connected |
 | `explain_connections` | flow | 0 | says which accounts are connected and what each can and cannot do, from the connection record and not from the model | none | n/a | none | no | - |
 | `explain_memory` | flow | 0 | says where a remembered fact came from, from the memory's own record | none | n/a | none | no | - |
+| `teach_shortcut` | flow | 1 | saves, lists or forgets the person's own short phrases (when I say X, do Y) in Diya's own database, said by code | none | the person says: forget the shortcut <words> | none | no | - |
+| `use_shortcut` | flow | 0 | swaps a phrase the person taught for the longer request it stands for, so that request meets every check and approval a typed one does | none | n/a | none | no | - |
 | `approve_in_chat` | flow | 1 | approves or drops the one action Diya has just asked about when the person's whole message is a yes or a no, read by code; never approves an action that came from outside text, and does exactly what the Approve button does | whatever the approved action reaches (only when approved) | as the action's own card says; a no changes nothing | owner approves each action | no | - |
 | `use_playbook` | flow | 0 | adds the steps of a playbook the person wrote themselves (named in the message or close in meaning) to the turn as their instructions; grants no tool and skips no approval | none | n/a | none | no | - |
 
@@ -169,6 +171,8 @@ Meta's Rule of Two and Simon Willison's lethal trifecta say an agent should not,
 | `read_calendar` | yes | yes | - | 2 |
 | `explain_connections` | - | - | - | 0 |
 | `explain_memory` | - | yes | - | 1 |
+| `teach_shortcut` | - | - | - | 0 |
+| `use_shortcut` | - | - | - | 0 |
 | `approve_in_chat` | - | - | - | 0 |
 | `use_playbook` | - | yes | - | 1 |
 

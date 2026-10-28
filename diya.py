@@ -49,6 +49,7 @@ import diya_memory
 import diya_origin
 import diya_provenance
 import diya_recall
+import diya_shortcuts
 import diya_schedule
 import diya_tasks
 import diya_time
@@ -668,6 +669,16 @@ def _last_user_text(messages):
         if isinstance(m, dict) and m.get("role") == "user":
             return m.get("content")
     return None
+
+
+def _with_last_user(messages, text):
+    """A copy of `messages` whose newest user message says `text` (the caller's list and the saved chat are left alone)."""
+    out = list(messages)
+    for i in range(len(out) - 1, -1, -1):
+        if isinstance(out[i], dict) and out[i].get("role") == "user":
+            out[i] = dict(out[i], content=text)
+            break
+    return out
 
 
 class Agent:
@@ -1407,6 +1418,12 @@ class Agent:
         if isinstance(text, str):
             self._turn.urls = set(getattr(self._turn, "urls", ())) | set(diya_google_cited.urls_in(text))
 
+    def _shortcut_reply(self, question):
+        """What to say to a message that teaches, forgets or lists shortcuts ("when I say X, do Y"), said by code and kept in Diya's own database (diya_shortcuts.py), or None."""
+        if not isinstance(question, str):
+            return None
+        return diya_shortcuts.reply_to(self.store, question)
+
     def _approval_reply(self, question):
         """A typed yes or no to the action Diya has just asked about (2026-10-27: Hark asks in the chat and the person answers there). Read by CODE, never by the model, and only when ALL of this holds: the
         message is nothing but a yes or a no, typed into a chat; exactly one action is waiting that was proposed while answering the person's message BEFORE this one, in this chat (so a yes to anything else
@@ -1704,6 +1721,14 @@ class Agent:
             if typed is not None:  # a typed yes or no to the action just asked about: decided by code, the model is not asked
                 self._journal("approve_in_chat", {"question": question}, "ok", result=typed, started=started, kind="flow")
                 return typed, []
+            taught = self._shortcut_reply(question)
+            if taught is not None:  # "when I say X, do Y", "forget the shortcut X", "what shortcuts do I have": kept or said by code, the model is not asked
+                self._journal("teach_shortcut", {"question": question}, "ok", result=taught, started=started, kind="flow")
+                return taught, []
+            stands_for = diya_shortcuts.expand(self.store, question)
+            if stands_for is not None:  # a phrase the person taught stands for a longer request: that request is what is answered, through every check a typed one meets
+                self._journal("use_shortcut", {"phrase": question}, "ok", result=stands_for, started=started, kind="flow")
+                messages, question = _with_last_user(messages, stands_for), stands_for
             where_from = self._where_from(question, messages)
             if where_from is not None:  # "how do you know that?": answered by code from the memory's own record, never by the model (docs/PROVENANCE_DESIGN.md)
                 self._journal("explain_memory", {"question": question}, "ok", result=where_from, started=started, kind="flow")
